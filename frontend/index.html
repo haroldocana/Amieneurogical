@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AMIE - Copiloto Clínico Psiquiátrico y Neurológico</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+              950: '#082f49',
+            },
+            clinical: {
+              danger: '#ef4444',
+              warning: '#f59e0b',
+              success: '#10b981',
+              info: '#3b82f6',
+              surface: '#0f172a',
+              card: '#1e293b'
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Import Map -->
+    <style>
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-sky-500 selection:text-white">
+  <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
+<script type="module" src="/index.js"></script></body>
+</html>
