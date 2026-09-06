@@ -1,0 +1,8 @@
+{
+  "name": "AMIE Clinical Copilot - Psychiatric & Neurological Diagnostic Engine",
+  "description": "Advanced psychiatric and neurological clinical copilot based on the AMIE framework, DSM-5 criteria, bioclinical triangulation, neuromotor/QEEG biomarkers, and active risk containment protocols.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
