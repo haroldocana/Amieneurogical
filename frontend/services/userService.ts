@@ -49,9 +49,13 @@ export function getRegisteredUsers(): DoctorUser[] {
   }
 }
 
+/**
+ * Registra o emite una nueva licencia asignando opcionalmente contraseña inicial y cuota de IA.
+ */
 export function registerDoctorUser(
   user: Omit<DoctorUser, 'licenseKey' | 'createdAt' | 'expiresAt' | 'status' | 'aiCredits' | 'aiCreditsLimit'>,
-  initialCredits: number = 100
+  initialCredits: number = 100,
+  initialPassword?: string
 ): DoctorUser {
   const users = getRegisteredUsers();
   
@@ -63,9 +67,12 @@ export function registerDoctorUser(
     throw new Error(`El usuario ${user.username} o colegiado ${user.colegiadoNumber} ya está registrado.`);
   }
 
+  const assignedPassword = initialPassword && initialPassword.trim() ? initialPassword.trim() : (user.password || 'AMIE_2026_SECURE');
+
   const newUser: DoctorUser = {
     ...user,
-    licenseKey: `LIC-2026-AMIE-${Math.floor(100000 + Math.random() * 900000)}`,
+    password: assignedPassword,
+    licenseKey: `LIC-2026-AMIE-${user.colegiadoNumber}`,
     status: 'ACTIVE',
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
