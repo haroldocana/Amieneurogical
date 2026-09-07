@@ -1,6 +1,7 @@
 import { runtimeConfig } from '../resources/motor-clinico-amiet-55307264/config';
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
 import { CLINICAL_CASE_PRESETS } from '../constants';
+import { consumeAiCredit } from './userService';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
 const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
@@ -171,7 +172,58 @@ function normalizeFunctionalAreas(rawAreas: any) {
 }
 
 /**
- * Connects with external Clinical App via Cloud Storage and Cloud Function.
+ * Adaptador de Mapeo: Transforma el expediente emitido por App 1 al formato de App 2
+ */
+export async function mapApp1DataToApp2(
+  rawCase: any,
+  cleanPatientId: string,
+  resolvedDoctorUsername: string
+): Promise<PatientRecord> {
+  const sessions = rawCase.sessions || [];
+
+  const exactPsychometrics: Record<string, number> = {};
+  sessions.forEach((s: any) => {
+    if (s.testScores && typeof s.testScores === 'object') {
+      Object.entries(s.testScores).forEach(([key, val]) => {
+        if (typeof val === 'number') {
+          exactPsychometrics[key.toLowerCase()] = val;
+        }
+      });
+    }
+  });
+
+  const lastSession = sessions[sessions.length - 1] || {};
+  const rawFunctional = lastSession.functionalAreas || rawCase.functionalAreas || {};
+  const mappedFunctionalAreas = normalizeFunctionalAreas(rawFunctional);
+
+  const mappedNotes = sessions
+    .map((s: any) => `Sesión ${s.sessionNumber || ''} (${s.date || ''}): ${s.rawNotes || s.notes || ''}`)
+    .filter(Boolean);
+
+  return {
+    ...SAFE_DEFAULT_PATIENT,
+    id: rawCase.id || cleanPatientId,
+    patientNameAnonymized: `Paciente ID: ${rawCase.id || cleanPatientId}`,
+    age: Number(rawCase.generalData?.edad || rawCase.age) || 55,
+    gender: normalizeGender(rawCase.generalData?.sexo || rawCase.gender),
+    consultationReason: rawCase.generalData?.motivoConsultaTextual || rawCase.consultationReason || 'Evaluación neuroclínica integral',
+    anamnesis: rawCase.generalData?.antecedentes || rawCase.anamnesis || 'Sin antecedentes registrados',
+    sessionNotes: mappedNotes.length > 0 ? mappedNotes : ['Sincronizado desde base de datos App 1'],
+    functionalAreas: mappedFunctionalAreas,
+    psychometricScores: {
+      ...SAFE_DEFAULT_PATIENT.psychometricScores,
+      ...exactPsychometrics
+    },
+    sentinelTelemetry: {
+      ...SAFE_DEFAULT_PATIENT.sentinelTelemetry!,
+      pacId: cleanPatientId,
+      deviceSyncTime: `En línea (Extraído de App 1 - ${resolvedDoctorUsername})`
+    }
+  };
+}
+
+/**
+ * Conecta con la app clínica extrayendo expedientes y validando la propiedad por colegiado.
  */
 export async function syncWithClinicalApp(
   patientId: string,
@@ -182,10 +234,10 @@ export async function syncWithClinicalApp(
     ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username')
     : null;
 
-  const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold01').trim();
+  const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold01').trim().toLowerCase();
   const cleanPatientId = (patientId || 'PAC-8104').trim().toUpperCase();
 
-  // 1. EXTRACCIÓN DESDE CLOUD STORAGE
+  // 1. EXTRACCIÓN CON VALIDACIÓN DE SEGURIDAD POR COLEGIADO DESDE BUCKET
   try {
     const cloudUrl = `https://storage.googleapis.com/base-psicologiagt-usuario2/clinica/${resolvedDoctorUsername}/cases.json?t=${Date.now()}`;
     const response = await fetch(cloudUrl);
@@ -195,43 +247,13 @@ export async function syncWithClinicalApp(
       const rawCase = clinicalDatabase[cleanPatientId];
 
       if (rawCase) {
-        const sessions = rawCase.sessions || [];
-        
-        const exactPsychometrics: Record<string, number> = {};
-        sessions.forEach((s: any) => {
-          if (s.testScores && typeof s.testScores === 'object') {
-            Object.entries(s.testScores).forEach(([key, val]) => {
-              if (typeof val === 'number') exactPsychometrics[key] = val;
-            });
-          }
-        });
+        // VALIDACIÓN DE PROPIEDAD DE EXPEDIENTE:
+        const caseColegiado = Number(rawCase.colegiadoOwner || rawCase.generalData?.colegiadoTratante || colegiado);
+        if (caseColegiado !== Number(colegiado)) {
+          throw new Error(`Acceso Denegado: El expediente ${cleanPatientId} pertenece al Colegiado #${caseColegiado}, no al #${colegiado}.`);
+        }
 
-        const lastSession = sessions[sessions.length - 1] || {};
-        const rawFunctional = lastSession.functionalAreas || { sleep: 5, appetite: 5, energy: 5, social: 5, concentration: 5 };
-        const mappedFunctionalAreas = normalizeFunctionalAreas(rawFunctional);
-
-        const mappedNotes = sessions.map((s: any) => `Sesión ${s.sessionNumber} (${s.date || ''}): ${s.rawNotes || ''}`).filter(Boolean);
-
-        const mappedPatient: PatientRecord = {
-          ...SAFE_DEFAULT_PATIENT,
-          id: rawCase.id || cleanPatientId,
-          patientNameAnonymized: `Paciente ID: ${rawCase.id || cleanPatientId}`,
-          age: Number(rawCase.generalData?.edad) || 55,
-          gender: normalizeGender(rawCase.generalData?.sexo),
-          consultationReason: rawCase.generalData?.motivoConsultaTextual || 'Evaluación neuroclínica integral',
-          anamnesis: rawCase.generalData?.antecedentes || 'Sin antecedentes registrados',
-          sessionNotes: mappedNotes.length > 0 ? mappedNotes : ['Sincronizado desde la base clínica App1'],
-          functionalAreas: mappedFunctionalAreas,
-          psychometricScores: {
-            ...SAFE_DEFAULT_PATIENT.psychometricScores,
-            ...exactPsychometrics
-          },
-          sentinelTelemetry: {
-            ...SAFE_DEFAULT_PATIENT.sentinelTelemetry!,
-            pacId: cleanPatientId,
-            deviceSyncTime: `En línea (Sincronizado de ${resolvedDoctorUsername})`
-          }
-        };
+        const mappedPatient = await mapApp1DataToApp2(rawCase, cleanPatientId, resolvedDoctorUsername);
 
         let amieAnalysis: AmieClinicalAnalysis | null = null;
         try {
@@ -243,24 +265,26 @@ export async function syncWithClinicalApp(
         return {
           patient: mappedPatient,
           analysis: amieAnalysis,
-          message: `Expediente ${cleanPatientId} extraído al 100% de la nube para ${resolvedDoctorUsername}.`
+          message: `Expediente ${cleanPatientId} autenticado y extraído para el Colegiado #${colegiado}.`
         };
       }
     }
-  } catch (err) {
-    console.warn('Fallo al conectar con Cloud Storage directo, intentando fallback de Cloud Function:', err);
+  } catch (err: any) {
+    if (err?.message && err.message.includes('Acceso Denegado')) {
+      throw err;
+    }
+    console.warn('Fallo en Cloud Storage directo, buscando en microservicio protegido:', err);
   }
 
-  // 2. FALLBACK VIA CLOUD FUNCTION
+  // 2. FALLBACK A BACKEND PROTEGIDO CON AUTENTICACIÓN
   const token = typeof window !== 'undefined'
     ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token'
     : 'demo-jwt-bearer-token';
 
   const postBody = {
     patientId: cleanPatientId,
-    pacientId: cleanPatientId,
     doctorUsername: resolvedDoctorUsername,
-    colegiado: Number(colegiado) || 749210,
+    colegiado: Number(colegiado),
     requestTimestamp: new Date().toISOString(),
     sourceApp: 'AMIE-Clinical-Analyzer'
   };
@@ -275,82 +299,29 @@ export async function syncWithClinicalApp(
       body: JSON.stringify(postBody)
     });
 
+    if (response.status === 403) {
+      throw new Error(`Acceso denegado: El profesional con Colegiado #${colegiado} no es el médico tratante del expediente ${cleanPatientId}.`);
+    }
+
     if (response.status === 404) {
-      throw new Error(`El expediente ${cleanPatientId} no existe o no tiene datos cargados`);
+      throw new Error(`El expediente ${cleanPatientId} no existe en la base de datos de ${resolvedDoctorUsername}.`);
     }
 
     if (response.ok) {
       const data = await response.json();
-      const rawData = (data.patientRecord || data) as any;
-
-      const mappedId = rawData.patientId || rawData.id || rawData.pacId || cleanPatientId;
-      const mappedAge = Number(rawData.age) || 21;
-      const mappedGender = normalizeGender(rawData.sex || rawData.gender || 'Femenino');
-      
-      const mappedChiefComplaint = Array.isArray(rawData.clinicalFocus)
-        ? rawData.clinicalFocus.join(', ')
-        : (rawData.chiefComplaint || rawData.consultationReason || 'Evaluación de foco clínico neuropsiquiátrico');
-
-      const mappedNotes = rawData.analysisFindings || rawData.anamnesis || 'Sincronizado desde la App SaaS';
-      const mappedFunctionalAreas = normalizeFunctionalAreas(rawData.functionalAreas);
-
-      const mappedPatient: PatientRecord = {
-        ...SAFE_DEFAULT_PATIENT,
-        id: mappedId,
-        patientNameAnonymized: `Paciente ID: ${mappedId}`,
-        age: mappedAge,
-        gender: mappedGender,
-        consultationReason: mappedChiefComplaint,
-        anamnesis: mappedNotes,
-        sessionNotes: Array.isArray(rawData.sessionNotes) && rawData.sessionNotes.length > 0
-          ? rawData.sessionNotes
-          : [mappedNotes],
-        audioRecordings: [],
-        functionalAreas: mappedFunctionalAreas,
-        psychometricScores: {
-          ...SAFE_DEFAULT_PATIENT.psychometricScores,
-          ...(rawData.psychometricScores || {})
-        },
-        neuromotorBiomarkers: {
-          ...SAFE_DEFAULT_PATIENT.neuromotorBiomarkers!,
-          ...(rawData.neuromotorBiomarkers || {})
-        },
-        qeegZScores: {
-          ...SAFE_DEFAULT_PATIENT.qeegZScores!,
-          ...(rawData.qeegZScores || {})
-        },
-        multisensoryHardware: {
-          ...SAFE_DEFAULT_PATIENT.multisensoryHardware!,
-          ...(rawData.multisensoryHardware || {})
-        },
-        sentinelTelemetry: {
-          ...SAFE_DEFAULT_PATIENT.sentinelTelemetry!,
-          ...(rawData.sentinelTelemetry || {}),
-          pacId: mappedId,
-          deviceSyncTime: 'En línea (Sincronizado desde Cloud Function)'
-        },
-        substancesHistory: {
-          ...SAFE_DEFAULT_PATIENT.substancesHistory,
-          ...(rawData.substancesHistory || {})
-        },
-        medicalHistory: Array.isArray(rawData.medicalHistory)
-          ? rawData.medicalHistory
-          : SAFE_DEFAULT_PATIENT.medicalHistory
-      };
+      const mappedPatient = await mapApp1DataToApp2(data.patientRecord || data, cleanPatientId, resolvedDoctorUsername);
 
       return {
         patient: mappedPatient,
         analysis: data.preliminaryAnalysis || data.analysis || null,
-        message: data.message || `Expediente ${cleanPatientId} sincronizado exitosamente para ${resolvedDoctorUsername}.`
+        message: data.message || `Expediente ${cleanPatientId} sincronizado exitosamente.`
       };
-    } else if (response.status !== 404) {
-      throw new Error(`Servicio de sincronización respondió con código ${response.status}`);
     }
   } catch (err: any) {
-    if (err?.message && err.message.includes('no existe o no tiene datos cargados')) {
+    if (err?.message && (err.message.includes('Acceso denegado') || err.message.includes('no existe'))) {
       throw err;
     }
-    console.warn('Fallo en solicitud de red a Cloud Function, verificando repositorio local de presets:', err);
+    console.warn('Fallo en solicitud de red a Cloud Function, verificando repositorio local:', err);
   }
 
   // 3. FALLBACK LOCAL PRESETS
@@ -377,17 +348,22 @@ export async function syncWithClinicalApp(
     };
   }
 
-  throw new Error(`El expediente ${cleanPatientId} no existe o no tiene datos cargados`);
+  throw new Error(`El expediente ${cleanPatientId} no existe o no se tiene autorización de lectura.`);
 }
 
 /**
- * Runs AMIE Multimodal Diagnostic Analysis using DSM-5 Morrison principles
- * via Express Proxy pointing to Vertex AI.
+ * Ejecuta el análisis diagnóstico con Vertex AI descontando 1 crédito de IA.
  */
 export async function runAmieClinicalAnalysis(
   patient: PatientRecord,
   qEegImageBase64?: string
 ): Promise<AmieClinicalAnalysis> {
+  const activeUsername = typeof window !== 'undefined'
+    ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01'
+    : 'harold01';
+
+  consumeAiCredit(activeUsername);
+
   const token = typeof window !== 'undefined' 
     ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token' 
     : 'demo-jwt-bearer-token';
@@ -399,7 +375,6 @@ export async function runAmieClinicalAnalysis(
 
   const activeImage = qEegImageBase64 || safeRecord.qeegBiomarkers?.heatmapBase64 || null;
 
-  // 1. Intento vía Microservicio Cloud Run
   try {
     const apiPayload = {
       patientRecord: safeRecord,
@@ -427,10 +402,9 @@ export async function runAmieClinicalAnalysis(
       }
     }
   } catch (backendError) {
-    console.warn('Cloud Run API no disponible, ejecutando motor clínico Vertex AI a través del Proxy:', backendError);
+    console.warn('Cloud Run API no disponible, ejecutando Vertex AI a través del Proxy Express:', backendError);
   }
 
-  // 2. Ejecución mediante Proxy Backend de Express a Vertex AI
   const patientJsonString = JSON.stringify(safeRecord, null, 2);
 
   const promptText = `
@@ -488,12 +462,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido.
   const vertexEndpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-1.5-flash:generateContent';
 
   const proxyPayload = {
-    contents: [
-      {
-        role: 'user',
-        parts: parts
-      }
-    ],
+    contents: [{ role: 'user', parts: parts }],
     systemInstruction: {
       parts: [
         {
@@ -509,18 +478,23 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido.
 
   const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
   const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  const parsedData: AmieClinicalAnalysis = JSON.parse(responseText);
-  return parsedData;
+  return JSON.parse(responseText) as AmieClinicalAnalysis;
 }
 
 /**
- * Chat copilot conversation handler via Express Proxy
+ * Canaliza el chat copiloto con Vertex AI descontando 1 crédito de IA por consulta.
  */
 export async function askAmieAssistant(
   conversation: { role: 'user' | 'model'; text: string }[],
   currentPatient: PatientRecord,
   analysisData?: AmieClinicalAnalysis | null
 ): Promise<string> {
+  const activeUsername = typeof window !== 'undefined'
+    ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01'
+    : 'harold01';
+
+  consumeAiCredit(activeUsername);
+
   const systemContext = `
 Eres AMIE (Articulate Medical Intelligence Explorer), Copiloto Clínico Psiquiátrico y Neurológico.
 Estás dialogando directamente con el médico especialista tratante colegiado.
@@ -541,12 +515,8 @@ Responde de forma concisa, profesional, técnica, fundamentada en la literatura 
 
   const proxyPayload = {
     contents: contents,
-    systemInstruction: {
-      parts: [{ text: systemContext }]
-    },
-    generationConfig: {
-      temperature: 0.4
-    }
+    systemInstruction: { parts: [{ text: systemContext }] },
+    generationConfig: { temperature: 0.4 }
   };
 
   try {
