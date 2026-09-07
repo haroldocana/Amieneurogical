@@ -1,4 +1,3 @@
-
 /**
  * @license
  * Copyright 2025 Google LLC
@@ -14,8 +13,9 @@ import { WebSocketServer, WebSocket } from 'ws';
 const app = express();
 app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
 
-const PORT = process?.env?.API_BACKEND_PORT || 5000;
-const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
+// Configuración de Puerto y Host para Render (0.0.0.0 y PORT de entorno)
+const PORT = process.env.PORT || process.env.API_BACKEND_PORT || 10000;
+const API_BACKEND_HOST = process.env.API_BACKEND_HOST || "0.0.0.0";
 
 const GOOGLE_CLOUD_LOCATION = process?.env?.GOOGLE_CLOUD_LOCATION;
 const GOOGLE_CLOUD_PROJECT = process?.env?.GOOGLE_CLOUD_PROJECT;
@@ -32,19 +32,17 @@ if (!PROXY_HEADER) {
 app.set('trust proxy', 1 /* number of proxies between user and server */);
 
 // IMPORTANT: Vertex AI Studio Rate Limiting
-// This rate limiting configuration protects your backend APIs from abuse.
-// Removing it exposes your service to DoS attacks and unexpected costs.
 const proxyLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // Set ratelimit window at 15min (in ms)
-    max: 100, // Limit each IP to 100 requests per window 
-    standardHeaders: true, // Return rate limit info in the "RateLimit-*" headers
-    legacyHeaders: false, // no "X-RateLimit-*" headers
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 100, 
+    standardHeaders: true, 
+    legacyHeaders: false, 
     message: {
       error: 'Too many requests',
       message: 'You have exceed the request limit, please try again later.'
     },
 });
-// Apply the rate limiter to the /api-proxy route before the main proxy logic
+
 app.use('/api-proxy', proxyLimiter);
 
 const API_CLIENT_MAP = [
@@ -107,21 +105,11 @@ const API_CLIENT_MAP = [
   },
 ].map((client) => ({ ...client, patternInfo: parsePattern(client.patternForProxy) }));
 
-// IMPORTANT: Vertex AI Studio SSRF Protection
-// The set below is the exhaustive allow-list of upstream hostnames this
-// proxy may forward authenticated requests to. It is sourced at code
-// generation time from the RestApiClient.getAllowedUpstreamHosts() of every
-// client embedded in API_CLIENT_MAP. Removing, weakening, or widening this
-// check (for example, by adding wildcards or computing entries from request
-// data) re-introduces the SSRF vulnerability that allows the deployed
-// service account's OAuth access token to be exfiltrated to an
-// attacker-controlled host.
 const ALLOWED_UPSTREAM_HOSTS = new Set([
   "aiplatform.clients6.google.com",
 ]);
 
 const ALLOWED_LINKED_RESOURCES = new Set();
-
 const WEB_SOCKET_BODY_POLICY = "live_bidi";
 
 const ALLOWED_GENERATE_CONTENT_ROOT_FIELDS = new Set(["contents", "generationConfig", "generation_config", "labels", "model", "safetySettings", "safety_settings", "systemInstruction", "system_instruction", "toolConfig", "tool_config", "tools"]);
@@ -249,8 +237,6 @@ function asProxiedBodyText(body) {
   return JSON.stringify(body);
 }
 
-// Uses Google Application Default Credentials (ADC).
-// Users need to run "gcloud auth application-default login" in order to use the proxy.
 const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
 });
@@ -342,8 +328,6 @@ function getRequestHeaders(accessToken) {
 
 // --- Proxy Endpoint ---
 app.post('/api-proxy', async (req, res) => {
-
-  // Check for the custom header added by the shim
   if (req.headers['x-app-proxy'] !== PROXY_HEADER) {
     return res.status(403).send('Forbidden: Request must originate from the Vertex App shim.');
   }
@@ -353,9 +337,7 @@ app.post('/api-proxy', async (req, res) => {
     return res.status(400).send('Bad Request: originalUrl is required.');
   }
 
-  // 1. Find the matching API client
   const apiClient = API_CLIENT_MAP.find(p => {
-    // We store extractedParams on req for use later if needed, though getVertexUrl takes it as arg.
     req.extractedParams = extractParams(p.patternInfo, originalUrl);
     return req.extractedParams !== null;
   });
@@ -384,20 +366,12 @@ app.post('/api-proxy', async (req, res) => {
 
   console.log(`[Node Proxy] Matched API client: ${apiClient.name}`);
   try {
-    // 2. Get authenticated access token
     const accessToken = await getAccessToken(res);
     if (!accessToken) return;
 
-    // 3. Construct the full API URL using env-set GOOGLE_CLOUD_PROJECT/LOCATION and extracted params
     const context = {projectId: GOOGLE_CLOUD_PROJECT, region: GOOGLE_CLOUD_LOCATION};
     const apiUrl = apiClient.getApiEndpoint(context, extractedParams);
 
-    // IMPORTANT: Vertex AI Studio SSRF Protection
-    // Parse the constructed apiUrl with the standard URL parser (not a
-    // regex) and require the resulting hostname to be in the hardcoded
-    // ALLOWED_UPSTREAM_HOSTS set. This neutralizes attacks that smuggle a
-    // URL-grammar delimiter (e.g. '#') into a pattern parameter to redirect
-    // the authenticated upstream request to an attacker-controlled host.
     let parsedApiUrl;
     try {
       parsedApiUrl = new URL(apiUrl);
@@ -411,7 +385,6 @@ app.post('/api-proxy', async (req, res) => {
     }
     console.log(`[Node Proxy] Forwarding to Vertex API: ${apiUrl}`);
 
-    // 4. Prepare headers for the API call
     const apiHeaders = getRequestHeaders(accessToken);
 
     const apiFetchOptions = {
@@ -420,19 +393,15 @@ app.post('/api-proxy', async (req, res) => {
       body: body ? body : undefined,
     };
 
-    // 5. Make the call to the API
     const apiResponse = await fetch(apiUrl, apiFetchOptions);
 
-    // 6. Respond to the client based on stream type
     if (apiClient.isStreaming) {
       console.log(`[Node Proxy] Sending STREAMING response for ${apiClient.name}`);
-      // Set headers for a streaming JSON response
       res.writeHead(apiResponse.status, {
         'Content-Type': 'text/event-stream',
         'Transfer-Encoding': 'chunked',
         'Connection': 'keep-alive',
       });
-      // Immediately send headers
       res.flushHeaders();
 
       if (!apiResponse.body) {
@@ -443,7 +412,7 @@ app.post('/api-proxy', async (req, res) => {
       const decoder = new TextDecoder();
       let deltaChunk = '';
       apiResponse.body.on('data', (encodedChunk) => {
-        if (res.writableEnded) return; // Prevent writing after res.end()
+        if (res.writableEnded) return;
 
         try {
           if (!apiClient.transformFn) {
@@ -479,13 +448,11 @@ app.post('/api-proxy', async (req, res) => {
 
       res.on('error', (resError) => {
         console.error('[Node Proxy] Error writing to client response:', resError);
-        // The source stream might need to be destroyed if an error occurs here.
         if (apiResponse.body && typeof apiResponse.body.destroy === 'function') {
              apiResponse.body.destroy(resError);
         }
       });
     } else {
-      // Non-streaming response handling
       console.log(`[Node Proxy] Sending JSON response for ${apiClient.name}`);
       const data = await apiResponse.json();
       res.status(apiResponse.status).json(data);
@@ -497,10 +464,10 @@ app.post('/api-proxy', async (req, res) => {
   }
 });
 
+// Inicio del servidor usando el Host y Puerto dinámicos
 const server = app.listen(PORT, API_BACKEND_HOST, () => {
-  console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);
+  console.log(`Vertex AI Backend listening on http://${API_BACKEND_HOST}:${PORT}`);
 });
-
 
 const wss = new WebSocketServer({ noServer: true });
 
@@ -508,7 +475,6 @@ server.on('upgrade', async (request, socket, head) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (url.pathname === '/ws-proxy') {
-    
     let targetUrl = url.searchParams.get('target');
     if (!targetUrl) {
       console.log('[Node Proxy] Missing target URL');
@@ -562,14 +528,10 @@ server.on('upgrade', async (request, socket, head) => {
 
     upstreamWs.once('error', initialErrorHandler);
 
-    // 5. Handle Successful Upstream Connection
     const onUpstreamOpen = () => {
-      // Remove the "bootstrapping" error handler
       upstreamWs.removeListener('error', initialErrorHandler);
 
-      // Perform the HTTP -> WebSocket upgrade for the Client
       wss.handleUpgrade(request, socket, head, (ws) => {
-
         upstreamWs.on('message', (data, isBinary) => {
           const logMsg = isBinary ? '<Binary Data>' : data.toString();
           console.log(`[Upstream -> Client] [${new Date().toISOString()}]: ${logMsg}`);
@@ -584,8 +546,6 @@ server.on('upgrade', async (request, socket, head) => {
         });
 
         ws.on('message', (data, isBinary) => {
-          const logMsg = isBinary ? '<Binary Data>' : data.toString();
-
           const messageVerdict = validateProxiedRequestBody(data.toString(), WEB_SOCKET_BODY_POLICY);
           if (!messageVerdict.allowed) {
             console.error('[Node Proxy] Rejected message from client:', messageVerdict.reason);
@@ -641,9 +601,6 @@ server.on('upgrade', async (request, socket, head) => {
     upstreamWs.once('open', onUpstreamOpen);
 
   } else {
-    // Path did not match
     socket.destroy();
   }
 });
-
-
