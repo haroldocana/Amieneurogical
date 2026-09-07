@@ -49,7 +49,7 @@ export default function App() {
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
 
-  // Clinical Case State with Safe Initial Default
+  // Clinical Case State
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
   });
@@ -84,6 +84,18 @@ export default function App() {
     setDoctorUsername(auth.username || 'harold01');
     setColegiadoNumber(auth.colegiadoNumber || 749210);
     setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('amie_auth_token');
+      localStorage.removeItem('amie_doctor_name');
+      localStorage.removeItem('amie_username');
+      localStorage.removeItem('amie_doctor_username');
+      localStorage.removeItem('amie_colegiado_number');
+      localStorage.removeItem('amie_ai_credits');
+    }
+    setIsAuthenticated(false);
   };
 
   const handleRunAnalysis = async () => {
@@ -165,6 +177,7 @@ export default function App() {
         patientGender={safeGender}
         onSyncPacient={handleSyncPacient}
         isSyncingPac={isSyncing}
+        onLogout={handleLogout}
       />
 
       {/* Primary Tab Navigation Bar */}
@@ -314,10 +327,10 @@ export default function App() {
 
             {/* SaaS */}
             <HoverTooltip
-              title="Licencias SaaS & Cloud Storage"
-              description="Aprovisionamiento de credenciales médicas validadas por colegiatura y gestión de cuotas de IA."
-              clinicalUtility="Administración institucional segura HIPAA/RGPD."
-              badge="Gestión"
+              title="Perfil de Licencia & Control IA"
+              description="Monitoreo de vigencia de licencia, consumo del bolsón de IA y administración de contraseña."
+              clinicalUtility="Perfil de usuario e indicadores institucionales."
+              badge="Perfil"
             >
               <button
                 onClick={() => setActiveTab('saas')}
@@ -338,7 +351,6 @@ export default function App() {
 
       {/* Main Tab Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
-        
         {syncNotFoundAlert && (
           <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl animate-shake">
             <div className="flex items-center gap-3">
