@@ -3,8 +3,10 @@ export interface DoctorUser {
   doctorName: string;
   colegiadoNumber: number;
   licenseKey: string;
+  password?: string;
   status: 'ACTIVE' | 'SUSPENDED';
   createdAt: string;
+  expiresAt: string;       // Requerido para el control de tiempo de la licencia
   aiCredits: number;       // Consultas de IA disponibles
   aiCreditsLimit: number;  // Límite asignado por el administrador
 }
@@ -17,8 +19,10 @@ const DEFAULT_USERS: DoctorUser[] = [
     doctorName: 'Dr. Alejandro Morales Rivera',
     colegiadoNumber: 749210,
     licenseKey: 'LIC-2026-AMIE-749210',
+    password: 'AMIE_2025_SECURE',
     status: 'ACTIVE',
     createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     aiCredits: 100,
     aiCreditsLimit: 100
   }
@@ -33,11 +37,12 @@ export function getRegisteredUsers(): DoctorUser[] {
   }
   try {
     const parsed = JSON.parse(data);
-    // Asegurar compatibilidad agregando cuotas por defecto a usuarios antiguos
     return parsed.map((u: any) => ({
       ...u,
-      aiCredits: u.aiCredits ?? 50,
-      aiCreditsLimit: u.aiCreditsLimit ?? 50
+      password: u.password || 'AMIE_2025_SECURE',
+      expiresAt: u.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      aiCredits: u.aiCredits ?? 100,
+      aiCreditsLimit: u.aiCreditsLimit ?? 100
     }));
   } catch (err) {
     return DEFAULT_USERS;
@@ -45,8 +50,8 @@ export function getRegisteredUsers(): DoctorUser[] {
 }
 
 export function registerDoctorUser(
-  user: Omit<DoctorUser, 'licenseKey' | 'createdAt' | 'status' | 'aiCredits' | 'aiCreditsLimit'>,
-  initialCredits: number = 50
+  user: Omit<DoctorUser, 'licenseKey' | 'createdAt' | 'expiresAt' | 'status' | 'aiCredits' | 'aiCreditsLimit'>,
+  initialCredits: number = 100
 ): DoctorUser {
   const users = getRegisteredUsers();
   
@@ -63,6 +68,7 @@ export function registerDoctorUser(
     licenseKey: `LIC-2026-AMIE-${Math.floor(100000 + Math.random() * 900000)}`,
     status: 'ACTIVE',
     createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     aiCredits: initialCredits,
     aiCreditsLimit: initialCredits
   };
@@ -73,7 +79,18 @@ export function registerDoctorUser(
 }
 
 /**
- * Asigna o recarga la cuota de consultas de IA para un médico (Función Administrador)
+ * Permite al médico actualizar/resetear su contraseña de acceso personal.
+ */
+export function updateDoctorPassword(username: string, newPass: string): void {
+  const users = getRegisteredUsers();
+  const index = users.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+  if (index === -1) throw new Error("Especialista no encontrado en el sistema.");
+  users[index].password = newPass;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+}
+
+/**
+ * Asigna o recarga la cuota de consultas de IA para un médico (Función Administrador).
  */
 export function updateDoctorAiCredits(username: string, newLimit: number): DoctorUser {
   const users = getRegisteredUsers();
@@ -84,7 +101,7 @@ export function updateDoctorAiCredits(username: string, newLimit: number): Docto
   }
 
   users[index].aiCreditsLimit = newLimit;
-  users[index].aiCredits = newLimit; // Reinicia la cuota disponible al nuevo límite
+  users[index].aiCredits = newLimit;
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
   return users[index];
@@ -103,7 +120,7 @@ export function consumeAiCredit(username: string): number {
   }
 
   if (users[index].aiCredits <= 0) {
-    throw new Error(`Límite de consultas de IA alcanzado (${users[index].aiCreditsLimit}/${users[index].aiCreditsLimit}). Por favor, solicita una recarga de cuota al administrador.`);
+    throw new Error(`Límite de consultas de IA alcanzado (${users[index].aiCreditsLimit}/${users[index].aiCreditsLimit}). Solicita un incremento de cuota.`);
   }
 
   users[index].aiCredits -= 1;
