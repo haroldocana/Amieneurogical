@@ -88,12 +88,8 @@ export default function App() {
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('amie_auth_token');
-      localStorage.removeItem('amie_doctor_name');
-      localStorage.removeItem('amie_username');
-      localStorage.removeItem('amie_doctor_username');
-      localStorage.removeItem('amie_colegiado_number');
-      localStorage.removeItem('amie_ai_credits');
+      localStorage.clear();
+      sessionStorage.clear();
     }
     setIsAuthenticated(false);
   };
@@ -108,7 +104,7 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Error al conectar con el motor clínico AMIE.');
-    } finally {
+    } fontally {
       setIsAnalyzing(false);
     }
   };
