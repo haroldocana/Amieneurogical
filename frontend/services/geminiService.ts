@@ -1,10 +1,12 @@
-import { GoogleGenAI } from '@google/genai';
 import { runtimeConfig } from '../resources/motor-clinico-amiet-55307264/config';
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
 import { CLINICAL_CASE_PRESETS } from '../constants';
 
-const CLOUD_RUN_API_URL = 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
-const CLOUD_FUNCTION_SYNC_URL = 'https://sync-patient-expedient-367911373284.us-central1.run.app';
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
+const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
+
+const CLOUD_RUN_API_URL = import.meta.env.VITE_CLOUD_RUN_URL || 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
+const CLOUD_FUNCTION_SYNC_URL = import.meta.env.VITE_CLOUD_FUNCTION_SYNC_URL || 'https://sync-patient-expedient-367911373284.us-central1.run.app';
 
 export const SAFE_DEFAULT_PATIENT: PatientRecord = {
   id: 'PAC-8104',
@@ -110,6 +112,30 @@ export const SAFE_DEFAULT_PATIENT: PatientRecord = {
 };
 
 /**
+ * Función auxiliar para canalizar llamadas a Vertex AI a través del Backend Proxy de Express
+ */
+async function callVertexViaProxy(originalUrl: string, payloadBody: any) {
+  const response = await fetch(`${BACKEND_URL}/api-proxy`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-app-proxy': PROXY_HEADER
+    },
+    body: JSON.stringify({
+      originalUrl,
+      body: payloadBody
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Proxy Error (${response.status}): ${errorText}`);
+  }
+
+  return await response.json();
+}
+
+/**
  * Normaliza el género/sexo recibido del SaaS al tipo esperado 'M' | 'F' | 'Other'
  */
 function normalizeGender(rawSex?: string): 'M' | 'F' | 'Other' {
@@ -146,8 +172,6 @@ function normalizeFunctionalAreas(rawAreas: any) {
 
 /**
  * Connects with external Clinical App via Cloud Storage and Cloud Function.
- * Extracts 100% of accumulated psychometric scores, functional areas, and longitudinal notes
- * to enable high-certainty (80-90%) bioclinical triangulation.
  */
 export async function syncWithClinicalApp(
   patientId: string,
@@ -161,7 +185,7 @@ export async function syncWithClinicalApp(
   const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold01').trim();
   const cleanPatientId = (patientId || 'PAC-8104').trim().toUpperCase();
 
-  // 1. INTENTO DE EXTRACCIÓN DIRECTA 100% FIEL DESDE GOOGLE CLOUD STORAGE (APP1)
+  // 1. EXTRACCIÓN DESDE CLOUD STORAGE
   try {
     const cloudUrl = `https://storage.googleapis.com/base-psicologiagt-usuario2/clinica/${resolvedDoctorUsername}/cases.json?t=${Date.now()}`;
     const response = await fetch(cloudUrl);
@@ -173,7 +197,6 @@ export async function syncWithClinicalApp(
       if (rawCase) {
         const sessions = rawCase.sessions || [];
         
-        // Extracción dinámica del 100% de los resultados psicométricos sin pérdida de claves
         const exactPsychometrics: Record<string, number> = {};
         sessions.forEach((s: any) => {
           if (s.testScores && typeof s.testScores === 'object') {
@@ -210,7 +233,6 @@ export async function syncWithClinicalApp(
           }
         };
 
-        // Triangulación bioclínica automática
         let amieAnalysis: AmieClinicalAnalysis | null = null;
         try {
           amieAnalysis = await runAmieClinicalAnalysis(mappedPatient);
@@ -229,7 +251,7 @@ export async function syncWithClinicalApp(
     console.warn('Fallo al conectar con Cloud Storage directo, intentando fallback de Cloud Function:', err);
   }
 
-  // 2. FALLBACK VIA CLOUD FUNCTION SYNC ENDPOINT
+  // 2. FALLBACK VIA CLOUD FUNCTION
   const token = typeof window !== 'undefined'
     ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token'
     : 'demo-jwt-bearer-token';
@@ -261,7 +283,6 @@ export async function syncWithClinicalApp(
       const data = await response.json();
       const rawData = (data.patientRecord || data) as any;
 
-      // MAPEO Y ADAPTACIÓN DE DATOS (SaaS -> Copiloto)
       const mappedId = rawData.patientId || rawData.id || rawData.pacId || cleanPatientId;
       const mappedAge = Number(rawData.age) || 21;
       const mappedGender = normalizeGender(rawData.sex || rawData.gender || 'Femenino');
@@ -332,7 +353,7 @@ export async function syncWithClinicalApp(
     console.warn('Fallo en solicitud de red a Cloud Function, verificando repositorio local de presets:', err);
   }
 
-  // 3. FALLBACK LOCAL SI EXISTE EN PRESETS
+  // 3. FALLBACK LOCAL PRESETS
   const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPatientId);
   if (matchedPreset) {
     const syncdPatient: PatientRecord = {
@@ -360,8 +381,8 @@ export async function syncWithClinicalApp(
 }
 
 /**
- * Runs AMIE Multimodal Diagnostic Analysis using DSM-5 Morrison principles,
- * 7-disorder differential matrix, regional qEEG Z-score breakdown, and APK telemetry.
+ * Runs AMIE Multimodal Diagnostic Analysis using DSM-5 Morrison principles
+ * via Express Proxy pointing to Vertex AI.
  */
 export async function runAmieClinicalAnalysis(
   patient: PatientRecord,
@@ -378,7 +399,7 @@ export async function runAmieClinicalAnalysis(
 
   const activeImage = qEegImageBase64 || safeRecord.qeegBiomarkers?.heatmapBase64 || null;
 
-  // 1. Direct Call to Cloud Run Microservice endpoint with JWT Authorization & Multimodal Payload
+  // 1. Intento vía Microservicio Cloud Run
   try {
     const apiPayload = {
       patientRecord: safeRecord,
@@ -406,12 +427,10 @@ export async function runAmieClinicalAnalysis(
       }
     }
   } catch (backendError) {
-    console.warn('Cloud Run API unavailable, invoking Gemini 2.5 Flash clinical engine:', backendError);
+    console.warn('Cloud Run API no disponible, ejecutando motor clínico Vertex AI a través del Proxy:', backendError);
   }
 
-  // 2. Direct call to Google GenAI SDK (Gemini 2.5 Flash) with Clinical Chain of Thought & Multimodal Payload
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
-
+  // 2. Ejecución mediante Proxy Backend de Express a Vertex AI
   const patientJsonString = JSON.stringify(safeRecord, null, 2);
 
   const promptText = `
@@ -449,92 +468,7 @@ EXPEDIENTE DEL PACIENTE EN FORMATO JSON:
 ${patientJsonString}
 
 INSTRUCCIONES DE FORMATO DE RESPUESTA:
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura exacta:
-{
-  "principalDiagnosis": {
-    "codeCIE10": "código CIE-10 (ej. F32.3 o F31.2 o F90.2)",
-    "codeCIE9": "código CIE-9 equivalente",
-    "disorderName": "Nombre exacto con especificadores según DSM-5",
-    "certaintyPct": 92,
-    "specifiers": ["lista", "de", "especificadores"],
-    "gafEstimated": 50,
-    "justificationDsm5": "Justificación clínica detallada según criterios Morrison y DSM-5"
-  },
-  "differentialMatrix": [
-    {
-      "disorderKey": "TDAH" | "TAG" | "TDM" | "TEA" | "TLP" | "TOC" | "DETERIORO_PRODROMO",
-      "disorderName": "Nombre del trastorno",
-      "codeCIE10": "CIE-10",
-      "status": "Confirmado Principal" | "Descartado" | "Posible / A Investigar" | "Comórbido",
-      "certaintyPct": 85,
-      "qeegProfile": {
-        "thetaBetaRatioEvaluation": "Evaluación de Theta/Beta para este trastorno",
-        "highBetaEvaluation": "Evaluación de High-Beta",
-        "alphaAsymmetryEvaluation": "Evaluación de Asimetría Alfa",
-        "coherenceEvaluation": "Evaluación de Coherencia"
-      },
-      "psychometricsProfile": {
-        "scaleMatched": "Escalas clave (ej. ASRS, AQ-10, BDI)",
-        "scoreSummary": "Interpretación psicométrica"
-      },
-      "apkPassiveMarker": "Correlación con despertares y latencia biomotora",
-      "acousticBiomarkerCorrelation": "Correlación con ritmo del habla y prosodia",
-      "biasDiscardRationale": "Por qué se descarta o confirma el sesgo",
-      "morrisonPrincipleApplied": "Principio Morrison aplicado"
-    }
-  ],
-  "differentialDiagnoses": [
-    {
-      "candidate": "Nombre del diagnóstico",
-      "codeCIE10": "CIE-10",
-      "status": "Descartado" | "Posible / A investigar" | "Comórbido",
-      "rationale": "Motivo clínico",
-      "safetyRuleApplied": "Principio aplicado"
-    }
-  ],
-  "bioclinicalTriangulation": {
-    "psychometricsSummary": "Resumen cruzado de escalas",
-    "functionalAreasAssessment": "Evaluación neurovegetativa",
-    "neuromotorInterpretation": "Análisis de latencia USB y control inhibitorio",
-    "acousticBiometricAssessment": "Evaluación acústica de voz y prosodia",
-    "qeegInterpretation": "Análisis global de biomarcadores qEEG",
-    "regionalLobeBreakdown": {
-      "frontal": "Análisis lóbulo frontal",
-      "temporal": "Análisis lóbulo temporal",
-      "parietal": "Análisis lóbulo parietal",
-      "occipital": "Análisis lóbulo occipital"
-    },
-    "convergenceScore": 94
-  },
-  "riskAlerts": {
-    "suicideRiskLevel": "BAJO" | "MODERADO" | "ALTO" | "CRÍTICO",
-    "psychosisRisk": "AUSENTE" | "LEVE / ATENUADO" | "PROMISORIO" | "ACTIVO FRANCO",
-    "cognitiveDeteriorationRisk": "NORMAL" | "LEVE (DCL)" | "MODERADO" | "SEVERO",
-    "apkPassiveState": "Estado actual de telemetría APK Centinela",
-    "criticalAlertsList": ["Alerta 1", "Alerta 2"],
-    "containmentProtocolSuggested": "Directrices de contención 24/7 y restricción de medios"
-  },
-  "pharmacologicalEffectiveness": [
-    {
-      "drugClass": "Familia farmacológica (ej. ISRS, Estabilizadores del Ánimo, Psicoestimulantes)",
-      "moleculeName": "Molécula de elección",
-      "dosageAssessed": "Dosis analizada",
-      "estimatedEffectivenessPct": 88,
-      "expectedResponse": "Alta Respuesta Terapéutica" | "Respuesta Parcial / Dosis Subóptima" | "Riesgo de Viraje a Manía / Hipersensibilidad" | "Baja Efectividad / Resistencia Farmacodinámica",
-      "biomarkerRationale": "Fundamentación bioclínica y qEEG",
-      "adverseEffectRisks": ["Riesgo 1", "Riesgo 2"],
-      "recommendedDoseAdjustment": "Ajuste o titulación recomendada"
-    }
-  ],
-  "recommendedActionPlan": {
-    "neurofeedbackProtocol": ["Protocolo 1 (ej. Entrenamiento SMR / Inhibición Theta Frontal)", "Protocolo 2"],
-    "psychotherapyStrategy": ["TCC / DBT / EMDR especificada con foco clínico", "Estrategia 2"],
-    "pharmacologySuggestions": ["Sugerencia psicofarmacológica fundamentada", "Sugerencia 2"],
-    "psychiatryReferralUrgent": true,
-    "monitoringDirectives": ["Directiva de seguimiento", "Directiva 2"],
-    "urgentActions": ["Acción inmediata 1", "Acción 2"]
-  }
-}
+Devuelve EXCLUSIVAMENTE un objeto JSON válido.
 `;
 
   const parts: any[] = [{ text: promptText }];
@@ -551,33 +485,42 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura exact
     }
   }
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+  const vertexEndpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-1.5-flash:generateContent';
+
+  const proxyPayload = {
     contents: [
       {
         role: 'user',
         parts: parts
       }
     ],
-    config: {
-      systemInstruction: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica.',
+    systemInstruction: {
+      parts: [
+        {
+          text: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica.'
+        }
+      ]
+    },
+    generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.2,
+      temperature: 0.2
     }
-  });
+  };
 
-  const text = response.text || '{}';
-  const parsedData: AmieClinicalAnalysis = JSON.parse(text);
+  const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
+  const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  const parsedData: AmieClinicalAnalysis = JSON.parse(responseText);
   return parsedData;
 }
 
+/**
+ * Chat copilot conversation handler via Express Proxy
+ */
 export async function askAmieAssistant(
   conversation: { role: 'user' | 'model'; text: string }[],
   currentPatient: PatientRecord,
   analysisData?: AmieClinicalAnalysis | null
 ): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
-
   const systemContext = `
 Eres AMIE (Articulate Medical Intelligence Explorer), Copiloto Clínico Psiquiátrico y Neurológico.
 Estás dialogando directamente con el médico especialista tratante colegiado.
@@ -589,19 +532,28 @@ ${analysisData ? `Análisis diagnóstico emitido previamente:\n${JSON.stringify(
 Responde de forma concisa, profesional, técnica, fundamentada en la literatura médica psiquiátrica (DSM-5, psicofarmacología clínica de Stahl/Goodman & Gilman, neurociencias y principios diagnósticos de James Morrison).
 `;
 
+  const vertexEndpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-1.5-flash:generateContent';
+
   const contents = conversation.map(msg => ({
-    role: msg.role,
+    role: msg.role === 'model' ? 'model' : 'user',
     parts: [{ text: msg.text }]
   }));
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+  const proxyPayload = {
     contents: contents,
-    config: {
-      systemInstruction: systemContext,
+    systemInstruction: {
+      parts: [{ text: systemContext }]
+    },
+    generationConfig: {
       temperature: 0.4
     }
-  });
+  };
 
-  return response.text || 'Sin respuesta del motor clínico.';
+  try {
+    const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
+    return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor clínico.';
+  } catch (err: any) {
+    console.error('Error en askAmieAssistant:', err);
+    return 'Error al conectar con el servidor proxy de AMIE: ' + (err.message || 'Fallo de red');
+  }
 }
