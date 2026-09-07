@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Stethoscope, Lock, User, AlertCircle, ArrowRight, RefreshCw, UserPlus, CheckCircle2, KeyRound, Database } from 'lucide-react';
+import { ShieldCheck, Stethoscope, Lock, User, AlertCircle, ArrowRight, RefreshCw, UserPlus, CheckCircle2, KeyRound } from 'lucide-react';
 import { authenticateDoctor, registerDoctorUser, getRegisteredUsers, updateDoctorAiCredits, DoctorUser } from '../services/userService';
 
 interface LoginModalProps {
@@ -29,6 +29,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   const [adminDoctorName, setAdminDoctorName] = useState('');
   const [adminColegiado, setAdminColegiado] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [adminAiLimit, setAdminAiLimit] = useState<number>(100);
   const [adminSuccessMsg, setAdminSuccessMsg] = useState<string | null>(null);
 
@@ -161,6 +162,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       return;
     }
 
+    if (!adminPassword.trim()) {
+      setError('Debes ingresar una contraseña inicial para el especialista.');
+      return;
+    }
+
     try {
       const newUser = registerDoctorUser(
         {
@@ -168,13 +174,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           doctorName: adminDoctorName.trim(),
           colegiadoNumber: numColegiado,
         },
-        adminAiLimit
+        adminAiLimit,
+        adminPassword.trim()
       );
 
-      setAdminSuccessMsg(`Licencia #${newUser.licenseKey} emitida para ${newUser.doctorName}.`);
+      setAdminSuccessMsg(`Licencia #${newUser.licenseKey} emitida exitosamente para ${newUser.doctorName}.`);
       setAdminDoctorName('');
       setAdminColegiado('');
       setAdminUsername('');
+      setAdminPassword('');
       refreshAdminUsers();
     } catch (err: any) {
       setError(err.message || 'Error al emitir la licencia.');
@@ -431,19 +439,29 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                       className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white font-mono"
                     />
                   </div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Usuario ID"
-                    value={adminUsername}
-                    onChange={(e) => setAdminUsername(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white"
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Usuario ID"
+                      value={adminUsername}
+                      onChange={(e) => setAdminUsername(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white"
+                    />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contraseña Inicial *"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white font-mono"
+                    />
+                  </div>
                   <button
                     type="submit"
-                    className="w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded transition"
+                    className="w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded transition mt-1"
                   >
-                    Emitir Licencia
+                    Emitir Licencia con Clave
                   </button>
                 </form>
 
