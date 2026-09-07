@@ -104,7 +104,7 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Error al conectar con el motor clínico AMIE.');
-    } fontally {
+    } finally {
       setIsAnalyzing(false);
     }
   };
