@@ -5,13 +5,25 @@
  */
 import 'dotenv/config';
 import express from 'express';
+import cors from 'cors'; // Importación de CORS agregada
 import { GoogleAuth } from 'google-auth-library';
 import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const app = express();
-app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
+
+// --- Configuración Global de CORS ---
+app.use(cors({
+  origin: '*', // Permite peticiones desde el frontend en Render
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-goog-api-client']
+}));
+
+// Responder inmediatamente a peticiones Preflight (OPTIONS)
+app.options('*', cors());
+
+app.use(express.json({ limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb" }));
 
 // Configuración de Puerto y Host para Render (0.0.0.0 y PORT de entorno)
 const PORT = process.env.PORT || process.env.API_BACKEND_PORT || 10000;
@@ -33,20 +45,20 @@ app.set('trust proxy', 1 /* number of proxies between user and server */);
 
 // IMPORTANT: Vertex AI Studio Rate Limiting
 const proxyLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 min
-    max: 100, 
-    standardHeaders: true, 
-    legacyHeaders: false, 
-    message: {
-      error: 'Too many requests',
-      message: 'You have exceed the request limit, please try again later.'
-    },
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 100, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  message: {
+    error: 'Too many requests',
+    message: 'You have exceed the request limit, please try again later.'
+  },
 });
 
 app.use('/api-proxy', proxyLimiter);
 
 const API_CLIENT_MAP = [
- {
+  {
     name: "VertexGenAi:generateContent",
     patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:generateContent",
     getApiEndpoint: (context, params) => {
@@ -57,7 +69,7 @@ const API_CLIENT_MAP = [
     isStreaming: false,
     transformFn: null,
   },
- {
+  {
     name: "VertexGenAi:predict",
     patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:predict",
     getApiEndpoint: (context, params) => {
@@ -68,7 +80,7 @@ const API_CLIENT_MAP = [
     isStreaming: false,
     transformFn: null,
   },
- {
+  {
     name: "VertexGenAi:streamGenerateContent",
     patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:streamGenerateContent",
     getApiEndpoint: (context, params) => {
