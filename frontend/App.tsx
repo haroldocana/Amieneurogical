@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
 import { BiomarkerDashboard } from './components/BiomarkerDashboard';
@@ -29,8 +29,6 @@ import {
   KeyRound,
   AlertCircle,
   BrainCircuit,
-  RefreshCw,
-  CloudDownload,
   GraduationCap,
   GitCompare,
   Microscope,
@@ -66,6 +64,21 @@ export default function App() {
   const [isDsmModalOpen, setIsDsmModalOpen] = useState(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
 
+  // Recuperación automática de sesión activa desde localStorage
+  useEffect(() => {
+    const savedToken = localStorage.getItem('amie_auth_token');
+    const savedDoctor = localStorage.getItem('amie_doctor_name');
+    const savedUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username');
+    const savedColegiado = localStorage.getItem('amie_colegiado_number');
+
+    if (savedToken && savedDoctor) {
+      setDoctorName(savedDoctor);
+      setDoctorUsername(savedUsername || 'harold01');
+      setColegiadoNumber(Number(savedColegiado) || 749210);
+      setIsAuthenticated(true);
+    }
+  }, []);
+
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -88,7 +101,6 @@ export default function App() {
     }
   };
 
-  // Dynamic PAC Synchronization with Cloud Function endpoint sending doctorUsername
   const handleSyncPacient = async (pacId: string) => {
     setIsSyncing(true);
     setErrorMsg(null);
@@ -155,7 +167,7 @@ export default function App() {
         isSyncingPac={isSyncing}
       />
 
-      {/* Primary Tab Navigation Bar with Interactive Hover Explaners */}
+      {/* Primary Tab Navigation Bar */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
@@ -303,7 +315,7 @@ export default function App() {
             {/* SaaS */}
             <HoverTooltip
               title="Licencias SaaS & Cloud Storage"
-              description="Aprovisionamiento de credenciales médicas validadas por colegiatura en gs://base-conocimiento-medica/licencias/."
+              description="Aprovisionamiento de credenciales médicas validadas por colegiatura y gestión de cuotas de IA."
               clinicalUtility="Administración institucional segura HIPAA/RGPD."
               badge="Gestión"
             >
@@ -327,7 +339,6 @@ export default function App() {
       {/* Main Tab Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
         
-        {/* Error 404: Expediente no encontrado en Toro App / Cloud Function */}
         {syncNotFoundAlert && (
           <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl animate-shake">
             <div className="flex items-center gap-3">
@@ -348,7 +359,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Sync Success notification */}
         {syncSuccessMsg && (
           <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 shadow-lg">
             <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -356,7 +366,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Error notification general */}
         {errorMsg && (
           <div className="p-4 bg-red-950/60 border border-red-500/50 rounded-xl text-red-200 text-xs flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
@@ -370,29 +379,20 @@ export default function App() {
         {/* Tab 1: Workstation Clínico */}
         {activeTab === 'workstation' && (
           <div className="space-y-5">
-            {/* Critical Risk Alert Banner if analysis exists */}
             {analysis?.riskAlerts && <RiskAlertBanner alerts={analysis.riskAlerts} />}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              {/* Left Column: Patient Record, Sentinel Dashboard, Audio Acoustics & Bioclinical Telemetry */}
               <div className="lg:col-span-5 space-y-5 flex flex-col">
                 <PatientJsonEditor
                   patient={currentPatient}
                   onChange={setCurrentPatient}
                   onSelectPreset={handleSelectPreset}
                 />
-
-                {/* Sentinel APK Passive Measurement */}
                 <PatientSentinelDashboard patient={currentPatient} />
-
-                {/* Session Audio & Voice Biometrics */}
                 <SessionAudioAcoustics audioRecordings={currentPatient?.audioRecordings} />
-
-                {/* Visual Biomarkers Dashboard */}
                 <BiomarkerDashboard patient={currentPatient} />
               </div>
 
-              {/* Right Column: AMIE Clinical Output or Prompt Engine */}
               <div className="lg:col-span-7 space-y-5">
                 {analysis ? (
                   <>
@@ -408,14 +408,13 @@ export default function App() {
                       Motor Clínico AMIE Listo para Análisis Multimodal
                     </h3>
                     <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                      Ingrese un código PAC en la barra superior o seleccione un caso prototípico. Haga clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado en 5 bloques: Impresión Principal (&gt;80%), Matriz Diferencial de 7 trastornos, qEEG por Lóbulos y Biometría Acústica, Efectividad Farmacológica y Plan Multimodal de Seguridad.
+                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haga clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado en 5 bloques.
                     </p>
 
                     <button
                       onClick={handleRunAnalysis}
                       disabled={isAnalyzing}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-lg shadow-sky-500/20 active:scale-95 transition"
-                      title="Procesar datos clínicos del paciente con IA"
                     >
                       <Activity className="w-4 h-4" />
                       <span>Procesar Expediente Ahora</span>
@@ -427,30 +426,11 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 2: Evaluador Científico & Multisensor */}
-        {activeTab === 'scientific_evaluator' && (
-          <ScientificNeuroEvaluator patient={currentPatient} />
-        )}
-
-        {/* Tab 3: Diferenciador & Sesgos */}
-        {activeTab === 'differential_bias' && (
-          <DifferentialBiasResolver patient={currentPatient} />
-        )}
-
-        {/* Tab 4: Capacitación AMIE & Simulador */}
+        {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={currentPatient} />}
+        {activeTab === 'differential_bias' && <DifferentialBiasResolver patient={currentPatient} />}
         {activeTab === 'academy' && <AmieClinicalAcademy />}
-
-        {/* Tab 5: Neurotopografía 3D Holográfica */}
-        {activeTab === 'neuro_3d' && (
-          <div className="space-y-4">
-            <InteractiveNeuroViewer patient={currentPatient} />
-          </div>
-        )}
-
-        {/* Tab 6: Neurosensometría (qEEG) */}
+        {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
-
-        {/* Tab 7: Referencia a Psiquiatría */}
         {activeTab === 'referral' && (
           <PsychiatryReferralView
             patient={currentPatient}
@@ -459,19 +439,15 @@ export default function App() {
             colegiadoNumber={colegiadoNumber}
           />
         )}
-
-        {/* Tab 8: Licencias SaaS */}
         {activeTab === 'saas' && <AdminSaaSPanel />}
       </main>
 
-      {/* ASISTENTE FLOTANTE AMIE HELP EN LA ESQUINA INFERIOR DERECHA */}
       <FloatingAmieAssistant
         currentPatientId={safePatientId}
         onNavigateTab={(targetTab) => setActiveTab(targetTab)}
         activeTab={activeTab}
       />
 
-      {/* DSM-5 / Principles Reference Modal */}
       <DsmGuideModal
         isOpen={isDsmModalOpen}
         onClose={() => setIsDsmModalOpen(false)}
