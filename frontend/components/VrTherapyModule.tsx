@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { 
   Glasses, Activity, HeartPulse, FileText, CheckCircle2, ShieldAlert, 
-  Wifi, Settings, Edit3, Download, RefreshCw, BarChart2, Play, Pause, Layers, Brain, Target, Eye
+  Wifi, Settings, Edit3, Download, RefreshCw, BarChart2, Play, Pause, Layers, Brain, Target
 } from 'lucide-react';
 
 interface VrTherapyModuleProps {
@@ -10,7 +10,6 @@ interface VrTherapyModuleProps {
   onUpdatePatientVrData: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-// BATERÍA COMPLETA DE TRASTORNOS CON MÉTRICAS Y DATOS DINÁMICOS
 const EXTENDED_CLINICAL_PROTOCOLS = [
   {
     key: 'TAG',
@@ -22,7 +21,6 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
     targetDurationSec: 300,
     expectedPhysioPattern: 'Elevación de GSR > 4.0 µS con recuperación de HRV RMSSD > 35 ms tras 180s de exposición.',
     primaryBiomarkers: 'Conductancia Cutánea (GSR Pico) + HRV RMSSD',
-    // Configuración biométrica dinámica específica
     metric1: { label: 'Conductancia Cutánea (GSR)', value: '4.8 µS', status: '(Pico Excitación)', desc: 'Respuesta adrenérgica simpática' },
     metric2: { label: 'Tono Vagal (HRV RMSSD)', value: '48 ms', status: '(Modulación)', desc: 'Capacidad de autorregulación parasimpática' },
     metric3: { label: 'Índice de Habituación (H)', value: '2.84', status: '(Óptima)', desc: 'Tasa de extinción del distrés' },
@@ -108,102 +106,6 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
     metric3: { label: 'Tono Parasimpático', value: '32 ms', status: '(Modulado)', desc: 'Recuperación progresiva' },
     graphGsrData: [1.8, 4.2, 4.1, 4.0, 3.8, 3.2, 2.5, 2.0, 1.6],
     graphHrvData: [38, 20, 21, 23, 26, 30, 35, 39, 42]
-  },
-  {
-    key: 'TEA',
-    disorderName: 'Trastorno del Espectro Autista (TEA / CIE-11: 6A02)',
-    reliabilityPct: 90.5,
-    scenarioTitle: 'Modulación de Carga Sensorial y Detección de Camouflaging',
-    clinicalObjective: 'Evaluación del umbral de saturación sensorial (auditiva/visual) e incongruencia del enmascaramiento.',
-    stimulusParameters: 'Entorno urbano dinámico con control gradual de picos de luminancia y ruido blanco de baja frecuencia.',
-    targetDurationSec: 300,
-    expectedPhysioPattern: 'Estabilización de GSR frente a picos sensoriales y control de sobrecarga táctil/visual.',
-    primaryBiomarkers: 'Índice de Sobrecarga Sensorial + Tono Vagal de Autorregulación',
-    metric1: { label: 'Sobrecarga Sensorial', value: '78%', status: '(Alta Excitación)', desc: 'Saturación por estímulos urbanos' },
-    metric2: { label: 'Fijación Ocular Evitativa', value: '62%', status: '(Desviación de Mirada)', desc: 'Evitación de contacto visual' },
-    metric3: { label: 'Estabilidad Vagal', value: '28 ms', status: '(Moderada)', desc: 'Sostenimiento parasimpático' },
-    graphGsrData: [2.0, 3.8, 4.5, 4.8, 4.6, 4.2, 3.8, 3.1, 2.5],
-    graphHrvData: [35, 22, 18, 16, 20, 24, 28, 30, 32]
-  },
-  {
-    key: 'AGORAFOBIA',
-    disorderName: 'Agorafobia y Trastorno de Pánico (CIE-11: 6B01 / 6B02)',
-    reliabilityPct: 95.2,
-    scenarioTitle: 'Exposición a Espacios Abiertos / Confinamiento Espacial',
-    clinicalObjective: 'Monitoreo de hiperventilación, taquicardia reactiva y picos de excitación simpática agudizada.',
-    stimulusParameters: 'Transición fluida entre recinto confinado (ascensor virtual) y plaza abierta de alto tráfico.',
-    targetDurationSec: 300,
-    expectedPhysioPattern: 'Control del tono simpático agudo y prevención de hiperventilación parasimpática.',
-    primaryBiomarkers: 'Variabilidad del Ritmo Cardíaco (HRV) + Pico de Conductancia GSR',
-    metric1: { label: 'Pico de Pánico GSR', value: '5.8 µS', status: '(Excitación Aguda)', desc: 'Reacción vegetativa inmediata' },
-    metric2: { label: 'Variabilidad Cardíaca', value: '14 ms', status: '(Caída Vagal)', desc: 'Taquicardia inmersiva reactiva' },
-    metric3: { label: 'Recuperación en Espacio', value: '120 s', status: '(En Proceso)', desc: 'Desensibilización al espacio' },
-    graphGsrData: [1.1, 5.8, 5.2, 4.1, 3.0, 2.2, 1.8, 1.5, 1.2],
-    graphHrvData: [42, 14, 18, 26, 32, 38, 42, 45, 48]
-  },
-  {
-    key: 'DETERIORO',
-    disorderName: 'Deterioro Cognitivo Leve / Prodromo Neurodegenerativo (CIE-11: 6D80)',
-    reliabilityPct: 88.9,
-    scenarioTitle: 'Navegación Espacial Mapeada y Memoria Visuoespacial 3D',
-    clinicalObjective: 'Evaluación de la desorientación espacial temprana, velocidad de procesamiento y búsqueda inmersiva.',
-    stimulusParameters: 'Laberinto espacial en 3D con hitos visuales y medición de trayectoria ocular.',
-    targetDurationSec: 240,
-    expectedPhysioPattern: 'Mantenimiento de estabilidad saccádica y trayectoria eficiente sin desorientación.',
-    primaryBiomarkers: 'Eficiencia de Trayectoria 3D + Estabilidad Saccádica Ocular',
-    metric1: { label: 'Error de Trayectoria 3D', value: '34%', status: '(Desorientación Leve)', desc: 'Desviación de la ruta idónea' },
-    metric2: { label: 'Velocidad de Búsqueda', value: '620 ms', status: '(Ralentizada)', desc: 'Tiempo de localización de hitos' },
-    metric3: { label: 'Fábrica Cardiovascular', value: '42 ms', status: '(Normotenso)', desc: 'Estabilidad autonómica general' },
-    graphGsrData: [1.0, 1.2, 1.5, 1.8, 2.0, 1.9, 1.7, 1.4, 1.1],
-    graphHrvData: [45, 44, 42, 41, 40, 42, 43, 44, 45]
-  },
-  {
-    key: 'ESQUIZOFRENIA_PROD',
-    disorderName: 'Síndrome Psicótico Atenuado / Pródromo Esquizofrenia (CIE-11: 6A20)',
-    reliabilityPct: 87.6,
-    scenarioTitle: 'Integración Multisensorial y Detección de Anomalías Perceptivas',
-    clinicalObjective: 'Evaluación de la congruencia oculomotora y respuesta vegetativa ante incongruencias espacio-temporales.',
-    stimulusParameters: 'Entorno abstracto neutro con alteración diferida de profundidad y perspectiva 3D.',
-    targetDurationSec: 300,
-    expectedPhysioPattern: 'Desviación involuntaria del rastreo ocular y disociación respuesta vegetativa/fijación.',
-    primaryBiomarkers: 'Gaze Tracking Error + Coherencia Vegetativa Intersensorial',
-    metric1: { label: 'Gaze Tracking Error', value: '4.2°', status: '(Disociación Ocular)', desc: 'Incongruencia del rastreo visual' },
-    metric2: { label: 'Coherencia Vegetativa', value: '42%', status: '(Desacoplada)', desc: 'Disociación GSR / Estímulo' },
-    metric3: { label: 'Tono Parasimpático', value: '30 ms', status: '(Aplanado)', desc: 'Ausencia de modulación vagal' },
-    graphGsrData: [1.5, 1.8, 1.6, 2.2, 1.7, 2.0, 1.8, 1.5, 1.4],
-    graphHrvData: [32, 30, 31, 29, 30, 28, 31, 30, 32]
-  },
-  {
-    key: 'DOLOR_CRONICO',
-    disorderName: 'Somatic Symptom Disorder / Dolor Crónico Centralizado (CIE-11: 6C20)',
-    reliabilityPct: 89.1,
-    scenarioTitle: 'Modulación Top-Down del Dolor mediante Ilusión Corporal VR',
-    clinicalObjective: 'Evaluación de la reescritura de esquemas propioceptivos e inhibición de la amplificación central.',
-    stimulusParameters: 'Feedback de avatar corporal espejo con estimulación térmica/visual sincrónica.',
-    targetDurationSec: 300,
-    expectedPhysioPattern: 'Reducción de la respuesta simpática ante provocación nociceptiva simulada.',
-    primaryBiomarkers: 'Modulación Vagal HRV + Atenuación de Reactividad GSR',
-    metric1: { label: 'Atenuación Nociceptiva', value: '38%', status: '(Inhibición Top-Down)', desc: 'Reducción de carga alostática' },
-    metric2: { label: 'Tono Vagal Recuperado', value: '44 ms', status: '(Aumento Parasimpático)', desc: 'Relajación corporal profunda' },
-    metric3: { label: 'Tensión Galvánica Basal', value: '1.5 µS', status: '(Normotensa)', desc: 'Línea base desinflamada' },
-    graphGsrData: [3.5, 3.2, 2.8, 2.2, 1.9, 1.7, 1.5, 1.4, 1.3],
-    graphHrvData: [22, 26, 30, 35, 39, 42, 44, 45, 46]
-  },
-  {
-    key: 'TCA',
-    disorderName: 'Trastorno de la Conducta Alimentaria / Dismorfia Corporal (CIE-11: 6B80)',
-    reliabilityPct: 89.1,
-    scenarioTitle: 'Exposición a Imagen Corporal Resonante y Desensibilización',
-    clinicalObjective: 'Evaluación de la ansiedad autonómica frente a la percepción distorsionada del esquema corporal.',
-    stimulusParameters: 'Proyección 3D de avatar espejo con gradiente de ajuste antropométrico en tiempo real.',
-    targetDurationSec: 240,
-    expectedPhysioPattern: 'Extinción del pico de ansiedad vegetativa ante la observación del esquema corporal real.',
-    primaryBiomarkers: 'Pico de Reactividad GSR + Tasa de Fijación Ocular Evitativa',
-    metric1: { label: 'Pico Ansiedad Dismórfica', value: '5.1 µS', status: '(Excitación Espejo)', desc: 'Respuesta ante avatar real' },
-    metric2: { label: 'Fijación Ocular Evitativa', value: '71%', status: '(Foco Evitativo)', desc: 'Evitación de áreas clave' },
-    metric3: { label: 'Extinción del Distrés', value: '160 s', status: '(En Desensibilización)', desc: 'Reducción de respuesta' },
-    graphGsrData: [1.2, 5.1, 4.8, 4.0, 3.2, 2.5, 2.0, 1.6, 1.3],
-    graphHrvData: [40, 16, 20, 28, 34, 38, 41, 44, 46]
   }
 ];
 
@@ -233,7 +135,42 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
 
-  // Sincronizar la telemetría y el informe cuando cambia el protocolo
+  // ESCUCHA WEBSOCKET EN TIEMPO REAL DESDE EL QUEST 3S
+  useEffect(() => {
+    if (connectionType === 'simulation') return;
+
+    const socketUrl = connectionType === 'websocket'
+      ? `ws://${ipAddress}:8080`
+      : `wss://amieneurogical.onrender.com/ws/quest3s`;
+
+    const ws = new WebSocket(socketUrl);
+
+    ws.onopen = () => {
+      setIsConnected(true);
+      console.log(`Enlace WebSocket activo con Quest 3S en ${socketUrl}`);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const liveData = JSON.parse(event.data);
+        setTelemetry(prev => ({
+          ...prev,
+          gsrMicroSiemens: liveData.gsrArray || prev.gsrMicroSiemens,
+          hrvRmssdMs: liveData.hrvArray || prev.hrvRmssdMs,
+          habituationIndexH: liveData.habituationH ?? prev.habituationIndexH,
+          saccadicRateHz: liveData.saccadicHz ?? prev.saccadicRateHz
+        }));
+      } catch (e) {
+        console.warn('Payload no válido recibido del Quest 3S:', e);
+      }
+    };
+
+    ws.onerror = () => setIsConnected(false);
+    ws.onclose = () => setIsConnected(false);
+
+    return () => ws.close();
+  }, [connectionType, ipAddress]);
+
   useEffect(() => {
     setTelemetry(prev => ({
       ...prev,
@@ -302,7 +239,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
   return (
     <div className="space-y-5">
-      {/* Encabezado Principal + Ajustes Quest 3S */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -313,11 +249,11 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 Módulo Terapéutico VR Meta Quest 3S
                 <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] rounded-full font-semibold">
-                  MÉTRICAS ADAPTATIVAS POR TRASTORNO
+                  MÉTRICAS ADAPTATIVAS EN TIEMPO REAL
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Pruebas estandarizadas con biomarcadores dinámicos (87.6% - 96.5% de fiabilidad) bajo DSM-5-TR y CIE-11.
+                Infección activa de datos vía WebSocket / LAN directo desde el visor Meta Quest 3S.
               </p>
             </div>
           </div>
@@ -341,7 +277,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
           </div>
         </div>
 
-        {/* Panel de Configuración de Enlace */}
         {isConfigOpen && (
           <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl space-y-3">
             <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
@@ -389,7 +324,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         )}
       </div>
 
-      {/* Selector de Protocolo por Trastorno DSM-5-TR */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-wider">
@@ -457,7 +391,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
-      {/* Grid de Biometría Dinámica (Cambia según el trastorno seleccionado) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
@@ -491,7 +424,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
-      {/* Gráfica de Estudio Biométrico Dinámica */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
@@ -521,7 +453,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
-      {/* Editor del Informe Clínico Ejecutivo */}
       <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
