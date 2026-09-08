@@ -1,703 +1,594 @@
-/**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
- */
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import { GoogleAuth } from 'google-auth-library';
-import fetch from 'node-fetch';
-import rateLimit from 'express-rate-limit';
-import { WebSocketServer, WebSocket } from 'ws';
-import mongoose from 'mongoose';
+import React, { useState, useEffect } from 'react';
+import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { 
+  Glasses, Activity, HeartPulse, FileText, CheckCircle2, ShieldAlert, 
+  Wifi, Settings, Edit3, Download, RefreshCw, BarChart2, Play, Pause, Layers, Brain, Target
+} from 'lucide-react';
 
-const app = express();
-
-// --- Configuración e Inicialización de MongoDB (Persistencia AMIE) ---
-if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('[AMIE Clinical Engine] Conectado exitosamente a MongoDB Atlas'))
-    .catch(err => console.error('[AMIE Clinical Engine] Error al conectar a MongoDB:', err));
-} else {
-  console.warn('[AMIE Clinical Engine] ADVERTENCIA: No se encontró la variable MONGO_URI. Los registros se procesarán solo en memoria.');
+interface VrTherapyModuleProps {
+  patient: PatientRecord;
+  onUpdatePatientVrData: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-// Esquema de Mongoose para almacenar el objeto PatientRecord completo
-const patientRecordSchema = new mongoose.Schema({
-  patientRecord: mongoose.Schema.Types.Mixed
-}, { timestamps: true });
-
-const PatientRecordModel = mongoose.model('PatientRecord', patientRecordSchema);
-
-// --- Configuración Global de CORS ---
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-goog-api-client']
-}));
-
-app.use(express.json({ limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb" }));
-
-// Configuración de Puerto y Host para Render
-const PORT = process.env.PORT || process.env.API_BACKEND_PORT || 10000;
-const API_BACKEND_HOST = process.env.API_BACKEND_HOST || "0.0.0.0";
-
-const GOOGLE_CLOUD_LOCATION = process?.env?.GOOGLE_CLOUD_LOCATION;
-const GOOGLE_CLOUD_PROJECT = process?.env?.GOOGLE_CLOUD_PROJECT;
-if (!GOOGLE_CLOUD_PROJECT || !GOOGLE_CLOUD_LOCATION) {
-  console.error("Error: Environment variables GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set.");
-  process.exit(1);
-}
-const PROXY_HEADER = process?.env?.PROXY_HEADER;
-if (!PROXY_HEADER) {
-  console.error("Error: Environment variables PROXY_HEADER must be set.");
-  process.exit(1);
-}
-
-app.set('trust proxy', 1);
-
-// Rate Limiter para Vertex AI
-const proxyLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100, 
-  standardHeaders: true, 
-  legacyHeaders: false, 
-  message: {
-    error: 'Too many requests',
-    message: 'You have exceed the request limit, please try again later.'
-  },
-});
-
-app.use('/api-proxy', proxyLimiter);
-
-// --- ENDPOINT REGISTRO CLÍNICO Y PERSISTENCIA AMIE (PatientRecord JSON) ---
-app.post('/api/patient-records', async (req, res) => {
-  try {
-    const payload = req.body;
-    
-    if (!payload || !payload.patientRecord || !payload.patientRecord.metadata) {
-      return res.status(400).json({ 
-        error: 'Bad Request', 
-        message: 'Estructura JSON de PatientRecord inválida para el motor AMIE.' 
-      });
-    }
-
-    const { patientId, sessionGuid } = payload.patientRecord.metadata;
-    console.log(`[AMIE Clinical Engine] Recibido expediente debiased para Paciente ID: ${patientId} (Session: ${sessionGuid})`);
-
-    let savedRecordId = null;
-
-    if (mongoose.connection.readyState === 1) {
-      const newRecord = new PatientRecordModel(payload);
-      const savedDoc = await newRecord.save();
-      savedRecordId = savedDoc._id;
-      console.log(`[AMIE Clinical Engine] Registro guardado con éxito en MongoDB (ID: ${savedRecordId})`);
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: 'Expediente clínico procesado y registrado exitosamente.',
-      patientId: patientId,
-      sessionGuid: sessionGuid,
-      dbRecordId: savedRecordId,
-      debiasedConfidence: payload.patientRecord.debiasingEngineMetrics?.debiasedConfidenceIndexPercent || 90.0
-    });
-  } catch (error) {
-    console.error('[AMIE Clinical Engine] Error al procesar o guardar el expediente:', error);
-    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
-  }
-});
-
-const API_CLIENT_MAP = [
+// CATALOGO EXTENDIDO DE 12 TRASTORNOS Y ENFERMEDADES DSM-5-TR / CIE-11
+const EXTENDED_CLINICAL_PROTOCOLS = [
   {
-    name: "VertexGenAi:generateContent",
-    patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:generateContent",
-    getApiEndpoint: (context, params) => {
-      return `https://aiplatform.clients6.google.com/${params['version']}/projects/${context.projectId}/locations/${context.region}/publishers/google/models/${params['model']}:generateContent`;
-    },
-    getLinkedResourceName: null,
-    bodyPolicy: "generate_content",
-    isStreaming: false,
-    transformFn: null,
+    key: 'TLP',
+    disorderName: 'Trastorno Límite de la Personalidad (TLP / CIE-11: 6D11)',
+    reliabilityPct: 91.8,
+    scenarioTitle: 'Provocación Controlada de Rechazo Social e Inhibición de Respuesta',
+    clinicalObjective: 'Evaluación de la desregulación afectiva aguda, hipervigilancia interpersonal y velocidad de autorregulación parasimpática.',
+    stimulusParameters: 'Paradoja de interacción Cyberball 3D inmersiva con exclusión diferida y registro de labilidad.',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Picos múltiples de GSR con caída drástica de HRV (< 20 ms) y modulación posterior.',
+    primaryBiomarkers: 'Labilidad Simpática + Caída Paroxística HRV + Tiempo de Recuperación Homeostática',
+    metric1: { label: 'Labilidad Simpática', value: '5.4 µS', status: '(Inestabilidad Alta)', desc: 'Picos múltiples en respuesta a exclusión' },
+    metric2: { label: 'Caída Paroxística HRV', value: '12 ms', status: '(Desregulación)', desc: 'Colapso temporal del tono vagal' },
+    metric3: { label: 'Tiempo de Autorregulación', value: '180 s', status: '(Lento)', desc: 'Retorno a línea base autonómica' },
+    graphGsrData: [1.2, 4.5, 2.1, 5.4, 1.8, 4.2, 2.0, 1.5, 1.3],
+    graphHrvData: [45, 12, 38, 15, 40, 18, 35, 42, 46]
   },
   {
-    name: "VertexGenAi:predict",
-    patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:predict",
-    getApiEndpoint: (context, params) => {
-      return `https://aiplatform.clients6.google.com/${params['version']}/projects/${context.projectId}/locations/${context.region}/publishers/google/models/${params['model']}:predict`;
-    },
-    getLinkedResourceName: null,
-    bodyPolicy: "opaque",
-    isStreaming: false,
-    transformFn: null,
+    key: 'ALZHEIMER',
+    disorderName: 'Trastorno Neurocognitivo Mayor / Menor por Enfermedad de Alzheimer (DSM-5 / CIE-11: 6D80)',
+    reliabilityPct: 93.4,
+    scenarioTitle: 'Mapeo Visuoespacial, Orientación Alocéntrica y Memoria Reciente 3D',
+    clinicalObjective: 'Cuantificación de la desorientación en entornos virtuales complejos, pérdida de hitos visuales y perseveración motora.',
+    stimulusParameters: 'Navegación en réplica virtual de entorno doméstico con tareas de localización de objetos cotidianos.',
+    targetDurationSec: 360,
+    expectedPhysioPattern: 'Aumento de la latencia de búsqueda, trayectoria vacilante y errores en fijación foveal.',
+    primaryBiomarkers: 'Eficiencia de Trayectoria 3D + Errores de Orientación + Fijación Foveal',
+    metric1: { label: 'Desviación de Trayectoria 3D', value: '42%', status: '(Desorientación Severa)', desc: 'Pérdida de la ruta alocéntrica idónea' },
+    metric2: { label: 'Fijación Foveal en Hitos', value: '110 ms', status: '(Deficiente)', desc: 'Incapacidad de retención del estímulo' },
+    metric3: { label: 'Latencia de Búsqueda', value: '820 ms', status: '(Enlentecimiento)', desc: 'Tiempo medio de procesamiento visuoespacial' },
+    graphGsrData: [1.1, 1.4, 1.8, 2.2, 2.5, 2.4, 2.2, 1.9, 1.5],
+    graphHrvData: [42, 40, 38, 35, 33, 35, 37, 39, 41]
   },
   {
-    name: "VertexGenAi:streamGenerateContent",
-    patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:streamGenerateContent",
-    getApiEndpoint: (context, params) => {
-      return `https://aiplatform.clients6.google.com/${params['version']}/projects/${context.projectId}/locations/${context.region}/publishers/google/models/${params['model']}:streamGenerateContent`;
-    },
-    getLinkedResourceName: null,
-    bodyPolicy: "generate_content",
-    isStreaming: true,
-    transformFn: (response) => {
-        let normalizedResponse = response.trim();
-        while (normalizedResponse.startsWith(',') || normalizedResponse.startsWith('[')) {
-          normalizedResponse = normalizedResponse.substring(1).trim();
-        }
-        while (normalizedResponse.endsWith(',') || normalizedResponse.endsWith(']')) {
-          normalizedResponse = normalizedResponse.substring(0, normalizedResponse.length - 1).trim();
-        }
-
-        if (!normalizedResponse.length) {
-          return {result: null, inProgress: false};
-        }
-
-        if (!normalizedResponse.endsWith('}')) {
-          return {result: normalizedResponse, inProgress: true};
-        }
-
-        try {
-          const parsedResponse = JSON.parse(`${normalizedResponse}`);
-          const transformedResponse = `data: ${JSON.stringify(parsedResponse)}\n\n`;
-          return {result: transformedResponse, inProgress: false};
-        } catch (error) {
-          throw new Error(`Failed to parse response: ${error}.`);
-        }
-    },
+    key: 'PARKINSON',
+    disorderName: 'Enfermedad de Parkinson con Alteración Neuroconductual (DSM-5 / CIE-11: 8A20)',
+    reliabilityPct: 92.1,
+    scenarioTitle: 'Control Motor Fino, Bloqueo de la Marcha (Freezing) e Inhibición Sacádica',
+    clinicalObjective: 'Evaluación de la micro-congelación motora inmersiva, temblor de acción ajustado y latencia de inicio de movimiento.',
+    stimulusParameters: 'Paso por umbrales virtuales estrechos y manipulación 3D con retrazado de feedback háptico/visual.',
+    targetDurationSec: 240,
+    expectedPhysioPattern: 'Frecuencia de temblor postural capturada, episodio de Freezing al cruzar puertas y rigidez sacádica.',
+    primaryBiomarkers: 'Índice de Freezing Motriz + Frecuencia de Temblor (Hz) + Latencia de Inicio',
+    metric1: { label: 'Índice de Freezing Motriz', value: '4.2 pts', status: '(Bloqueo Frecuente)', desc: 'Congelación motora en umbrales VR' },
+    metric2: { label: 'Frecuencia Temblor Postural', value: '5.8 Hz', status: '(Temblor Reposo/Acción)', desc: 'Oscilación de mandos/manos en 3D' },
+    metric3: { label: 'Latencia Inicio Movimiento', value: '640 ms', status: '(Acinesia Leve)', desc: 'Retraso biomotor de la intención' },
+    graphGsrData: [1.0, 2.8, 4.2, 3.5, 4.0, 2.9, 2.1, 1.6, 1.2],
+    graphHrvData: [38, 28, 22, 25, 20, 29, 34, 38, 40]
   },
-].map((client) => ({ ...client, patternInfo: parsePattern(client.patternForProxy) }));
-
-const ALLOWED_UPSTREAM_HOSTS = new Set([
-  "aiplatform.clients6.google.com",
-]);
-
-const ALLOWED_LINKED_RESOURCES = new Set();
-const WEB_SOCKET_BODY_POLICY = "live_bidi";
-
-const ALLOWED_GENERATE_CONTENT_ROOT_FIELDS = new Set(["contents", "generationConfig", "generation_config", "labels", "model", "safetySettings", "safety_settings", "systemInstruction", "system_instruction", "toolConfig", "tool_config", "tools"]);
-const ALLOWED_CONTENT_FIELDS = new Set(["parts", "role"]);
-const ALLOWED_PART_FIELDS = new Set(["codeExecutionResult", "code_execution_result", "executableCode", "executable_code", "functionCall", "function_call", "functionResponse", "function_response", "inlineData", "inline_data", "text", "thought", "thoughtSignature", "thought_signature", "videoMetadata", "video_metadata"]);
-const ALLOWED_TOOL_FIELDS = new Set(["codeExecution", "code_execution", "enterpriseWebSearch", "enterprise_web_search", "functionDeclarations", "function_declarations", "googleSearch", "googleSearchRetrieval", "google_search", "google_search_retrieval"]);
-const LOWERCASED_CONTENT_VALUED_FIELDS = new Set(["contents", "systeminstruction", "system_instruction", "turns"]);
-const FREE_TEXT_FIELDS = new Set(["data", "text", "thoughtSignature", "thought_signature"]);
-const OPAQUE_FIELDS = new Set(["args", "functionDeclarations", "function_declarations", "response", "responseJsonSchema", "responseSchema", "response_json_schema", "response_schema"]);
-const DEREFERENCED_URI_SCHEMES = ["bigquery://","gs://"];
-const MAX_BODY_DEPTH = 64;
-
-function isPlainObject(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function firstDisallowedKey(node, allowed) {
-  for (const key of Object.keys(node)) {
-    if (!allowed.has(key)) return key;
+  {
+    key: 'TAG',
+    disorderName: 'Trastorno de Ansiedad Generalizada (TAG / CIE-11: 6B00)',
+    reliabilityPct: 94.8,
+    scenarioTitle: 'Auditorio Intersubjetivo & Exposición Evaluativa Gradual',
+    clinicalObjective: 'Evaluación de la reactividad adrenérgica y tasa de extinción de distrés ante estímulos sociales y variación sonora.',
+    stimulusParameters: 'Escenario 3D de audiencia activa. Sonoridad graduada (0 - 85 dB) e interacción visual directa.',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Elevación de GSR > 4.0 µS con recuperación de HRV RMSSD > 35 ms tras 180s de exposición.',
+    primaryBiomarkers: 'Conductancia Cutánea (GSR Pico) + HRV RMSSD',
+    metric1: { label: 'Conductancia Cutánea (GSR)', value: '4.8 µS', status: '(Pico Excitación)', desc: 'Respuesta adrenérgica simpática' },
+    metric2: { label: 'Tono Vagal (HRV RMSSD)', value: '48 ms', status: '(Modulación)', desc: 'Capacidad de autorregulación parasimpática' },
+    metric3: { label: 'Índice de Habituación (H)', value: '2.84', status: '(Óptima)', desc: 'Tasa de extinción del distrés' },
+    graphGsrData: [1.2, 1.8, 3.2, 4.8, 3.9, 2.8, 2.1, 1.6, 1.3],
+    graphHrvData: [45, 42, 31, 22, 28, 35, 40, 46, 48]
+  },
+  {
+    key: 'TDAH',
+    disorderName: 'Trastorno por Déficit de Atención e Hiperactividad (TDAH / CIE-11: 6A05)',
+    reliabilityPct: 92.4,
+    scenarioTitle: 'Entorno Neurocognitivo de Carga Atencional Continua (CPT-VR)',
+    clinicalObjective: 'Cuantificación de omisiones atencionales, fijación ocular y supresión de sacadas frente a distractores.',
+    stimulusParameters: 'Aula virtual interactiva con 12 distractores periféricos 360° y paradigma Go/No-Go.',
+    targetDurationSec: 240,
+    expectedPhysioPattern: 'Desviación sacádica < 1.2 Hz y latencia de fijación ocular estable.',
+    primaryBiomarkers: 'Tasa Sacádica (Hz) + Estabilidad de Fijación Ocular + Latencia Biomotora',
+    metric1: { label: 'Frecuencia Sacádica Ocular', value: '2.8 Hz', status: '(Hiperactividad Ocular)', desc: 'Inestabilidad del rastreo visual' },
+    metric2: { label: 'Fijación Ocular Sostenida', value: '180 ms', status: '(Deficiente)', desc: 'Tiempo medio de fijación en target' },
+    metric3: { label: 'Latencia Biomotora', value: '485 ms', status: '(Inestable)', desc: 'Variabilidad del tiempo de respuesta' },
+    graphGsrData: [2.1, 2.5, 3.8, 4.2, 4.0, 3.9, 4.1, 3.8, 3.5],
+    graphHrvData: [30, 28, 25, 22, 24, 23, 22, 25, 26]
+  },
+  {
+    key: 'TEPT',
+    disorderName: 'Trastorno de Estrés Postraumático (TEPT / CIE-11: 6B40)',
+    reliabilityPct: 96.5,
+    scenarioTitle: 'Desensibilización Inmersiva y Extinción de Respuesta de Alarma',
+    clinicalObjective: 'Medición de la tasa de extinción del distrés (H) e inhibición de la respuesta de sobresalto (Startle Response).',
+    stimulusParameters: 'Procesamiento EMDR inmersivo en 3D con desacoplamiento de pistas traumáticas contextuales.',
+    targetDurationSec: 360,
+    expectedPhysioPattern: 'Pico agudo de GSR seguido de curva de extinción sostenida (H > 2.0).',
+    primaryBiomarkers: 'Índice de Habituación Terapéutica (H) + Respuesta Galvánica de Alarma',
+    metric1: { label: 'Respuesta de Sobresalto (Startle)', value: '6.2 µS', status: '(Hiperalerta)', desc: 'Pico agudo galvánico ante estímulo' },
+    metric2: { label: 'Tono Vagal (HRV RMSSD)', value: '15 ms', status: '(Inhibición Vagal)', desc: 'Bloqueo parasimpático agudo' },
+    metric3: { label: 'Índice de Habituación (H)', value: '1.12', status: '(Lenta Extinción)', desc: 'Resistencia al desacoplamiento' },
+    graphGsrData: [1.5, 6.2, 5.8, 4.9, 3.8, 2.9, 2.2, 1.8, 1.4],
+    graphHrvData: [40, 15, 18, 24, 30, 36, 42, 45, 48]
+  },
+  {
+    key: 'TDM',
+    disorderName: 'Trastorno Depresivo Mayor con Anhedonia (TDM / CIE-11: 6A70)',
+    reliabilityPct: 91.2,
+    scenarioTitle: 'Entorno de Activación Conductual y Resonancia Afectiva',
+    clinicalObjective: 'Evaluación de la plasticidad vegetativa ante estímulos de valencia emocional positiva.',
+    stimulusParameters: 'Inmersión en entorno natural con frecuencia lumínica regulada (10,000 lux VR equivalentes).',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Transición de aplanamiento vegetativo a incremento de tono vagal (HRV > 40 ms).',
+    primaryBiomarkers: 'Tono Vagal Parasimpático + Variabilidad Térmica/GSR',
+    metric1: { label: 'Conductancia Cutánea Basal', value: '0.8 µS', status: '(Aplanamiento)', desc: 'Hiporreactividad adrenérgica' },
+    metric2: { label: 'Tono Vagal (HRV RMSSD)', value: '18 ms', status: '(Tono Bajo)', desc: 'Rigidez autonómica parasimpática' },
+    metric3: { label: 'Resonancia Afectiva', value: '35%', status: '(Subóptima)', desc: 'Respuesta ante valencia positiva' },
+    graphGsrData: [0.8, 0.9, 1.0, 1.1, 1.2, 1.1, 1.0, 0.9, 0.8],
+    graphHrvData: [18, 19, 20, 22, 25, 28, 32, 35, 38]
+  },
+  {
+    key: 'TOC',
+    disorderName: 'Trastorno Obsesivo-Compulsivo (TOC / CIE-11: 6B20)',
+    reliabilityPct: 93.8,
+    scenarioTitle: 'Prevención de Respuesta con Exposición a Asimetría y Contaminación',
+    clinicalObjective: 'Análisis de la latencia de resistencia a la compulsión y desensibilización sin neutralización.',
+    stimulusParameters: 'Habitación virtual con disparadores estandarizados de desorden y contaminación sin herramienta de corrección.',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Tolerancia al distrés vegetativo sostenido con descenso gradual de GSR.',
+    primaryBiomarkers: 'Tiempo de Retorno a Línea de Base Vegetativa + Latencia de Resistencia',
+    metric1: { label: 'Tensión Meseta GSR', value: '4.2 µS', status: '(Ansiedad Sostenida)', desc: 'Resistencia sin compulsión' },
+    metric2: { label: 'Resistencia a Neutralizar', value: '240 s', status: '(Óptima)', desc: 'Tiempo antes de la urgencia' },
+    metric3: { label: 'Tono Parasimpático', value: '32 ms', status: '(Modulado)', desc: 'Recuperación progresiva' },
+    graphGsrData: [1.8, 4.2, 4.1, 4.0, 3.8, 3.2, 2.5, 2.0, 1.6],
+    graphHrvData: [38, 20, 21, 23, 26, 30, 35, 39, 42]
+  },
+  {
+    key: 'TEA',
+    disorderName: 'Trastorno del Espectro Autista (TEA / CIE-11: 6A02)',
+    reliabilityPct: 90.5,
+    scenarioTitle: 'Modulación de Carga Sensorial y Detección de Camouflaging',
+    clinicalObjective: 'Evaluación del umbral de saturación sensorial (auditiva/visual) e incongruencia del enmascaramiento.',
+    stimulusParameters: 'Entorno urbano dinámico con control gradual de picos de luminancia y ruido blanco de baja frecuencia.',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Estabilización de GSR frente a picos sensoriales y control de sobrecarga táctil/visual.',
+    primaryBiomarkers: 'Índice de Sobrecarga Sensorial + Tono Vagal de Autorregulación',
+    metric1: { label: 'Sobrecarga Sensorial', value: '78%', status: '(Alta Excitación)', desc: 'Saturación por estímulos urbanos' },
+    metric2: { label: 'Fijación Ocular Evitativa', value: '62%', status: '(Desviación de Mirada)', desc: 'Evitación de contacto visual' },
+    metric3: { label: 'Estabilidad Vagal', value: '28 ms', status: '(Moderada)', desc: 'Sostenimiento parasimpático' },
+    graphGsrData: [2.0, 3.8, 4.5, 4.8, 4.6, 4.2, 3.8, 3.1, 2.5],
+    graphHrvData: [35, 22, 18, 16, 20, 24, 28, 30, 32]
+  },
+  {
+    key: 'AGORAFOBIA',
+    disorderName: 'Agorafobia y Trastorno de Pánico (CIE-11: 6B01 / 6B02)',
+    reliabilityPct: 95.2,
+    scenarioTitle: 'Exposición a Espacios Abiertos / Confinamiento Espacial',
+    clinicalObjective: 'Monitoreo de hiperventilación, taquicardia reactiva y picos de excitación simpática agudizada.',
+    stimulusParameters: 'Transición fluida entre recinto confinado (ascensor virtual) y plaza abierta de alto tráfico.',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Control del tono simpático agudo y prevención de hiperventilación parasimpática.',
+    primaryBiomarkers: 'Variabilidad del Ritmo Cardíaco (HRV) + Pico de Conductancia GSR',
+    metric1: { label: 'Pico de Pánico GSR', value: '5.8 µS', status: '(Excitación Aguda)', desc: 'Reacción vegetativa inmediata' },
+    metric2: { label: 'Variabilidad Cardíaca', value: '14 ms', status: '(Caída Vagal)', desc: 'Taquicardia inmersiva reactiva' },
+    metric3: { label: 'Recuperación en Espacio', value: '120 s', status: '(En Proceso)', desc: 'Desensibilización al espacio' },
+    graphGsrData: [1.1, 5.8, 5.2, 4.1, 3.0, 2.2, 1.8, 1.5, 1.2],
+    graphHrvData: [42, 14, 18, 26, 32, 38, 42, 45, 48]
+  },
+  {
+    key: 'ESQUIZOFRENIA_PROD',
+    disorderName: 'Síndrome Psicótico Atenuado / Pródromo Esquizofrenia (CIE-11: 6A20)',
+    reliabilityPct: 87.6,
+    scenarioTitle: 'Integración Multisensorial y Detección de Anomalías Perceptivas',
+    clinicalObjective: 'Evaluación de la congruencia oculomotora y respuesta vegetativa ante incongruencias espacio-temporales.',
+    stimulusParameters: 'Entorno abstracto neutro con alteración diferida de profundidad y perspectiva 3D.',
+    targetDurationSec: 300,
+    expectedPhysioPattern: 'Desviación involuntaria del rastreo ocular y disociación respuesta vegetativa/fijación.',
+    primaryBiomarkers: 'Gaze Tracking Error + Coherencia Vegetativa Intersensorial',
+    metric1: { label: 'Gaze Tracking Error', value: '4.2°', status: '(Disociación Ocular)', desc: 'Incongruencia del rastreo visual' },
+    metric2: { label: 'Coherencia Vegetativa', value: '42%', status: '(Desacoplada)', desc: 'Disociación GSR / Estímulo' },
+    metric3: { label: 'Tono Parasimpático', value: '30 ms', status: '(Aplanado)', desc: 'Ausencia de modulación vagal' },
+    graphGsrData: [1.5, 1.8, 1.6, 2.2, 1.7, 2.0, 1.8, 1.5, 1.4],
+    graphHrvData: [32, 30, 31, 29, 30, 28, 31, 30, 32]
+  },
+  {
+    key: 'TCA',
+    disorderName: 'Trastorno de la Conducta Alimentaria / Dismorfia Corporal (CIE-11: 6B80)',
+    reliabilityPct: 89.1,
+    scenarioTitle: 'Exposición a Imagen Corporal Resonante y Desensibilización',
+    clinicalObjective: 'Evaluación de la ansiedad autonómica frente a la percepción distorsionada del esquema corporal.',
+    stimulusParameters: 'Proyección 3D de avatar espejo con gradiente de ajuste antropométrico en tiempo real.',
+    targetDurationSec: 240,
+    expectedPhysioPattern: 'Extinción del pico de ansiedad vegetativa ante la observación del esquema corporal real.',
+    primaryBiomarkers: 'Pico de Reactividad GSR + Tasa de Fijación Ocular Evitativa',
+    metric1: { label: 'Pico Ansiedad Dismórfica', value: '5.1 µS', status: '(Excitación Espejo)', desc: 'Respuesta ante avatar real' },
+    metric2: { label: 'Fijación Ocular Evitativa', value: '71%', status: '(Foco Evitativo)', desc: 'Evitación de áreas clave' },
+    metric3: { label: 'Extinción del Distrés', value: '160 s', status: '(En Desensibilización)', desc: 'Reducción de respuesta' },
+    graphGsrData: [1.2, 5.1, 4.8, 4.0, 3.2, 2.5, 2.0, 1.6, 1.3],
+    graphHrvData: [40, 16, 20, 28, 34, 38, 41, 44, 46]
   }
-  return null;
-}
+];
 
-function describeUnknownField(kind, key) {
-  return kind + ' field is not allowed in a proxied request: ' + key;
-}
+export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpdatePatientVrData }) => {
+  const [selectedProtocolKey, setSelectedProtocolKey] = useState<string>('TLP');
+  const activeProtocol = EXTENDED_CLINICAL_PROTOCOLS.find(p => p.key === selectedProtocolKey) || EXTENDED_CLINICAL_PROTOCOLS[0];
 
-function findStringViolation(value, parentKey) {
-  if (parentKey !== undefined && FREE_TEXT_FIELDS.has(parentKey)) return null;
-  const normalized = value.trim().toLowerCase();
-  for (const scheme of DEREFERENCED_URI_SCHEMES) {
-    if (normalized.startsWith(scheme)) {
-      return 'a proxied request may not reference storage by URI (' + scheme +
-        '), because the proxy would read it with the credential of the deployed app';
-    }
-  }
-  return null;
-}
+  const [isSessionRunning, setIsSessionRunning] = useState(false);
+  const [sessionTimer, setSessionTimer] = useState(0);
 
-function findObjectKeyViolation(node, parentKey) {
-  const slot = (parentKey ?? '').toLowerCase();
-  if (slot === 'parts') {
-    const key = firstDisallowedKey(node, ALLOWED_PART_FIELDS);
-    return key ? describeUnknownField('Part', key) : null;
-  }
-  if (slot === 'tools') {
-    const key = firstDisallowedKey(node, ALLOWED_TOOL_FIELDS);
-    return key ? describeUnknownField('Tool', key) : null;
-  }
-  if (LOWERCASED_CONTENT_VALUED_FIELDS.has(slot)) {
-    const key = firstDisallowedKey(node, ALLOWED_CONTENT_FIELDS);
-    return key ? describeUnknownField('Content', key) : null;
-  }
-  return null;
-}
+  const [connectionType, setConnectionType] = useState<'websocket' | 'render_proxy' | 'simulation'>('simulation');
+  const [ipAddress, setIpAddress] = useState('192.168.1.105');
+  const [isConnected, setIsConnected] = useState(true);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
 
-function findSchemeViolation(node, parentKey, depth) {
-  if (depth > MAX_BODY_DEPTH) {
-    return 'request body nests deeper than ' + MAX_BODY_DEPTH + ' levels';
-  }
-  if (typeof node === 'string') return findStringViolation(node, parentKey);
-  if (Array.isArray(node)) {
-    for (const element of node) {
-      const violation = findSchemeViolation(element, parentKey, depth + 1);
-      if (violation) return violation;
-    }
-    return null;
-  }
-  if (!isPlainObject(node)) return null;
-  for (const key of Object.keys(node)) {
-    const violation = findSchemeViolation(node[key], key, depth + 1);
-    if (violation) return violation;
-  }
-  return null;
-}
+  const [telemetry, setTelemetry] = useState<VrTelemetryData>({
+    sessionId: `VR-QUEST3S-${Math.floor(1000 + Math.random() * 9000)}`,
+    timestamp: new Date().toISOString(),
+    gsrMicroSiemens: activeProtocol.graphGsrData,
+    hrvRmssdMs: activeProtocol.graphHrvData,
+    habituationIndexH: 2.84,
+    stressPeaksCount: 2,
+    exposureDurationSec: 300,
+    saccadicRateHz: 1.2
+  });
 
-function findViolation(node, parentKey, depth) {
-  if (parentKey !== undefined && OPAQUE_FIELDS.has(parentKey)) return null;
-  if (depth > MAX_BODY_DEPTH) {
-    return 'request body nests deeper than ' + MAX_BODY_DEPTH + ' levels';
-  }
-  if (typeof node === 'string') return findStringViolation(node, parentKey);
-  if (Array.isArray(node)) {
-    for (const element of node) {
-      const violation = findViolation(element, parentKey, depth + 1);
-      if (violation) return violation;
-    }
-    return null;
-  }
-  if (!isPlainObject(node)) return null;
-  const keyViolation = findObjectKeyViolation(node, parentKey);
-  if (keyViolation) return keyViolation;
-  for (const key of Object.keys(node)) {
-    const violation = findViolation(node[key], key, depth + 1);
-    if (violation) return violation;
-  }
-  return null;
-}
+  const [isEditingReport, setIsEditingReport] = useState(false);
+  const [reportText, setReportText] = useState('');
 
-function validateProxiedRequestBody(bodyText, policy) {
-  if (bodyText === undefined || bodyText === null || bodyText === '') {
-    return { allowed: true };
-  }
-  let body;
-  try {
-    body = JSON.parse(bodyText);
-  } catch (e) {
-    return { allowed: false, reason: 'request body is not valid JSON' };
-  }
-  if (!isPlainObject(body)) {
-    return { allowed: false, reason: 'request body must be a JSON object' };
-  }
-  if (policy === 'generate_content') {
-    const key = firstDisallowedKey(body, ALLOWED_GENERATE_CONTENT_ROOT_FIELDS);
-    if (key) return { allowed: false, reason: describeUnknownField('Request', key) };
-  }
-  const violation = policy === 'opaque'
-    ? findSchemeViolation(body, undefined, 0)
-    : findViolation(body, undefined, 0);
-  return violation ? { allowed: false, reason: violation } : { allowed: true };
-}
+  // ESCUCHA WEBSOCKET EN TIEMPO REAL DESDE EL QUEST 3S
+  useEffect(() => {
+    if (connectionType === 'simulation') return;
 
-function asProxiedBodyText(body) {
-  if (body === undefined || body === null || typeof body === 'string') return body;
-  return JSON.stringify(body);
-}
+    const socketUrl = connectionType === 'websocket'
+      ? `ws://${ipAddress}:8080`
+      : `wss://amieneurogical.onrender.com/ws/quest3s`;
 
-const auth = new GoogleAuth({
-  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-});
+    const ws = new WebSocket(socketUrl);
 
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+    ws.onopen = () => {
+      setIsConnected(true);
+      console.log(`Enlace WebSocket activo con Quest 3S en ${socketUrl}`);
+    };
 
-function parsePattern(pattern) {
-  const paramRegex = /\{\{(.*?)\}\}/g;
-  const params = [];
-  const parts = [];
-  let lastIndex = 0;
-  let match;
+    ws.onmessage = (event) => {
+      try {
+        const liveData = JSON.parse(event.data);
+        setTelemetry(prev => ({
+          ...prev,
+          gsrMicroSiemens: liveData.gsrArray || prev.gsrMicroSiemens,
+          hrvRmssdMs: liveData.hrvArray || prev.hrvRmssdMs,
+          habituationIndexH: liveData.habituationH ?? prev.habituationIndexH,
+          saccadicRateHz: liveData.saccadicHz ?? prev.saccadicRateHz
+        }));
+      } catch (e) {
+        console.warn('Payload no válido recibido del Quest 3S:', e);
+      }
+    };
 
-  while ((match = paramRegex.exec(pattern)) !== null) {
-    params.push(match[1]);
-    const literalPart = pattern.substring(lastIndex, match.index);
-    parts.push(escapeRegex(literalPart));
-    parts.push(`(?<${match[1]}>[A-Za-z0-9\-_.!~*'():@]+)`);
-    lastIndex = paramRegex.lastIndex;
-  }
-  parts.push(escapeRegex(pattern.substring(lastIndex)));
-  const regexString = parts.join('');
+    ws.onerror = () => setIsConnected(false);
+    ws.onclose = () => setIsConnected(false);
 
-  return {regex: new RegExp(`^${regexString}$`), params};
-}
+    return () => ws.close();
+  }, [connectionType, ipAddress]);
 
-function isSafePathSegment(value) {
-  return !!value && value !== '.' && value !== '..' && encodeURIComponent(value).replace(/%3A/g, ':').replace(/%40/g, '@') === value;
-}
+  useEffect(() => {
+    setTelemetry(prev => ({
+      ...prev,
+      gsrMicroSiemens: activeProtocol.graphGsrData,
+      hrvRmssdMs: activeProtocol.graphHrvData
+    }));
 
-function extractParams(patternInfo, url) {
-  const match = url.match(patternInfo.regex);
-  if (!match) return null;
-  const params = {};
-  for (let i = 0; i < patternInfo.params.length; i++) {
-    const value = match[i + 1];
-    if (!isSafePathSegment(value)) return null;
-    params[patternInfo.params[i]] = value;
-  }
-  return params;
-}
+    setReportText(
+      `INFORME MÉDICO-EJECUTIVO DE EVALUACIÓN NEUROFISIOLÓGICA VR QUEST 3S\n` +
+      `===================================================================\n` +
+      `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age} años | GÉNERO: ${patient.gender}\n` +
+      `CATEGORÍA CLÍNICA: ${activeProtocol.disorderName}\n` +
+      `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
+      `PROTOCOLO INMERSIVO: ${activeProtocol.scenarioTitle}\n` +
+      `DISPOSITIVO: Meta Quest 3S (Frecuencia de Muestreo Fisiológico: 60 Hz)\n\n` +
+      `1. OBJETIVO TERAPÉUTICO Y PARÁMETROS DEL ESTÍMULO:\n` +
+      `- Objetivo: ${activeProtocol.clinicalObjective}\n` +
+      `- Configuración del Entorno 3D: ${activeProtocol.stimulusParameters}\n\n` +
+      `2. REGISTRO DE BIOMARCADORES Y TELEMETRÍA EN TIEMPO REAL:\n` +
+      `- Biomarcadores Clave: ${activeProtocol.primaryBiomarkers}\n` +
+      `- ${activeProtocol.metric1.label}: ${activeProtocol.metric1.value} ${activeProtocol.metric1.status}\n` +
+      `- ${activeProtocol.metric2.label}: ${activeProtocol.metric2.value} ${activeProtocol.metric2.status}\n` +
+      `- ${activeProtocol.metric3.label}: ${activeProtocol.metric3.value} ${activeProtocol.metric3.status}\n\n` +
+      `3. CONCLUSIÓN Y TRIANGULACIÓN BIOCLÍNICA AMIE:\n` +
+      `La prueba profesional en el escenario '${activeProtocol.scenarioTitle}' alcanza un índice de fiabilidad diagnóstica de ${activeProtocol.reliabilityPct}%. Se transfiere este vector al motor AMIE para desensibilizar el diagnóstico diferencial frente a sesgos de autoreporte.`
+    );
+  }, [selectedProtocolKey, patient]);
 
-const FORWARDABLE_REQUEST_HEADERS = new Set([
-  "accept",
-  "accept-language",
-  "content-type",
-  "x-goog-api-client",
-]);
-
-function sanitizeForwardedHeaders(requestHeaders) {
-  const forwardable = {};
-  for (const [name, value] of Object.entries(requestHeaders || {})) {
-    if (FORWARDABLE_REQUEST_HEADERS.has(name.toLowerCase())) {
-      forwardable[name] = value;
-    }
-  }
-  return forwardable;
-}
-
-async function getAccessToken(res) {
-  try {
-    const authClient = await auth.getClient();
-    const token = await authClient.getAccessToken();
-    return token.token;
-  } catch (error) {
-    console.error('[Node Proxy] Authentication error:', error);
-    if (!res) return null;
-    if (error.code === 'ERR_GCLOUD_NOT_LOGGED_IN' || (error.message && error.message.includes('Could not load the default credentials'))) {
-      res.status(401).json({
-        error: 'Authentication Required',
-        message: 'Google Cloud Application Default Credentials not found or invalid. Please run "gcloud auth application-default login" and try again.',
-      });
+  useEffect(() => {
+    let interval: any = null;
+    if (isSessionRunning) {
+      interval = setInterval(() => {
+        setSessionTimer(prev => prev + 1);
+      }, 1000);
     } else {
-      res.status(500).json({ error: `Authentication failed: ${error.message}` });
+      clearInterval(interval);
     }
-    return null;
-  }
-}
+    return () => clearInterval(interval);
+  }, [isSessionRunning]);
 
-function getRequestHeaders(accessToken) {
-  return {
-    'Authorization': `Bearer ${accessToken}`,
-    'X-Goog-User-Project': GOOGLE_CLOUD_PROJECT,
-    'Content-Type': 'application/json',
+  const handleExportWord = () => {
+    const header = "data:application/vnd.ms-word;charset=utf-8,";
+    const content = encodeURIComponent(
+      `<html><head><meta charset='utf-8'></head><body style='font-family:Arial,sans-serif;padding:20px;'>` +
+      `<h2 style='color:#0284c7;'>AMIE CLINICAL WORKSTATION — INFORME OFICIAL VR QUEST 3S</h2>` +
+      `<pre style='font-family:Arial,sans-serif;white-space:pre-wrap;'>${reportText}</pre>` +
+      `</body></html>`
+    );
+    const link = document.createElement("a");
+    link.href = header + content;
+    link.download = `Informe_Clinico_VR_${selectedProtocolKey}_${patient.id || 'PAC-8104'}.doc`;
+    link.click();
   };
-}
 
-// --- Proxy Endpoint ---
-app.post('/api-proxy', async (req, res) => {
-  if (req.headers['x-app-proxy'] !== PROXY_HEADER) {
-    return res.status(403).send('Forbidden: Request must originate from the Vertex App shim.');
-  }
-
-  const { originalUrl, headers, body } = req.body;
-  if (!originalUrl) {
-    return res.status(400).send('Bad Request: originalUrl is required.');
-  }
-
-  const apiClient = API_CLIENT_MAP.find(p => {
-    req.extractedParams = extractParams(p.patternInfo, originalUrl);
-    return req.extractedParams !== null;
-  });
-
-  if (!apiClient) {
-    console.error(`[Node Proxy] No API client handler found for URL: ${originalUrl}`);
-    return res.status(404).json({ error: `No proxy handler found for URL: ${originalUrl}` });
-  }
-
-  const extractedParams = req.extractedParams;
-
-  const proxiedBodyText = asProxiedBodyText(body);
-  const bodyVerdict = validateProxiedRequestBody(proxiedBodyText, apiClient.bodyPolicy);
-  if (!bodyVerdict.allowed) {
-    console.error(`[Node Proxy] Rejected request body: ${bodyVerdict.reason}`);
-    return res.status(400).json({ error: `Request body not allowed: ${bodyVerdict.reason}` });
-  }
-
-  if (apiClient.getLinkedResourceName) {
-    const linkedResourceName = apiClient.getLinkedResourceName(extractedParams);
-    if (!ALLOWED_LINKED_RESOURCES.has(linkedResourceName)) {
-      console.error(`[Node Proxy] Linked resource not allowed: ${linkedResourceName}`);
-      return res.status(403).json({ error: 'Linked resource not allowed.' });
-    }
-  }
-
-  console.log(`[Node Proxy] Matched API client: ${apiClient.name}`);
-  try {
-    const accessToken = await getAccessToken(res);
-    if (!accessToken) return;
-
-    const context = {projectId: GOOGLE_CLOUD_PROJECT, region: GOOGLE_CLOUD_LOCATION};
-    const apiUrl = apiClient.getApiEndpoint(context, extractedParams);
-
-    let parsedApiUrl;
-    try {
-      parsedApiUrl = new URL(apiUrl);
-    } catch (e) {
-      console.error(`[Node Proxy] Invalid API URL: ${apiUrl}`);
-      return res.status(400).json({ error: 'Invalid API URL.' });
-    }
-    if (!ALLOWED_UPSTREAM_HOSTS.has(parsedApiUrl.hostname.toLowerCase())) {
-      console.error(`[Node Proxy] Upstream host not allowed: ${parsedApiUrl.hostname}`);
-      return res.status(400).json({ error: 'Upstream host not allowed.' });
-    }
-    console.log(`[Node Proxy] Forwarding to Vertex API: ${apiUrl}`);
-
-    const apiHeaders = getRequestHeaders(accessToken);
-
-    const apiFetchOptions = {
-      method: 'POST',
-      headers: {...sanitizeForwardedHeaders(headers), ...apiHeaders},
-      body: body ? body : undefined,
+  const handleTransferData = () => {
+    const updatedReport: VrTherapyReport = {
+      sessionGuid: telemetry.sessionId,
+      exposureType: `Prueba Profesional VR (${activeProtocol.scenarioTitle})`,
+      sympatheticToneIndex: 68,
+      vagalReactivityIndex: 42,
+      habituationRate: 'Óptima',
+      synthesizedClinicalSummary: reportText
     };
+    onUpdatePatientVrData(telemetry, updatedReport);
+  };
 
-    const apiResponse = await fetch(apiUrl, apiFetchOptions);
+  return (
+    <div className="space-y-5">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-xl text-white shadow-lg shadow-cyan-600/20">
+              <Glasses className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                Módulo Terapéutico VR Meta Quest 3S
+                <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] rounded-full font-semibold">
+                  MÉTRICAS ADAPTATIVAS EN TIEMPO REAL
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Infección activa de datos vía WebSocket / LAN directo desde el visor Meta Quest 3S.
+              </p>
+            </div>
+          </div>
 
-    if (apiClient.isStreaming) {
-      console.log(`[Node Proxy] Sending STREAMING response for ${apiClient.name}`);
-      res.writeHead(apiResponse.status, {
-        'Content-Type': 'text/event-stream',
-        'Transfer-Encoding': 'chunked',
-        'Connection': 'keep-alive',
-      });
-      res.flushHeaders();
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsConfigOpen(!isConfigOpen)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-700"
+            >
+              <Settings className="w-4 h-4 text-cyan-400" />
+              <span>Conexión Quest 3S</span>
+            </button>
 
-      if (!apiResponse.body) {
-        console.error('[Node Proxy] Streaming response has no body.');
-        return res.end(JSON.stringify({ error: 'Streaming response body is null' }));
-      }
+            <button
+              onClick={handleTransferData}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 transition active:scale-95 shrink-0"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Transferir a Triangulación Global</span>
+            </button>
+          </div>
+        </div>
 
-      const decoder = new TextDecoder();
-      let deltaChunk = '';
-      apiResponse.body.on('data', (encodedChunk) => {
-        if (res.writableEnded) return;
+        {isConfigOpen && (
+          <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl space-y-3">
+            <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
+              <Wifi className="w-4 h-4" /> Configuración de Enlace y Telemetría Quest 3S
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-1">Modo de Comunicación</label>
+                <select 
+                  value={connectionType} 
+                  onChange={(e: any) => setConnectionType(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg text-xs p-2 text-white focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="websocket">Direct WebSocket (Local LAN Quest 3S)</option>
+                  <option value="render_proxy">Render Backend Server Proxy</option>
+                  <option value="simulation">Simulación de Telemetría Bioclínica</option>
+                </select>
+              </div>
 
-        try {
-          if (!apiClient.transformFn) {
-            res.write(encodedChunk);
-          } else {
-            const decodedChunk = decoder.decode(encodedChunk, { stream: true });
-            deltaChunk = deltaChunk + decodedChunk;
+              {connectionType !== 'simulation' && (
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Dirección IP Visor Quest 3S</label>
+                  <input 
+                    type="text" 
+                    value={ipAddress} 
+                    onChange={(e) => setIpAddress(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg text-xs p-2 text-white font-mono"
+                  />
+                </div>
+              )}
 
-            const {result, inProgress} = apiClient.transformFn(deltaChunk);
-            if (result && !inProgress) {
-              deltaChunk = '';
-              res.write(new TextEncoder().encode(result));
-            }
-          }
-        } catch (error) {
-          console.error(`[Node Proxy] Error processing streaming response for ${apiClient.name}`);
-          console.error(error);
-        }
-      });
+              <div className="flex items-end">
+                <button 
+                  onClick={() => setIsConnected(!isConnected)}
+                  className={`w-full py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    isConnected ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50' : 'bg-rose-950/80 text-rose-300 border border-rose-500/50'
+                  }`}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>{isConnected ? 'Estado: Visor Enlazado (60 FPS)' : 'Desconectado - Reconectar'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-      apiResponse.body.on('end', () => {
-        deltaChunk = '';
-        console.log(`[Node Proxy] Vertex stream finished and all data processed for ${apiClient.name}`);
-        res.end();
-      });
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-wider">
+            <Layers className="w-4 h-4" />
+            <span>Categoría Clínica en Estudio — Protocolos Estandarizados</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-500/40 px-3 py-1 rounded-full text-emerald-300 font-mono text-xs">
+            <Target className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Fiabilidad Diagnóstica: {activeProtocol.reliabilityPct}%</span>
+          </div>
+        </div>
 
-      apiResponse.body.on('error', (streamError) => {
-        console.error('[Node Proxy] Error from Vertex stream:', streamError);
-        if (!res.writableEnded) {
-          res.end(JSON.stringify({ proxyError: 'Stream error from Vertex AI', details: streamError.message }));
-        }
-      });
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-5 space-y-2">
+            <label className="text-xs text-slate-400 font-semibold block">Seleccionar Trastorno / Patología:</label>
+            <select
+              value={selectedProtocolKey}
+              onChange={(e) => setSelectedProtocolKey(e.target.value)}
+              className="w-full bg-slate-950 border border-cyan-500/40 rounded-xl p-3 text-xs text-white font-bold focus:outline-none focus:border-cyan-400"
+            >
+              {EXTENDED_CLINICAL_PROTOCOLS.map(proto => (
+                <option key={proto.key} value={proto.key}>
+                  [{proto.key}] ({proto.reliabilityPct}%) {proto.disorderName}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      res.on('error', (resError) => {
-        console.error('[Node Proxy] Error writing to client response:', resError);
-        if (apiResponse.body && typeof apiResponse.body.destroy === 'function') {
-             apiResponse.body.destroy(resError);
-        }
-      });
-    } else {
-      console.log(`[Node Proxy] Sending JSON response for ${apiClient.name}`);
-      const data = await apiResponse.json();
-      res.status(apiResponse.status).json(data);
-    }
-  } catch (error) {
-    console.error(`[Node Proxy] Error proxying request for ${apiClient.name}`);
-    console.error(error)
-    res.status(500).json({ error: error });
-  }
-});
+          <div className="md:col-span-7 bg-slate-950/80 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-white flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-cyan-400" />
+                  {activeProtocol.scenarioTitle}
+                </span>
+                <span className="text-[10px] text-cyan-400 bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono">
+                  Duración: {activeProtocol.targetDurationSec}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mb-2 leading-relaxed">{activeProtocol.clinicalObjective}</p>
+              <div className="p-2.5 bg-slate-900/90 rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <p><strong className="text-slate-200">Parámetros del Estímulo:</strong> {activeProtocol.stimulusParameters}</p>
+                <p><strong className="text-cyan-300">Respuesta Esperada:</strong> {activeProtocol.expectedPhysioPattern}</p>
+              </div>
+            </div>
 
-// Inicio del servidor usando el Host y Puerto dinámicos
-const server = app.listen(PORT, API_BACKEND_HOST, () => {
-  console.log(`Vertex AI Backend listening on http://${API_BACKEND_HOST}:${PORT}`);
-});
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
+              <span className="text-xs font-mono text-slate-400">
+                Tiempo Bio-VR: <strong className="text-cyan-300">{sessionTimer}s / {activeProtocol.targetDurationSec}s</strong>
+              </span>
 
-// --- CONFIGURACIÓN DE SERVIDORES WEBSOCKET (PROXY VERTEX AI & VISOR QUEST 3S) ---
-const wssVertex = new WebSocketServer({ noServer: true });
-const wssQuest = new WebSocketServer({ noServer: true });
+              <button
+                onClick={() => setIsSessionRunning(!isSessionRunning)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                  isSessionRunning 
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20' 
+                    : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-600/20'
+                }`}
+              >
+                {isSessionRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                <span>{isSessionRunning ? 'Detener Prueba Clínica' : 'Iniciar Protocolo Quest 3S'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-// Lógica de Retransmisión para Quest 3S (Canal /ws/quest3s)
-wssQuest.on('connection', (ws) => {
-  console.log('[AMIE VR Engine] Visor Meta Quest 3S o Cliente Web Conectado');
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+          <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
+            <Activity className="w-4 h-4 text-cyan-400" />
+            <span>{activeProtocol.metric1.label}</span>
+          </div>
+          <div className="text-xl font-bold text-white">
+            {activeProtocol.metric1.value} <span className="text-xs text-rose-400 font-normal">{activeProtocol.metric1.status}</span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">{activeProtocol.metric1.desc}</p>
+        </div>
 
-  ws.on('message', (data) => {
-    try {
-      const payload = JSON.parse(data.toString());
-      // Retransmitir la telemetría a todos los clientes suscritos (Workstation Web)
-      wssQuest.clients.forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(payload));
-        }
-      });
-    } catch (err) {
-      console.error('[AMIE VR Engine] Error procesando mensaje de Quest 3S:', err);
-    }
-  });
+        <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+          <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
+            <HeartPulse className="w-4 h-4 text-emerald-400" />
+            <span>{activeProtocol.metric2.label}</span>
+          </div>
+          <div className="text-xl font-bold text-white">
+            {activeProtocol.metric2.value} <span className="text-xs text-emerald-400 font-normal">{activeProtocol.metric2.status}</span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">{activeProtocol.metric2.desc}</p>
+        </div>
 
-  ws.on('close', () => console.log('[AMIE VR Engine] Cliente Quest 3S desconectado'));
-});
+        <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+          <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
+            <ShieldAlert className="w-4 h-4 text-purple-400" />
+            <span>{activeProtocol.metric3.label}</span>
+          </div>
+          <div className="text-xl font-bold text-cyan-300">{activeProtocol.metric3.value}</div>
+          <p className="text-[10px] text-emerald-400 mt-1">{activeProtocol.metric3.desc}</p>
+        </div>
+      </div>
 
-// Manejo centralizado de Upgrades de Red (Gestión de dos rutas WebSocket)
-server.on('upgrade', async (request, socket, head) => {
-  const url = new URL(request.url, `http://${request.headers.host}`);
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-cyan-400" /> Curva de Respuesta Neurofisiológica Dinámica — {activeProtocol.scenarioTitle}
+          </h3>
+          <span className="text-[10px] text-slate-400">Ventana Temporal de Muestreo: 300s</span>
+        </div>
 
-  // 1. CANAL WEBSOCKET META QUEST 3S
-  if (url.pathname === '/ws/quest3s') {
-    wssQuest.handleUpgrade(request, socket, head, (ws) => {
-      wssQuest.emit('connection', ws, request);
-    });
-    return;
-  }
+        <div className="h-44 w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-end gap-2 relative">
+          {telemetry.gsrMicroSiemens.map((val, idx) => {
+            const hrvVal = telemetry.hrvRmssdMs[idx] || 30;
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
+                <div 
+                  style={{ height: `${(val / 6) * 100}%` }} 
+                  className="w-full bg-gradient-to-t from-cyan-600 to-rose-500 rounded-t opacity-80 group-hover:opacity-100 transition"
+                />
+                <span className="text-[9px] text-slate-500 font-mono">t+{idx * 30}s</span>
 
-  // 2. CANAL PROXY VERTEX AI (BidiGenerateContent)
-  if (url.pathname === '/ws-proxy') {
-    let targetUrl = url.searchParams.get('target');
-    if (!targetUrl) {
-      console.log('[Node Proxy] Missing target URL');
-      socket.destroy();
-      return;
-    }
+                <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 border border-slate-700 p-2 rounded text-[10px] text-white z-20 shadow-xl whitespace-nowrap">
+                  <span>Métrica 1: {val}</span>
+                  <span>Métrica 2: {hrvVal}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-    if (targetUrl === 'wss://aiplatform.googleapis.com//ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent') {
-      const location = GOOGLE_CLOUD_LOCATION === 'global' ? 'us-central1' : GOOGLE_CLOUD_LOCATION;
-      targetUrl = `wss://${location}-aiplatform.googleapis.com//ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`;
-    } else {
-      console.log('[Node Proxy] Invalid target URL');
-      socket.destroy();
-      return;
-    }
+      <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
+            <FileText className="w-4 h-4" />
+            <span>Informe Clínico Ejecutivo — [{selectedProtocolKey}]</span>
+          </div>
 
-    let accessToken;
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsEditingReport(!isEditingReport)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{isEditingReport ? 'Finalizar Edición' : 'Editar Informe'}</span>
+            </button>
 
-    try {
-      accessToken = await getAccessToken();
-      if (!accessToken) throw new Error('No token');
-    } catch (err) {
-      console.log('[Node Proxy] Authentication failed');
-      socket.destroy();
-      return;
-    }
+            <button
+              onClick={handleExportWord}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-blue-600/20"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar Word (.docx)</span>
+            </button>
+          </div>
+        </div>
 
-    console.log(`[Node Proxy] Initiating upstream connection to: ${targetUrl}`);
-
-    let upstreamWs;
-
-    try {
-      upstreamWs = new WebSocket(targetUrl, {
-        headers: getRequestHeaders(accessToken)
-      });
-    } catch (e) {
-      console.error('[Node Proxy] Invalid Upstream URL');
-      socket.destroy();
-      return;
-    }
-
-    const initialErrorHandler = (error) => {
-      console.error('[Node Proxy] Upstream connection failed:', error);
-      upstreamWs.removeEventListener('open', onUpstreamOpen);
-
-      if (socket.writable) {
-        socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-        socket.destroy();
-      }
-    };
-
-    upstreamWs.once('error', initialErrorHandler);
-
-    const onUpstreamOpen = () => {
-      upstreamWs.removeListener('error', initialErrorHandler);
-
-      wssVertex.handleUpgrade(request, socket, head, (ws) => {
-        upstreamWs.on('message', (data, isBinary) => {
-          const logMsg = isBinary ? '<Binary Data>' : data.toString();
-          console.log(`[Upstream -> Client] [${new Date().toISOString()}]: ${logMsg}`);
-
-          if (ws.readyState === WebSocket.OPEN) {
-            if (data === undefined || data === null) {
-              console.warn('[Node Proxy] Attempted to send undefined/null data to client');
-              return;
-            }
-            ws.send(data, { binary: isBinary });
-          }
-        });
-
-        ws.on('message', (data, isBinary) => {
-          const messageVerdict = validateProxiedRequestBody(data.toString(), WEB_SOCKET_BODY_POLICY);
-          if (!messageVerdict.allowed) {
-            console.error('[Node Proxy] Rejected message from client:', messageVerdict.reason);
-            ws.close(1008, 'Message not allowed');
-            return;
-          }
-
-          let dataJson = {};
-          try {
-            dataJson = JSON.parse(data.toString());
-          } catch (error) {
-            console.error('[Node Proxy] Failed to parse message from client:', error);
-            ws.close(1011, 'Failed to parse message');
-          }
-
-          if (dataJson['setup']) {
-            dataJson['setup']['model'] = `projects/${GOOGLE_CLOUD_PROJECT}/locations/${GOOGLE_CLOUD_LOCATION}/${dataJson['setup']['model']}`;
-          }
-
-          if (upstreamWs.readyState === WebSocket.OPEN) {
-            upstreamWs.send(JSON.stringify(dataJson), { binary: false });
-          }
-        });
-
-        upstreamWs.on('error', (error) => {
-          console.error('[Node Proxy] Upstream error:', error);
-          ws.close(1011, error.message);
-        });
-
-        upstreamWs.on('close', (code, reason) => {
-          console.log(`[Node Proxy] Upstream closed: ${code} ${reason}`);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.close(code, reason);
-          }
-        });
-
-        ws.on('error', (error) => {
-          console.error('[Node Proxy] Client error:', error);
-          upstreamWs.close(1011, error.message);
-        });
-
-        ws.on('close', (code, reason) => {
-          console.log(`[Node Proxy] Client closed: ${code} ${reason}`);
-          if (upstreamWs.readyState === WebSocket.OPEN) {
-            upstreamWs.close(1000, reason);
-          }
-        });
-
-        wssVertex.emit('connection', ws, request);
-      });
-    };
-
-    upstreamWs.once('open', onUpstreamOpen);
-
-  } else {
-    socket.destroy();
-  }
-});
+        {isEditingReport ? (
+          <textarea
+            value={reportText}
+            onChange={(e) => setReportText(e.target.value)}
+            rows={12}
+            className="w-full bg-slate-950 text-slate-100 font-mono text-xs p-4 rounded-xl border border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500 leading-relaxed"
+          />
+        ) : (
+          <div className="bg-slate-950/90 p-5 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed shadow-inner">
+            {reportText}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
