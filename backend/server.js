@@ -30,19 +30,16 @@ const patientRecordSchema = new mongoose.Schema({
 
 const PatientRecordModel = mongoose.model('PatientRecord', patientRecordSchema);
 
-// --- Configuración Global de CORS ---
+// --- Configuración Global de CORS (Maneja Preflight automáticamente en Express 5) ---
 app.use(cors({
-  origin: '*', // Permite peticiones desde el frontend en Render
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-goog-api-client']
 }));
 
-// Responder inmediatamente a peticiones Preflight (OPTIONS)
-app.options('*', cors());
-
 app.use(express.json({ limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb" }));
 
-// Configuración de Puerto y Host para Render (0.0.0.0 y PORT de entorno)
+// Configuración de Puerto y Host para Render
 const PORT = process.env.PORT || process.env.API_BACKEND_PORT || 10000;
 const API_BACKEND_HOST = process.env.API_BACKEND_HOST || "0.0.0.0";
 
@@ -58,7 +55,7 @@ if (!PROXY_HEADER) {
   process.exit(1);
 }
 
-app.set('trust proxy', 1 /* number of proxies between user and server */);
+app.set('trust proxy', 1);
 
 // IMPORTANT: Vertex AI Studio Rate Limiting
 const proxyLimiter = rateLimit({
