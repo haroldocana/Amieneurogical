@@ -10,8 +10,25 @@ import { GoogleAuth } from 'google-auth-library';
 import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
+import mongoose from 'mongoose';
 
 const app = express();
+
+// --- Configuración e Inicialización de MongoDB (Persistencia AMIE) ---
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('[AMIE Clinical Engine] Conectado exitosamente a MongoDB Atlas'))
+    .catch(err => console.error('[AMIE Clinical Engine] Error al conectar a MongoDB:', err));
+} else {
+  console.warn('[AMIE Clinical Engine] ADVERTENCIA: No se encontró la variable MONGO_URI. Los registros se procesarán solo en memoria.');
+}
+
+// Esquema de Mongoose para almacenar el objeto PatientRecord completo
+const patientRecordSchema = new mongoose.Schema({
+  patientRecord: mongoose.Schema.Types.Mixed
+}, { timestamps: true });
+
+const PatientRecordModel = mongoose.model('PatientRecord', patientRecordSchema);
 
 // --- Configuración Global de CORS ---
 app.use(cors({
@@ -57,8 +74,8 @@ const proxyLimiter = rateLimit({
 
 app.use('/api-proxy', proxyLimiter);
 
-// --- ENDPOINT REGISTRO CLINICO AMIE (PatientRecord JSON) ---
-app.post('/api/patient-records', (req, res) => {
+// --- ENDPOINT REGISTRO CLÍNICO Y PERSISTENCIA AMIE (PatientRecord JSON) ---
+app.post('/api/patient-records', async (req, res) => {
   try {
     const payload = req.body;
     
@@ -66,23 +83,33 @@ app.post('/api/patient-records', (req, res) => {
     if (!payload || !payload.patientRecord || !payload.patientRecord.metadata) {
       return res.status(400).json({ 
         error: 'Bad Request', 
-        message: 'Invalid AMIE PatientRecord JSON structure.' 
+        message: 'Estructura JSON de PatientRecord inválida para el motor AMIE.' 
       });
     }
 
     const { patientId, sessionGuid } = payload.patientRecord.metadata;
     console.log(`[AMIE Clinical Engine] Recibido expediente debiased para Paciente ID: ${patientId} (Session: ${sessionGuid})`);
 
-    // Aquí se procesa o persiste el registro (ej. guardado en base de datos o almacenamiento persistente)
+    let savedRecordId = null;
+
+    // Si MongoDB está conectado, guardar de manera persistente
+    if (mongoose.connection.readyState === 1) {
+      const newRecord = new PatientRecordModel(payload);
+      const savedDoc = await newRecord.save();
+      savedRecordId = savedDoc._id;
+      console.log(`[AMIE Clinical Engine] Registro guardado con éxito en MongoDB (ID: ${savedRecordId})`);
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Expediente clínico procesado y registrado exitosamente.',
       patientId: patientId,
       sessionGuid: sessionGuid,
+      dbRecordId: savedRecordId,
       debiasedConfidence: payload.patientRecord.debiasingEngineMetrics?.debiasedConfidenceIndexPercent || 90.0
     });
   } catch (error) {
-    console.error('[AMIE Clinical Engine] Error al procesar el expediente:', error);
+    console.error('[AMIE Clinical Engine] Error al procesar o guardar el expediente:', error);
     return res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
