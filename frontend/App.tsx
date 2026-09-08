@@ -18,7 +18,8 @@ import { AmieClinicalAcademy } from './components/AmieClinicalAcademy';
 import { FloatingAmieAssistant } from './components/FloatingAmieAssistant';
 import { HoverTooltip } from './components/HoverTooltip';
 import { LoginModal } from './components/LoginModal';
-import { PatientRecord, AmieClinicalAnalysis } from './types';
+import { VrTherapyModule } from './components/VrTherapyModule';
+import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
 import {
@@ -34,10 +35,11 @@ import {
   Microscope,
   Cpu,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  Glasses
 } from 'lucide-react';
 
-type AppTab = 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'referral' | 'saas';
+type AppTab = 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'vr_therapy' | 'referral' | 'saas';
 
 export default function App() {
   // Authentication State
@@ -143,6 +145,17 @@ export default function App() {
       setSyncNotFoundAlert(null);
       setSyncSuccessMsg(null);
     }
+  };
+
+  // Handler para transferir la biometría VR Quest 3S al expediente global del paciente
+  const handleUpdatePatientVrData = (telemetry: VrTelemetryData, report: VrTherapyReport) => {
+    setCurrentPatient(prev => ({
+      ...prev,
+      vrTelemetryData: telemetry,
+      vrTherapyReport: report
+    }));
+    setSyncSuccessMsg('Métricas de VR Quest 3S transferidas exitosamente a la Triangulación Global.');
+    setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
   if (!isAuthenticated) {
@@ -301,6 +314,26 @@ export default function App() {
               </button>
             </HoverTooltip>
 
+            {/* VR Quest 3S */}
+            <HoverTooltip
+              title="Módulo Terapéutico VR Quest 3S"
+              description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV) e informe individual sintetizado."
+              clinicalUtility="Cálculo del índice de habituación H y transferencia a la triangulación global."
+              badge="Biometría VR"
+            >
+              <button
+                onClick={() => setActiveTab('vr_therapy')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                  activeTab === 'vr_therapy'
+                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <Glasses className="w-3.5 h-3.5 text-cyan-300" />
+                <span>VR Quest 3S</span>
+              </button>
+            </HoverTooltip>
+
             {/* Referencia */}
             <HoverTooltip
               title="Referencia a Psiquiatría"
@@ -439,6 +472,12 @@ export default function App() {
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
+        {activeTab === 'vr_therapy' && (
+          <VrTherapyModule
+            patient={currentPatient}
+            onUpdatePatientVrData={handleUpdatePatientVrData}
+          />
+        )}
         {activeTab === 'referral' && (
           <PsychiatryReferralView
             patient={currentPatient}
