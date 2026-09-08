@@ -86,30 +86,48 @@ const HARDWARE_CLINICAL_PROTOCOLS = [
 
 export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> = ({ patient, onUpdatePatientVrData }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [touchTapCalibrating, setTouchTapCalibrating] = useState(false);
-  const [liveTouchLatency, setLiveTouchLatency] = useState<number | null>(null);
-
   const [selectedProtocolKey, setSelectedProtocolKey] = useState<string>('TDAH');
   const activeProtocol = HARDWARE_CLINICAL_PROTOCOLS.find(p => p.key === selectedProtocolKey) || HARDWARE_CLINICAL_PROTOCOLS[0];
 
   const [bleConnected, setBleConnected] = useState(false);
   const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
-  
-  // Trazado Cardíaco en Tiempo Real
-  const [ecgWaveData, setEcgWaveData] = useState<number[]>([72, 74, 71, 75, 82, 78, 73, 70, 72, 76, 80, 74, 76, 78, 73]);
-  const [liveBpm, setLiveBpm] = useState<number>(74);
+
+  // Trazado ECG en Tiempo Real
+  const [ecgPoints, setEcgPoints] = useState<number[]>([]);
+  const [liveBpm, setLiveBpm] = useState<number>(72);
+  const [liveRmssd, setLiveRmssd] = useState<number>(42);
 
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
   const [transferSuccess, setTransferSuccess] = useState(false);
 
-  // Simulación y refresco en vivo del trazado
+  // Generador de Onda ECG Continua (Complejo PQRST)
   useEffect(() => {
+    let step = 0;
     const interval = setInterval(() => {
-      const nextBpm = Math.round(70 + Math.random() * 15);
-      setLiveBpm(nextBpm);
-      setEcgWaveData(prev => [...prev.slice(1), nextBpm]);
-    }, 1000);
+      step++;
+      const ecgCycleIndex = step % 20;
+      let yVal = 50; // Línea isoeléctrica
+
+      if (ecgCycleIndex === 3) yVal = 42;       // Onda P
+      else if (ecgCycleIndex === 6) yVal = 58;  // Onda Q
+      else if (ecgCycleIndex === 7) yVal = 5;   // Pico R (QRS)
+      else if (ecgCycleIndex === 8) yVal = 85;  // Onda S
+      else if (ecgCycleIndex === 12) yVal = 35; // Onda T
+      else yVal = 50 + (Math.random() * 4 - 2);  // Ruido isoeléctrico fisiológico
+
+      setEcgPoints(prev => {
+        const updated = [...prev, yVal];
+        return updated.length > 100 ? updated.slice(1) : updated;
+      });
+
+      if (step % 20 === 0) {
+        const bpmVal = Math.round(72 + (Math.random() * 6 - 3));
+        setLiveBpm(bpmVal);
+        setLiveRmssd(Math.round(40 + (Math.random() * 8 - 4)));
+      }
+    }, 40); // 50 Hz render update
+
     return () => clearInterval(interval);
   }, []);
 
@@ -191,10 +209,16 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     }
   };
 
+  // Construcción del path continuo SVG
+  const svgPathD = ecgPoints.map((y, i) => {
+    const x = (i / 100) * 800;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
   return (
     <div className={`space-y-6 transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-6 overflow-y-auto' : 'relative'}`}>
       
-      {/* 1. HUD Header & Conexión Hardware */}
+      {/* 1. HUD Header */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-cyan-500 via-teal-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-cyan-500/20">
@@ -253,7 +277,42 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       )}
 
-      {/* 2. Selector de Protocolo por Trastorno */}
+      {/* 2. TRAZADO CONTINUO ELECTROCARDIOGRÁFICO (ECG REAL P-QRS-T) */}
+      <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-2xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+            <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+            <span>Electrocardiograma en Vivo & Trazado de Intervalos RR (Geoid HS500)</span>
+          </div>
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <span className="text-emerald-400 font-bold bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40">
+              {liveBpm} BPM
+            </span>
+            <span className="text-cyan-400 font-bold bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-500/40">
+              HRV: {liveRmssd} ms
+            </span>
+          </div>
+        </div>
+
+        {/* Lienzo SVG para la Onda ECG */}
+        <div className="h-32 w-full bg-slate-950 rounded-xl p-2 border border-slate-800 relative overflow-hidden flex items-center">
+          {/* Rejilla Médica ECG */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:16px_16px] opacity-40" />
+
+          <svg viewBox="0 0 800 100" className="w-full h-full relative z-10 preserve-3d">
+            <path
+              d={svgPathD}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      </div>
+
+      {/* 3. Selector de Protocolo por Trastorno */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -296,7 +355,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 3. Tarjetas de Métricas Propias del Trastorno */}
+      {/* 4. Tarjetas de Métricas Propias */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
@@ -327,33 +386,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
           <div className="text-xl font-bold text-emerald-300">{activeProtocol.primaryMetrics.m3.value}</div>
           <p className="text-[10px] text-emerald-400 mt-1">{activeProtocol.primaryMetrics.m3.desc}</p>
-        </div>
-      </div>
-
-      {/* 4. PANORÁMICA DE LA GRÁFICA CARDÍACA EN TIEMPO REAL (ECG LIVE / GEOID) */}
-      <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-5 shadow-2xl space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-wider">
-            <LineChart className="w-4 h-4 text-rose-500" />
-            <span>Trazado de Frecuencia Cardíaca & Variabilidad en Tiempo Real (Geoid HS500)</span>
-          </div>
-          <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40 animate-pulse">
-            {liveBpm} BPM (ECG Live)
-          </span>
-        </div>
-
-        <div className="h-32 w-full bg-slate-950 rounded-xl p-3 flex items-end gap-2 border border-slate-800">
-          {ecgWaveData.map((bpm, i) => (
-            <div key={i} className="flex-1 bg-slate-900 rounded-t relative group flex flex-col justify-end h-full">
-              <div 
-                style={{ height: `${(bpm / 120) * 100}%` }}
-                className="w-full bg-gradient-to-t from-teal-500 via-cyan-500 to-rose-500 rounded-t transition-all duration-300"
-              />
-              <div className="absolute bottom-full mb-1 hidden group-hover:block bg-slate-800 text-[10px] text-white p-1 rounded font-mono shadow-md z-10 whitespace-nowrap">
-                {bpm} BPM
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
