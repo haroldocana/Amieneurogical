@@ -30,7 +30,7 @@ const patientRecordSchema = new mongoose.Schema({
 
 const PatientRecordModel = mongoose.model('PatientRecord', patientRecordSchema);
 
-// --- Configuración Global de CORS (Maneja Preflight automáticamente en Express 5) ---
+// --- Configuración Global de CORS ---
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -57,9 +57,9 @@ if (!PROXY_HEADER) {
 
 app.set('trust proxy', 1);
 
-// IMPORTANT: Vertex AI Studio Rate Limiting
+// Rate Limiter para Vertex AI
 const proxyLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
+  windowMs: 15 * 60 * 1000,
   max: 100, 
   standardHeaders: true, 
   legacyHeaders: false, 
@@ -76,7 +76,6 @@ app.post('/api/patient-records', async (req, res) => {
   try {
     const payload = req.body;
     
-    // Validación básica de estructura del JSON AMIE
     if (!payload || !payload.patientRecord || !payload.patientRecord.metadata) {
       return res.status(400).json({ 
         error: 'Bad Request', 
@@ -89,7 +88,6 @@ app.post('/api/patient-records', async (req, res) => {
 
     let savedRecordId = null;
 
-    // Si MongoDB está conectado, guardar de manera persistente
     if (mongoose.connection.readyState === 1) {
       const newRecord = new PatientRecordModel(payload);
       const savedDoc = await newRecord.save();
@@ -535,11 +533,44 @@ const server = app.listen(PORT, API_BACKEND_HOST, () => {
   console.log(`Vertex AI Backend listening on http://${API_BACKEND_HOST}:${PORT}`);
 });
 
-const wss = new WebSocketServer({ noServer: true });
+// --- CONFIGURACIÓN DE SERVIDORES WEBSOCKET (PROXY VERTEX AI & VISOR QUEST 3S) ---
+const wssVertex = new WebSocketServer({ noServer: true });
+const wssQuest = new WebSocketServer({ noServer: true });
 
+// Lógica de Retransmisión para Quest 3S (Canal /ws/quest3s)
+wssQuest.on('connection', (ws) => {
+  console.log('[AMIE VR Engine] Visor Meta Quest 3S o Cliente Web Conectado');
+
+  ws.on('message', (data) => {
+    try {
+      const payload = JSON.parse(data.toString());
+      // Retransmitir la telemetría a todos los clientes suscritos (Workstation Web)
+      wssQuest.clients.forEach((client) => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(payload));
+        }
+      });
+    } catch (err) {
+      console.error('[AMIE VR Engine] Error procesando mensaje de Quest 3S:', err);
+    }
+  });
+
+  ws.on('close', () => console.log('[AMIE VR Engine] Cliente Quest 3S desconectado'));
+});
+
+// Manejo centralizado de Upgrades de Red (Gestión de dos rutas WebSocket)
 server.on('upgrade', async (request, socket, head) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
+  // 1. CANAL WEBSOCKET META QUEST 3S
+  if (url.pathname === '/ws/quest3s') {
+    wssQuest.handleUpgrade(request, socket, head, (ws) => {
+      wssQuest.emit('connection', ws, request);
+    });
+    return;
+  }
+
+  // 2. CANAL PROXY VERTEX AI (BidiGenerateContent)
   if (url.pathname === '/ws-proxy') {
     let targetUrl = url.searchParams.get('target');
     if (!targetUrl) {
@@ -597,7 +628,7 @@ server.on('upgrade', async (request, socket, head) => {
     const onUpstreamOpen = () => {
       upstreamWs.removeListener('error', initialErrorHandler);
 
-      wss.handleUpgrade(request, socket, head, (ws) => {
+      wssVertex.handleUpgrade(request, socket, head, (ws) => {
         upstreamWs.on('message', (data, isBinary) => {
           const logMsg = isBinary ? '<Binary Data>' : data.toString();
           console.log(`[Upstream -> Client] [${new Date().toISOString()}]: ${logMsg}`);
@@ -660,7 +691,7 @@ server.on('upgrade', async (request, socket, head) => {
           }
         });
 
-        wss.emit('connection', ws, request);
+        wssVertex.emit('connection', ws, request);
       });
     };
 
