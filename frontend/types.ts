@@ -138,6 +138,27 @@ export interface TherapeuticAffinityScore {
   biomarkerRationale: string;
 }
 
+// --- MÓDULO VR QUEST 3S & TELEMETRÍA BIOMÉTRICA INMERSIVA ---
+export interface VrTelemetryData {
+  sessionId: string;
+  timestamp: string;
+  gsrMicroSiemens: number[]; // Serie temporal de conductancia cutánea (GSR)
+  hrvRmssdMs: number[];      // Serie temporal de variabilidad cardíaca (RMSSD)
+  habituationIndexH: number; // Métrica matemática de habituación
+  stressPeaksCount: number;  // Picos simpáticos detectados
+  exposureDurationSec: number;
+  saccadicRateHz?: number;   // Frecuencia sacádica ocular en VR
+}
+
+export interface VrTherapyReport {
+  sessionGuid: string;
+  exposureType: string;
+  sympatheticToneIndex: number; // 0 - 100
+  vagalReactivityIndex: number;  // 0 - 100
+  habituationRate: 'Óptima' | 'Moderada' | 'Ausente/Saturada';
+  synthesizedClinicalSummary: string; // Informe sintetizado de la prueba individual VR
+}
+
 export interface PatientRecord {
   id: string; // PAC-XXXX format
   patientNameAnonymized: string;
@@ -150,6 +171,8 @@ export interface PatientRecord {
   sentinelTelemetry?: PatientSentinelData;
   qeegBiomarkers?: QeegBiomarkers;
   multisensoryHardware?: MultisensoryHardwareTelemetry;
+  vrTelemetryData?: VrTelemetryData;     // Telemetría inmersiva para la triangulación
+  vrTherapyReport?: VrTherapyReport;     // Informe sintético de la prueba VR
   psychopharmacologyCurrent?: CurrentPsychopharmacologyItem[];
   psychometricScores: {
     phq9?: number;
@@ -249,6 +272,7 @@ export interface AmieClinicalAnalysis {
     neuromotorInterpretation?: string;
     acousticBiometricAssessment: string;
     qeegInterpretation?: string;
+    vrHabituationAssessment?: string; // Evaluación triangulada de la biometría VR
     regionalLobeBreakdown: {
       frontal: string;
       temporal: string;
