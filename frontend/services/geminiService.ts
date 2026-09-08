@@ -382,6 +382,8 @@ export async function runAmieClinicalAnalysis(
       sentinelTelemetry: safeRecord.sentinelTelemetry || null,
       qeegBiomarkers: safeRecord.qeegBiomarkers || null,
       multisensoryHardware: safeRecord.multisensoryHardware || null,
+      vrTelemetryData: safeRecord.vrTelemetryData || null,
+      vrTherapyReport: safeRecord.vrTherapyReport || null,
       timestamp: new Date().toISOString(),
       source: 'AMIE-Clinical-Analyzer-Web'
     };
@@ -407,38 +409,63 @@ export async function runAmieClinicalAnalysis(
 
   const patientJsonString = JSON.stringify(safeRecord, null, 2);
 
+  // CONSTRUCCIÓN DEL PROMPT CON EXTRACCIÓN EXPLÍCITA DE TELEMETRÍA VR Y OTROS MÓDULOS
+  const vrSection = safeRecord.vrTelemetryData ? `
+--- MÓDULO VR QUEST 3S & TELEMETRÍA BIOMÉTRICA INMERSIVA ---
+- Session GUID: ${safeRecord.vrTelemetryData.sessionId}
+- Conductancia Cutánea (GSR Pico): ${Math.max(...(safeRecord.vrTelemetryData.gsrMicroSiemens || [0]))} µS
+- Tono Vagal (HRV RMSSD Última Lectura): ${safeRecord.vrTelemetryData.hrvRmssdMs?.slice(-1)[0] || 'N/A'} ms
+- Índice de Habituación Terapéutica (H): ${safeRecord.vrTelemetryData.habituationIndexH}
+- Picos de Excitación Simpática: ${safeRecord.vrTelemetryData.stressPeaksCount}
+- Resumen Informe VR Previo: ${safeRecord.vrTherapyReport?.synthesizedClinicalSummary || 'Sin informe registrado'}
+` : '--- MÓDULO VR QUEST 3S: No se ha realizado o transferido prueba inmersiva ---';
+
+  const multisensorySection = safeRecord.multisensoryHardware ? `
+--- BIOMETRÍA MULTISENSORIAL EN VIVO ---
+- Índice Tono Vagal (HRV): ${safeRecord.multisensoryHardware.vagalToneHrvIndex}/100
+- Presión Prensión Manual: ${safeRecord.multisensoryHardware.handGripPressureKg} kg
+- Índice Camouflaging (CAT-Q): ${safeRecord.multisensoryHardware.camouflagingIndexPct}%
+- Duración Fijación Ocular: ${safeRecord.multisensoryHardware.ocularFixationDurationMs} ms
+- Estado Microexpresiones: ${safeRecord.multisensoryHardware.microExpressionState}
+` : '';
+
   const promptText = `
 IDENTIDAD CLÍNICA (AMIE FRAMEWORK):
 Eres AMIE (Articulate Medical Intelligence Explorer), operando como Copiloto Psiquiátrico y Neurológico Avanzado.
 Tu función es el análisis bioclínico, la prevención activa y la generación de diagnósticos diferenciales para el profesional de la salud responsable bajo normativas HIPAA y RGPD.
 
 MÉTODO DE ANÁLISIS E INTERPRETACIÓN DE DATOS (JSON):
-Al recibir el expediente clínico del paciente, realizarás un análisis cruzado integral en 4 niveles:
+Al recibir el expediente clínico del paciente, realizarás un análisis cruzado integral en 5 niveles:
 
 1. EXTRAER Y EVALUAR SÍNTOMAS PRINCIPALES:
    - Motivo de consulta, anamnesis y notas históricas de cada sesión.
    - Carga sintomática en Ansiedad, Depresión, Psicosis, TDAH, TCA, Personalidad (TLP) y Deterioro Cognitivo.
 
-2. TRIANGULACIÓN BIOCLÍNICA Y PSICOMÉTRICA:
+2. TRIANGULACIÓN BIOCLÍNICA, PSICOMÉTRICA Y BIOMÉTRICA MULTIMODAL:
    - Cruza las notas subjetivas del terapeuta con los puntajes DSM-5/OMS (BDI-II, BAI, PHQ-9, GAD-7, ASRS, AQ-10, MMSE, C-SSRS, SAD PERSONS).
    - Analiza las Áreas Funcionales (Sueño, Apetito, Energía, Social, Atención).
    - Evalúa biomarcadores de hardware (Test Neuromotor USB: latencia en ms, omisiones, comisiones/falsas alarmas).
    - Analiza la potencias por banda qEEG (Delta, Theta, Alfa, Beta, High Beta) y Z-Scores por región (Frontal, Parietal, Temporal, Occipital).
 
-3. EVALUACIÓN DE MEDICIÓN PASIVA (APK CENTINELA - RIESGO SUICIDA):
+3. INTEG RACIÓN DE TELEMETRÍA VR META QUEST 3S (FRECUENCIA CARDÍACA / GSR):
+   ${vrSection}
+   - Correlaciona matemáticamente la respuesta vegetativa inmersiva (variabilidad de la frecuencia cardíaca HRV y GSR) con la severidad del autoreporte psicométrico.
+   - Si se observa incongruencia (e.g., autoreporte de angustia extrema pero respuesta vagal normalizada e índice H óptimo en VR), calcula el posible efecto de debiasing o sesgo en el informe final.
+
+4. EVALUACIÓN DE MEDICIÓN PASIVA (APK CENTINELA - RIESGO SUICIDA):
    - Interpreta los parámetros anonimizados de la herramienta de medición pasiva vinculada al expediente PAC.
    - Si los despertares nocturnos (nightWakeups) son mayores a 3 por noche y la latencia biomotora refleja agitación o letargo severo, combina estos datos con las escalas psicométricas (SAD PERSONS / C-SSRS).
    - En caso de detectarse un estado de riesgo ALTO o CRÍTICO:
      a) Prioriza en el dictamen el protocolo de contención y restricción de medios.
      b) Emite las recomendaciones de contacto directo con el profesional responsable (Colegiado) o la red de apoyo designada.
 
-4. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTE DE SESGOS (7 TRASTORNOS):
-   Evalúa y realiza cruces bioclínicos obligatorios entre: TDAH, TAG, TDM, TEA, TLP, TOC y DETERIORO_PRODROMO.
-
-5. CADENA DE RAZONAMIENTO DIAGNÓSTICO (DSM-5 & MORRISON):
+5. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTE DE SESGOS (7 TRASTORNOS) & PRINCIPIOS MORRISON:
+   - Evalúa y realiza cruces bioclínicos obligatorios entre: TDAH, TAG, TDM, TEA, TLP, TOC y DETERIORO_PRODROMO.
    - Aplica el Principio de Seguridad A (descarte orgánico/sustancias primero), Principio F (prioridad al estado de ánimo), Principio M (Navaja de Occam), Principio W (evitar TP en cuadro agudo) y Principio X (jerarquía de tratabilidad).
 
-EXPEDIENTE DEL PACIENTE EN FORMATO JSON:
+${multisensorySection}
+
+EXPEDIENTE COMPLETO DEL PACIENTE EN FORMATO JSON:
 ${patientJsonString}
 
 INSTRUCCIONES DE FORMATO DE RESPUESTA:
@@ -466,7 +493,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido.
     systemInstruction: {
       parts: [
         {
-          text: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica.'
+          text: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica multimodal.'
         }
       ]
     },
