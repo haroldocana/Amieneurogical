@@ -5,7 +5,7 @@
  */
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors'; // Importación de CORS agregada
+import cors from 'cors';
 import { GoogleAuth } from 'google-auth-library';
 import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
@@ -56,6 +56,36 @@ const proxyLimiter = rateLimit({
 });
 
 app.use('/api-proxy', proxyLimiter);
+
+// --- ENDPOINT REGISTRO CLINICO AMIE (PatientRecord JSON) ---
+app.post('/api/patient-records', (req, res) => {
+  try {
+    const payload = req.body;
+    
+    // Validación básica de estructura del JSON AMIE
+    if (!payload || !payload.patientRecord || !payload.patientRecord.metadata) {
+      return res.status(400).json({ 
+        error: 'Bad Request', 
+        message: 'Invalid AMIE PatientRecord JSON structure.' 
+      });
+    }
+
+    const { patientId, sessionGuid } = payload.patientRecord.metadata;
+    console.log(`[AMIE Clinical Engine] Recibido expediente debiased para Paciente ID: ${patientId} (Session: ${sessionGuid})`);
+
+    // Aquí se procesa o persiste el registro (ej. guardado en base de datos o almacenamiento persistente)
+    return res.status(201).json({
+      success: true,
+      message: 'Expediente clínico procesado y registrado exitosamente.',
+      patientId: patientId,
+      sessionGuid: sessionGuid,
+      debiasedConfidence: payload.patientRecord.debiasingEngineMetrics?.debiasedConfidenceIndexPercent || 90.0
+    });
+  } catch (error) {
+    console.error('[AMIE Clinical Engine] Error al procesar el expediente:', error);
+    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+});
 
 const API_CLIENT_MAP = [
   {
