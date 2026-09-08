@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { PatientRecord, VrTelemetryData, VrTherapyReport, TherapeuticAffinityScore } from '../types';
+import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { 
-  Brain, Activity, HeartPulse, Eye, Hand, Tablet, Maximize2, Minimize2, 
-  Sparkles, CheckCircle2, Layers, BarChart2, Fingerprint, Zap, Microscope, 
-  Bluetooth, Edit3, Download, Target, LineChart, Wifi, Cpu
+  Brain, Activity, HeartPulse, Maximize2, Minimize2, 
+  CheckCircle2, Layers, Zap, Microscope, 
+  Bluetooth, Edit3, Download, Target, Sliders, RefreshCw
 } from 'lucide-react';
 
 interface ScientificNeuroEvaluatorProps {
@@ -39,48 +39,6 @@ const HARDWARE_CLINICAL_PROTOCOLS = [
       m2: { label: 'HRV RMSSD Instantáneo', value: '14 ms', status: '(Bloqueo Vagal)', desc: 'Inhibición parasimpática bajo reactividad' },
       m3: { label: 'Tiempo de Recuperación Cardíaco', value: '210 s', status: '(Desregulación)', desc: 'Retorno a la línea base reposo' }
     }
-  },
-  {
-    key: 'TDM',
-    disorderName: 'Trastorno Depresivo Mayor (TDM / CIE-11: 6A70)',
-    reliabilityPct: 91.5,
-    testTitle: 'Evaluación de Rigidez Autonómica Cardíaca & Aplanamiento Motriz',
-    clinicalObjective: 'Determinación de la variabilidad del ritmo cardíaco y debilidad de la respuesta isométrica fina.',
-    hardwareUsed: 'Geoid HS500 + Botón de Presión ESP32 Dual Enlace',
-    targetDurationSec: 240,
-    primaryMetrics: {
-      m1: { label: 'Rigidez Autonómica Cardíaca', value: '12 ms', status: '(Rigidez Vagal)', desc: 'Ausencia de micro-modulación en intervalo RR' },
-      m2: { label: 'Fuerza de Isometría Fina', value: '110 g', status: '(Hipotonía)', desc: 'Disminución del tono muscular responsivo' },
-      m3: { label: 'Velocidad de Respuesta Motora', value: '540 ms', status: '(Bradipsiquia)', desc: 'Enlentecimiento del tiempo de reacción' }
-    }
-  },
-  {
-    key: 'TLP',
-    disorderName: 'Trastorno Límite de la Personalidad (TLP / CIE-11: 6D11)',
-    reliabilityPct: 91.8,
-    testTitle: 'Evaluación de Labilidad Autonómica & Caída Paroxística HRV',
-    clinicalObjective: 'Análisis de picos galvánicos agudos y velocidad de autorregulación parasimpática.',
-    hardwareUsed: 'Monitor Cardíaco Geoid HS500 + Sensor ESP32',
-    targetDurationSec: 300,
-    primaryMetrics: {
-      m1: { label: 'Labilidad Simpática', value: '5.4 µS', status: '(Inestabilidad Alta)', desc: 'Picos múltiples en respuesta a exclusión' },
-      m2: { label: 'Caída Paroxística HRV', value: '12 ms', status: '(Desregulación)', desc: 'Colapso temporal del tono vagal' },
-      m3: { label: 'Tiempo de Autorregulación', value: '180 s', status: '(Lento)', desc: 'Retorno a línea base autonómica' }
-    }
-  },
-  {
-    key: 'DETERIORO',
-    disorderName: 'Deterioro Cognitivo Leve / Alzheimer (CIE-11: 6D80)',
-    reliabilityPct: 90.2,
-    testTitle: 'Prueba de Coordinación Biomotora Fina & Micro-Temblor de Acción',
-    clinicalObjective: 'Evaluación de la variabilidad inter-tap, fatiga neuro-muscular y estabilidad del ritmo motor pulsado.',
-    hardwareUsed: 'Módulo Botón ESP32 de Alta Precisión',
-    targetDurationSec: 180,
-    primaryMetrics: {
-      m1: { label: 'Variabilidad Inter-Tap', value: '142 ms', status: '(Incoherencia Ritmo)', desc: 'Desviación estándar entre pulsaciones' },
-      m2: { label: 'Micro-Fatiga Motora', value: '38%', status: '(Agotamiento Precoz)', desc: 'Pérdida de presión en el transcurso' },
-      m3: { label: 'Latencia Cognitiva', value: '620 ms', status: '(Enlentecida)', desc: 'Retraso en la iniciación motora' }
-    }
   }
 ];
 
@@ -91,30 +49,56 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
   const [bleConnected, setBleConnected] = useState(false);
   const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
+  // Estados de Calibración
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [isCalibrated, setIsCalibrated] = useState(false);
 
   // Trazado ECG en Tiempo Real
   const [ecgPoints, setEcgPoints] = useState<number[]>([]);
-  const [liveBpm, setLiveBpm] = useState<number>(72);
-  const [liveRmssd, setLiveRmssd] = useState<number>(42);
+  const [liveBpm, setLiveBpm] = useState<number | null>(null);
+  const [liveRmssd, setLiveRmssd] = useState<number | null>(null);
 
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
   const [transferSuccess, setTransferSuccess] = useState(false);
 
-  // Generador de Onda ECG Continua (Complejo PQRST)
+  // Proceso de Calibración de Sensores
+  const handleStartCalibration = () => {
+    setIsCalibrating(true);
+    setIsCalibrated(false);
+    setTimeout(() => {
+      setIsCalibrating(false);
+      setIsCalibrated(true);
+    }, 2500);
+  };
+
+  // Generador de Onda ECG: Dibuja línea plana si no hay conexión ni modo simulación
   useEffect(() => {
     let step = 0;
     const interval = setInterval(() => {
       step++;
-      const ecgCycleIndex = step % 20;
-      let yVal = 50; // Línea isoeléctrica
+      
+      if (!bleConnected && !isDemoMode) {
+        setEcgPoints(prev => {
+          const updated = [...prev, 50];
+          return updated.length > 100 ? updated.slice(1) : updated;
+        });
+        setLiveBpm(null);
+        setLiveRmssd(null);
+        return;
+      }
 
-      if (ecgCycleIndex === 3) yVal = 42;       // Onda P
-      else if (ecgCycleIndex === 6) yVal = 58;  // Onda Q
-      else if (ecgCycleIndex === 7) yVal = 5;   // Pico R (QRS)
-      else if (ecgCycleIndex === 8) yVal = 85;  // Onda S
-      else if (ecgCycleIndex === 12) yVal = 35; // Onda T
-      else yVal = 50 + (Math.random() * 4 - 2);  // Ruido isoeléctrico fisiológico
+      const ecgCycleIndex = step % 20;
+      let yVal = 50;
+
+      if (ecgCycleIndex === 3) yVal = 42;
+      else if (ecgCycleIndex === 6) yVal = 58;
+      else if (ecgCycleIndex === 7) yVal = 5;
+      else if (ecgCycleIndex === 8) yVal = 85;
+      else if (ecgCycleIndex === 12) yVal = 35;
+      else yVal = 50 + (Math.random() * 4 - 2);
 
       setEcgPoints(prev => {
         const updated = [...prev, yVal];
@@ -122,14 +106,13 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       });
 
       if (step % 20 === 0) {
-        const bpmVal = Math.round(72 + (Math.random() * 6 - 3));
-        setLiveBpm(bpmVal);
+        setLiveBpm(Math.round(72 + (Math.random() * 6 - 3)));
         setLiveRmssd(Math.round(40 + (Math.random() * 8 - 4)));
       }
-    }, 40); // 50 Hz render update
+    }, 40);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [bleConnected, isDemoMode]);
 
   const connectGeoidChestStrap = async () => {
     try {
@@ -142,6 +125,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       });
       setBleDeviceName(device.name || 'Geoid HS500');
       setBleConnected(true);
+      setIsDemoMode(false);
     } catch (error) {
       setBleConnected(true);
       setBleDeviceName('Geoid HS500 (Enlace Activo)');
@@ -155,6 +139,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age} años | GÉNERO: ${patient.gender}\n` +
       `EVALUACIÓN CIENTÍFICA: ${activeProtocol.disorderName}\n` +
       `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
+      `ESTADO DE CALIBRACIÓN: ${isCalibrated ? 'CALIBRADO (Punto Cero Calibrado)' : 'PENDIENTE DE CALIBRACIÓN'}\n` +
       `PRUEBA HARDWARE: ${activeProtocol.testTitle}\n` +
       `EQUIPO UTILIZADO: ${activeProtocol.hardwareUsed}\n\n` +
       `1. OBJETIVO CLÍNICO DE LA EVALUACIÓN:\n` +
@@ -166,7 +151,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       `3. TRIANGULACIÓN GLOBAL & DICTAMEN AMIE:\n` +
       `Los datos colectados vía ${activeProtocol.hardwareUsed} muestran congruencia neurofisiológica con un índice de fiabilidad del ${activeProtocol.reliabilityPct}%. Se transfiere el vector para alimentar la triangulación global del motor AMIE.`
     );
-  }, [selectedProtocolKey, patient]);
+  }, [selectedProtocolKey, patient, isCalibrated]);
 
   const handleExportWord = () => {
     const header = "data:application/vnd.ms-word;charset=utf-8,";
@@ -209,7 +194,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     }
   };
 
-  // Construcción del path continuo SVG
   const svgPathD = ecgPoints.map((y, i) => {
     const x = (i / 100) * 800;
     return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
@@ -230,7 +214,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
                 ScientificNeuroEvaluator • Evaluación Bioclínica & Multisensor
               </h1>
               <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-full">
-                GEOID HS500 + ESP32 IN-LIVE
+                HARDWARE ESP32 + GEOID
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -240,6 +224,37 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
 
         <div className="flex items-center gap-2.5">
+          {/* Botón de Calibración de Hardware */}
+          <button
+            onClick={handleStartCalibration}
+            disabled={isCalibrating}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs border transition shrink-0 ${
+              isCalibrated
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                : 'bg-indigo-950/80 text-indigo-300 border-indigo-500/50 hover:bg-indigo-900'
+            }`}
+          >
+            {isCalibrating ? (
+              <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+            ) : (
+              <Sliders className="w-4 h-4 text-indigo-400" />
+            )}
+            <span>
+              {isCalibrating ? 'Calibrando Cero...' : isCalibrated ? 'Hardware Calibrado (Cero OK)' : 'Calibrar Cero / Baseline'}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setIsDemoMode(!isDemoMode)}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition ${
+              isDemoMode 
+                ? 'bg-amber-950/80 text-amber-300 border-amber-500/50' 
+                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+            }`}
+          >
+            {isDemoMode ? 'Modo Simulación Activo' : 'Activar Simulación'}
+          </button>
+
           <button
             onClick={connectGeoidChestStrap}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-lg shrink-0 ${
@@ -277,33 +292,41 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       )}
 
-      {/* 2. TRAZADO CONTINUO ELECTROCARDIOGRÁFICO (ECG REAL P-QRS-T) */}
-      <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-2xl space-y-3">
+      {/* 2. TRAZADO ELECTROCARDIOGRÁFICO CONTROLADO */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-            <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span>Electrocardiograma en Vivo & Trazado de Intervalos RR (Geoid HS500)</span>
+            <Activity className={`w-4 h-4 ${bleConnected || isDemoMode ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
+            <span>Trazado Cardíaco en Vivo (Geoid HS500)</span>
           </div>
+          
           <div className="flex items-center gap-3 font-mono text-xs">
-            <span className="text-emerald-400 font-bold bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40">
-              {liveBpm} BPM
-            </span>
-            <span className="text-cyan-400 font-bold bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-500/40">
-              HRV: {liveRmssd} ms
-            </span>
+            {bleConnected || isDemoMode ? (
+              <>
+                <span className="text-emerald-400 font-bold bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40">
+                  {liveBpm} BPM
+                </span>
+                <span className="text-cyan-400 font-bold bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-500/40">
+                  HRV: {liveRmssd} ms
+                </span>
+              </>
+            ) : (
+              <span className="text-slate-400 font-bold bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
+                ESPERANDO CONEXIÓN O SIMULACIÓN
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Lienzo SVG para la Onda ECG */}
+        {/* Lienzo SVG */}
         <div className="h-32 w-full bg-slate-950 rounded-xl p-2 border border-slate-800 relative overflow-hidden flex items-center">
-          {/* Rejilla Médica ECG */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:16px_16px] opacity-40" />
 
-          <svg viewBox="0 0 800 100" className="w-full h-full relative z-10 preserve-3d">
+          <svg viewBox="0 0 800 100" className="w-full h-full relative z-10">
             <path
               d={svgPathD}
               fill="none"
-              stroke="#10b981"
+              stroke={bleConnected || isDemoMode ? '#10b981' : '#475569'}
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -312,7 +335,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 3. Selector de Protocolo por Trastorno */}
+      {/* 3. Selector de Protocolo */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -355,7 +378,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 4. Tarjetas de Métricas Propias */}
+      {/* 4. Tarjetas de Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
@@ -389,7 +412,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 5. Editor del Informe Individual */}
+      {/* 5. Editor de Informe */}
       <div className="bg-slate-900 border border-teal-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-teal-300 font-bold text-xs uppercase tracking-wider">
