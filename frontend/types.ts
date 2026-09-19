@@ -1,9 +1,14 @@
+// ============================================================================
+// AMIE / AIMA CLINICAL ENGINE - SYSTEM TYPE DEFINITIONS
+// ============================================================================
+
+// --- BIOMETRÍA ACÚSTICA Y VOZ ---
 export interface AcousticVoiceBiometrics {
-  speechRateWpm: number; // Words per minute (normal 120-160)
-  bradylaliaIndex: number; // 0-100 (high = severe motor/speech retardation)
-  affectiveFlatteningScore: number; // 0-100 (high = monotone/flat affect)
-  responseLatencyMs: number; // Average pause before answering in ms
-  prosodyVariabilityPct: number; // Pitch variation (low = depressed/schizophrenic flat prosody)
+  speechRateWpm: number; // Palabras por minuto (normal 120-160)
+  bradylaliaIndex: number; // 0-100 (alto = inhibición psicomotora/inhibición severa)
+  affectiveFlatteningScore: number; // 0-100 (alto = aplanamiento afectivo / monotonía)
+  responseLatencyMs: number; // Latencia de respuesta en ms
+  prosodyVariabilityPct: number; // Variabilidad de tono
   acousticStressMarker: 'Normal' | 'Labilidad Emocional' | 'Aplanamiento Afectivo' | 'Presión del Habla (Taquilalia)' | 'Inhibición Severa';
 }
 
@@ -18,8 +23,9 @@ export interface SessionAudioRecording {
   audioWaveformData?: number[];
 }
 
+// --- MONITOREO PASIVO / SENSITIVO CENTINELA (APK / SENSOR MÓVIL) ---
 export interface SentinelSleepMetrics {
-  nightWakeups: number; // e.g. >3 indicates high risk
+  nightWakeups: number; // >3 indica riesgo de descompensación
   hoursInDarkness: number;
   sleepEfficiencyPct: number;
   avgSleepDurationHours: number;
@@ -28,8 +34,8 @@ export interface SentinelSleepMetrics {
 export interface SentinelBehavioralBiometrics {
   typingLatencyMs: number;
   screenActiveTimeMinutes: number;
-  biomotorLatencyMs: number; // screen-tap / movement interaction latency
-  activityRestlessnessIndex: number; // 0-100
+  biomotorLatencyMs: number; // Latencia de toque/movimiento
+  activityRestlessnessIndex: number; // 0-100 (agitación motora)
 }
 
 export interface SentinelSafetyStatus {
@@ -44,7 +50,7 @@ export interface SentinelSafetyStatus {
 }
 
 export interface PatientSentinelData {
-  pacId: string; // e.g. "PAC-4092"
+  pacId: string;
   deviceSyncTime: string;
   sleepMetrics: SentinelSleepMetrics;
   behavioralBiometrics: SentinelBehavioralBiometrics;
@@ -65,6 +71,7 @@ export interface PatientSentinelData {
   };
 }
 
+// --- BIOMARCADORES CEREBRALES (qEEG / EEGLAB) ---
 export interface QeegBandPowers {
   delta: number;
   theta: number;
@@ -102,15 +109,81 @@ export interface QeegBiomarkers {
   alphaPeakFrequencyHz?: number;
 }
 
+// --- TELEMETRÍA MULTISENSORIAL FISIOLÓGICA (GSR, HRV, GRIP) ---
 export interface MultisensoryHardwareTelemetry {
-  vagalToneHrvIndex: number; // 0-100 (RMSSD high = strong vagal parasympathetic tone)
-  handGripPressureKg: number; // Manual isometric sensor
-  camouflagingIndexPct: number; // CAT-Q masking for ASD (0-100%)
-  ocularFixationDurationMs: number; // Saccades / gaze stability
-  touchTapLatencyCompensatedMs: number; // Calibrated using event.timeStamp
+  vagalToneHrvIndex: number; // 0-100 (RMSSD alto = tono parasimpático sano)
+  handGripPressureKg: number; // Presión de agarre isométrica
+  camouflagingIndexPct: number; // Escala CAT-Q de enmascaramiento TEA
+  ocularFixationDurationMs: number; // Estabilidad de mirada
+  touchTapLatencyCompensatedMs: number;
   microExpressionState: 'Incongruencia Afectiva' | 'Micro-tensión Frontal' | 'Hipervigilancia Ocular' | 'Aplanamiento Motor' | 'Normorreactivo';
 }
 
+// --- HARDWARE VR PICO NEO 3 PRO & BIOMETRÍA INMERSIVA Y OCULAR ---
+export type SupportedVrDevice = 'PICO_NEO_3_PRO' | 'PICO_NEO_3_PRO_EYE' | 'META_QUEST_3' | 'META_QUEST_3S' | 'SIMULATION';
+
+export interface ControllerTelemetry {
+  hand: 'left' | 'right';
+  triggerPressure: number; // 0.0 a 1.0 (medida de impulsividad)
+  gripPressure: number;    // 0.0 a 1.0 (medida de tensión)
+  joystickVector: { x: number; y: number };
+  accelerometer: { x: number; y: number; z: number }; // Temblor motor / Agitación
+  hapticFeedbackActive: boolean;
+}
+
+export interface HeadMotion6DoF {
+  position: { x: number; y: number; z: number };
+  rotation: { pitch: number; yaw: number; roll: number };
+  headJitterIndex: number; // Indice de micro-movimiento/agitación (TDAH/Ansiedad)
+}
+
+export interface EyeTrackingPupilometry {
+  pupilDiameterMm: number;    // Diámetro pupilar (Carga cognitiva/estrés)
+  saccadicRateHz: number;      // Tasa de movimientos sacádicos
+  fixationDurationMs: number;  // Tiempo de fijación visual
+  gazeVector: { x: number; y: number; z: number };
+  blinkFrequencyPerMin: number;
+  source: 'PICO_EYE_TOBII' | 'DIY_OV9281_PUPILCORE' | 'MEDIA_PIPE' | 'SIMULATED';
+}
+
+export interface VrTelemetryData {
+  sessionId: string;
+  timestamp: string | number;
+  deviceId?: SupportedVrDevice;
+  
+  // Series Temporales Biométricas (Polar H10 + GSR)
+  gsrMicroSiemens: number[]; // Serie temporal de conductancia cutánea
+  hrvRmssdMs: number[];      // Serie temporal de variabilidad cardíaca
+  heartRateBpm?: number;     // Frecuencia cardíaca instantánea
+  
+  // Análisis Matemático de Respuesta VR
+  habituationIndexH: number; // Métrica de habituación
+  stressPeaksCount: number;  // Picos simpáticos
+  exposureDurationSec: number;
+  
+  // Telemetría Pico Neo 3 Pro
+  headMotion6DoF?: HeadMotion6DoF;
+  controllers?: {
+    left: ControllerTelemetry;
+    right: ControllerTelemetry;
+  };
+  
+  // Biometría Ocular & Pupilometría
+  pupilDiameterMm?: number;
+  saccadicRateHz?: number;
+  eyeTracking?: EyeTrackingPupilometry;
+}
+
+export interface VrTherapyReport {
+  sessionGuid: string;
+  exposureType: string;
+  sympatheticToneIndex: number; // 0 - 100
+  vagalReactivityIndex: number;  // 0 - 100
+  habituationRate: 'Óptima' | 'Moderada' | 'Ausente/Saturada';
+  synthesizedClinicalSummary: string; // Resumen ejecutivo para el dictamen
+}
+
+// --- PERFIL DE PSICOFARMACOLOGÍA ---
 export interface CurrentPsychopharmacologyItem {
   drugName: string;
   dosage: string;
@@ -138,29 +211,9 @@ export interface TherapeuticAffinityScore {
   biomarkerRationale: string;
 }
 
-// --- MÓDULO VR QUEST 3S & TELEMETRÍA BIOMÉTRICA INMERSIVA ---
-export interface VrTelemetryData {
-  sessionId: string;
-  timestamp: string;
-  gsrMicroSiemens: number[]; // Serie temporal de conductancia cutánea (GSR)
-  hrvRmssdMs: number[];      // Serie temporal de variabilidad cardíaca (RMSSD)
-  habituationIndexH: number; // Métrica matemática de habituación
-  stressPeaksCount: number;  // Picos simpáticos detectados
-  exposureDurationSec: number;
-  saccadicRateHz?: number;   // Frecuencia sacádica ocular en VR
-}
-
-export interface VrTherapyReport {
-  sessionGuid: string;
-  exposureType: string;
-  sympatheticToneIndex: number; // 0 - 100
-  vagalReactivityIndex: number;  // 0 - 100
-  habituationRate: 'Óptima' | 'Moderada' | 'Ausente/Saturada';
-  synthesizedClinicalSummary: string; // Informe sintetizado de la prueba individual VR
-}
-
+// --- EXPEDIENTE COMPLETO DEL PACIENTE ---
 export interface PatientRecord {
-  id: string; // PAC-XXXX format
+  id: string; // PAC-XXXX
   patientNameAnonymized: string;
   age: number;
   gender: 'M' | 'F' | 'Other';
@@ -171,8 +224,8 @@ export interface PatientRecord {
   sentinelTelemetry?: PatientSentinelData;
   qeegBiomarkers?: QeegBiomarkers;
   multisensoryHardware?: MultisensoryHardwareTelemetry;
-  vrTelemetryData?: VrTelemetryData;     // Telemetría inmersiva para la triangulación
-  vrTherapyReport?: VrTherapyReport;     // Informe sintético de la prueba VR
+  vrTelemetryData?: VrTelemetryData;       // Telemetría Pico Neo 3 Pro + Polar H10
+  vrTherapyReport?: VrTherapyReport;       // Informe sintetizado VR
   psychopharmacologyCurrent?: CurrentPsychopharmacologyItem[];
   psychometricScores: {
     phq9?: number;
@@ -217,6 +270,7 @@ export interface PatientRecord {
   medicalHistory: string[];
 }
 
+// --- MATRIZ DIFERENCIAL Y SESGOS ---
 export type ClinicalDisorderKey = 
   | 'TDAH' 
   | 'TAG' 
@@ -248,6 +302,7 @@ export interface DifferentialDisorderComparison {
   morrisonPrincipleApplied: string;
 }
 
+// --- DICTAMEN INTEGRAL DEL MOTOR CLINICO AMIE ---
 export interface AmieClinicalAnalysis {
   principalDiagnosis: {
     codeCIE10: string;
@@ -272,7 +327,8 @@ export interface AmieClinicalAnalysis {
     neuromotorInterpretation?: string;
     acousticBiometricAssessment: string;
     qeegInterpretation?: string;
-    vrHabituationAssessment?: string; // Evaluación triangulada de la biometría VR
+    vrHabituationAssessment?: string; // Evaluación triangulada Pico Neo 3 + Polar H10
+    pupilometryAssessment?: string;  // Evaluación de sesgos atencionales por pupilometría
     regionalLobeBreakdown: {
       frontal: string;
       temporal: string;
@@ -302,6 +358,7 @@ export interface AmieClinicalAnalysis {
   rawModelChainOfThought?: string;
 }
 
+// --- LICENCIAMIENTO SAAS & INSTITUCIONAL ---
 export interface MedicalLicenseAccount {
   id: string;
   doctorName: string;
@@ -328,7 +385,7 @@ export interface TopographicLobeScore {
   interpretation: string;
 }
 
-// AMIE ACADEMY & SIMULATOR
+// --- AMIE CLINICAL ACADEMY & SIMULADOR IA ---
 export type LifeCycleStage = 'INFANCIA' | 'ADOLESCENCIA' | 'ADULTEZ' | 'ADULTEZ_MAYOR';
 export type AvatarEmotionState = 'Neutral' | 'Defensivo' | 'Ansioso' | 'Afligido' | 'Aliviado';
 export type PsychotherapyFramework = 'TCC' | 'DBT' | 'ACT' | 'EMDR' | 'SISTEMICA' | 'PSICODINAMICA_BREVE';
