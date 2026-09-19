@@ -64,10 +64,10 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         'Sesión 2: Acompañado por cónyuge quien reporta que el paciente pasa horas mirando al vacío y revisando un arma en el ático. Se interviene para decomiso de medios.'
       ],
       multisensoryHardware: {
-        vagalToneHrvIndex: 18, // Severamente deprimido (<25)
-        handGripPressureKg: 21.4, // Hipotonía psicomotora marcada
+        vagalToneHrvIndex: 18,
+        handGripPressureKg: 21.4,
         camouflagingIndexPct: 12,
-        ocularFixationDurationMs: 4200, // Fijación inmóvil prolongada
+        ocularFixationDurationMs: 4200,
         touchTapLatencyCompensatedMs: 485,
         microExpressionState: 'Aplanamiento Motor'
       },
@@ -142,14 +142,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         recordingDate: '2025-02-14',
         channelsCount: 19,
         samplingRateHz: 500,
-        bandPowers: {
-          delta: 34,
-          theta: 28,
-          alfa: 18,
-          beta: 14,
-          highBeta: 6,
-          gamma: 2
-        },
+        bandPowers: { delta: 34, theta: 28, alfa: 18, beta: 14, highBeta: 6, gamma: 2 },
         regionalZScores: {
           frontal: { region: 'Frontal', deltaZ: 1.9, thetaZ: 2.3, alfaZ: -1.2, betaZ: 0.4, highBetaZ: 0.1, coherenceZ: 0.81, interpretation: 'Enlentecimiento frontal difuso con elevación de ondas lentas' },
           parietal: { region: 'Parietal', deltaZ: 0.4, thetaZ: 0.8, alfaZ: 0.3, betaZ: 0.2, highBetaZ: 0.0, coherenceZ: 0.94 },
@@ -159,36 +152,10 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         thetaBetaRatio: 1.8,
         alphaPeakFrequencyHz: 8.5
       },
-      psychometricScores: {
-        phq9: 24,
-        gad7: 16,
-        bdi2: 42,
-        bai: 18,
-        mmse: 29,
-        sadPersons: 9,
-        cssrsLevel: 5,
-        gafEstimated: 25,
-        whodas2: 4.2
-      },
-      functionalAreas: {
-        sleep: 15,
-        appetite: 20,
-        energy: 15,
-        social: 10,
-        attention: 35
-      },
-      neuromotorBiomarkers: {
-        reactionTimeMs: 485,
-        omissionErrors: 8,
-        commissionErrors: 2,
-        motorStabilityScore: 42
-      },
-      qeegZScores: {
-        frontalThetaBetaRatio: 1.8,
-        temporalAsymmetry: 0.4,
-        alphaPeakFrequencyHz: 8.5,
-        deltaSlowActivityZ: 1.9
-      },
+      psychometricScores: { phq9: 24, gad7: 16, bdi2: 42, bai: 18, mmse: 29, sadPersons: 9, cssrsLevel: 5, gafEstimated: 25, whodas2: 4.2 },
+      functionalAreas: { sleep: 15, appetite: 20, energy: 15, social: 10, attention: 35 },
+      neuromotorBiomarkers: { reactionTimeMs: 485, omissionErrors: 8, commissionErrors: 2, motorStabilityScore: 42 },
+      qeegZScores: { frontalThetaBetaRatio: 1.8, temporalAsymmetry: 0.4, alphaPeakFrequencyHz: 8.5, deltaSlowActivityZ: 1.9 },
       substancesHistory: {
         alcohol: 'Consumo ocasional previo, nulo en último mes',
         tobacco: 'Fumador leve (5 cig/día)',
@@ -217,7 +184,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         vagalToneHrvIndex: 78,
         handGripPressureKg: 42.1,
         camouflagingIndexPct: 8,
-        ocularFixationDurationMs: 140, // Saccades erráticas ultra-rápidas
+        ocularFixationDurationMs: 140,
         touchTapLatencyCompensatedMs: 195,
         microExpressionState: 'Hipervigilancia Ocular'
       },
@@ -292,14 +259,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         recordingDate: '2025-02-18',
         channelsCount: 19,
         samplingRateHz: 500,
-        bandPowers: {
-          delta: 12,
-          theta: 35,
-          alfa: 15,
-          beta: 26,
-          highBeta: 12,
-          gamma: 5
-        },
+        bandPowers: { delta: 12, theta: 35, alfa: 15, beta: 26, highBeta: 12, gamma: 5 },
         regionalZScores: {
           frontal: { region: 'Frontal', deltaZ: -0.5, thetaZ: 3.2, alfaZ: -1.4, betaZ: 2.6, highBetaZ: 2.1, coherenceZ: 0.76, interpretation: 'Desincronización fronto-estriatal masiva con exceso theta/beta' },
           parietal: { region: 'Parietal', deltaZ: -0.2, thetaZ: 1.4, alfaZ: -0.8, betaZ: 1.8, highBetaZ: 1.2, coherenceZ: 0.88 },
@@ -309,35 +269,10 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         thetaBetaRatio: 3.2,
         alphaPeakFrequencyHz: 11.2
       },
-      psychometricScores: {
-        phq9: 2,
-        gad7: 12,
-        bdi2: 4,
-        mmse: 27,
-        asrs: 15,
-        sadPersons: 3,
-        cssrsLevel: 0,
-        gafEstimated: 25
-      },
-      functionalAreas: {
-        sleep: 10,
-        appetite: 40,
-        energy: 98,
-        social: 95,
-        attention: 20
-      },
-      neuromotorBiomarkers: {
-        reactionTimeMs: 195,
-        omissionErrors: 1,
-        commissionErrors: 19,
-        motorStabilityScore: 30
-      },
-      qeegZScores: {
-        frontalThetaBetaRatio: 3.2,
-        temporalAsymmetry: 1.4,
-        alphaPeakFrequencyHz: 11.2,
-        deltaSlowActivityZ: -0.5
-      },
+      psychometricScores: { phq9: 2, gad7: 12, bdi2: 4, mmse: 27, asrs: 15, sadPersons: 3, cssrsLevel: 0, gafEstimated: 25 },
+      functionalAreas: { sleep: 10, appetite: 40, energy: 98, social: 95, attention: 20 },
+      neuromotorBiomarkers: { reactionTimeMs: 195, omissionErrors: 1, commissionErrors: 19, motorStabilityScore: 30 },
+      qeegZScores: { frontalThetaBetaRatio: 3.2, temporalAsymmetry: 1.4, alphaPeakFrequencyHz: 11.2, deltaSlowActivityZ: -0.5 },
       substancesHistory: {
         alcohol: 'Negativo',
         tobacco: 'Negativo',
@@ -441,14 +376,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         recordingDate: '2025-01-20',
         channelsCount: 19,
         samplingRateHz: 500,
-        bandPowers: {
-          delta: 15,
-          theta: 38,
-          alfa: 22,
-          beta: 16,
-          highBeta: 7,
-          gamma: 2
-        },
+        bandPowers: { delta: 15, theta: 38, alfa: 22, beta: 16, highBeta: 7, gamma: 2 },
         regionalZScores: {
           frontal: { region: 'Frontal', deltaZ: 0.8, thetaZ: 2.8, alfaZ: -0.4, betaZ: 0.2, highBetaZ: 0.1, coherenceZ: 0.85, interpretation: 'Ratio Theta/Beta frontal 2.8σ compatible con fenotipo TDAH inatento' },
           parietal: { region: 'Parietal', deltaZ: 0.2, thetaZ: 1.1, alfaZ: 0.4, betaZ: 0.1, highBetaZ: 0.0, coherenceZ: 0.95 },
@@ -458,34 +386,10 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         thetaBetaRatio: 2.8,
         alphaPeakFrequencyHz: 9.8
       },
-      psychometricScores: {
-        phq9: 8,
-        gad7: 11,
-        asrs: 17,
-        mmse: 30,
-        sadPersons: 1,
-        cssrsLevel: 0,
-        gafEstimated: 70
-      },
-      functionalAreas: {
-        sleep: 65,
-        appetite: 80,
-        energy: 85,
-        social: 75,
-        attention: 25
-      },
-      neuromotorBiomarkers: {
-        reactionTimeMs: 275,
-        omissionErrors: 12,
-        commissionErrors: 14,
-        motorStabilityScore: 58
-      },
-      qeegZScores: {
-        frontalThetaBetaRatio: 2.8,
-        temporalAsymmetry: 0.1,
-        alphaPeakFrequencyHz: 9.8,
-        deltaSlowActivityZ: 0.8
-      },
+      psychometricScores: { phq9: 8, gad7: 11, asrs: 17, mmse: 30, sadPersons: 1, cssrsLevel: 0, gafEstimated: 70 },
+      functionalAreas: { sleep: 65, appetite: 80, energy: 85, social: 75, attention: 25 },
+      neuromotorBiomarkers: { reactionTimeMs: 275, omissionErrors: 12, commissionErrors: 14, motorStabilityScore: 58 },
+      qeegZScores: { frontalThetaBetaRatio: 2.8, temporalAsymmetry: 0.1, alphaPeakFrequencyHz: 9.8, deltaSlowActivityZ: 0.8 },
       substancesHistory: {
         alcohol: 'Ocasional social',
         tobacco: 'Negativo',
@@ -589,14 +493,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         recordingDate: '2025-02-17',
         channelsCount: 19,
         samplingRateHz: 500,
-        bandPowers: {
-          delta: 48,
-          theta: 29,
-          alfa: 12,
-          beta: 8,
-          highBeta: 2,
-          gamma: 1
-        },
+        bandPowers: { delta: 48, theta: 29, alfa: 12, beta: 8, highBeta: 2, gamma: 1 },
         regionalZScores: {
           frontal: { region: 'Frontal', deltaZ: 2.9, thetaZ: 2.1, alfaZ: -1.8, betaZ: -1.2, highBetaZ: -0.9, coherenceZ: 0.65, interpretation: 'Enlentecimiento polimorfo generalizado con ondas delta continuas (+2.9σ)' },
           parietal: { region: 'Parietal', deltaZ: 2.4, thetaZ: 1.8, alfaZ: -1.4, betaZ: -0.8, highBetaZ: -0.5, coherenceZ: 0.72 },
@@ -606,32 +503,10 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         thetaBetaRatio: 2.1,
         alphaPeakFrequencyHz: 7.2
       },
-      psychometricScores: {
-        phq9: 6,
-        mmse: 14,
-        sadPersons: 2,
-        cssrsLevel: 0,
-        gafEstimated: 25
-      },
-      functionalAreas: {
-        sleep: 20,
-        appetite: 30,
-        energy: 25,
-        social: 20,
-        attention: 15
-      },
-      neuromotorBiomarkers: {
-        reactionTimeMs: 560,
-        omissionErrors: 18,
-        commissionErrors: 9,
-        motorStabilityScore: 28
-      },
-      qeegZScores: {
-        frontalThetaBetaRatio: 2.1,
-        temporalAsymmetry: 0.8,
-        alphaPeakFrequencyHz: 7.2,
-        deltaSlowActivityZ: 2.9
-      },
+      psychometricScores: { phq9: 6, mmse: 14, sadPersons: 2, cssrsLevel: 0, gafEstimated: 25 },
+      functionalAreas: { sleep: 20, appetite: 30, energy: 25, social: 20, attention: 15 },
+      neuromotorBiomarkers: { reactionTimeMs: 560, omissionErrors: 18, commissionErrors: 9, motorStabilityScore: 28 },
+      qeegZScores: { frontalThetaBetaRatio: 2.1, temporalAsymmetry: 0.8, alphaPeakFrequencyHz: 7.2, deltaSlowActivityZ: 2.9 },
       substancesHistory: {
         alcohol: 'Abstemio desde hace 15 años',
         tobacco: 'Ex-fumador severo (60 paquetes/año)',
@@ -640,7 +515,11 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         medicationsCurrent: ['Bromuro de ipratropio', 'Salbutamol aerosol', 'Oxigenoterapia domiciliaria 2L/min']
       },
       medicalHistory: ['EPOC GOLD III', 'Celulitis infecciosa de pie derecho con septicemia']
-      export const MASTER_VR_ENVIRONMENTS = {
+    }
+  }
+];
+
+export const MASTER_VR_ENVIRONMENTS = {
   version: "3.8.0-AMIE-CLINICAL",
   systemName: "AMIE VR 52-DISORDER MASTER CONFIGURATION",
   updatedAt: "2026-03-20T00:00:00Z",
@@ -770,7 +649,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
     },
     {
       id: "ENV_05_PHOBIA_ELEVATOR_HEIGHTS",
-      name": "Ascensor / Balcón / Espacios Limítrofes (Fobias y Pánico)",
+      name: "Ascensor / Balcón / Espacios Limítrofes (Fobias y Pánico)",
       unitySceneName: "Scene_Phobia_Elevator_Heights",
       supportedClinicalTasks: ["VRET_GRADUAL_EXPOSURE", "INTEROCEPTIVE_PANIC_PROVOCATION"],
       targetDisorders: [
@@ -922,7 +801,7 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
       controllableParameters: {
         objectsMisplacementCount: { type: "range", min: 0, max: 10, default: 3, unit: "objects" },
         stepByStepVoiceGuidance: { type: "boolean", default: false },
-        clockDrawingTaskActive: { type: "boolean", "default": true }
+        clockDrawingTaskActive: { type: "boolean", default: true }
       },
       lslEventMarkers: {
         avdTaskStart: "AVD_TASK_START",
@@ -936,6 +815,3 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
     }
   ]
 };
-    }
-  }
-];
