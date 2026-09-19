@@ -640,6 +640,302 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
         medicationsCurrent: ['Bromuro de ipratropio', 'Salbutamol aerosol', 'Oxigenoterapia domiciliaria 2L/min']
       },
       medicalHistory: ['EPOC GOLD III', 'Celulitis infecciosa de pie derecho con septicemia']
+      export const MASTER_VR_ENVIRONMENTS = {
+  version: "3.8.0-AMIE-CLINICAL",
+  systemName: "AMIE VR 52-DISORDER MASTER CONFIGURATION",
+  updatedAt: "2026-03-20T00:00:00Z",
+  environmentsCount: 10,
+  coveredDisordersCount: 52,
+  defaultSamplingRateHz: 60,
+  masterEnvironments: [
+    {
+      id: "ENV_01_CLASSROOM_OFFICE",
+      name: "Aula / Oficina de Carga Atencional y Cognitiva",
+      unitySceneName: "Scene_Classroom_CPT3D",
+      supportedClinicalTasks: ["CPT_3D_GO_NO_GO", "N_BACK_MEMORY", "STROOP_3D_SPATIAL"],
+      targetDisorders: [
+        { code: "6A05.0", dsm5: "314.01", name: "TDAH Presentación Combinada" },
+        { code: "6A05.1", dsm5: "314.00", name: "TDAH Presentación Inatenta" },
+        { code: "6A05.2", dsm5: "314.01", name: "TDAH Presentación Hiperactiva/Impulsiva" },
+        { code: "6A03.0", dsm5: "315.00", name: "Trastorno Específico del Aprendizaje (Lectura/Dislexia)" },
+        { code: "6A03.1", dsm5: "315.1", name: "Trastorno Específico del Aprendizaje (Cálculo/Discalculia)" },
+        { code: "6A04", dsm5: "315.4", name: "Trastorno del Desarrollo de la Coordinación Motora" }
+      ],
+      controllableParameters: {
+        distractorDensity360: { type: "range", min: 0, max: 12, default: 4, unit: "active_distractors" },
+        stimulusIntervalMs: { type: "range", min: 200, max: 2000, default: 1000, unit: "milliseconds" },
+        ambientNoiseDecibels: { type: "range", min: 30, max: 85, default: 50, unit: "dB" },
+        openDoorDistractorActive: { type: "boolean", default: true }
+      },
+      lslEventMarkers: {
+        stimulusTarget: "STIMULUS_TARGET_GO",
+        stimulusNoGo: "STIMULUS_NOGO",
+        commissionError: "ERROR_COMMISSION_IMPULSIVITY",
+        omissionError: "ERROR_OMISSION_INATTENTION"
+      },
+      biometricThresholds: {
+        maxPupilDilationMm: 4.5,
+        maxHeadJitterIndex: 0.35,
+        criticalHrvDropMs: 20
+      }
+    },
+    {
+      id: "ENV_02_INTERPERSONAL_AUDITORIUM",
+      name: "Auditorio Intersubjetivo e Interacción Social",
+      unitySceneName: "Scene_Auditorium_TSST",
+      supportedClinicalTasks: ["VR_TSST_SPEECH", "SOCIAL_GAZE_TRACKING", "CAMOUFLAGING_DETECTOR"],
+      targetDisorders: [
+        { code: "6B01", dsm5: "300.23", name: "Trastorno de Ansiedad Social (Fobia Social)" },
+        { code: "6A02.0", dsm5: "299.00", name: "Trastorno del Espectro Autista Nivel 1 (Sin DTI)" },
+        { code: "6A02.1", dsm5: "299.00", name: "Trastorno del Espectro Autista Nivel 2/3 (Con DTI)" },
+        { code: "6B04", dsm5: "309.21", name: "Trastorno de Ansiedad por Separación" },
+        { code: "6B05", dsm5: "312.23", name: "Mutismo Selectivo" },
+        { code: "6D11.0", dsm5: "301.82", name: "Trastorno de la Personalidad Evitativa" },
+        { code: "6D11.1", dsm5: "301.20", name: "Trastorno de la Personalidad Esquizoide" },
+        { code: "6A22", dsm5: "301.22", name: "Trastorno de la Personalidad Esquizotípica" }
+      ],
+      controllableParameters: {
+        audienceSize: { type: "range", min: 1, max: 100, default: 25, unit: "avatars" },
+        avatarAffectiveExpression: { type: "select", options: ["NEUTRAL", "HOSTILE_DISAPPROVAL", "APPROVING", "INATTENTIVE"], default: "HOSTILE_DISAPPROVAL" },
+        stageLightingLux: { type: "range", min: 100, max: 2000, default: 800, unit: "lux" },
+        directEyeContactEnforced: { type: "boolean", default: true }
+      },
+      lslEventMarkers: {
+        speechStart: "MARKER_SPEECH_START",
+        audienceGasp: "MARKER_AUDIENCE_REACTION_NEGATIVE",
+        eyeAvoidanceDetected: "MARKER_EYE_AVOIDANCE_EVENT"
+      },
+      biometricThresholds: {
+        gsrSpikeMicroSiemens: 4.5,
+        minHrvRmssdMs: 25,
+        saccadicFrequencyHz: 3.2
+      }
+    },
+    {
+      id: "ENV_03_CUE_EXPOSURE_LOUNGE",
+      name: "Bar / Casino / Habitación de Exposición a Pistas (Cue-Exposure)",
+      unitySceneName: "Scene_CueExposure_Lounge",
+      supportedClinicalTasks: ["CUE_EXPOSURE_THERAPY", "INHIBITORY_CONTROL_BAR"],
+      targetDisorders: [
+        { code: "6C40", dsm5: "303.90", name: "Trastorno por Consumo de Alcohol" },
+        { code: "6C41", dsm5: "304.30", name: "Trastorno por Consumo de Cánnabis" },
+        { code: "6C42", dsm5: "304.20", name: "Trastorno por Consumo de Estimulantes (Cocaína/Anfetaminas)" },
+        { code: "6C43", dsm5: "304.00", name: "Trastorno por Consumo de Opioides" },
+        { code: "6C4A", dsm5: "305.1", name: "Trastorno por Consumo de Tabaco / Nicotina" },
+        { code: "6C50", dsm5: "312.31", name: "Trastorno por Juego de Apuestas (Ludopatía)" },
+        { code: "6C51", dsm5: "312.39", name: "Trastorno por Juego por Internet (Gaming Disorder)" },
+        { code: "6C4E", dsm5: "312.34", name: "Trastorno Explosivo Intermitente / Conducta Impulsiva" }
+      ],
+      controllableParameters: {
+        substanceType: { type: "select", options: ["ALCOHOL", "CANNABIS", "STIMULANTS", "GAMBLING_SLOTS", "TOBACCO"], default: "ALCOHOL" },
+        peerPressureAvatars: { type: "range", min: 0, max: 5, default: 2, unit: "avatars" },
+        cueProximityMeters: { type: "range", min: 0.2, max: 3.0, default: 0.5, unit: "meters" }
+      },
+      lslEventMarkers: {
+        cuePresented: "CUE_STIMULUS_PRESENTED",
+        approachTriggered: "APPROACH_BEHAVIOR_DETECTED",
+        avoidanceTriggered: "AVOIDANCE_BEHAVIOR_DETECTED"
+      },
+      biometricThresholds: {
+        cravingGsrSpike: 5.0,
+        hrvVagalCollapseMs: 18
+      }
+    },
+    {
+      id: "ENV_04_BODY_IMAGE_BUFFET",
+      name: "Espejo Virtual y Buffet de Alimentación",
+      unitySceneName: "Scene_BodyImage_Buffet",
+      supportedClinicalTasks: ["BODY_DISMORPHIA_HEATMAP", "FOOD_PROVOCATION_TEST"],
+      targetDisorders: [
+        { code: "6B80", dsm5: "307.1", name: "Anorexia Nerviosa (Restrictiva / Purgativa)" },
+        { code: "6B81", dsm5: "307.51", name: "Bulimia Nerviosa" },
+        { code: "6B82", dsm5: "307.54", name: "Trastorno por Atracón (Binge Eating)" },
+        { code: "6B83", dsm5: "307.59", name: "Trastorno de Evitación/Restricción de la Ingesta (ARFID)" },
+        { code: "6B21", dsm5: "300.7", name: "Trastorno Dismórfico Corporal" }
+      ],
+      controllableParameters: {
+        avatarBmiDistortionPct: { type: "range", min: -30, max: 50, default: 0, unit: "percent" },
+        foodCaloricDensity: { type: "select", options: ["LOW_CALORIE", "HIGH_CALORIE_BINGE", "MIXED"], default: "HIGH_CALORIE_BINGE" },
+        mirrorEyeGazeHeatmapActive: { type: "boolean", default: true }
+      },
+      lslEventMarkers: {
+        mirrorLookStart: "MIRROR_INSPECTION_START",
+        bodyDistortionPeak: "BODY_DISTORTION_APPLIED",
+        bingeFoodApproach: "BINGE_FOOD_GAZE_FIXATION"
+      },
+      biometricThresholds: {
+        fixationDurationMs: 2500,
+        gsrElevationMicroSiemens: 3.8
+      }
+    },
+    {
+      id: "ENV_05_PHOBIA_ELEVATOR_HEIGHTS",
+      name": "Ascensor / Balcón / Espacios Limítrofes (Fobias y Pánico)",
+      unitySceneName: "Scene_Phobia_Elevator_Heights",
+      supportedClinicalTasks: ["VRET_GRADUAL_EXPOSURE", "INTEROCEPTIVE_PANIC_PROVOCATION"],
+      targetDisorders: [
+        { code: "6B02", dsm5: "300.22", name: "Agorafobia" },
+        { code: "6B00", dsm5: "300.01", name: "Trastorno de Pánico" },
+        { code: "6B03.0", dsm5: "300.29", name: "Acrofobia (Miedo a las alturas)" },
+        { code: "6B03.1", dsm5: "300.29", name: "Claustrofobia (Espacios cerrados)" },
+        { code: "6B03.2", dsm5: "300.29", name: "Aerofobia (Miedo a volar)" },
+        { code: "6B03.3", dsm5: "300.29", name: "Aracnofobia / Zoofobia" },
+        { code: "6B03.4", dsm5: "300.29", name: "Fobia a Sangre / Inyecciones / Heridas" }
+      ],
+      controllableParameters: {
+        floorHeightMeters: { type: "range", min: 0, max: 200, default: 50, unit: "meters" },
+        elevatorEnclosureTightness: { type: "range", min: 0, max: 100, default: 80, unit: "percent" },
+        turbulenceLevel: { type: "range", min: 0, max: 10, default: 0, unit: "index" }
+      },
+      lslEventMarkers: {
+        exposureLevelIncreased: "VRET_EXPOSURE_STEP_UP",
+        panicSpikeDetected: "PANIC_BIOMETRIC_SPIKE",
+        habituationReached: "HABITUATION_CRITERIA_MET"
+      },
+      biometricThresholds: {
+        panicHeartRateBpm: 125,
+        panicGsrMicroSiemens: 6.5,
+        habituationIndexH: 2.5
+      }
+    },
+    {
+      id: "ENV_06_CYBERBALL_SOCIAL_REJECTION",
+      name: "Simulación Cyberball (Exclusión Social y Rechazo)",
+      unitySceneName: "Scene_Cyberball_Rejection",
+      supportedClinicalTasks: ["CYBERBALL_PARADIGM", "REJECTION_SENSITIVITY_TEST"],
+      targetDisorders: [
+        { code: "6D11.2", dsm5: "301.83", name: "Trastorno Límite de la Personalidad (TLP)" },
+        { code: "6D11.3", dsm5: "301.50", name: "Trastorno de la Personalidad Histriónica" },
+        { code: "6D11.4", dsm5: "301.81", name: "Trastorno de la Personalidad Narcisista" },
+        { code: "6D11.5", dsm5: "301.6", name: "Trastorno de la Personalidad Dependiente" },
+        { code: "6B00", dsm5: "300.02", name: "Trastorno de Ansiedad Generalizada (TAG)" }
+      ],
+      controllableParameters: {
+        exclusionPhaseActive: { type: "boolean", default: true },
+        throwsToPatientPct: { type: "range", min: 0, max: 50, default: 0, unit: "percent" },
+        avatarSmirkOnExclusion: { type: "boolean", default: true }
+      },
+      lslEventMarkers: {
+        inclusionPhaseStart: "CYBERBALL_INCLUSION_START",
+        exclusionPhaseStart: "CYBERBALL_EXCLUSION_START",
+        rejectionReactionPeak: "REJECTION_GSPSP_PEAK"
+      },
+      biometricThresholds: {
+        paroxysmalHrvDropMs: 15,
+        sympatheticLabilityIndex: 5.2
+      }
+    },
+    {
+      id: "ENV_07_DISASSOCIATION_AGENCY_ROOM",
+      name: "Habitación Sensoriomotora y Perturbación de Agencia",
+      unitySceneName: "Scene_AgencyPerturbation_Disassociation",
+      supportedClinicalTasks: ["SENSORIMOTOR_AGENCY_TEST", "RUBBER_HAND_VR_ILLUSION"],
+      targetDisorders: [
+        { code: "6A20", dsm5: "295.90", name: "Esquizofrenia (Fase Aguda / Síntomas Negativos)" },
+        { code: "6A21", dsm5: "295.40", name: "Trastorno Esquizofreniforme / Psicosis Breve" },
+        { code: "6A24", dsm5: "297.1", name: "Trastorno Delirante (Paranoia)" },
+        { code: "6B60", dsm5: "300.6", name: "Trastorno de Despersonalización / Desrealización" },
+        { code: "6B61", dsm5: "300.12", name: "Trastorno de Amnesia Disociativa" },
+        { code: "6C20", dsm5: "300.82", name: "Trastorno de Síntomas Somáticos / Hipocondría" }
+      ],
+      controllableParameters: {
+        controllerTrackingDelayMs: { type: "range", min: 0, max: 300, default: 150, unit: "milliseconds" },
+        auditoryHallucinationVolume: { type: "range", min: 0, max: 100, default: 30, unit: "percent" },
+        mirrorDesynchronizationActive: { type: "boolean", default: true }
+      },
+      lslEventMarkers: {
+        agencyPerturbationApplied: "AGENCY_PERTURBATION_APPLIED",
+        hallucinationTriggered: "AUDITORY_HALLUCINATION_PLAYED",
+        realityTestingBreak: "REALITY_TESTING_DISRUPTED"
+      },
+      biometricThresholds: {
+        motorTremorJitterHz: 4.5,
+        gsrHypoReactivityMicroSiemens: 0.5
+      }
+    },
+    {
+      id: "ENV_08_TRAUMA_EXPOSURE_ZONE",
+      name: "Zona de Evento Traumático Controlado (TEPT y EMDR 3D)",
+      unitySceneName: "Scene_Trauma_EMDR_Exposure",
+      supportedClinicalTasks: ["EMDR_3D_BILATERAL_HAPTIC", "PROLONGED_EXPOSURE_VR"],
+      targetDisorders: [
+        { code: "6B40", dsm5: "309.81", name: "Trastorno de Estrés Postraumático (TEPT)" },
+        { code: "6B41", dsm5: "308.3", name: "Trastorno de Estrés Agudo" },
+        { code: "6B42", dsm5: "309.28", name: "Trastornos de Adaptación" },
+        { code: "6B43", dsm5: "313.89", name: "Trastorno de Apego Reactivo / Desinhibido" }
+      ],
+      controllableParameters: {
+        emdrSaccadicSpeedHz: { type: "range", min: 0.5, max: 3.0, default: 1.5, unit: "Hz" },
+        controllerHapticBilateralActive: { type: "boolean", default: true },
+        traumaCueDesaturationPct: { type: "range", min: 0, max: 100, default: 50, unit: "percent" }
+      },
+      lslEventMarkers: {
+        emdrSweepStart: "EMDR_SWEEP_START",
+        startleResponseSpike: "STARTLE_RESPONSE_SPIKE",
+        traumaUncouplingMet: "TRAUMA_UNCOUPLING_SUCCESS"
+      },
+      biometricThresholds: {
+        startleGsrPeakMicroSiemens: 6.8,
+        habituationExtinctionH: 2.2
+      }
+    },
+    {
+      id: "ENV_09_BIOPHILIC_SANCTUARY",
+      name: "Santuario Biofílico y Autorregulación Vagal (Depresión / Bipolar)",
+      unitySceneName: "Scene_Biophilic_Sanctuary",
+      supportedClinicalTasks: ["ANHEDONIA_REWARD_MAPPING", "VAGAL_BIOFEEDBACK_BREATHING"],
+      targetDisorders: [
+        { code: "6A70", dsm5: "296.23", name: "Trastorno de Depresión Mayor (TDM) Episodio Único" },
+        { code: "6A71", dsm5: "296.33", name: "Trastorno de Depresión Mayor Recurrente" },
+        { code: "6A72", dsm5: "300.4", name: "Trastorno Depresivo Persistente (Distimia)" },
+        { code: "6A60", dsm5: "296.40", name: "Trastorno Bipolar I (Episodio Maníaco/Depresivo)" },
+        { code: "6A61", dsm5: "296.89", name: "Trastorno Bipolar II" }
+      ],
+      controllableParameters: {
+        environmentColorSaturation: { type: "range", min: 0, max: 100, default: 80, unit: "percent" },
+        biofeedbackOceanWavesHrvSync: { type: "boolean", default: true },
+        rewardTaskFrequency: { type: "range", min: 1, max: 10, default: 5, unit: "tasks_per_min" }
+      },
+      lslEventMarkers: {
+        rewardTaskCompleted: "REWARD_TASK_COMPLETED",
+        affectiveResonanceStart: "AFFECTIVE_RESONANCE_START",
+        vagalCoherenceAchieved: "VAGAL_COHERENCE_ACHIEVED"
+      },
+      biometricThresholds: {
+        targetHrvRmssdMs: 45,
+        basalGsrMicroSiemens: 1.2
+      }
+    },
+    {
+      id: "ENV_10_NEURODEGENERATIVE_DAILY_HOME",
+      name: "Hogar Virtual de Actividades de la Vida Diaria (AVD) / Neurocognitivo",
+      unitySceneName: "Scene_DailyHome_CognitiveAVD",
+      supportedClinicalTasks: ["AVD_FUNCTIONAL_ASSESSMENT", "SPATIAL_ORIENTATION_TEST"],
+      targetDisorders: [
+        { code: "6D70", dsm5: "331.83", name: "Deterioro Cognitivo Leve (DCL)" },
+        { code: "6D80", dsm5: "294.11", name: "Trastorno Neurocognitivo Mayor (Tipo Alzheimer)" },
+        { code: "6D81", dsm5: "290.40", name: "Trastorno Neurocognitivo Vascular" },
+        { code: "6D82", dsm5: "294.11", name: "Trastorno Neurocognitivo por Cuerpos de Lewy" },
+        { code: "6D83", dsm5: "294.11", name: "Trastorno Neurocognitivo Frontotemporal" },
+        { code: "6D71", dsm5: "293.0", name: "Delirium / Estado Confusional Agudo" }
+      ],
+      controllableParameters: {
+        objectsMisplacementCount: { type: "range", min: 0, max: 10, default: 3, unit: "objects" },
+        stepByStepVoiceGuidance: { type: "boolean", default: false },
+        clockDrawingTaskActive: { type: "boolean", "default": true }
+      },
+      lslEventMarkers: {
+        avdTaskStart: "AVD_TASK_START",
+        spatialDisorientationError: "SPATIAL_DISORIENTATION_ERROR",
+        taskCompletedSuccess: "AVD_TASK_COMPLETED_SUCCESS"
+      },
+      biometricThresholds: {
+        maxHesitationLatencySec: 15,
+        motorTremorAmplitude: 0.4
+      }
+    }
+  ]
+};
     }
   }
 ];
