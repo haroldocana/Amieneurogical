@@ -20,6 +20,7 @@ import { HoverTooltip } from './components/HoverTooltip';
 import { LoginModal } from './components/LoginModal';
 import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
+import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
@@ -68,6 +69,7 @@ export default function App() {
   const [isDsmModalOpen, setIsDsmModalOpen] = useState(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
+  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
 
   // Recuperación automática de sesión activa desde localStorage
   useEffect(() => {
@@ -484,13 +486,33 @@ export default function App() {
         {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
         
-        {/* Tab 7: Módulo VR Inmersivo con Consola Fullscreen */}
+        {/* Tab 7: Módulo VR Inmersivo con Botones de Consolas Fullscreen */}
         {activeTab === 'vr_therapy' && (
-          <VrTherapyModule
-            patient={currentPatient}
-            onUpdatePatientVrData={handleUpdatePatientVrData}
-            onOpenFullscreenConsole={() => setIsFullscreenConsoleOpen(true)}
-          />
+          <div className="space-y-4">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setIsFullscreenDiagnosticOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
+              >
+                <Brain className="w-4 h-4" />
+                <span>Abrir Consola de Diagnóstico (Pruebas 3D)</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenConsoleOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
+              >
+                <Glasses className="w-4 h-4" />
+                <span>Abrir Consola de Tratamiento (Exposición)</span>
+              </button>
+            </div>
+
+            <VrTherapyModule
+              patient={currentPatient}
+              onUpdatePatientVrData={handleUpdatePatientVrData}
+              onOpenFullscreenConsole={() => setIsFullscreenConsoleOpen(true)}
+            />
+          </div>
         )}
 
         {activeTab === 'referral' && (
@@ -516,11 +538,20 @@ export default function App() {
         defaultView={dsmModalView}
       />
 
-      {/* Modal Fullscreen de la Consola Terapéutica VR */}
+      {/* Modal Fullscreen 1: Consola Terapéutica VR (VRET / EMDR) */}
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
           patient={currentPatient}
           onClose={() => setIsFullscreenConsoleOpen(false)}
+          onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
+      )}
+
+      {/* Modal Fullscreen 2: Consola de Diagnóstico e Inferencia VR (CPT-3D / AAT / Cyberball) */}
+      {isFullscreenDiagnosticOpen && (
+        <FullscreenDiagnosticRunner
+          patient={currentPatient}
+          onClose={() => setIsFullscreenDiagnosticOpen(false)}
           onUpdatePatientVrData={handleUpdatePatientVrData}
         />
       )}
