@@ -19,6 +19,8 @@ import { FloatingAmieAssistant } from './components/FloatingAmieAssistant';
 import { HoverTooltip } from './components/HoverTooltip';
 import { LoginModal } from './components/LoginModal';
 import { VrTherapyModule } from './components/VrTherapyModule';
+import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
+import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
@@ -62,9 +64,10 @@ export default function App() {
   const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Modals
+  // Modals & Fullscreen Controls
   const [isDsmModalOpen, setIsDsmModalOpen] = useState(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
+  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
 
   // Recuperación automática de sesión activa desde localStorage
   useEffect(() => {
@@ -147,14 +150,14 @@ export default function App() {
     }
   };
 
-  // Handler para transferir la biometría VR Quest 3S al expediente global del paciente
+  // Handler para transferir la biometría VR al expediente global del paciente
   const handleUpdatePatientVrData = (telemetry: VrTelemetryData, report: VrTherapyReport) => {
     setCurrentPatient(prev => ({
       ...prev,
       vrTelemetryData: telemetry,
       vrTherapyReport: report
     }));
-    setSyncSuccessMsg('Métricas de VR Quest 3S transferidas exitosamente a la Triangulación Global.');
+    setSyncSuccessMsg('Métricas de VR transferidas exitosamente a la Triangulación Global.');
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
@@ -314,10 +317,10 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* VR Quest 3S */}
+            {/* VR Quest 3S / Pico 3 Pro */}
             <HoverTooltip
-              title="Módulo Terapéutico VR Quest 3S"
-              description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV) e informe individual sintetizado."
+              title="Módulo Terapéutico VR (Pico Neo 3 Pro / Quest 3S)"
+              description="Exposición inmersiva con biofeedback en tiempo real (GSR, Geoid HS500 HRV) e informe individual sintetizado."
               clinicalUtility="Cálculo del índice de habituación H y transferencia a la triangulación global."
               badge="Biometría VR"
             >
@@ -330,7 +333,7 @@ export default function App() {
                 }`}
               >
                 <Glasses className="w-3.5 h-3.5 text-cyan-300" />
-                <span>VR Quest 3S</span>
+                <span>VR Inmersivo</span>
               </button>
             </HoverTooltip>
 
@@ -468,16 +471,28 @@ export default function App() {
         )}
 
         {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={currentPatient} />}
-        {activeTab === 'differential_bias' && <DifferentialBiasResolver patient={currentPatient} />}
+        
+        {/* Tab 3: Diferenciador & Sesgos + Matriz de Triangulación Bioclínica */}
+        {activeTab === 'differential_bias' && (
+          <div className="space-y-6">
+            <DifferentialBiasResolver patient={currentPatient} />
+            <DiagnosticTriangulationView patient={currentPatient} analysis={analysis} />
+          </div>
+        )}
+
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
+        
+        {/* Tab 7: Módulo VR Inmersivo con Consola Fullscreen */}
         {activeTab === 'vr_therapy' && (
           <VrTherapyModule
             patient={currentPatient}
             onUpdatePatientVrData={handleUpdatePatientVrData}
+            onOpenFullscreenConsole={() => setIsFullscreenConsoleOpen(true)}
           />
         )}
+
         {activeTab === 'referral' && (
           <PsychiatryReferralView
             patient={currentPatient}
@@ -500,6 +515,15 @@ export default function App() {
         onClose={() => setIsDsmModalOpen(false)}
         defaultView={dsmModalView}
       />
+
+      {/* Modal Fullscreen de la Consola Terapéutica VR */}
+      {isFullscreenConsoleOpen && (
+        <FullscreenTreatmentConsole
+          patient={currentPatient}
+          onClose={() => setIsFullscreenConsoleOpen(false)}
+          onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
+      )}
     </div>
   );
 }
