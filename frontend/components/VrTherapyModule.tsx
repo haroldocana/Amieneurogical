@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { MASTER_VR_ENVIRONMENTS } from '../constants';
+import { VrControlService } from '../services/vrControlService';
 import { 
   Glasses, 
   Activity, 
@@ -18,7 +20,8 @@ import {
   Layers, 
   Brain, 
   Target,
-  Maximize2
+  Maximize2,
+  MonitorPlay
 } from 'lucide-react';
 
 interface VrTherapyModuleProps {
@@ -27,11 +30,12 @@ interface VrTherapyModuleProps {
   onOpenFullscreenConsole?: () => void;
 }
 
-// CATÁLOGO EXTENDIDO DE PROTOCOLOS DSM-5-TR / CIE-11
+// CATÁLOGO EXTENDIDO DE PROTOCOLOS VINCULADOS A LOS 10 ENTORNOS MAESTROS
 const EXTENDED_CLINICAL_PROTOCOLS = [
   {
     key: 'TAG',
-    disorderName: 'Trastorno de Ansiedad Generalizada (TAG / CIE-11: 6B00)',
+    masterEnvId: 'ENV_02_INTERPERSONAL_AUDITORIUM',
+    disorderName: 'Trastorno de Ansiedad Social / Generalizada (TAG / Fobia Social)',
     reliabilityPct: 94.8,
     scenarioTitle: 'Auditorio Intersubjetivo & Exposición Evaluativa Gradual',
     clinicalObjective: 'Evaluación de la reactividad adrenérgica y tasa de extinción de distrés ante estímulos sociales y variación sonora.',
@@ -47,6 +51,7 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
   },
   {
     key: 'TDAH',
+    masterEnvId: 'ENV_01_CLASSROOM_OFFICE',
     disorderName: 'Trastorno por Déficit de Atención e Hiperactividad (TDAH / CIE-11: 6A05)',
     reliabilityPct: 92.4,
     scenarioTitle: 'Entorno Neurocognitivo de Carga Atencional Continua (CPT-VR)',
@@ -57,15 +62,16 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
     primaryBiomarkers: 'Tasa Sacádica (Hz) + Estabilidad de Fijación Ocular + Latencia Biomotora',
     metric1: { label: 'Frecuencia Sacádica Ocular', value: '2.8 Hz', status: '(Hiperactividad Ocular)', desc: 'Inestabilidad del rastreo visual' },
     metric2: { label: 'Fijación Ocular Sostenida', value: '180 ms', status: '(Deficiente)', desc: 'Tiempo medio de fijación en target' },
-    metric3: { label: 'Latencia Biomotora', value: '485 ms', status: '(Inestable)', desc: 'Variabilidad del tiempo de respuesta' },
+    metric3: { label: 'Latencia Biomotora', value: '485 ms', status: '(Instable)', desc: 'Variabilidad del tiempo de respuesta' },
     graphGsrData: [2.1, 2.5, 3.8, 4.2, 4.0, 3.9, 4.1, 3.8, 3.5],
     graphHrvData: [30, 28, 25, 22, 24, 23, 22, 25, 26]
   },
   {
     key: 'TDM',
+    masterEnvId: 'ENV_09_BIOPHILIC_SANCTUARY',
     disorderName: 'Trastorno Depresivo Mayor con Anhedonia (TDM / CIE-11: 6A70)',
     reliabilityPct: 91.2,
-    scenarioTitle: 'Entorno de Activación Conductual y Resonancia Afectiva',
+    scenarioTitle: 'Santuario Biofílico y Activación de Coherencia Vagal',
     clinicalObjective: 'Evaluación de la plasticidad vegetativa ante estímulos de valencia emocional positiva.',
     stimulusParameters: 'Inmersión en entorno natural con frecuencia lumínica regulada (10,000 lux VR equivalentes).',
     targetDurationSec: 300,
@@ -79,6 +85,7 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
   },
   {
     key: 'TEPT',
+    masterEnvId: 'ENV_08_TRAUMA_EXPOSURE_ZONE',
     disorderName: 'Trastorno de Estrés Postraumático (TEPT / CIE-11: 6B40)',
     reliabilityPct: 96.5,
     scenarioTitle: 'Desensibilización Inmersiva y Extinción de Respuesta de Alarma',
@@ -95,6 +102,7 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
   },
   {
     key: 'TLP',
+    masterEnvId: 'ENV_06_CYBERBALL_SOCIAL_REJECTION',
     disorderName: 'Trastorno Límite de la Personalidad (TLP / CIE-11: 6D11)',
     reliabilityPct: 89.7,
     scenarioTitle: 'Provocación Controlada de Rechazo Social e Inhibición de Respuesta',
@@ -110,20 +118,21 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
     graphHrvData: [45, 12, 38, 15, 40, 18, 35, 42, 46]
   },
   {
-    key: 'TOC',
-    disorderName: 'Trastorno Obsesivo-Compulsivo (TOC / CIE-11: 6B20)',
+    key: 'ADICCIONES',
+    masterEnvId: 'ENV_03_CUE_EXPOSURE_LOUNGE',
+    disorderName: 'Trastornos por Consumo de Sustancias y Juego (CIE-11: 6C40 / 6C50)',
     reliabilityPct: 93.8,
-    scenarioTitle: 'Prevención de Respuesta con Exposición a Asimetría y Contaminación',
-    clinicalObjective: 'Análisis de la latencia de resistencia a la compulsión y desensibilización sin neutralización.',
-    stimulusParameters: 'Habitación virtual con disparadores estandarizados de desorden y contaminación sin herramienta de corrección.',
+    scenarioTitle: 'Bar / Casino virtual de Exposición a Pistas (Cue-Exposure)',
+    clinicalObjective: 'Medición de la respuesta autonómica galvánica ante estímulos de consumo y evaluación del craving.',
+    stimulusParameters: 'Entorno social con presencia de alcohol, tragamonedas y presión de grupo modulable.',
     targetDurationSec: 300,
-    expectedPhysioPattern: 'Tolerancia al distrés vegetativo sostenido con descenso gradual de GSR.',
-    primaryBiomarkers: 'Tiempo de Retorno a Línea de Base Vegetativa + Latencia de Resistencia',
-    metric1: { label: 'Tensión Meseta GSR', value: '4.2 µS', status: '(Ansiedad Sostenida)', desc: 'Resistencia sin compulsión' },
-    metric2: { label: 'Resistencia a Neutralizar', value: '240 s', status: '(Óptima)', desc: 'Tiempo antes de la urgencia' },
-    metric3: { label: 'Tono Parasimpático', value: '32 ms', status: '(Modulado)', desc: 'Recuperación progresiva' },
-    graphGsrData: [1.8, 4.2, 4.1, 4.0, 3.8, 3.2, 2.5, 2.0, 1.6],
-    graphHrvData: [38, 20, 21, 23, 26, 30, 35, 39, 42]
+    expectedPhysioPattern: 'Elevación de GSR ante la presentación de la pista con reducción paulatina.',
+    primaryBiomarkers: 'Pico de Craving Galvánico + Caída de Tono Vagal',
+    metric1: { label: 'Pico Galvánico Craving', value: '5.2 µS', status: '(Reatividad Alta)', desc: 'Elevación ante la pista de consumo' },
+    metric2: { label: 'Resistencia al Apropamiento', value: '210 s', status: '(Óptima)', desc: 'Inhibición de la conducta de acercamiento' },
+    metric3: { label: 'Recuperación Vagal', value: '38 ms', status: '(Estable)', desc: 'Autorregulación emocional' },
+    graphGsrData: [1.8, 5.2, 4.8, 4.1, 3.5, 2.8, 2.1, 1.7, 1.4],
+    graphHrvData: [42, 18, 22, 28, 32, 36, 40, 42, 44]
   }
 ];
 
@@ -156,6 +165,21 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({
 
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
+
+  // INICIALIZAR Y TRANSMITIR COMANDOS DE HARDWARE AL VISOR VR
+  const handleToggleSession = () => {
+    const nextState = !isSessionRunning;
+    setIsSessionRunning(nextState);
+
+    if (nextState) {
+      // Enviar orden de carga de escena 3D al visor Pico/Quest
+      VrControlService.connect(ipAddress, 8080);
+      VrControlService.loadMasterEnvironment(
+        activeProtocol.masterEnvId, 
+        patient.id || 'PAC-8104'
+      );
+    }
+  };
 
   // ESCUCHA WEBSOCKET EN TIEMPO REAL DESDE EL QUEST 3S / PICO
   useEffect(() => {
@@ -201,13 +225,15 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({
       hrvRmssdMs: activeProtocol.graphHrvData
     }));
 
+    const masterEnvData = MASTER_VR_ENVIRONMENTS.masterEnvironments.find(e => e.id === activeProtocol.masterEnvId);
+
     setReportText(
       `INFORME MÉDICO-EJECUTIVO DE EVALUACIÓN NEUROFISIOLÓGICA VR\n` +
       `===================================================================\n` +
       `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age} años | GÉNERO: ${patient.gender}\n` +
       `CATEGORÍA CLÍNICA: ${activeProtocol.disorderName}\n` +
+      `ENTORNO MAESTRO 3D: ${masterEnvData?.name || activeProtocol.scenarioTitle}\n` +
       `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
-      `PROTOCOLO INMERSIVO: ${activeProtocol.scenarioTitle}\n` +
       `DISPOSITIVO: Meta Quest 3S / Pico Neo 3 Pro (Frecuencia de Muestreo: 60 Hz)\n\n` +
       `1. OBJETIVO TERAPÉUTICO Y PARÁMETROS DEL ESTÍMULO:\n` +
       `- Objetivo: ${activeProtocol.clinicalObjective}\n` +
@@ -222,14 +248,13 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({
     );
   }, [selectedProtocolKey, patient]);
 
-  // Temporizador y fluctuación simulación dinámica
+  // Temporizador y fluctuación de simulación dinámica
   useEffect(() => {
     let interval: any = null;
     if (isSessionRunning) {
       interval = setInterval(() => {
         setSessionTimer(prev => prev + 1);
 
-        // Si se está en modo simulación, genera fluctuaciones leves en la gráfica en tiempo real
         if (connectionType === 'simulation') {
           setTelemetry(prev => {
             const lastGsr = prev.gsrMicroSiemens[prev.gsrMicroSiemens.length - 1] || 2.0;
@@ -430,15 +455,15 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({
               </span>
 
               <button
-                onClick={() => setIsSessionRunning(!isSessionRunning)}
+                onClick={handleToggleSession}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
                   isSessionRunning 
                     ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20' 
                     : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-600/20'
                 }`}
               >
-                {isSessionRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                <span>{isSessionRunning ? 'Detener Prueba Clínica' : 'Iniciar Protocolo VR'}</span>
+                {isSessionRunning ? <Pause className="w-3.5 h-3.5" /> : <MonitorPlay className="w-3.5 h-3.5" />}
+                <span>{isSessionRunning ? 'Detener Prueba Clínica' : 'Iniciar Protocolo en Visor VR'}</span>
               </button>
             </div>
           </div>
