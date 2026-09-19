@@ -1,36 +1,43 @@
 import React, { useState } from 'react';
-import { AmieClinicalAnalysis } from '../types';
+import { AmieClinicalAnalysis, PatientRecord } from '../types';
 import { DifferentialMatrixTable } from './DifferentialMatrixTable';
+import { ClinicalReportExporter } from './ClinicalReportExporter';
 import {
   Stethoscope,
-  GitFork,
   Activity,
   AlertTriangle,
   ClipboardList,
-  CheckCircle2,
-  XCircle,
   Pill,
   Brain,
-  Download,
   Copy,
   Check,
   Zap,
   ShieldAlert,
   Smartphone,
-  Gauge,
-  Sparkles
+  Sparkles,
+  Printer,
+  FileText
 } from 'lucide-react';
 
 interface ClinicalOutputViewerProps {
   analysis: AmieClinicalAnalysis;
+  patient?: PatientRecord;
+  doctorName?: string;
+  colegiadoNumber?: number;
 }
 
-export const ClinicalOutputViewer: React.FC<ClinicalOutputViewerProps> = ({ analysis }) => {
+export const ClinicalOutputViewer: React.FC<ClinicalOutputViewerProps> = ({
+  analysis,
+  patient,
+  doctorName = 'Dr. Alejandro Morales Rivera',
+  colegiadoNumber = 749210
+}) => {
   const [copied, setCopied] = useState(false);
+  const [showReportExporter, setShowReportExporter] = useState(false);
 
   const handleCopyReport = () => {
     const markdown = `
-# DICTAMEN CLÍNICO ESTRUCTURADO - MOTOR AMIE (DSM-5)
+# DICTAMEN CLÍNICO ESTRUCTURADO - MOTOR AMIE (DSM-5-TR / CIE-11)
 ## 1. IMPRESIÓN DIAGNÓSTICA PRINCIPAL
 - Trastorno: ${analysis.principalDiagnosis.disorderName}
 - Certeza Diagnóstica: ${analysis.principalDiagnosis.certaintyPct || 90}%
@@ -39,8 +46,8 @@ export const ClinicalOutputViewer: React.FC<ClinicalOutputViewerProps> = ({ anal
 - Especificadores: ${analysis.principalDiagnosis.specifiers.join(', ')}
 - Fundamentación: ${analysis.principalDiagnosis.justificationDsm5}
 
-## 2. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTES DE SESGO (7 TRASTORNOS)
-${analysis.differentialMatrix ? analysis.differentialMatrix.map(d => `- [${d.status}] ${d.disorderName} (${d.codeCIE10}, Certeza: ${d.certaintyPct}%): ${d.biasDiscardRationale} [Regla: ${d.morrisonPrincipleApplied}]`).join('\n') : ''}
+## 2. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTES DE SESGO
+${analysis.differentialMatrix ? analysis.differentialMatrix.map(d => `- [${d.status}]${d.disorderName} (${d.codeCIE10}, Certeza:${d.certaintyPct}%): ${d.biasDiscardRationale} [Regla:${d.morrisonPrincipleApplied}]`).join('\n') : ''}
 
 ## 3. EVALUACIÓN DE NEUROSENSOMETRÍA qEEG POR LÓBULOS Y BIOMARCADORES
 - Frontal: ${analysis.bioclinicalTriangulation.regionalLobeBreakdown?.frontal || 'N/A'}
@@ -65,7 +72,7 @@ ${analysis.recommendedActionPlan.neurofeedbackProtocol ? analysis.recommendedAct
 ${analysis.recommendedActionPlan.psychotherapyStrategy.map(s => `- ${s}`).join('\n')}
 ### Psicofarmacología & Efectividad de Biomarcadores:
 ${analysis.recommendedActionPlan.pharmacologySuggestions.map(p => `- ${p}`).join('\n')}
-${analysis.pharmacologicalEffectiveness ? analysis.pharmacologicalEffectiveness.map(e => `- [${e.expectedResponse}] ${e.moleculeName} (${e.drugClass}): ${e.biomarkerRationale}`).join('\n') : ''}
+${analysis.pharmacologicalEffectiveness ? analysis.pharmacologicalEffectiveness.map(e => `- [${e.expectedResponse}]${e.moleculeName} (${e.drugClass}):${e.biomarkerRationale}`).join('\n') : ''}
 ### Referencia Urgente a Psiquiatría: ${analysis.recommendedActionPlan.psychiatryReferralUrgent ? 'SÍ (ACTIVA)' : 'NO'}
 ### Acciones Inmediatas:
 ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
@@ -76,24 +83,61 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Safe Fallback Patient en caso de que no se pase directamente por prop
+  const activePatientRecord: PatientRecord = patient || {
+    id: 'PAC-8104',
+    patientNameAnonymized: 'Paciente ID: PAC-8104',
+    age: 55,
+    gender: 'M',
+    consultationReason: 'Evaluación Bioclínica Multimodal',
+    anamnesis: 'Registrado en sistema AMIE',
+    sessionNotes: [],
+    psychometricScores: {},
+    functionalAreas: { sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50 },
+    substancesHistory: { alcohol: '', tobacco: '', cannabis: '', stimulants: '', medicationsCurrent: [] },
+    medicalHistory: []
+  };
+
   return (
     <div className="space-y-5">
       {/* Top Action Header */}
-      <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
         <div className="flex items-center gap-2">
           <div className="h-3 w-3 rounded-full bg-emerald-400 animate-ping" />
           <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
             Dictamen Médico Estructurado Emitido (5 Bloques Normativos)
           </span>
         </div>
-        <button
-          onClick={handleCopyReport}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
-        >
-          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-sky-400" />}
-          <span>{copied ? 'Copiado al Portapapeles' : 'Copiar Dictamen'}</span>
-        </button>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setShowReportExporter(!showReportExporter)}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition shadow-md shadow-sky-600/20"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>{showReportExporter ? 'Ocultar Dictamen PDF' : 'Generar PDF / Oficial'}</span>
+          </button>
+
+          <button
+            onClick={handleCopyReport}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-sky-400" />}
+            <span>{copied ? 'Copiado' : 'Copiar Texto'}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Componente del Generador de Reporte Impreso / PDF */}
+      {showReportExporter && (
+        <ClinicalReportExporter
+          patient={activePatientRecord}
+          analysis={analysis}
+          doctorName={doctorName}
+          colegiadoNumber={colegiadoNumber}
+          onClose={() => setShowReportExporter(false)}
+        />
+      )}
 
       {/* BLOQUE 1: IMPRESIÓN DIAGNÓSTICA PRINCIPAL (DSM-5) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl relative overflow-hidden">
