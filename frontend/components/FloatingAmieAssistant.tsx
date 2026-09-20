@@ -126,8 +126,8 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       badge: 'Google Cloud Run',
       summary: 'Conexión dinámica con la Cloud Function para importar expedientes PAC anonimizados (PAC-XXXX) vinculados al No. de Colegiado.',
       keyPoints: [
-        'Petición HTTP POST: Envía { patientId: searchPacId, colegiado: number } al endpoint https://sync-patient-expedient-367911373284.us-central1.run.app.',
-        'Manejo de Errores 404: Despliega una alerta visual no destructiva si el expediente no existe en Toro App.',
+        'Petición HTTP POST: Envía { patientId: searchPacId, colegiado: number } al endpoint de Cloud Run.',
+        'Manejo de Errores 404: Despliega una alerta visual no destructiva si el expediente no existe en el repositorio central.',
         'Anonimización Estricta: Muestra únicamente "Paciente ID: [id] | Edad: [age] | Sexo: [sex]" para cumplimiento HIPAA/RGPD.'
       ]
     }
@@ -167,7 +167,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
         </button>
       </div>
 
-      {/* Slide-over Drawer / Panel Lateral (Dark Glassmorphism) */}
+      {/* Panel Lateral Drawer (Dark Glassmorphism) */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-xl h-full bg-slate-950/95 border-l border-cyan-500/40 shadow-[-15px_0_40px_rgba(6,182,212,0.2)] flex flex-col text-slate-100 overflow-hidden font-sans">
@@ -197,7 +197,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
               </button>
             </div>
 
-            {/* Search Bar */}
+            {/* Barra de Búsqueda */}
             <div className="p-3 bg-slate-900/60 border-b border-slate-800">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -211,7 +211,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
               </div>
             </div>
 
-            {/* Horizontal Topic Switcher */}
+            {/* Selector Horizontal de Temas */}
             <div className="p-2.5 bg-slate-950 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
               {filteredTopics.map((topic) => {
                 const IconComp = topic.icon;
@@ -233,10 +233,10 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
               })}
             </div>
 
-            {/* Topic Details Panel */}
+            {/* Panel de Detalle del Tema Seleccionado */}
             <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-slate-950/70">
               
-              {/* Title Card */}
+              {/* Tarjeta de Título */}
               <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
                   {currentTopicData.summary}
                 </p>
 
-                {/* Direct Jump Action Button */}
+                {/* Botón Nivelador para Saltar al Módulo */}
                 <button
                   onClick={() => {
                     onNavigateTab(currentTopicData.tabKey);
@@ -264,7 +264,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
                 </button>
               </div>
 
-              {/* Step-by-Step Clinical Explanations */}
+              {/* Explicación Técnica Paso a Paso */}
               <div className="space-y-2.5">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Funcionamiento & Especificaciones Técnicas:
@@ -283,7 +283,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
                 </div>
               </div>
 
-              {/* Safety Assurance Note */}
+              {/* Nota de Seguridad y Confidencialidad */}
               <div className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 text-[11px] text-emerald-200 flex items-start gap-2">
                 <Lock className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
