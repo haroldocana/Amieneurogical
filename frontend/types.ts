@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE / AIMA CLINICAL ENGINE - SYSTEM TYPE DEFINITIONS
+// AMIE / AIMA CLINICAL ENGINE - SYSTEM TYPE DEFINITIONS (COMPATIBLE 100%)
 // ============================================================================
 
 // --- BIOMETRÍA ACÚSTICA Y VOZ ---
@@ -303,6 +303,13 @@ export interface DifferentialDisorderComparison {
 }
 
 // --- DICTAMEN INTEGRAL DEL MOTOR CLINICO AMIE ---
+export interface DiagnosticImpressionItem {
+  code: string;
+  title: string;
+  confidencePct: number;
+  rationale: string;
+}
+
 export interface AmieClinicalAnalysis {
   principalDiagnosis: {
     codeCIE10: string;
@@ -313,6 +320,12 @@ export interface AmieClinicalAnalysis {
     gafEstimated: number;
     justificationDsm5: string;
   };
+
+  // Propiedades opcionales para compatibilidad fluida con PDF, FHIR y UI
+  diagnosticImpressions?: DiagnosticImpressionItem[];
+  treatmentRecommendations?: string[];
+  biasMitigationNotes?: string[];
+
   differentialMatrix: DifferentialDisorderComparison[];
   differentialDiagnoses: Array<{
     candidate: string;
@@ -329,6 +342,12 @@ export interface AmieClinicalAnalysis {
     qeegInterpretation?: string;
     vrHabituationAssessment?: string; // Evaluación triangulada Pico Neo 3 + Polar H10
     pupilometryAssessment?: string;  // Evaluación de sesgos atencionales por pupilometría
+    
+    // Campos extendidos para exportación de biomarcadores
+    autonomicTone?: string;
+    habituationRate?: string;
+    cognitiveLoad?: string;
+
     regionalLobeBreakdown: {
       frontal: string;
       temporal: string;
