@@ -1,5 +1,8 @@
 import { PatientRecord, MedicalLicenseAccount } from './types';
 
+// ============================================================================
+// PRINCIPIOS DIAGNÓSTICOS DE JAMES MORRISON (DSM-5)
+// ============================================================================
 export const MORRISON_CLINICAL_PRINCIPLES = [
   { letter: 'A', title: 'Seguridad en Diagnóstico Diferencial', text: 'Establezca su diagnóstico diferencial en forma jerárquica conforme a la seguridad del paciente (trastornos orgánicos y tratables primero).' },
   { letter: 'B', title: 'Antecedentes Familiares', text: 'Los antecedentes familiares orientan el diagnóstico; revalúe tras entrevistar a la familia.' },
@@ -19,6 +22,9 @@ export const MORRISON_CLINICAL_PRINCIPLES = [
   { letter: 'X', title: 'Jerarquía de Tratabilidad', text: 'Enliste diagnósticos múltiples priorizando el más urgente y sensible al tratamiento médico.' }
 ];
 
+// ============================================================================
+// BASE DE DATOS LOCAL DE LICENCIAMIENTO SAAS (MOCK/DEMO)
+// ============================================================================
 export const INITIAL_LICENSES: MedicalLicenseAccount[] = [
   {
     id: 'LIC-00891',
@@ -48,6 +54,9 @@ export const INITIAL_LICENSES: MedicalLicenseAccount[] = [
   }
 ];
 
+// ============================================================================
+// CASOS CLÍNICOS PRE-CARGADOS PARA DEMOSTRACIÓN
+// ============================================================================
 export const CLINICAL_CASE_PRESETS: { name: string; description: string; record: PatientRecord }[] = [
   {
     name: 'Caso 1: Crisis Depresiva Severa con SAD PERSONS Crítico (Riesgo Suicida)',
@@ -519,6 +528,9 @@ export const CLINICAL_CASE_PRESETS: { name: string; description: string; record:
   }
 ];
 
+// ============================================================================
+// CONFIGURACIÓN MAESTRA DE ENTORNOS VR (52 TRASTORNOS CIE-11 / DSM-5)
+// ============================================================================
 export const MASTER_VR_ENVIRONMENTS = {
   version: "3.8.0-AMIE-CLINICAL",
   systemName: "AMIE VR 52-DISORDER MASTER CONFIGURATION",
