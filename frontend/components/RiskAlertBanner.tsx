@@ -7,9 +7,12 @@ interface RiskAlertBannerProps {
 }
 
 export const RiskAlertBanner: React.FC<RiskAlertBannerProps> = ({ alerts }) => {
+  if (!alerts) return null;
+
+  const criticalAlertsList = alerts.criticalAlertsList || [];
   const isCritical = alerts.suicideRiskLevel === 'CRÍTICO' || alerts.suicideRiskLevel === 'ALTO';
 
-  if (!isCritical && alerts.criticalAlertsList.length === 0) {
+  if (!isCritical && criticalAlertsList.length === 0) {
     return null;
   }
 
@@ -17,21 +20,33 @@ export const RiskAlertBanner: React.FC<RiskAlertBannerProps> = ({ alerts }) => {
     <div
       className={`rounded-xl p-4 border shadow-2xl transition-all ${
         isCritical
-          ? 'bg-gradient-to-r from-red-950 via-rose-950 to-slate-900 border-red-500/80 text-red-100 ring-2 ring-red-500/30 animate-pulse-slow'
+          ? 'bg-gradient-to-r from-red-950 via-rose-950 to-slate-900 border-red-500/80 text-red-100 ring-2 ring-red-500/30'
           : 'bg-amber-950/70 border-amber-500/60 text-amber-100'
       }`}
     >
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-lg ${isCritical ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'} shrink-0 mt-0.5`}>
+          <div
+            className={`p-2 rounded-lg ${
+              isCritical ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+            } shrink-0 mt-0.5`}
+          >
             <AlertOctagon className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-black text-sm uppercase tracking-wider text-red-300">
                 ALERTA CLÍNICA DE SEGURIDAD & CONTENCIÓN INMEDIATA
               </span>
-              <span className="px-2 py-0.5 text-[11px] font-bold rounded bg-red-600 text-white shadow">
+              <span
+                className={`px-2 py-0.5 text-[11px] font-bold rounded text-white shadow ${
+                  alerts.suicideRiskLevel === 'CRÍTICO'
+                    ? 'bg-red-600 animate-pulse'
+                    : alerts.suicideRiskLevel === 'ALTO'
+                    ? 'bg-rose-600'
+                    : 'bg-amber-600'
+                }`}
+              >
                 NIVEL: {alerts.suicideRiskLevel}
               </span>
             </div>
@@ -41,18 +56,23 @@ export const RiskAlertBanner: React.FC<RiskAlertBannerProps> = ({ alerts }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+        <div className="flex items-center gap-2 self-end md:self-auto shrink-0 flex-wrap">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/60 border border-red-500/50 text-xs font-semibold text-white">
             <Clock className="w-4 h-4 text-red-300" />
             <span>Seguimiento 24/7 Requerido</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/80 border border-rose-500/40 text-xs font-semibold text-rose-200">
+            <PhoneCall className="w-4 h-4 text-rose-400" />
+            <span>Línea de Crisis Activa</span>
           </div>
         </div>
       </div>
 
       {/* Critical alerts detail */}
-      {alerts.criticalAlertsList.length > 0 && (
+      {criticalAlertsList.length > 0 && (
         <div className="mt-3 pt-3 border-t border-red-500/30 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-          {alerts.criticalAlertsList.map((item, i) => (
+          {criticalAlertsList.map((item, i) => (
             <div key={i} className="flex items-center gap-2 text-red-200 bg-red-950/40 p-1.5 rounded border border-red-500/20">
               <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
               <span>{item}</span>
