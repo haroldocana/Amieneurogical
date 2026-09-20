@@ -1,6 +1,6 @@
 import React from 'react';
 import { AvatarEmotionState } from '../types';
-import { User, Activity, Mic, ShieldAlert, Heart, Volume2, Sparkles, AlertCircle } from 'lucide-react';
+import { Volume2, Heart, Mic, Activity, Sparkles } from 'lucide-react';
 
 interface SimulatedPatientAvatarProps {
   avatarUrl: string;
@@ -75,7 +75,8 @@ export const SimulatedPatientAvatar: React.FC<SimulatedPatientAvatarProps> = ({
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5 mb-3 relative z-10">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
-          <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 font-mono">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 font-mono flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-cyan-400" />
             Feed Fotorrealista • Paciente Simulado IA
           </span>
         </div>
@@ -110,6 +111,13 @@ export const SimulatedPatientAvatar: React.FC<SimulatedPatientAvatarProps> = ({
             </div>
           )}
 
+          {/* Active Mic Badge when speaking */}
+          {isSpeaking && (
+            <div className="absolute top-2 right-2 p-1.5 rounded-full bg-cyan-500/80 text-white shadow-lg animate-pulse z-20">
+              <Mic className="w-3.5 h-3.5" />
+            </div>
+          )}
+
           {/* Hologram Grid Overlay */}
           <div className="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:12px_12px] opacity-20 pointer-events-none" />
         </div>
@@ -137,13 +145,16 @@ export const SimulatedPatientAvatar: React.FC<SimulatedPatientAvatarProps> = ({
 
         <div className="grid grid-cols-2 gap-2 text-[11px]">
           <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-            <span className="text-slate-400">Velocidad Fónica:</span>
+            <span className="text-slate-400 flex items-center gap-1">
+              <Activity className="w-3 h-3 text-cyan-400" />
+              Fónica:
+            </span>
             <span className="text-slate-200 font-bold">{speechRateWpm} WPM</span>
           </div>
 
           <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
             <span className="text-slate-400 flex items-center gap-1">
-              <Heart className="w-3 h-3 text-rose-400" /> Rapport Empático:
+              <Heart className="w-3 h-3 text-rose-400" /> Rapport:
             </span>
             <span className={`font-bold ${empathyScore >= 70 ? 'text-emerald-400' : empathyScore >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
               {empathyScore}%
