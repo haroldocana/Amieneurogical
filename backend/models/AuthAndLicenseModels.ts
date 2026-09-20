@@ -1,8 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// ==========================================
-// 1. ESQUEMA DE ORGANIZACIÓN / HOSPITAL (B2B)
-// ==========================================
+// ============================================================================
+// 1. ESQUEMA DE ORGANIZACIÓN / HOSPITAL (Multi-Tenant B2B)
+// ============================================================================
 export interface IOrganization extends Document {
   name: string;
   type: 'HOSPITAL' | 'CLINIC' | 'RESEARCH_CENTER';
@@ -44,9 +44,9 @@ const OrganizationSchema = new Schema<IOrganization>({
   }
 }, { timestamps: true });
 
-// ==========================================
-// 2. ESQUEMA DE USUARIO MÉDICO (UNIFICADO)
-// ==========================================
+// ============================================================================
+// 2. ESQUEMA DE USUARIO MÉDICO (Independiente + Corporativo)
+// ============================================================================
 export interface IDoctorUser extends Document {
   username: string;
   email: string;
@@ -60,7 +60,7 @@ export interface IDoctorUser extends Document {
   passwordResetToken?: string;
   passwordResetExpires?: Date;
   
-  // Para médicos independientes
+  // Bolsón y Licencia Personal (Médico Independiente: 1, 2 o 3 Años)
   personalAiQuotaPool: {
     totalTokensPurchased: number;
     tokensUsed: number;
@@ -73,7 +73,7 @@ export interface IDoctorUser extends Document {
     isActive: boolean;
   };
   
-  // Asignación interna corporativa
+  // Cuota asignada internamente por Hospital Corporativo
   corporateAssignedQuota: {
     maxTokens: number;
     usedTokens: number;
