@@ -12,7 +12,7 @@ export const AmieChatCopilot: React.FC<AmieChatCopilotProps> = ({ patient, analy
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'model'; text: string }>>([
     {
       role: 'model',
-      text: `Protocolo AMIE Activo. Estoy a su disposición para discutir hipótesis diagnósticas diferenciales, farmacocinética, interacciones o ajustes de contención para el paciente ${patient.patientNameAnonymized}.`
+      text: `Protocolo AMIE Activo. Estoy a su disposición para discutir hipótesis diagnósticas diferenciales, farmacocinética, interacciones o ajustes de contención para el paciente ${patient.patientNameAnonymized || patient.id}.`
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -65,7 +65,7 @@ export const AmieChatCopilot: React.FC<AmieChatCopilotProps> = ({ patient, analy
         <span className="text-[10px] text-slate-400">Modelo: gemini-2.5-flash</span>
       </div>
 
-      {/* Messages */}
+      {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 p-3.5 overflow-y-auto space-y-3 text-xs">
         {messages.map((m, idx) => (
           <div
@@ -105,7 +105,7 @@ export const AmieChatCopilot: React.FC<AmieChatCopilotProps> = ({ patient, analy
         )}
       </div>
 
-      {/* Suggested chips */}
+      {/* Prompts Sugeridos */}
       <div className="px-3 py-1.5 bg-slate-950/80 border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto text-[11px]">
         <span className="text-slate-500 shrink-0">Consultas rápidas:</span>
         <button
@@ -128,7 +128,7 @@ export const AmieChatCopilot: React.FC<AmieChatCopilotProps> = ({ patient, analy
         </button>
       </div>
 
-      {/* Input Form */}
+      {/* Formulario de Entrada */}
       <form onSubmit={handleSendMessage} className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
         <input
           type="text"
