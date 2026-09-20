@@ -26,6 +26,7 @@ import { DiagnosticTriangulationView } from './components/DiagnosticTriangulatio
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
+import { subscribeUsbDeviceEvents, NeuromotorTelemetrySample } from './utils/checkUsbSupport'; // <-- Importación añadida
 import {
   Activity,
   LayoutDashboard,
@@ -41,7 +42,8 @@ import {
   Check,
   AlertTriangle,
   Glasses,
-  Sparkles
+  Sparkles,
+  Usb // <-- Icono añadido
 } from 'lucide-react';
 
 type AppTab = 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'vr_therapy' | 'referral' | 'saas';
@@ -74,6 +76,9 @@ export default function App() {
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
 
+  // USB Device State
+  const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
+
   // Recuperación automática de sesión activa desde localStorage
   useEffect(() => {
     const savedToken = localStorage.getItem('amie_auth_token');
@@ -87,6 +92,23 @@ export default function App() {
       setColegiadoNumber(Number(savedColegiado) || 749210);
       setIsAuthenticated(true);
     }
+  }, []);
+
+  // Suscripción a eventos de hardware USB (Hot-Plugging)
+  useEffect(() => {
+    const unsubscribe = subscribeUsbDeviceEvents(
+      (deviceName) => {
+        setUsbDeviceName(deviceName);
+        setSyncSuccessMsg(`Hardware conectado: ${deviceName}`);
+        setTimeout(() => setSyncSuccessMsg(null), 4000);
+      },
+      (deviceName) => {
+        setUsbDeviceName(null);
+        setErrorMsg(`Hardware desconectado: ${deviceName}`);
+        setTimeout(() => setErrorMsg(null), 4000);
+      }
+    );
+    return () => unsubscribe();
   }, []);
 
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
@@ -166,6 +188,23 @@ export default function App() {
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
+  // Handler para actualizar la telemetría de hardware USB / EEG sin sobreescribir el resto del expediente
+  const handleUpdateUsbHardwareData = (sample: NeuromotorTelemetrySample) => {
+    setCurrentPatient(prev => ({
+      ...prev,
+      neuromotorBiomarkers: {
+        ...prev.neuromotorBiomarkers,
+        reactionTimeMs: sample.reactionTimeMs ?? prev.neuromotorBiomarkers?.reactionTimeMs ?? 240
+      },
+      multisensoryHardware: {
+        ...prev.multisensoryHardware,
+        handGripPressureKg: sample.handGripPressureKg ?? prev.multisensoryHardware?.handGripPressureKg ?? 32.5,
+        touchTapLatencyCompensatedMs: sample.touchTapLatencyMs ?? prev.multisensoryHardware?.touchTapLatencyCompensatedMs ?? 180
+      }
+      // NOTA: sample.eegChannelsRaw se puede propagar aquí si el PatientRecord tiene un campo para ello
+    }));
+  };
+
   if (!isAuthenticated) {
     return <LoginModal onSuccess={handleLoginSuccess} />;
   }
@@ -196,6 +235,14 @@ export default function App() {
         isSyncingPac={isSyncing}
         onLogout={handleLogout}
       />
+
+      {/* Barra superior secundaria para estado de USB */}
+      {usbDeviceName && (
+        <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
+          <Usb className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
+          <span>Telemetría Activa: <strong>{usbDeviceName}</strong></span>
+        </div>
+      )}
 
       {/* Primary Tab Navigation Bar */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
@@ -487,6 +534,8 @@ export default function App() {
 
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
+        
+        {/* Módulo qEEG: Aquí se puede inyectar el listener de handleUpdateUsbHardwareData si lo conectas */}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
         
         {/* Tab 7: Módulo VR Inmersivo con Botones de Consolas Fullscreen */}
