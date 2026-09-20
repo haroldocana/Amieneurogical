@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { PatientRecord } from '../types';
 import { CLINICAL_CASE_PRESETS } from '../constants';
-import { FileCode, FileText, Sparkles, CheckCircle, AlertTriangle, UserCheck } from 'lucide-react';
+import { 
+  FileCode, FileText, Sparkles, CheckCircle, AlertTriangle, 
+  UserCheck, Glasses // <-- Añadido Glasses para VR
+} from 'lucide-react';
 
 interface PatientJsonEditorProps {
   patient: PatientRecord;
@@ -344,6 +347,94 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                 </div>
               </div>
             )}
+
+            {/* NUEVO: Módulos de Inmersión (VR & Hipnosis) */}
+            <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
+              <h3 className="font-semibold text-slate-300 text-xs mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><Glasses className="w-4 h-4 text-indigo-400"/> Módulos de Inmersión (VR & Hipnosis)</span>
+                <span className="text-[10px] text-indigo-400 font-normal">Neuromodulación</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <span className="text-[11px] text-slate-400">Escenario VR Activo</span>
+                  <input
+                    type="text"
+                    placeholder="Ej. Acrofobia, Relajación..."
+                    value={(patient as any).immersionMetrics?.vrScenario || ''}
+                    onChange={(e) =>
+                      onChange({
+                        ...patient,
+                        immersionMetrics: {
+                          ...(patient as any).immersionMetrics,
+                          vrScenario: e.target.value,
+                        },
+                      } as any)
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-indigo-300 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400">Tolerancia VR (%)</span>
+                  <input
+                    type="number"
+                    min="0" max="100"
+                    placeholder="0-100"
+                    value={(patient as any).immersionMetrics?.vrTolerance ?? ''}
+                    onChange={(e) =>
+                      onChange({
+                        ...patient,
+                        immersionMetrics: {
+                          ...(patient as any).immersionMetrics,
+                          vrTolerance: parseInt(e.target.value) || 0,
+                        },
+                      } as any)
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400">Susceptibilidad Hipnótica (0-10)</span>
+                  <input
+                    type="number"
+                    min="0" max="10"
+                    placeholder="0-10"
+                    value={(patient as any).immersionMetrics?.hypnoticSusceptibility ?? ''}
+                    onChange={(e) =>
+                      onChange({
+                        ...patient,
+                        immersionMetrics: {
+                          ...(patient as any).immersionMetrics,
+                          hypnoticSusceptibility: parseInt(e.target.value) || 0,
+                        },
+                      } as any)
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-fuchsia-300 focus:border-fuchsia-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400">Nivel de Trance (Profundidad)</span>
+                  <select
+                    value={(patient as any).immersionMetrics?.tranceDepth || 'Ninguno'}
+                    onChange={(e) =>
+                      onChange({
+                        ...patient,
+                        immersionMetrics: {
+                          ...(patient as any).immersionMetrics,
+                          tranceDepth: e.target.value,
+                        },
+                      } as any)
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:border-fuchsia-500 focus:outline-none"
+                  >
+                    <option value="Ninguno">Ninguno</option>
+                    <option value="Ligero">Ligero</option>
+                    <option value="Medio">Medio</option>
+                    <option value="Profundo (Somnambulismo)">Profundo (Somnambulismo)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
       </div>
