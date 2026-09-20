@@ -4,13 +4,13 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 
 // -----------------------------------------------------------------------
-// 1. CONSUMO Y DESCUENTO DEL BOLSÓN DE IA (Middleware / Helper)
+// 1. DESCUENTO DE TOKENS DEL BOLSÓN DE IA
 // -----------------------------------------------------------------------
 export const consumeAiTokens = async (userId: string, tokensToConsume: number = 1): Promise<{ success: boolean; remaining: number; message?: string }> => {
   const doctor = await DoctorUserModel.findById(userId).populate('organizationId');
   if (!doctor) return { success: false, remaining: 0, message: 'Usuario médico no encontrado.' };
 
-  // CASO A: MÉDICO INDEPENDIENTE
+  // A) MÉDICO INDEPENDIENTE
   if (doctor.accountType === 'INDIVIDUAL') {
     if (!doctor.personalLicense.isActive || new Date() > new Date(doctor.personalLicense.validUntil)) {
       return { success: false, remaining: 0, message: 'Su licencia individual ha expirado. Por favor, extienda su suscripción.' };
@@ -24,17 +24,16 @@ export const consumeAiTokens = async (userId: string, tokensToConsume: number = 
     return { success: true, remaining: doctor.personalAiQuotaPool.totalTokensPurchased - doctor.personalAiQuotaPool.tokensUsed };
   }
 
-  // CASO B: MÉDICO CORPORATIVO (HOSPITAL)
+  // B) MÉDICO CORPORATIVO (HOSPITAL)
   if (doctor.accountType === 'CORPORATE_MEMBER' && doctor.organizationId) {
     const org = await OrganizationModel.findById(doctor.organizationId);
     if (!org || !org.corporateLicense.isActive || new Date() > new Date(org.corporateLicense.validUntil)) {
-      return { success: false, remaining: 0, message: 'La licencia institucional de su hospital se encuentra inactiva o vencida.' };
+      return { success: false, remaining: 0, message: 'La licencia de su institución hospitalaria está inactiva o vencida.' };
     }
     const orgRemaining = org.globalAiQuotaPool.totalTokensPurchased - org.globalAiQuotaPool.tokensUsed;
     if (orgRemaining < tokensToConsume) {
       return { success: false, remaining: orgRemaining, message: 'El bolsón global de IA de la institución ha sido agotado.' };
     }
-    // Descuenta del bolsón global del hospital y de la cuota del usuario
     org.globalAiQuotaPool.tokensUsed += tokensToConsume;
     doctor.corporateAssignedQuota.usedTokens += tokensToConsume;
     await org.save();
@@ -46,7 +45,7 @@ export const consumeAiTokens = async (userId: string, tokensToConsume: number = 
 };
 
 // -----------------------------------------------------------------------
-// 2. SOLICITAR RESETEO DE CONTRASEÑA (Para Médicos Independientes)
+// 2. SOLICITUD DE RESETEO DE CONTRASEÑA
 // -----------------------------------------------------------------------
 export const requestPasswordReset = async (req: Request, res: Response) => {
   try {
@@ -59,7 +58,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
 
     if (doctor.accountType === 'CORPORATE_MEMBER') {
       return res.status(403).json({ 
-        error: `Cuenta gestionada corporativamente por su institución (${doctor.authMethod}). Restablezca su clave a través del departamento de TI de su hospital.` 
+        error: `Su cuenta pertenece al hospital/clínica. Restablezca su clave desde el portal SSO de su institución (${doctor.authMethod}).` 
       });
     }
 
@@ -68,10 +67,9 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     doctor.passwordResetExpires = new Date(Date.now() + 3600000); // 1 Hora de validez
     await doctor.save();
 
-    // Aquí integrar servicio de envío de email (SendGrid, AWS SES, Resend, etc.)
     return res.status(200).json({ 
-      message: 'Enlace de restablecimiento generado.',
-      resetTokenUrl: `https://aima.health/reset-password?token=${resetToken}` 
+      message: 'Enlace de restablecimiento generado con éxito.',
+      resetUrl: `https://amie-clinical-analyzer-367911373284.us-central1.run.app/reset-password?token=${resetToken}` 
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -79,7 +77,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
 };
 
 // -----------------------------------------------------------------------
-// 3. RECARGA DE BOLSÓN Y EXTENSIÓN DE LICENCIA (1, 2 O 3 AÑOS)
+// 3. RECARGA DE BOLSÓN Y EXTENSIÓN MULTIANUAL (1, 2 O 3 AÑOS)
 // -----------------------------------------------------------------------
 export const refillQuotaAndLicense = async (req: Request, res: Response) => {
   try {
@@ -91,12 +89,13 @@ export const refillQuotaAndLicense = async (req: Request, res: Response) => {
 
       org.globalAiQuotaPool.totalTokensPurchased += addTokens || 0;
       if (extensionYears && extensionYears > 0) {
-        const currentExp = new Date(org.corporateLicense.validUntil > new Date() ? org.corporateLicense.validUntil : new Date());
-        currentExp.setFullYear(currentExp.getFullYear() + extensionYears);
-        org.corporateLicense.validUntil = currentExp;
+        const baseDate = org.corporateLicense.validUntil > new Date() ? org.corporateLicense.validUntil : new Date();
+        const newExp = new Date(baseDate);
+        newExp.setFullYear(newExp.getFullYear() + extensionYears);
+        org.corporateLicense.validUntil = newExp;
       }
       await org.save();
-      return res.status(200).json({ message: 'Bolsón corporativo actualizado.', organization: org });
+      return res.status(200).json({ message: 'Bolsón e extensión corporativa aplicados.', organization: org });
     } else {
       const doctor = await DoctorUserModel.findById(targetId);
       if (!doctor) return res.status(404).json({ error: 'Médico no encontrado.' });
@@ -105,9 +104,10 @@ export const refillQuotaAndLicense = async (req: Request, res: Response) => {
       doctor.personalAiQuotaPool.lastRefillDate = new Date();
 
       if (extensionYears && extensionYears > 0) {
-        const currentExp = new Date(doctor.personalLicense.validUntil && doctor.personalLicense.validUntil > new Date() ? doctor.personalLicense.validUntil : new Date());
-        currentExp.setFullYear(currentExp.getFullYear() + extensionYears);
-        doctor.personalLicense.validUntil = currentExp;
+        const baseDate = doctor.personalLicense.validUntil && doctor.personalLicense.validUntil > new Date() ? doctor.personalLicense.validUntil : new Date();
+        const newExp = new Date(baseDate);
+        newExp.setFullYear(newExp.getFullYear() + extensionYears);
+        doctor.personalLicense.validUntil = newExp;
         doctor.personalLicense.isActive = true;
       }
       await doctor.save();
