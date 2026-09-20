@@ -1,10 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
 import { CLINICAL_CASE_PRESETS } from '../constants';
-import { 
-  FileCode, FileText, Sparkles, CheckCircle, AlertTriangle, 
-  UserCheck, Glasses // <-- Añadido Glasses para VR
-} from 'lucide-react';
+import { FileCode, Sparkles, AlertTriangle, Glasses } from 'lucide-react';
 
 interface PatientJsonEditorProps {
   patient: PatientRecord;
@@ -21,6 +18,11 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
   const [jsonString, setJsonString] = useState<string>(JSON.stringify(patient, null, 2));
   const [jsonError, setJsonError] = useState<string | null>(null);
 
+  // Sincronizar jsonString si el paciente cambia desde fuera
+  useEffect(() => {
+    setJsonString(JSON.stringify(patient, null, 2));
+  }, [patient]);
+
   const handleJsonTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setJsonString(text);
@@ -28,13 +30,18 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
       const parsed = JSON.parse(text) as PatientRecord;
       setJsonError(null);
       onChange(parsed);
-    } catch (err: any) {
-      setJsonError(err.message || 'JSON inválido');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setJsonError(err.message);
+      } else {
+        setJsonError('Sintaxis JSON inválida');
+      }
     }
   };
 
   const handlePresetClick = (idx: number) => {
     const selected = CLINICAL_CASE_PRESETS[idx].record;
+    onSelectPreset(selected);
     onChange(selected);
     setJsonString(JSON.stringify(selected, null, 2));
     setJsonError(null);
@@ -132,7 +139,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                 <label className="block text-slate-400 mb-1">Paciente (Anonimizado)</label>
                 <input
                   type="text"
-                  value={patient.patientNameAnonymized}
+                  value={patient.patientNameAnonymized || ''}
                   onChange={(e) =>
                     onChange({ ...patient, patientNameAnonymized: e.target.value })
                   }
@@ -143,7 +150,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                 <label className="block text-slate-400 mb-1">Edad</label>
                 <input
                   type="number"
-                  value={patient.age}
+                  value={patient.age || 0}
                   onChange={(e) =>
                     onChange({ ...patient, age: parseInt(e.target.value) || 0 })
                   }
@@ -153,9 +160,9 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               <div>
                 <label className="block text-slate-400 mb-1">Género</label>
                 <select
-                  value={patient.gender}
+                  value={patient.gender || 'M'}
                   onChange={(e) =>
-                    onChange({ ...patient, gender: e.target.value as any })
+                    onChange({ ...patient, gender: e.target.value as 'M' | 'F' | 'Other' })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none"
                 >
@@ -171,7 +178,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               <label className="block text-slate-400 mb-1">Motivo de Consulta Cardinal</label>
               <input
                 type="text"
-                value={patient.consultationReason}
+                value={patient.consultationReason || ''}
                 onChange={(e) =>
                   onChange({ ...patient, consultationReason: e.target.value })
                 }
@@ -183,7 +190,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               <label className="block text-slate-400 mb-1">Anamnesis & Evolución Longitudinal</label>
               <textarea
                 rows={3}
-                value={patient.anamnesis}
+                value={patient.anamnesis || ''}
                 onChange={(e) => onChange({ ...patient, anamnesis: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none leading-relaxed"
               />
@@ -200,7 +207,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">PHQ-9 (Depresión 0-27)</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores.phq9 ?? ''}
+                    value={patient.psychometricScores?.phq9 ?? ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
@@ -217,7 +224,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">GAD-7 (Ansiedad 0-21)</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores.gad7 ?? ''}
+                    value={patient.psychometricScores?.gad7 ?? ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
@@ -234,7 +241,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">SAD PERSONS (0-10)</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores.sadPersons ?? ''}
+                    value={patient.psychometricScores?.sadPersons ?? ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
@@ -251,7 +258,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">MMSE Cognición (0-30)</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores.mmse ?? ''}
+                    value={patient.psychometricScores?.mmse ?? ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
@@ -279,7 +286,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                     <span className="text-[11px] text-slate-400">Latencia TR (ms)</span>
                     <input
                       type="number"
-                      value={patient.neuromotorBiomarkers.reactionTimeMs}
+                      value={patient.neuromotorBiomarkers.reactionTimeMs || 0}
                       onChange={(e) =>
                         onChange({
                           ...patient,
@@ -296,7 +303,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                     <span className="text-[11px] text-slate-400">Errores Omisión</span>
                     <input
                       type="number"
-                      value={patient.neuromotorBiomarkers.omissionErrors}
+                      value={patient.neuromotorBiomarkers.omissionErrors || 0}
                       onChange={(e) =>
                         onChange({
                           ...patient,
@@ -313,7 +320,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                     <span className="text-[11px] text-slate-400">Falsas Alarmas (Comisión)</span>
                     <input
                       type="number"
-                      value={patient.neuromotorBiomarkers.commissionErrors}
+                      value={patient.neuromotorBiomarkers.commissionErrors || 0}
                       onChange={(e) =>
                         onChange({
                           ...patient,
@@ -348,10 +355,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               </div>
             )}
 
-            {/* NUEVO: Módulos de Inmersión (VR & Hipnosis) */}
+            {/* Módulos de Inmersión (VR & Hipnosis) */}
             <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
               <h3 className="font-semibold text-slate-300 text-xs mb-2 flex items-center justify-between">
-                <span className="flex items-center gap-1.5"><Glasses className="w-4 h-4 text-indigo-400"/> Módulos de Inmersión (VR & Hipnosis)</span>
+                <span className="flex items-center gap-1.5">
+                  <Glasses className="w-4 h-4 text-indigo-400" /> Módulos de Inmersión (VR & Hipnosis)
+                </span>
                 <span className="text-[10px] text-indigo-400 font-normal">Neuromodulación</span>
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -360,15 +369,15 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <input
                     type="text"
                     placeholder="Ej. Acrofobia, Relajación..."
-                    value={(patient as any).immersionMetrics?.vrScenario || ''}
+                    value={patient.immersionMetrics?.vrScenario || ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
                         immersionMetrics: {
-                          ...(patient as any).immersionMetrics,
+                          ...patient.immersionMetrics,
                           vrScenario: e.target.value,
                         },
-                      } as any)
+                      })
                     }
                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-indigo-300 focus:border-indigo-500 focus:outline-none"
                   />
@@ -377,17 +386,18 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">Tolerancia VR (%)</span>
                   <input
                     type="number"
-                    min="0" max="100"
+                    min="0"
+                    max="100"
                     placeholder="0-100"
-                    value={(patient as any).immersionMetrics?.vrTolerance ?? ''}
+                    value={patient.immersionMetrics?.vrTolerance ?? ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
                         immersionMetrics: {
-                          ...(patient as any).immersionMetrics,
+                          ...patient.immersionMetrics,
                           vrTolerance: parseInt(e.target.value) || 0,
                         },
-                      } as any)
+                      })
                     }
                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:border-indigo-500 focus:outline-none"
                   />
@@ -396,17 +406,18 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">Susceptibilidad Hipnótica (0-10)</span>
                   <input
                     type="number"
-                    min="0" max="10"
+                    min="0"
+                    max="10"
                     placeholder="0-10"
-                    value={(patient as any).immersionMetrics?.hypnoticSusceptibility ?? ''}
+                    value={patient.immersionMetrics?.hypnoticSusceptibility ?? ''}
                     onChange={(e) =>
                       onChange({
                         ...patient,
                         immersionMetrics: {
-                          ...(patient as any).immersionMetrics,
+                          ...patient.immersionMetrics,
                           hypnoticSusceptibility: parseInt(e.target.value) || 0,
                         },
-                      } as any)
+                      })
                     }
                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-fuchsia-300 focus:border-fuchsia-500 focus:outline-none"
                   />
@@ -414,15 +425,15 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                 <div>
                   <span className="text-[11px] text-slate-400">Nivel de Trance (Profundidad)</span>
                   <select
-                    value={(patient as any).immersionMetrics?.tranceDepth || 'Ninguno'}
+                    value={patient.immersionMetrics?.tranceDepth || 'Ninguno'}
                     onChange={(e) =>
                       onChange({
                         ...patient,
                         immersionMetrics: {
-                          ...(patient as any).immersionMetrics,
+                          ...patient.immersionMetrics,
                           tranceDepth: e.target.value,
                         },
-                      } as any)
+                      })
                     }
                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:border-fuchsia-500 focus:outline-none"
                   >
