@@ -7,20 +7,22 @@ interface PatientSentinelDashboardProps {
 }
 
 export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> = ({ patient }) => {
+  const sleepValue = patient.functionalAreas?.sleep ?? 50;
+
   const sentinel = patient.sentinelTelemetry || {
     pacId: patient.id || 'PAC-0001',
     deviceSyncTime: 'En línea',
     sleepMetrics: {
-      nightWakeups: patient.functionalAreas?.sleep < 30 ? 4 : 1,
+      nightWakeups: sleepValue < 30 ? 4 : 1,
       hoursInDarkness: 7.0,
-      avgSleepDurationHours: ((patient.functionalAreas?.sleep || 50) / 100) * 8,
-      sleepEfficiencyPct: Math.round((patient.functionalAreas?.sleep || 50) * 0.8 + 15)
+      avgSleepDurationHours: (sleepValue / 100) * 8,
+      sleepEfficiencyPct: Math.round(sleepValue * 0.8 + 15)
     },
     behavioralBiometrics: {
       typingLatencyMs: patient.neuromotorBiomarkers?.reactionTimeMs || 320,
-      screenActiveTimeMinutes: patient.functionalAreas?.sleep < 30 ? 110 : 20,
+      screenActiveTimeMinutes: sleepValue < 30 ? 110 : 20,
       biomotorLatencyMs: patient.neuromotorBiomarkers?.reactionTimeMs || 320,
-      activityRestlessnessIndex: 100 - (patient.functionalAreas?.sleep || 50)
+      activityRestlessnessIndex: 100 - sleepValue
     },
     safetyStatus: {
       riskLevel: (patient.psychometricScores?.sadPersons ?? 0) >= 7 ? 'CRÍTICO' : (patient.psychometricScores?.sadPersons ?? 0) >= 4 ? 'ALTO' : 'BAJO',
@@ -34,14 +36,14 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
     }
   };
 
-  const nightWakeups = sentinel.sleepMetrics?.nightWakeups ?? sentinel.nightWakeups ?? 0;
-  const biomotorLatencyMs = sentinel.behavioralBiometrics?.biomotorLatencyMs ?? sentinel.behavioralBiometrics?.typingLatencyMs ?? sentinel.biomotorLatencyMs ?? 300;
-  const screenNightMinutes = sentinel.behavioralBiometrics?.screenActiveTimeMinutes ?? sentinel.screenOnNightTimeMinutes ?? 0;
-  const sleepEff = sentinel.sleepMetrics?.sleepEfficiencyPct ?? sentinel.sleepEfficiencyPct ?? 80;
-  const sleepDuration = sentinel.sleepMetrics?.avgSleepDurationHours ?? sentinel.avgSleepDurationHours ?? 7;
-  const riskScore = sentinel.safetyStatus?.riskLevel ?? sentinel.passiveRiskScore ?? 'BAJO';
-  const riskRationale = sentinel.safetyStatus?.passiveRiskRationale ?? sentinel.passiveRiskRationale ?? '';
-  const emergency = sentinel.safetyStatus?.emergencyContact ?? sentinel.emergencyContact ?? { name: 'Familiar', phone: '+52 55 0000-0000', relationship: 'Red de Apoyo' };
+  const nightWakeups = sentinel.sleepMetrics?.nightWakeups ?? (sentinel as any).nightWakeups ?? 0;
+  const biomotorLatencyMs = sentinel.behavioralBiometrics?.biomotorLatencyMs ?? sentinel.behavioralBiometrics?.typingLatencyMs ?? (sentinel as any).biomotorLatencyMs ?? 300;
+  const screenNightMinutes = sentinel.behavioralBiometrics?.screenActiveTimeMinutes ?? (sentinel as any).screenOnNightTimeMinutes ?? 0;
+  const sleepEff = sentinel.sleepMetrics?.sleepEfficiencyPct ?? (sentinel as any).sleepEfficiencyPct ?? 80;
+  const sleepDuration = sentinel.sleepMetrics?.avgSleepDurationHours ?? (sentinel as any).avgSleepDurationHours ?? 7;
+  const riskScore = sentinel.safetyStatus?.riskLevel ?? (sentinel as any).passiveRiskScore ?? 'BAJO';
+  const riskRationale = sentinel.safetyStatus?.passiveRiskRationale ?? (sentinel as any).passiveRiskRationale ?? 'Sincronización de telemetría sin anomalías críticas.';
+  const emergency = sentinel.safetyStatus?.emergencyContact ?? (sentinel as any).emergencyContact ?? { name: 'Familiar', phone: '+52 55 0000-0000', relationship: 'Red de Apoyo' };
 
   const isNightWakeupHigh = nightWakeups > 3;
   const isBiomotorCritical = biomotorLatencyMs > 420 || biomotorLatencyMs < 200;
@@ -147,11 +149,11 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
           <div className="text-base font-bold font-mono text-purple-300">
             {sleepEff}%
           </div>
-          <div className="text-[9px] text-slate-400 mt-0.5">Total: {sleepDuration.toFixed(1)} hrs</div>
+          <div className="text-[9px] text-slate-400 mt-0.5">Total: {Number(sleepDuration).toFixed(1)} hrs</div>
         </div>
       </div>
 
-      {/* Rationale & Crisis protocol trigger */}
+      {/* Rationale & Crisis Protocol Trigger */}
       <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
         <p className="leading-relaxed">
           <strong className="text-slate-200">Interpretación Algorítmica: </strong>
@@ -168,7 +170,7 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
             </div>
             <a
               href={`tel:${emergency.phone}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[11px] font-bold transition shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[11px] font-bold transition shrink-0 shadow-lg shadow-rose-600/30"
             >
               <PhoneCall className="w-3.5 h-3.5" />
               <span>Llamar Red: {emergency.name}</span>
