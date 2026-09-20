@@ -48,7 +48,6 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
           role="tooltip"
           className={`absolute z-50 w-72 p-3.5 rounded-xl bg-slate-950/95 backdrop-blur-xl border border-cyan-500/40 shadow-[0_0_25px_rgba(6,182,212,0.25)] text-slate-100 transition-all duration-200 pointer-events-none animate-fadeIn ${getPositionClasses()}`}
         >
-          {/* Subtle neon indicator pip */}
           <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2 mb-2">
             <span className="font-bold text-xs text-white tracking-wide flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
