@@ -21,6 +21,7 @@ import { LoginModal } from './components/LoginModal';
 import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
+import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
@@ -39,7 +40,8 @@ import {
   Cpu,
   Check,
   AlertTriangle,
-  Glasses
+  Glasses,
+  Sparkles
 } from 'lucide-react';
 
 type AppTab = 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'vr_therapy' | 'referral' | 'saas';
@@ -70,6 +72,7 @@ export default function App() {
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
+  const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
 
   // Recuperación automática de sesión activa desde localStorage
   useEffect(() => {
@@ -489,13 +492,21 @@ export default function App() {
         {/* Tab 7: Módulo VR Inmersivo con Botones de Consolas Fullscreen */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 flex-wrap">
+              <button
+                onClick={() => setIsFullscreenHypnosisOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
+              >
+                <Sparkles className="w-4 h-4 text-purple-200 animate-spin-slow" />
+                <span>Consola Hipnosis & Trauma Evolutivo</span>
+              </button>
+
               <button
                 onClick={() => setIsFullscreenDiagnosticOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition"
               >
                 <Brain className="w-4 h-4" />
-                <span>Abrir Consola de Diagnóstico (Pruebas 3D)</span>
+                <span>Consola de Diagnóstico (Pruebas 3D)</span>
               </button>
 
               <button
@@ -503,7 +514,7 @@ export default function App() {
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
               >
                 <Glasses className="w-4 h-4" />
-                <span>Abrir Consola de Tratamiento (Exposición)</span>
+                <span>Consola de Tratamiento (Exposición)</span>
               </button>
             </div>
 
@@ -553,6 +564,14 @@ export default function App() {
           patient={currentPatient}
           onClose={() => setIsFullscreenDiagnosticOpen(false)}
           onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
+      )}
+
+      {/* Modal Fullscreen 3: Consola de Hipnosis Clinical Adaptativa por Etapa Evolutiva */}
+      {isFullscreenHypnosisOpen && (
+        <VrDevelopmentalTraumaFullscreenMonitor
+          patient={currentPatient}
+          onClose={() => setIsFullscreenHypnosisOpen(false)}
         />
       )}
     </div>
