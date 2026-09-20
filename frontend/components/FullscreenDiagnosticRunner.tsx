@@ -4,17 +4,11 @@ import {
   X, 
   Play, 
   Pause, 
-  RotateCcw, 
   Activity, 
-  Glasses, 
   Brain, 
   Target, 
   Clock, 
-  AlertCircle, 
   CheckCircle2, 
-  Eye, 
-  Zap, 
-  Radio, 
   Award,
   Terminal
 } from 'lucide-react';
@@ -43,20 +37,20 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
   const [pupilPeakMm, setPupilPeakMm] = useState(3.4);
   const [eventLogs, setEventLogs] = useState<string[]>([]);
 
-  // Telemetría simulada/recibida del conector de hardware
+  // Telemetría simulada/recibida del conector de hardware (Polar H10, GSR, Visor)
   const [currentBpm, setCurrentBpm] = useState(78);
   const [currentHrv, setCurrentHrv] = useState(42);
   const [currentGsr, setCurrentGsr] = useState(2.3);
 
-  // Lógica del Temporizador y Generación de Eventos en Tiempo Real
+  // Temporizador y Generador de Marcas de Eventos LSL en Tiempo Real
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (isTestRunning) {
       interval = setInterval(() => {
         setTestTimeSec(prev => {
           const nextTime = prev + 1;
 
-          // Simulación de eventos LSL según la prueba
+          // Simulación de eventos LSL según el paradigma seleccionado
           if (nextTime % 5 === 0) {
             const timestamp = new Date().toISOString().slice(11, 19);
             let eventMsg = '';
@@ -79,6 +73,8 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
               setPupilPeakMm(Number((3.2 + Math.random() * 0.8).toFixed(2)));
             } else if (selectedTest === 'CYBERBALL_BPD') {
               eventMsg = `[${timestamp}] [LSL MARKER] EXCLUSION_PHASE_START -> GSR Peak: ${(3.5 + Math.random() * 2.0).toFixed(2)}µS | HRV Drop`;
+            } else if (selectedTest === 'AGENCY_PERTURBATION') {
+              eventMsg = `[${timestamp}] [LSL MARKER] MOTOR_DELAY_INJECTED -> 120ms Perturbation | Disassociation Index: High`;
             }
 
             if (eventMsg) {
@@ -86,7 +82,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
             }
           }
 
-          // Variación Fisiológica
+          // Variación Fisiológica Simultánea
           setCurrentBpm(72 + Math.floor(Math.random() * 12));
           setCurrentHrv(35 + Math.floor(Math.random() * 15));
           setCurrentGsr(Number((2.0 + Math.random() * 1.5).toFixed(2)));
@@ -95,16 +91,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
         });
       }, 1000);
     } else {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isTestRunning, selectedTest]);
 
   const handleStartTest = () => {
     setTestTimeSec(0);
     setOmissionErrors(0);
     setCommissionErrors(0);
-    setEventLogs([`[SYSTEM] Prueba ${selectedTest} iniciada en Pico Neo 3 Pro.`]);
+    setEventLogs([`[SYSTEM] Prueba ${selectedTest} iniciada en Pico Neo 3 Pro / Quest 3S.`]);
     setIsTestRunning(true);
   };
 
@@ -113,7 +111,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
     const telemetryPayload: VrTelemetryData = {
       sessionId: `DIAG-${Date.now().toString().slice(-4)}`,
-      timestamp: Date.now(),
+      timestamp: new Date().toISOString(),
       deviceId: 'PICO_NEO_3_PRO',
       gsrMicroSiemens: [1.8, 2.3, 3.1, 2.8, 2.2],
       hrvRmssdMs: [45, 38, 32, 40, 44],
@@ -149,12 +147,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black tracking-wide text-white">CONSOLA DE DIAGNÓSTICO Y PRUEBAS VR</h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-950 text-purple-300 border border-purple-500/30">
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-950 text-purple-300 border border-purple-500/30 font-mono">
                 LSL EVENT MARKER 60HZ
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Paciente: <span className="text-white font-semibold">{patient.patientNameAnonymized}</span> ({patient.id}) | Mapeo RDoC / DSM-5-TR
+              Paciente: <span className="text-white font-semibold">{patient.patientNameAnonymized || patient.id}</span> ({patient.id}) | Mapeo RDoC / DSM-5-TR
             </p>
           </div>
         </div>
@@ -321,7 +319,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
           <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl text-purple-200 text-xs flex items-center gap-2">
             <Award className="w-5 h-5 text-purple-400 shrink-0" />
-            <span>Los datos recolectados enriquecen el análisis de Gemini 3.8 Flash para el dictamen final.</span>
+            <span>Los datos recolectados enriquecen el análisis de Gemini para el dictamen final.</span>
           </div>
         </div>
 
