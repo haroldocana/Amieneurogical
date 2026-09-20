@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
-import { TopographicLobeScore, QeegBandPowers } from '../types';
+import React, { useState, useEffect } from 'react';
+import { QeegBandPowers } from '../types';
 import { InteractiveNeuroViewer } from './InteractiveNeuroViewer';
-import { Upload, FileCheck, Brain, Activity, Cpu, Layers, Sparkles, RefreshCw, CheckCircle, Info, BarChart3 } from 'lucide-react';
+import { Upload, FileCheck, Brain, RefreshCw, CheckCircle, BarChart3, Zap } from 'lucide-react';
+
+export interface QeegAttachmentPayload {
+  recordingDate: string;
+  channelsCount: number;
+  samplingRateHz: number;
+  bandPowers: QeegBandPowers;
+}
 
 interface NeuroSensoryModuleProps {
-  onAttachQeegToPatient?: (biomarkers: any) => void;
+  onAttachQeegToPatient?: (biomarkers: QeegAttachmentPayload) => void;
 }
 
 export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttachQeegToPatient }) => {
@@ -29,7 +36,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
       setIsProcessing(true);
       setUploadSuccess(false);
 
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setIsProcessing(false);
         setUploadSuccess(true);
         if (onAttachQeegToPatient) {
@@ -41,6 +48,8 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
           });
         }
       }, 1400);
+
+      return () => clearTimeout(timer);
     }
   };
 
@@ -50,7 +59,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-lg text-white">
+            <div className="p-2 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-lg text-white shadow-lg shadow-purple-600/20">
               <Brain className="w-5 h-5" />
             </div>
             <h1 className="text-base font-bold text-white">
@@ -58,7 +67,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Procesamiento cuantitativo de bandas espectrales (Delta, Theta, Alfa, Beta, High Beta) y visor interactivo holográfico.
+            Procesamiento cuantitativo de bandas espectrales (Delta, Theta, Alfa, Beta, High Beta, Gamma) y visor interactivo holográfico.
           </p>
         </div>
 
@@ -79,7 +88,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
 
       {/* File Upload Status */}
       {selectedFile && (
-        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs shadow-md">
           <div className="flex items-center gap-2">
             <FileCheck className="w-4 h-4 text-emerald-400" />
             <span className="text-slate-200 font-medium">
@@ -87,7 +96,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
             </span>
           </div>
           {isProcessing ? (
-            <span className="flex items-center gap-1.5 text-sky-400">
+            <span className="flex items-center gap-1.5 text-sky-400 font-mono">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Procesando señales FFT & Espectro...
             </span>
           ) : uploadSuccess ? (
@@ -101,19 +110,21 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
       {/* Interactive 3D HUD Neuro-Spectral FFT Viewer */}
       <InteractiveNeuroViewer />
 
-      {/* Spectral Band Power Distribution (Delta, Theta, Alfa, Beta, High Beta) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+      {/* Spectral Band Power Distribution (Delta, Theta, Alfa, Beta, High Beta, Gamma) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-indigo-400" />
             <h2 className="font-bold text-xs uppercase tracking-wider text-slate-200">
-              Distribución de Potencia Relativa por Banda Espectral
+              Distribución de Potencia Relativa por Banda Espectral Quantitativa (qEEG)
             </h2>
           </div>
-          <span className="text-[10px] text-slate-400 font-mono">100% Espectro Global</span>
+          <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+            <Zap className="w-3 h-3 text-amber-400" /> 100% Espectro Global FFT
+          </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
           <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800">
             <span className="text-[10px] text-slate-400 block mb-1">Delta (0.5 - 4 Hz)</span>
             <div className="text-lg font-bold font-mono text-cyan-300">{bandPowers.delta}%</div>
@@ -150,7 +161,15 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
             <span className="text-[10px] text-slate-400 block mb-1">High Beta (20 - 30 Hz)</span>
             <div className="text-lg font-bold font-mono text-rose-300">{bandPowers.highBeta}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-rose-400 h-full rounded-full" style={{ width: `${bandPowers.highBeta * 2}%` }} />
+              <div className="bg-rose-400 h-full rounded-full" style={{ width: `${bandPowers.highBeta * 3}%` }} />
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800">
+            <span className="text-[10px] text-slate-400 block mb-1">Gamma (30 - 45 Hz)</span>
+            <div className="text-lg font-bold font-mono text-indigo-300">{bandPowers.gamma}%</div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div className="bg-indigo-400 h-full rounded-full" style={{ width: `${bandPowers.gamma * 8}%` }} />
             </div>
           </div>
         </div>
