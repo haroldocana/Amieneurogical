@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
-import { AlertTriangle, Send, FileText, PhoneCall, ShieldAlert, CheckSquare, Square, Printer, Check, Copy } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, PhoneCall, CheckSquare, Square, Printer, Check, Copy } from 'lucide-react';
 
 interface PsychiatryReferralViewProps {
   patient: PatientRecord;
   analysis: AmieClinicalAnalysis | null;
-  currentDoctorName: string;
-  colegiadoNumber: number;
+  currentDoctorName?: string;
+  colegiadoNumber?: number;
 }
 
 export const PsychiatryReferralView: React.FC<PsychiatryReferralViewProps> = ({
   patient,
   analysis,
-  currentDoctorName,
-  colegiadoNumber,
+  currentDoctorName = 'Dr. Alejandro Morales Rivera',
+  colegiadoNumber = 749210,
 }) => {
   const [copied, setCopied] = useState(false);
   const [containmentChecklist, setContainmentChecklist] = useState({
@@ -44,15 +44,15 @@ DATOS DEL PACIENTE:
 MOTIVO DE REFERENCIA:
 ${patient.consultationReason}
 
-IMPRESIÓN DIAGNÓSTICA DSM-5 (COGNITIVO-BIOCLÍNICO):
-- Diagnóstico Principal: ${analysis?.principalDiagnosis.disorderName || 'En Evaluación Activa'}
-- Código CIE-10: ${analysis?.principalDiagnosis.codeCIE10 || 'Pendiente'}
-- Severidad GAF/EEAG: ${analysis?.principalDiagnosis.gafEstimated || patient.psychometricScores.gafEstimated || 'N/A'}/100
+IMPRESIÓN DIAGNÓSTICA DSM-5-TR (COGNITIVO-BIOCLÍNICO):
+- Diagnóstico Principal: ${analysis?.principalDiagnosis?.disorderName || 'En Evaluación Activa'}
+- Código CIE-11: ${analysis?.principalDiagnosis?.codeCIE10 || 'Pendiente'}
+- Severidad GAF/EEAG: ${analysis?.principalDiagnosis?.gafEstimated || patient.psychometricScores?.gafEstimated || 'N/A'}/100
 
 TRIANGULACIÓN DE RIESGO:
-- Nivel de Riesgo Suicida (SAD PERSONS: ${patient.psychometricScores.sadPersons ?? 'N/A'}/10): ${analysis?.riskAlerts.suicideRiskLevel || 'EVALUAR'}
+- Nivel de Riesgo Suicida (SAD PERSONS: ${patient.psychometricScores?.sadPersons ?? 'N/A'}/10): ${analysis?.riskAlerts?.suicideRiskLevel || 'EVALUAR'}
 - Medición Pasiva APK Centinela: Despertares Nocturnos = ${patient.sentinelTelemetry?.nightWakeups ?? 'N/A'}, Latencia Biomotora = ${patient.sentinelTelemetry?.biomotorLatencyMs ?? 'N/A'} ms
-- Riesgo Psicótico: ${analysis?.riskAlerts.psychosisRisk || 'Evaluación en curso'}
+- Riesgo Psicótico: ${analysis?.riskAlerts?.psychosisRisk || 'Evaluación en curso'}
 
 ACCIONES DE CONTENCIÓN INMEDIATA REALIZADAS:
 ${containmentChecklist.mediaRestriction ? '[X] Restricción de acceso a medios letales (armas, fármacos)' : '[ ] Restricción de medios letales'}
@@ -61,7 +61,7 @@ ${containmentChecklist.emergencyHotlineGiven ? '[X] Línea directa de emergencia
 ${containmentChecklist.toxicologyOrdered ? '[X] Perfil toxicológico y metabólico de exclusión solicitado' : '[ ] Toxicología'}
 
 OBSERVACIONES CLÍNICAS:
-${analysis?.principalDiagnosis.justificationDsm5 || patient.anamnesis}
+${analysis?.principalDiagnosis?.justificationDsm5 || patient.anamnesis || 'Sin observaciones adicionales.'}
 ============================================================
 Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumber})
   `.trim();
@@ -90,7 +90,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleCopy}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
@@ -119,7 +119,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
             <div className="space-y-2.5 text-xs text-slate-300">
               <div
                 onClick={() => toggleCheck('mediaRestriction')}
-                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700"
+                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition"
               >
                 {containmentChecklist.mediaRestriction ? <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" /> : <Square className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />}
                 <span>Restricción de medios letales en hogar (fármacos, armas de fuego, objetos punzantes).</span>
@@ -127,7 +127,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
 
               <div
                 onClick={() => toggleCheck('constantCompanion')}
-                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700"
+                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition"
               >
                 {containmentChecklist.constantCompanion ? <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" /> : <Square className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />}
                 <span>Acompañamiento continuo y no-aislamiento por red de apoyo designada.</span>
@@ -135,7 +135,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
 
               <div
                 onClick={() => toggleCheck('emergencyHotlineGiven')}
-                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700"
+                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition"
               >
                 {containmentChecklist.emergencyHotlineGiven ? <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" /> : <Square className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />}
                 <span>Línea telefónica de crisis 24/7 y contacto del médico colegiado provistos.</span>
@@ -143,7 +143,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
 
               <div
                 onClick={() => toggleCheck('toxicologyOrdered')}
-                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700"
+                className="flex items-start gap-2 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition"
               >
                 {containmentChecklist.toxicologyOrdered ? <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" /> : <Square className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />}
                 <span>Laboratorios toxicológicos y metabólicos de urgencia ordenados.</span>
@@ -151,7 +151,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
             </div>
           </div>
 
-          {patient.sentinelTelemetry && (
+          {patient.sentinelTelemetry && patient.sentinelTelemetry.emergencyContact && (
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl text-xs space-y-2">
               <span className="text-[10px] uppercase font-bold text-slate-400">Red de Apoyo Vinculada (APK)</span>
               <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
@@ -159,7 +159,7 @@ Firma del Médico Responsable: ____________________ (Colegiado #${colegiadoNumbe
                 <div className="text-slate-400">{patient.sentinelTelemetry.emergencyContact.relationship}</div>
                 <a
                   href={`tel:${patient.sentinelTelemetry.emergencyContact.phone}`}
-                  className="mt-2 inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-mono font-semibold"
+                  className="mt-2 inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-mono font-semibold transition"
                 >
                   <PhoneCall className="w-3.5 h-3.5" /> {patient.sentinelTelemetry.emergencyContact.phone}
                 </a>
