@@ -3,8 +3,10 @@ import { CLINICAL_CASE_PRESETS } from '../constants';
 import { consumeAiCredit } from './userService';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN DE VARIABLES DE ENTORNO Y ENDPOINTS
+// CONFIGURACIÓN DE VARIABLES DE ENTORNO, ENDPOINTS Y MODELO
 // ------------------------------------------------------------------
+export const GEMINI_MODEL = 'gemini-3.8-flash';
+
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
 const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
@@ -125,7 +127,7 @@ export const SAFE_DEFAULT_PATIENT: PatientRecord = {
 /**
  * Canaliza solicitudes hacia Vertex AI o Gemini a través del Backend Proxy en Express (Render)
  */
-async function callVertexViaProxy(originalUrl: string, payloadBody: any) {
+async function callVertexViaProxy(originalUrl: string, payloadBody: unknown) {
   const response = await fetch(`${BACKEND_URL}/api-proxy`, {
     method: 'POST',
     headers: {
@@ -154,12 +156,14 @@ function normalizeGender(rawSex?: string): 'M' | 'F' | 'Other' {
   return 'Other';
 }
 
-function normalizeFunctionalAreas(rawAreas: any) {
+function normalizeFunctionalAreas(rawAreas: unknown) {
   if (!rawAreas || typeof rawAreas !== 'object') {
     return { sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50 };
   }
 
-  const parseScore = (val: any) => {
+  const areasObj = rawAreas as Record<string, unknown>;
+
+  const parseScore = (val: unknown) => {
     const num = Number(val);
     if (!Number.isFinite(num)) return 50;
     if (num <= 10) return num * 10;
@@ -167,25 +171,25 @@ function normalizeFunctionalAreas(rawAreas: any) {
   };
 
   return {
-    sleep: parseScore(rawAreas.sleep),
-    appetite: parseScore(rawAreas.appetite),
-    energy: parseScore(rawAreas.energy),
-    social: parseScore(rawAreas.social),
-    attention: parseScore(rawAreas.attention ?? rawAreas.concentration ?? rawAreas.concentracion)
+    sleep: parseScore(areasObj.sleep),
+    appetite: parseScore(areasObj.appetite),
+    energy: parseScore(areasObj.energy),
+    social: parseScore(areasObj.social),
+    attention: parseScore(areasObj.attention ?? areasObj.concentration ?? areasObj.concentracion)
   };
 }
 
 export async function mapApp1DataToApp2(
-  rawCase: any,
+  rawCase: Record<string, unknown>,
   cleanPatientId: string,
   resolvedDoctorUsername: string
 ): Promise<PatientRecord> {
-  const sessions = rawCase.sessions || [];
+  const sessions = (rawCase.sessions as Array<Record<string, unknown>>) || [];
   const exactPsychometrics: Record<string, number> = {};
 
-  sessions.forEach((s: any) => {
+  sessions.forEach((s) => {
     if (s.testScores && typeof s.testScores === 'object') {
-      Object.entries(s.testScores).forEach(([key, val]) => {
+      Object.entries(s.testScores as Record<string, unknown>).forEach(([key, val]) => {
         if (typeof val === 'number') {
           exactPsychometrics[key.toLowerCase()] = val;
         }
@@ -198,17 +202,19 @@ export async function mapApp1DataToApp2(
   const mappedFunctionalAreas = normalizeFunctionalAreas(rawFunctional);
 
   const mappedNotes = sessions
-    .map((s: any) => `Sesión ${s.sessionNumber || ''} (${s.date || ''}): ${s.rawNotes || s.notes || ''}`)
+    .map((s) => `Sesión ${s.sessionNumber || ''} (${s.date || ''}): ${s.rawNotes || s.notes || ''}`)
     .filter(Boolean);
+
+  const generalData = (rawCase.generalData as Record<string, unknown>) || {};
 
   return {
     ...SAFE_DEFAULT_PATIENT,
-    id: rawCase.id || cleanPatientId,
-    patientNameAnonymized: `Paciente ID: ${rawCase.id || cleanPatientId}`,
-    age: Number(rawCase.generalData?.edad || rawCase.age) || 55,
-    gender: normalizeGender(rawCase.generalData?.sexo || rawCase.gender),
-    consultationReason: rawCase.generalData?.motivoConsultaTextual || rawCase.consultationReason || 'Evaluación neuroclínica integral',
-    anamnesis: rawCase.generalData?.antecedentes || rawCase.anamnesis || 'Sin antecedentes registrados',
+    id: (rawCase.id as string) || cleanPatientId,
+    patientNameAnonymized: `Paciente ID: ${(rawCase.id as string) || cleanPatientId}`,
+    age: Number(generalData.edad || rawCase.age) || 55,
+    gender: normalizeGender((generalData.sexo as string) || (rawCase.gender as string)),
+    consultationReason: (generalData.motivoConsultaTextual as string) || (rawCase.consultationReason as string) || 'Evaluación neuroclínica integral',
+    anamnesis: (generalData.antecedentes as string) || (rawCase.anamnesis as string) || 'Sin antecedentes registrados',
     sessionNotes: mappedNotes.length > 0 ? mappedNotes : ['Sincronizado desde base de datos App 1'],
     functionalAreas: mappedFunctionalAreas,
     psychometricScores: {
@@ -269,8 +275,8 @@ export async function syncWithClinicalApp(
         };
       }
     }
-  } catch (err: any) {
-    if (err?.message && err.message.includes('Acceso Denegado')) throw err;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('Acceso Denegado')) throw err;
     console.warn('Fallo en Cloud Storage directo, buscando en microservicio protegido:', err);
   }
 
@@ -315,8 +321,8 @@ export async function syncWithClinicalApp(
         message: data.message || `Expediente ${cleanPatientId} sincronizado exitosamente.`
       };
     }
-  } catch (err: any) {
-    if (err?.message && (err.message.includes('Acceso denegado') || err.message.includes('no existe'))) {
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes('Acceso denegado') || err.message.includes('no existe'))) {
       throw err;
     }
     console.warn('Fallo en Cloud Function, verificando repositorio local:', err);
@@ -350,7 +356,7 @@ export async function syncWithClinicalApp(
 }
 
 // ------------------------------------------------------------------
-// MOTOR PRINCIPAL DE INFERENCIA CLÍNICA AMIE (GEMINI 1.5 / VERTEX)
+// MOTOR PRINCIPAL DE INFERENCIA CLÍNICA AMIE (GEMINI 3.8 FLASH / VERTEX)
 // ------------------------------------------------------------------
 export async function runAmieClinicalAnalysis(
   patient: PatientRecord,
@@ -404,39 +410,21 @@ export async function runAmieClinicalAnalysis(
       }
     }
   } catch (backendError) {
-    console.warn('Cloud Run API no disponible, ejecutando Vertex / Gemini vía Proxy:', backendError);
+    console.warn('Cloud Run API no disponible, ejecutando Gemini 3.8 Flash vía Proxy:', backendError);
   }
 
-  // RUTINA 2: INTENTAR GEMINI API DIRECTA SI EXISTE VITE_GEMINI_API_KEY
+  // RUTINA 2: INTENTAR GEMINI API DIRECTA SI EXISTE VITE_GEMINI_API_KEY (GEMINI 3.8 FLASH)
   if (GEMINI_API_KEY) {
     try {
-      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
       const systemInstruction = `
-Eres AMIE (Artificial Intelligence Medical Inference Engine), un copiloto psiquiátrico y neurocientífico de grado clínico.
+Eres AMIE (Artificial Intelligence Medical Inference Engine), operando con Gemini 3.8 Flash como un copiloto psiquiátrico y neurocientífico de grado clínico.
 Tu función es analizar expedientes multimodales que combinan:
 1. Historia clínica y psicometría en formato JSON.
-2. Telemetría fisiológica en tiempo real del visor VR (Pico Neo 3 / Quest 3S): GSR (conductancia cutánea), HRV (variabilidad cardíaca RMSSD), tasa sacádica e índice de habituación H.
+2. Telemetría fisiológica en tiempo real del visor VR (Pico Neo 3 Pro / Quest 3S): GSR, HRV RMSSD, tasa sacádica e índice de habituación H.
 
-Debes responder ÚNICAMENTE en formato JSON válido con la siguiente estructura estricta:
-{
-  "diagnosticImpressions": [
-    { "code": "CIE-11/DSM-5", "title": "Nombre", "confidencePct": 85, "rationale": "Explicación" }
-  ],
-  "biomedicalTriangulation": {
-    "autonomicTone": "Descripción de la respuesta vagal/simpática",
-    "habituationRate": "Evaluación del índice H",
-    "cognitiveLoad": "Análisis atencional y ocular"
-  },
-  "biasMitigationNotes": [
-    "Identificación y neutralización de posibles sesgos de género, confirmación o auto-reporte"
-  ],
-  "riskAlerts": [
-    { "severity": "HIGH|MEDIUM|LOW", "message": "Alerta de riesgo" }
-  ],
-  "treatmentRecommendations": [
-    "Recomendación farmacológica o psicoterapéutica adaptada"
-  ]
-}`;
+Debes responder ÚNICAMENTE en formato JSON válido acorde al esquema de dictamen estructurado en 5 bloques.
+`;
 
       const directPayload = {
         contents: [
@@ -472,16 +460,16 @@ Debes responder ÚNICAMENTE en formato JSON válido con la siguiente estructura 
     }
   }
 
-  // RUTINA 3: LLAMADA A PROXY EXPRESS VERTEXT AI
+  // RUTINA 3: LLAMADA A PROXY EXPRESS VERTEX AI (GEMINI 3.8 FLASH)
   const vrSection = safeRecord.vrTelemetryData ? `
---- MÓDULO VR QUEST 3S & TELEMETRÍA BIOMÉTRICA INMERSIVA ---
+--- MÓDULO VR PICO NEO 3 PRO / QUEST 3S & TELEMETRÍA INMERSIVA ---
 - Session GUID: ${safeRecord.vrTelemetryData.sessionId}
 - Conductancia Cutánea (GSR Pico): ${Math.max(...(safeRecord.vrTelemetryData.gsrMicroSiemens || [0]))} µS
 - Tono Vagal (HRV RMSSD Última Lectura): ${safeRecord.vrTelemetryData.hrvRmssdMs?.slice(-1)[0] || 'N/A'} ms
 - Índice de Habituación Terapéutica (H): ${safeRecord.vrTelemetryData.habituationIndexH}
 - Picos de Excitación Simpática: ${safeRecord.vrTelemetryData.stressPeaksCount}
 - Resumen Informe VR Previo: ${safeRecord.vrTherapyReport?.synthesizedClinicalSummary || 'Sin informe registrado'}
-` : '--- MÓDULO VR QUEST 3S: No se ha realizado o transferido prueba inmersiva ---';
+` : '--- MÓDULO VR INMERSIVO: No se ha realizado o transferido prueba ---';
 
   const multisensorySection = safeRecord.multisensoryHardware ? `
 --- BIOMETRÍA MULTISENSORIAL EN VIVO ---
@@ -493,7 +481,7 @@ Debes responder ÚNICAMENTE en formato JSON válido con la siguiente estructura 
 ` : '';
 
   const promptText = `
-IDENTIDAD CLÍNICA (AMIE FRAMEWORK):
+IDENTIDAD CLÍNICA (AMIE FRAMEWORK • GEMINI 3.8 FLASH):
 Eres AMIE (Articulate Medical Intelligence Explorer), operando como Copiloto Psiquiátrico y Neurológico Avanzado.
 Tu función es el análisis bioclínico, la prevención activa y la generación de diagnósticos diferenciales para el profesional de la salud responsable bajo normativas HIPAA y RGPD.
 
@@ -501,7 +489,7 @@ MÉTODO DE ANÁLISIS E INTERPRETACIÓN DE DATOS (JSON):
 Al recibir el expediente clínico del paciente, realizarás un análisis cruzado integral en 5 niveles:
 1. EXTRAER Y EVALUAR SÍNTOMAS PRINCIPALES.
 2. TRIANGULACIÓN BIOCLÍNICA, PSICOMÉTRICA Y BIOMÉTRICA MULTIMODAL.
-3. INTEGRACIÓN DE TELEMETRÍA VR META QUEST 3S / PICO NEO 3:
+3. INTEGRACIÓN DE TELEMETRÍA VR PICO NEO 3 PRO / META QUEST 3S:
    ${vrSection}
 4. EVALUACIÓN DE MEDICIÓN PASIVA (APK CENTINELA - RIESGO SUICIDA).
 5. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTE DE SESGOS & PRINCIPIOS MORRISON.
@@ -515,7 +503,7 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA:
 Devuelve EXCLUSIVAMENTE un objeto JSON válido acorde al formato requerido.
 `;
 
-  const parts: any[] = [{ text: promptText }];
+  const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [{ text: promptText }];
 
   if (activeImage && activeImage.startsWith('data:image')) {
     const matches = activeImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
@@ -529,14 +517,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido acorde al formato requerido.
     }
   }
 
-  const vertexEndpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-1.5-flash:generateContent';
+  const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
 
   const proxyPayload = {
     contents: [{ role: 'user', parts: parts }],
     systemInstruction: {
       parts: [
         {
-          text: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica multimodal.'
+          text: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica operando con Gemini 3.8 Flash. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica multimodal.'
         }
       ]
     },
@@ -568,38 +556,109 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
   const gsrVal = patient.vrTelemetryData?.gsrMicroSiemens?.[0] || 2.1;
 
   return {
-    diagnosticImpressions: [
+    principalDiagnosis: {
+      codeCIE10: 'F43.1',
+      codeCIE9: '309.81',
+      disorderName: 'Trastorno de Estrés Postraumático con Hiperreactividad Simpática',
+      certaintyPct: 92.4,
+      specifiers: ['Con síntomas disociativos', 'Persistente'],
+      gafEstimated: 45,
+      justificationDsm5: `Criterios DSM-5 cumplidos. Triangulación bioclínica: Pico de conductancia galvánica (GSR = ${gsrVal} µS) y depresión de variabilidad cardíaca vagal (HRV = ${hrvVal} ms) ante exposición inmersiva.`
+    },
+    differentialMatrix: [
       {
-        code: 'DSM-5: 309.81 / CIE-11: 6B40',
-        title: 'Trastorno de Estrés Postraumático con Hiperreactividad Simpática',
-        confidencePct: 92.4,
-        rationale: `Triangulación confirmada: La telemetría en vivo muestra un pico de conductancia galvánica de ${gsrVal} µS y un tono vagal (HRV = ${hrvVal} ms) reactivo ante la exposición inmersiva.`
+        disorderKey: 'TAG',
+        disorderName: 'Trastorno de Ansiedad Generalizada',
+        codeCIE10: 'F41.1',
+        status: 'Descartado',
+        certaintyPct: 24.0,
+        qeegProfile: {
+          thetaBetaRatioEvaluation: 'Normal',
+          highBetaEvaluation: 'Ligeramente elevado',
+          alphaAsymmetryEvaluation: 'Sin asimetría frontal',
+          coherenceEvaluation: 'Coherencia parieto-occipital conservada'
+        },
+        psychometricsProfile: {
+          scaleMatched: 'GAD-7',
+          scoreSummary: `Puntaje: ${patient.psychometricScores.gad7 || 16}/21`
+        },
+        apkPassiveMarker: 'Despertares nocturnos aislados',
+        acousticBiomarkerCorrelation: 'Prosodia reactiva',
+        biasDiscardRationale: 'Descartado por presencia de evento traumático primario y síntomas intrusivos específicos.',
+        morrisonPrincipleApplied: 'Principio de Causalidad Primaria de Morrison'
       }
     ],
-    biomedicalTriangulation: {
-      autonomicTone: gsrVal > 3.0 ? 'Dominancia Simpática Aguda (Estrés)' : 'Tono Vagal Parasimpático Modulado',
-      habituationRate: 'Índice H = 2.84 (Extinción progresiva del distrés observada)',
-      cognitiveLoad: 'Fijación ocular estable con supresión sacádica compensada.'
+    differentialDiagnoses: [
+      {
+        candidate: 'Trastorno Adaptativo con Estado de Ánimo Depresivo',
+        codeCIE10: 'F43.21',
+        status: 'Descartado',
+        rationale: 'La severidad autonómica y la persistencia de reactividad simpática exceden el cuadro adaptativo simple.',
+        safetyRuleApplied: 'Regla de Severidad Sintomática DSM-5'
+      }
+    ],
+    bioclinicalTriangulation: {
+      psychometricsSummary: `PHQ-9: ${patient.psychometricScores.phq9 || 24}, BDI-II: ${patient.psychometricScores.bdi2 || 42}, CSS-RS Nivel: ${patient.psychometricScores.cssrsLevel || 5}`,
+      functionalAreasAssessment: `Sueño: ${patient.functionalAreas.sleep}/100, Atención: ${patient.functionalAreas.attention}/100`,
+      acousticBiometricAssessment: 'Bradilalia moderada y aplanamiento prosódico leve.',
+      vrHabituationAssessment: `Índice de Habituación H = ${patient.vrTelemetryData?.habituationIndexH || 82.5}. Tono vagal en RMSSD: ${hrvVal} ms.`,
+      regionalLobeBreakdown: {
+        frontal: 'Lentificación theta frontal moderada',
+        temporal: 'Asimetría leve en polo temporal izquierdo',
+        parietal: 'Coherencia beta dentro de límites normales',
+        occipital: 'Ritmo alfa posterior conservado en 8.5 Hz'
+      },
+      convergenceScore: 89.2
     },
-    biasMitigationNotes: [
-      'Sesgo de confirmación descartado: La respuesta biométrica autonómica invalida la minimización de síntomas por auto-reporte verbal.',
-      'Ajuste por etapa evolutiva aplicado para la edad del paciente.'
+    pharmacologicalEffectiveness: [
+      {
+        drugClass: 'ISRS',
+        moleculeName: 'Sertralina',
+        dosageAssessed: '50 mg/día',
+        estimatedEffectivenessPct: 65.0,
+        expectedResponse: 'Respuesta Parcial / Dosis Subóptima',
+        biomarkerRationale: 'Sub-dosis para cuadro severo. Se sugiere titulación progresiva según tolerancia.',
+        adverseEffectRisks: ['Malestar gastrointestinal inicial', 'Labilidad del sueño'],
+        recommendedDoseAdjustment: 'Considerar incremento a 100 mg/día tras evaluación hepática'
+      }
     ],
-    riskAlerts: [
-      { severity: 'MEDIUM', message: 'Labilidad emocional ante estímulos de exclusión social.' }
+    therapeuticAffinityScores: [
+      {
+        disorderName: 'Trastorno de Estrés Postraumático',
+        affinityPct: 92.0,
+        status: 'Alta Concordancia',
+        recommendedTherapy: 'EMDR',
+        psychopharmacologyScheme: 'Sertralina + Terapia de Exposición VR Bio-Adaptativa',
+        biomarkerRationale: 'Alta capacidad de habituación autonómica observada en protocolo inmersivo.'
+      }
     ],
-    treatmentRecommendations: [
-      'Continuar desensibilización con el protocolo VR EMDR a 5.2 Hz.',
-      'Reevaluar respuesta autonómica en 4 sesiones.'
-    ]
+    riskAlerts: {
+      suicideRiskLevel: patient.psychometricScores.cssrsLevel && patient.psychometricScores.cssrsLevel >= 4 ? 'CRÍTICO' : 'MODERADO',
+      psychosisRisk: 'AUSENTE',
+      cognitiveDeteriorationRisk: 'NORMAL',
+      apkPassiveState: 'Alerta Centinela: Actividad nocturna atípica detectada.',
+      criticalAlertsList: [
+        'Ideación autolítica activa con nivel CSS-RS elevado.',
+        'Se recomienda la activación inmediata del protocolo de contención e involucramiento de la red primaria.'
+      ],
+      containmentProtocolSuggested: 'Protocolo C-SSRS Nivel 5: Vigilancia 24/7, eliminación de medios letales y derivación psiquiátrica urgente.'
+    },
+    recommendedActionPlan: {
+      neurofeedbackProtocol: ['Protocolo SMR / Inhibición Theta Frontal en Fz (20 min x 12 sesiones)'],
+      psychotherapyStrategy: ['EMDR con estimulación bilateral háptica en mandos VR', 'TCC centrada en trauma'],
+      pharmacologySuggestions: ['Titulación de Sertralina a 100 mg/día', 'Monitoreo de función hepática'],
+      psychiatryReferralUrgent: true,
+      monitoringDirectives: ['Sincronización diaria con APK Centinela', 'Control de HRV en cada sesión VR'],
+      urgentActions: ['Notificar al contacto de emergencia registrado', 'Asegurar contención ambiental en domicilio']
+    }
   };
 };
 
 // ------------------------------------------------------------------
-// CHAT COPILOTO ASISTENTE CLÍNICO AMIE
+// CHAT COPILOTO ASISTENTE CLÍNICO AMIE (GEMINI 3.8 FLASH)
 // ------------------------------------------------------------------
 export async function askAmieAssistant(
-  conversation: { role: 'user' | 'model'; text: string }[],
+  conversation: Array<{ role: 'user' | 'model'; text: string }>,
   currentPatient: PatientRecord,
   analysisData?: AmieClinicalAnalysis | null
 ): Promise<string> {
@@ -610,17 +669,17 @@ export async function askAmieAssistant(
   consumeAiCredit(activeUsername);
 
   const systemContext = `
-Eres AMIE (Articulate Medical Intelligence Explorer), Copiloto Clínico Psiquiátrico y Neurológico.
+Eres AMIE (Articulate Medical Intelligence Explorer), Copiloto Clínico Psiquiátrico y Neurológico operando con Gemini 3.8 Flash.
 Estás dialogando directamente con el médico especialista tratante colegiado.
 Información del paciente actual en estudio:
 ${JSON.stringify(currentPatient, null, 2)}
 
 ${analysisData ? `Análisis diagnóstico emitido previamente:\n${JSON.stringify(analysisData, null, 2)}` : ''}
 
-Responde de forma concisa, profesional, técnica, fundamentada en la literatura médica psiquiátrica (DSM-5, psicofarmacología clínica de Stahl/Goodman & Gilman, neurociencias y principios diagnósticos de James Morrison).
+Responde de forma concisa, profesional, técnica, fundamentada en la literatura médica psiquiátrica (DSM-5-TR, psicofarmacología clínica de Stahl, neurociencias y principios diagnósticos de James Morrison).
 `;
 
-  const vertexEndpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-1.5-flash:generateContent';
+  const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
 
   const contents = conversation.map(msg => ({
     role: msg.role === 'model' ? 'model' : 'user',
@@ -635,9 +694,10 @@ Responde de forma concisa, profesional, técnica, fundamentada en la literatura 
 
   try {
     const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
-    return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor clínico.';
-  } catch (err: any) {
+    return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor clínico Gemini 3.8 Flash.';
+  } catch (err: unknown) {
     console.error('Error en askAmieAssistant:', err);
-    return 'Error al conectar con el servidor proxy de AMIE: ' + (err.message || 'Fallo de red');
+    const msg = err instanceof Error ? err.message : 'Fallo de red';
+    return 'Error al conectar con el servidor proxy de AMIE: ' + msg;
   }
 }
