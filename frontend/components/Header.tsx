@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { ClinicalHelpModal } from './ClinicalHelpModal';
 import {
   Activity,
-  ShieldCheck,
   Stethoscope,
   BookOpen,
   BrainCircuit,
@@ -11,7 +10,8 @@ import {
   HelpCircle,
   Search,
   CloudDownload,
-  User
+  User,
+  LogOut
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -26,6 +26,7 @@ interface HeaderProps {
   patientGender?: 'M' | 'F' | 'Other';
   onSyncPacient: (pacId: string) => Promise<void>;
   isSyncingPac?: boolean;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   patientGender = 'M',
   onSyncPacient,
   isSyncingPac = false,
+  onLogout,
 }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [searchPacId, setSearchPacId] = useState<string>(currentPatientId || 'PAC-8104');
@@ -59,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
       <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-4 lg:px-8 py-2.5 shadow-xl">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
           
-          {/* Brand & Anonimized Patient Status Header */}
+          {/* Marca & Identificador de Paciente Anonimizado */}
           <div className="flex items-center gap-3 w-full md:w-auto justify-between">
             <div className="flex items-center gap-3">
               <div
@@ -81,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </div>
 
-                {/* DATO ANONIMIZADO OBLIGATORIO: Paciente ID: [searchPacId] | Edad: [age] | Sexo: [sex] */}
+                {/* DATO ANONIMIZADO DE PACIENTE */}
                 <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono mt-0.5">
                   <User className="w-3.5 h-3.5 text-emerald-400" />
                   <span className="bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
@@ -101,10 +103,10 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Dynamic PAC Search Form & Controls */}
+          {/* Buscador PAC & Botones de Control */}
           <div className="flex items-center flex-wrap gap-2.5 w-full md:w-auto justify-end">
             
-            {/* Formulario de Sincronización Dinámica con Cloud Function */}
+            {/* Formulario de Sincronización Dinámica */}
             <form onSubmit={handleFormSubmit} className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
@@ -121,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="submit"
                 disabled={isSyncingPac || !searchPacId.trim()}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white shadow-md shadow-cyan-600/20 active:scale-95 transition"
-                title="Hacer petición HTTP POST a la Cloud Function con { patientId: searchPacId }"
+                title="Petición de Sincronización de Expediente PAC"
               >
                 {isSyncingPac ? (
                   <>
@@ -137,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </form>
 
-            {/* Collegial Number Badge */}
+            {/* Colegiado Médico */}
             <div
               className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300"
               title={`Credencial médica del facultativo: ${doctorName}`}
@@ -146,11 +148,11 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="font-mono text-sky-300 font-bold">Col #{colegiadoNumber}</span>
             </div>
 
-            {/* Guía de Módulos (Botón de Ayuda) */}
+            {/* Guía Interactivas y Ayuda */}
             <button
               onClick={() => setIsHelpOpen(true)}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition"
-              title="Abrir la Guía Completa de Módulos y Funciones AMIE"
+              title="Abrir Guía Completa de Módulos AMIE"
             >
               <HelpCircle className="w-4 h-4 text-cyan-400" />
               <span className="hidden sm:inline">Guía</span>
@@ -170,13 +172,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenDsmGuide}
               className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-              title="Explorar el compendio completo de capítulos DSM-5"
+              title="Explorar el compendio de capítulos DSM-5"
             >
               <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
               <span>DSM-5</span>
             </button>
 
-            {/* Ejecutar Análisis AMIE */}
+            {/* Botón Ejecutar Análisis */}
             <button
               onClick={onRunAnalysis}
               disabled={isAnalyzing}
@@ -185,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'bg-sky-700/50 text-sky-200 cursor-not-allowed'
                   : 'bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-sky-500/20 active:scale-95'
               }`}
-              title="Ejecutar análisis bioclínico multimodal AMIE en 5 bloques"
+              title="Ejecutar análisis bioclínico multimodal AMIE"
             >
               {isAnalyzing ? (
                 <>
@@ -199,11 +201,22 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
             </button>
+
+            {/* Botón de Cierre de Sesión */}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 transition"
+                title="Cerrar Sesión Activa"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Interactive Clinical Help Modal */}
+      {/* Modal de Ayuda Médica */}
       <ClinicalHelpModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
