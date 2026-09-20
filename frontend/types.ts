@@ -4,11 +4,11 @@
 
 // --- BIOMETRÍA ACÚSTICA Y VOZ ---
 export interface AcousticVoiceBiometrics {
-  speechRateWpm: number; // Palabras por minuto (normal 120-160)
-  bradylaliaIndex: number; // 0-100 (alto = inhibición psicomotora/inhibición severa)
-  affectiveFlatteningScore: number; // 0-100 (alto = aplanamiento afectivo / monotonía)
-  responseLatencyMs: number; // Latencia de respuesta en ms
-  prosodyVariabilityPct: number; // Variabilidad de tono
+  speechRateWpm: number;
+  bradylaliaIndex: number;
+  affectiveFlatteningScore: number;
+  responseLatencyMs: number;
+  prosodyVariabilityPct: number;
   acousticStressMarker: 'Normal' | 'Labilidad Emocional' | 'Aplanamiento Afectivo' | 'Presión del Habla (Taquilalia)' | 'Inhibición Severa';
 }
 
@@ -23,9 +23,9 @@ export interface SessionAudioRecording {
   audioWaveformData?: number[];
 }
 
-// --- MONITOREO PASIVO / SENSITIVO CENTINELA (APK / SENSOR MÓVIL) ---
+// --- MONITOREO PASIVO / SENSITIVO CENTINELA ---
 export interface SentinelSleepMetrics {
-  nightWakeups: number; // >3 indica riesgo de descompensación
+  nightWakeups: number;
   hoursInDarkness: number;
   sleepEfficiencyPct: number;
   avgSleepDurationHours: number;
@@ -34,8 +34,8 @@ export interface SentinelSleepMetrics {
 export interface SentinelBehavioralBiometrics {
   typingLatencyMs: number;
   screenActiveTimeMinutes: number;
-  biomotorLatencyMs: number; // Latencia de toque/movimiento
-  activityRestlessnessIndex: number; // 0-100 (agitación motora)
+  biomotorLatencyMs: number;
+  activityRestlessnessIndex: number;
 }
 
 export interface SentinelSafetyStatus {
@@ -71,7 +71,7 @@ export interface PatientSentinelData {
   };
 }
 
-// --- BIOMARCADORES CEREBRALES (qEEG / EEGLAB) ---
+// --- BIOMARCADORES CEREBRALES (qEEG) ---
 export interface QeegBandPowers {
   delta: number;
   theta: number;
@@ -109,38 +109,38 @@ export interface QeegBiomarkers {
   alphaPeakFrequencyHz?: number;
 }
 
-// --- TELEMETRÍA MULTISENSORIAL FISIOLÓGICA (GSR, HRV, GRIP) ---
+// --- TELEMETRÍA MULTISENSORIAL FISIOLÓGICA ---
 export interface MultisensoryHardwareTelemetry {
-  vagalToneHrvIndex: number; // 0-100 (RMSSD alto = tono parasimpático sano)
-  handGripPressureKg: number; // Presión de agarre isométrica
-  camouflagingIndexPct: number; // Escala CAT-Q de enmascaramiento TEA
-  ocularFixationDurationMs: number; // Estabilidad de mirada
+  vagalToneHrvIndex: number;
+  handGripPressureKg: number;
+  camouflagingIndexPct: number;
+  ocularFixationDurationMs: number;
   touchTapLatencyCompensatedMs: number;
   microExpressionState: 'Incongruencia Afectiva' | 'Micro-tensión Frontal' | 'Hipervigilancia Ocular' | 'Aplanamiento Motor' | 'Normorreactivo';
 }
 
-// --- HARDWARE VR PICO NEO 3 PRO & BIOMETRÍA INMERSIVA Y OCULAR ---
+// --- HARDWARE VR & BIOMETRÍA INMERSIVA ---
 export type SupportedVrDevice = 'PICO_NEO_3_PRO' | 'PICO_NEO_3_PRO_EYE' | 'META_QUEST_3' | 'META_QUEST_3S' | 'SIMULATION';
 
 export interface ControllerTelemetry {
   hand: 'left' | 'right';
-  triggerPressure: number; // 0.0 a 1.0 (medida de impulsividad)
-  gripPressure: number;    // 0.0 a 1.0 (medida de tensión)
+  triggerPressure: number;
+  gripPressure: number;
   joystickVector: { x: number; y: number };
-  accelerometer: { x: number; y: number; z: number }; // Temblor motor / Agitación
+  accelerometer: { x: number; y: number; z: number };
   hapticFeedbackActive: boolean;
 }
 
 export interface HeadMotion6DoF {
   position: { x: number; y: number; z: number };
   rotation: { pitch: number; yaw: number; roll: number };
-  headJitterIndex: number; // Indice de micro-movimiento/agitación (TDAH/Ansiedad)
+  headJitterIndex: number;
 }
 
 export interface EyeTrackingPupilometry {
-  pupilDiameterMm: number;    // Diámetro pupilar (Carga cognitiva/estrés)
-  saccadicRateHz: number;      // Tasa de movimientos sacádicos
-  fixationDurationMs: number;  // Tiempo de fijación visual
+  pupilDiameterMm: number;
+  saccadicRateHz: number;
+  fixationDurationMs: number;
   gazeVector: { x: number; y: number; z: number };
   blinkFrequencyPerMin: number;
   source: 'PICO_EYE_TOBII' | 'DIY_OV9281_PUPILCORE' | 'MEDIA_PIPE' | 'SIMULATED';
@@ -150,25 +150,17 @@ export interface VrTelemetryData {
   sessionId: string;
   timestamp: string | number;
   deviceId?: SupportedVrDevice;
-  
-  // Series Temporales Biométricas (Polar H10 + GSR)
-  gsrMicroSiemens: number[]; // Serie temporal de conductancia cutánea
-  hrvRmssdMs: number[];      // Serie temporal de variabilidad cardíaca
-  heartRateBpm?: number;     // Frecuencia cardíaca instantánea
-  
-  // Análisis Matemático de Respuesta VR
-  habituationIndexH: number; // Métrica de habituación
-  stressPeaksCount: number;  // Picos simpáticos
+  gsrMicroSiemens: number[];
+  hrvRmssdMs: number[];
+  heartRateBpm?: number;
+  habituationIndexH: number;
+  stressPeaksCount: number;
   exposureDurationSec: number;
-  
-  // Telemetría Pico Neo 3 Pro
   headMotion6DoF?: HeadMotion6DoF;
   controllers?: {
     left: ControllerTelemetry;
     right: ControllerTelemetry;
   };
-  
-  // Biometría Ocular & Pupilometría
   pupilDiameterMm?: number;
   saccadicRateHz?: number;
   eyeTracking?: EyeTrackingPupilometry;
@@ -177,10 +169,10 @@ export interface VrTelemetryData {
 export interface VrTherapyReport {
   sessionGuid: string;
   exposureType: string;
-  sympatheticToneIndex: number; // 0 - 100
-  vagalReactivityIndex: number;  // 0 - 100
+  sympatheticToneIndex: number;
+  vagalReactivityIndex: number;
   habituationRate: 'Óptima' | 'Moderada' | 'Ausente/Saturada';
-  synthesizedClinicalSummary: string; // Resumen ejecutivo para el dictamen
+  synthesizedClinicalSummary: string;
 }
 
 // --- PERFIL DE PSICOFARMACOLOGÍA ---
@@ -195,7 +187,7 @@ export interface PharmacologicalEffectivenessEvaluation {
   drugClass: string;
   moleculeName: string;
   dosageAssessed: string;
-  estimatedEffectivenessPct: number; // 0-100%
+  estimatedEffectivenessPct: number;
   expectedResponse: 'Alta Respuesta Terapéutica' | 'Respuesta Parcial / Dosis Subóptima' | 'Riesgo de Viraje a Manía / Hipersensibilidad' | 'Baja Efectividad / Resistencia Farmacodinámica';
   biomarkerRationale: string;
   adverseEffectRisks: string[];
@@ -204,7 +196,7 @@ export interface PharmacologicalEffectivenessEvaluation {
 
 export interface TherapeuticAffinityScore {
   disorderName: string;
-  affinityPct: number; // 0-100%
+  affinityPct: number;
   status: 'Alta Concordancia' | 'Concordancia Moderada' | 'Descarte Sugerido';
   recommendedTherapy: 'DBT' | 'TCC' | 'MBT' | 'EMDR' | 'Remediación Cognitiva' | 'Integración Sensorial';
   psychopharmacologyScheme: string;
@@ -213,7 +205,7 @@ export interface TherapeuticAffinityScore {
 
 // --- EXPEDIENTE COMPLETO DEL PACIENTE ---
 export interface PatientRecord {
-  id: string; // PAC-XXXX
+  id: string;
   patientNameAnonymized: string;
   age: number;
   gender: 'M' | 'F' | 'Other';
@@ -224,8 +216,8 @@ export interface PatientRecord {
   sentinelTelemetry?: PatientSentinelData;
   qeegBiomarkers?: QeegBiomarkers;
   multisensoryHardware?: MultisensoryHardwareTelemetry;
-  vrTelemetryData?: VrTelemetryData;       // Telemetría Pico Neo 3 Pro + Polar H10
-  vrTherapyReport?: VrTherapyReport;       // Informe sintetizado VR
+  vrTelemetryData?: VrTelemetryData;
+  vrTherapyReport?: VrTherapyReport;
   psychopharmacologyCurrent?: CurrentPsychopharmacologyItem[];
   psychometricScores: {
     phq9?: number;
@@ -236,10 +228,10 @@ export interface PatientRecord {
     asrs?: number;
     aq10?: number;
     catq?: number;
-    cssrsLevel?: number; // 0-5
-    sadPersons?: number; // 0-10
-    whodas2?: number; // 1-5
-    gafEstimated?: number; // 1-100
+    cssrsLevel?: number;
+    sadPersons?: number;
+    whodas2?: number;
+    gafEstimated?: number;
   };
   functionalAreas: {
     sleep: number;
@@ -268,6 +260,12 @@ export interface PatientRecord {
     medicationsCurrent: string[];
   };
   medicalHistory: string[];
+  immersionMetrics?: {
+    vrScenario?: string;
+    vrTolerance?: number;
+    hypnoticSusceptibility?: number;
+    tranceDepth?: string;
+  };
 }
 
 // --- MATRIZ DIFERENCIAL Y SESGOS ---
@@ -321,7 +319,6 @@ export interface AmieClinicalAnalysis {
     justificationDsm5: string;
   };
 
-  // Propiedades opcionales para compatibilidad fluida con PDF, FHIR y UI
   diagnosticImpressions?: DiagnosticImpressionItem[];
   treatmentRecommendations?: string[];
   biasMitigationNotes?: string[];
@@ -340,14 +337,11 @@ export interface AmieClinicalAnalysis {
     neuromotorInterpretation?: string;
     acousticBiometricAssessment: string;
     qeegInterpretation?: string;
-    vrHabituationAssessment?: string; // Evaluación triangulada Pico Neo 3 + Polar H10
-    pupilometryAssessment?: string;  // Evaluación de sesgos atencionales por pupilometría
-    
-    // Campos extendidos para exportación de biomarcadores
+    vrHabituationAssessment?: string;
+    pupilometryAssessment?: string;
     autonomicTone?: string;
     habituationRate?: string;
     cognitiveLoad?: string;
-
     regionalLobeBreakdown: {
       frontal: string;
       temporal: string;
@@ -368,7 +362,7 @@ export interface AmieClinicalAnalysis {
   };
   recommendedActionPlan: {
     neurofeedbackProtocol: string[];
-    psychotherapyStrategy: string[]; // TCC / DBT / EMDR
+    psychotherapyStrategy: string[];
     pharmacologySuggestions: string[];
     psychiatryReferralUrgent: boolean;
     monitoringDirectives: string[];
@@ -377,76 +371,18 @@ export interface AmieClinicalAnalysis {
   rawModelChainOfThought?: string;
 }
 
-// --- LICENCIAMIENTO SAAS & INSTITUCIONAL ---
-export interface MedicalLicenseAccount {
-  id: string;
+// --- LICENCIAMIENTO SAAS & MULTI-TENANT ---
+export interface DoctorUser {
+  id?: string;
+  username: string;
   doctorName: string;
   colegiadoNumber: number;
-  username: string;
-  hospitalClinic: string;
-  specialty: string;
-  tier: 'Institucional' | 'Clínica Privada' | 'Investigación';
-  storageBucketUri: string;
-  createdAt: string;
-  expiresAt: string;
-  status: 'Activa' | 'Suspendida' | 'En Validación';
-}
-
-export interface TopographicLobeScore {
-  lobe: 'Frontal' | 'Parietal' | 'Temporal' | 'Occipital';
-  deltaZ: number;
-  thetaZ: number;
-  alphaZ: number;
-  betaZ: number;
-  highBetaZ?: number;
-  gammaZ: number;
-  coherenceIndex: number;
-  interpretation: string;
-}
-
-// --- AMIE CLINICAL ACADEMY & SIMULADOR IA ---
-export type LifeCycleStage = 'INFANCIA' | 'ADOLESCENCIA' | 'ADULTEZ' | 'ADULTEZ_MAYOR';
-export type AvatarEmotionState = 'Neutral' | 'Defensivo' | 'Ansioso' | 'Afligido' | 'Aliviado';
-export type PsychotherapyFramework = 'TCC' | 'DBT' | 'ACT' | 'EMDR' | 'SISTEMICA' | 'PSICODINAMICA_BREVE';
-export type PharmacologyClass = 'ISRS' | 'ISRN' | 'ANTIPSICOTICOS_ATIPICOS' | 'ESTABILIZADORES_ANIMO' | 'ESTIMULANTES';
-
-export interface SimulatedCase {
-  id: string;
-  caseCode: string; // PAC-SIM-XX
-  title: string;
-  patientName: string;
-  age: number;
-  gender: 'M' | 'F';
-  stage: LifeCycleStage;
-  avatarUrl: string;
-  initialEmotion: AvatarEmotionState;
-  consultationReason: string;
-  clinicalBackstory: string;
-  normativeDevelopmentVsPathologyClues: string;
-  psychometricsBase: {
-    bdi2?: number;
-    bai?: number;
-    asrs?: number;
-    aq10?: number;
-    catq?: number;
-    sadPersons?: number;
-    mmse?: number;
-  };
-  qeegSummary: string;
-  goldStandardDiagnosis: string;
-  goldStandardCIE10: string;
-  goldStandardFramework: PsychotherapyFramework;
-  goldStandardPharmacology: string;
-  simulatedPersonaPrompt: string;
-}
-
-export interface AcademyScoringResult {
-  totalScore: number; // 0-100
-  axisRapportAnamnesis: number; // 0-25
-  axisDiagnosticAcuity: number; // 0-25
-  axisEvidenceSelection: number; // 0-25
-  axisTechnicalAdherence: number; // 0-25
-  pedagogicalFeedback: string;
-  morrisonSupervisorNote: string;
-  competencyLevel: 'Experto Clínico' | 'Avanzado' | 'Competente' | 'En Desarrollo';
+  email?: string;
+  accountType?: 'INDIVIDUAL' | 'CORPORATE_MEMBER' | 'SUPER_ADMIN';
+  organizationName?: string;
+  authMethod?: 'LOCAL_PASSWORD' | 'MICROSOFT_SSO' | 'GOOGLE_SSO' | 'LDAP';
+  licenseKey?: string;
+  aiCredits: number;
+  aiCreditsLimit: number;
+  expiresAt?: string;
 }
