@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL HARDWARE - MÓDULO DE TELEMETRÍA Y COMPATIBILIDAD USB
+// AMIE CLINICAL HARDWARE - CAPTURA MULTISENSORIAL Y COMPATIBILIDAD USB / EEG
 // ============================================================================
 
 export interface UsbCompatibilityResult {
@@ -18,29 +18,28 @@ export interface NeuromotorTelemetrySample {
   handGripPressureKg?: number;   // Mapeado a patient.multisensoryHardware.handGripPressureKg
   touchTapLatencyMs?: number;    // Mapeado a patient.multisensoryHardware.touchTapLatencyCompensatedMs
   rawAdc?: number;
+  eegChannelsRaw?: number[];     // Transmisión directa para el módulo qEEG / NeuroSensoryModule
 }
 
 /**
-  * Filtros de Vendor ID para hardware biomédico y convertidores serie comunes
-  */
+ * Filtros de Vendor ID para hardware biomédico, tarjetas EEG y convertidores serie comunes
+ */
 export const BIOMEDICAL_USB_VENDOR_FILTERS = [
-  { usbVendorId: 0x0403 }, // FTDI (OpenBCI, BITalino)
-  { usbVendorId: 0x10c4 }, // CP210x Silicon Labs (ESP32 / Módulos ECG/GSR)
-  { usbVendorId: 0x2341 }, // Arduino (Kits de estimulación y respuesta)
-  { usbVendorId: 0x0483 }  // STM32 Microelectronics
+  { usbVendorId: 0x0403 }, // FTDI (OpenBCI Cyton/Ganglion, BITalino)
+  { usbVendorId: 0x10c4 }, // CP210x Silicon Labs (ESP32, módulos EEG/GSR)
+  { usbVendorId: 0x2341 }, // Arduino (Kits de estimulación psicofisiológica)
+  { usbVendorId: 0x0483 }  // STM32 Microelectronics (Kits de telemetría clínica)
 ];
 
 /**
-  * Evalúa si el navegador y entorno actual soportan la captura directa de hardware USB
-  */
+ * Evalúa si el navegador y el entorno ejecutan una conexión segura para USB directo
+ */
 export const checkUsbCompatibility = (): UsbCompatibilityResult => {
   const isWebHIDSupported = typeof navigator !== 'undefined' && 'hid' in navigator;
   const isWebSerialSupported = typeof navigator !== 'undefined' && 'serial' in navigator;
   const isWebUSBSupported = typeof navigator !== 'undefined' && 'usb' in navigator;
   
-  // Garantiza que la ejecución esté en un contexto seguro (HTTPS o localhost)
   const isSecureContext = typeof window !== 'undefined' ? (window.isSecureContext ?? false) : false;
-  
   const isCompatible = (isWebHIDSupported || isWebSerialSupported || isWebUSBSupported) && isSecureContext;
 
   return {
@@ -51,14 +50,14 @@ export const checkUsbCompatibility = (): UsbCompatibilityResult => {
     isHttps: isSecureContext,
     recommendedBrowser: "Google Chrome, Microsoft Edge o Brave (Desktop v89+)",
     details: isCompatible 
-      ? "Dispositivos USB de Telemetría Neuromotora listos para captura en milisegundos."
+      ? "Dispositivos USB de Telemetría Neuromotora y qEEG listos para captura en milisegundos."
       : "Se requiere un entorno HTTPS seguro y un navegador basado en Chromium para la captura directa USB."
   };
 };
 
 /**
-  * Escucha eventos de conexión y desconexión física de hardware en tiempo real
-  */
+ * Escucha eventos de conexión y desconexión física de hardware en tiempo real (Hot-Plugging)
+ */
 export const subscribeUsbDeviceEvents = (
   onDeviceConnected: (deviceName: string) => void,
   onDeviceDisconnected: (deviceName: string) => void
@@ -66,12 +65,12 @@ export const subscribeUsbDeviceEvents = (
   if (typeof navigator === 'undefined') return () => {};
 
   const handleConnect = (event: any) => {
-    const name = event.device?.productName || event.port?.info?.usbVendorId ? 'Dispositivo Biomédico USB' : 'Sensor Neuromotor';
+    const name = event.device?.productName || 'Dispositivo Biomédico / Sensor USB';
     onDeviceConnected(name);
   };
 
   const handleDisconnect = (event: any) => {
-    const name = event.device?.productName || 'Sensor Neuromotor';
+    const name = event.device?.productName || 'Dispositivo Biomédico USB';
     onDeviceDisconnected(name);
   };
 
@@ -85,7 +84,6 @@ export const subscribeUsbDeviceEvents = (
     (navigator as any).serial.addEventListener('disconnect', handleDisconnect);
   }
 
-  // Cleanup de listeners
   return () => {
     if ('hid' in navigator) {
       (navigator as any).hid.removeEventListener('connect', handleConnect);
@@ -99,8 +97,8 @@ export const subscribeUsbDeviceEvents = (
 };
 
 /**
-  * Abre puerto WebSerial y transmite muestras biométricas directamente al estado del paciente
-  */
+ * Abre puerto WebSerial y transmite muestras biométricas/EEG directamente al estado del paciente
+ */
 export const connectSerialNeuromotorSensor = async (
   onSample: (sample: NeuromotorTelemetrySample) => void,
   baudRate: number = 115200
@@ -109,7 +107,6 @@ export const connectSerialNeuromotorSensor = async (
     throw new Error('WebSerial no está soportado en este navegador.');
   }
 
-  // Solicita interacción de usuario para seleccionar el sensor
   const port = await (navigator as any).serial.requestPort({
     filters: BIOMEDICAL_USB_VENDOR_FILTERS
   });
@@ -122,7 +119,6 @@ export const connectSerialNeuromotorSensor = async (
 
   let keepReading = true;
 
-  // Bucle de lectura asíncrona de tramas serie
   (async () => {
     let buffer = '';
     while (keepReading) {
@@ -138,16 +134,17 @@ export const connectSerialNeuromotorSensor = async (
           if (!cleanLine) continue;
 
           try {
-            // Intenta parsear JSON directo del hardware { "rt": 240, "grip": 35.2 }
+            // Trama JSON: { "rt": 240, "grip": 35.2, "eeg": [12.4, 45.1, 8.2, 19.3] }
             const json = JSON.parse(cleanLine);
             onSample({
               timestamp: Date.now(),
               reactionTimeMs: json.rt,
               handGripPressureKg: json.grip,
-              touchTapLatencyMs: json.tap
+              touchTapLatencyMs: json.tap,
+              eegChannelsRaw: Array.isArray(json.eeg) ? json.eeg : undefined
             });
           } catch {
-            // Fallback para tramas CSV simples: "240,35.2,180"
+            // Trama CSV simple: "240,35.2,180"
             const parts = cleanLine.split(',').map(Number);
             if (parts.length >= 2) {
               onSample({
@@ -163,7 +160,6 @@ export const connectSerialNeuromotorSensor = async (
     }
   })();
 
-  // Función de desconexión segura
   return async () => {
     keepReading = false;
     await reader.cancel();
