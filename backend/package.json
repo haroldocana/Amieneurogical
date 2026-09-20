@@ -2,7 +2,7 @@
   "name": "amie-clinical-copilot-psychiatric-neurological-diagnostic-engine-api-backend-server",
   "type": "module",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Node backend for proxying Google Cloud API requests",
   "main": "server.js",
   "scripts": {
@@ -10,6 +10,7 @@
     "dev": "nodemon --env-file=.env.local server.js"
   },
   "dependencies": {
+    "@google/genai": "latest",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.0.0",
