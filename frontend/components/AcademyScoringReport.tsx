@@ -18,11 +18,8 @@ import {
   RefreshCw,
   ArrowRight,
   Download,
-  Share2,
   ShieldCheck,
   Check,
-  Flame,
-  Frown,
   PartyPopper
 } from 'lucide-react';
 
@@ -100,11 +97,9 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
         ? 'bg-slate-900 border-emerald-500/60 shadow-emerald-950/30' 
         : 'bg-slate-900 border-rose-500/60 shadow-rose-950/30'
     }`}>
-      {/* Dynamic Celebration vs Failure Banner */}
+      {/* Dynamic Victory / Failure Banner */}
       {isApproved ? (
-        /* VICTORY SCREEN (70 - 100 PTS) */
         <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 border border-emerald-500/80 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn">
-          {/* Confetti & Glow Accents */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
           
           <div className="flex items-center gap-4 relative z-10">
@@ -135,7 +130,6 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
           </div>
         </div>
       ) : (
-        /* FAILURE SCREEN (< 70 PTS) */
         <div className="p-5 rounded-2xl bg-gradient-to-r from-rose-950 via-red-950 to-slate-900 border border-rose-500/80 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn">
           <div className="flex items-center gap-4 relative z-10">
             <div className="text-5xl">
@@ -166,7 +160,7 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
         </div>
       )}
 
-      {/* Grid: Radar Chart + 4-Axis Scorecards */}
+      {/* Grid: Radar Chart + 4 Score Axis Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Radar Chart */}
         <div className="lg:col-span-5 bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col items-center justify-center">
@@ -191,7 +185,7 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
           </div>
         </div>
 
-        {/* 4 Score Axis Cards (with Failure Highlighting if low score) */}
+        {/* 4 Score Axis Cards */}
         <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           {/* Eje A */}
           <div className={`p-3.5 rounded-xl border flex flex-col justify-between transition ${
@@ -295,7 +289,7 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
         </div>
       </div>
 
-      {/* Remedial Study Recommendations if Failed */}
+      {/* Recomendaciones de Repaso si Reprobó */}
       {!isApproved && (
         <div className="p-4 rounded-xl bg-rose-950/50 border border-rose-500/40 space-y-2 text-xs text-rose-200">
           <div className="flex items-center gap-2 font-bold text-rose-300">
@@ -310,7 +304,7 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
         </div>
       )}
 
-      {/* Morrison Supervisor Feedback Box */}
+      {/* Nota del Supervisor Dr. James Morrison */}
       <div className="p-4 rounded-xl bg-slate-950 border border-cyan-500/30 space-y-2 text-xs">
         <div className="flex items-center gap-2 font-bold text-cyan-300">
           <BookOpen className="w-4 h-4" />
@@ -324,7 +318,7 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
         </div>
       </div>
 
-      {/* Digital Accreditation Badge if Approved */}
+      {/* Insignia Digital de Acreditación si Aprobó */}
       {isApproved && (
         <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3">
@@ -351,7 +345,7 @@ Sello de Validación Digital AMIE Clinical Engine • ID Cert: AMIE-SIM-${Math.f
         </div>
       )}
 
-      {/* Footer Navigation Actions */}
+      {/* Acciones de Navegación */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
         <button
           onClick={onRestartSimulation}
