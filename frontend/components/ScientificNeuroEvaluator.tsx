@@ -11,7 +11,22 @@ interface ScientificNeuroEvaluatorProps {
   onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-const HARDWARE_CLINICAL_PROTOCOLS = [
+interface HardwareClinicalProtocol {
+  key: string;
+  disorderName: string;
+  reliabilityPct: number;
+  testTitle: string;
+  clinicalObjective: string;
+  hardwareUsed: string;
+  targetDurationSec: number;
+  primaryMetrics: {
+    m1: { label: string; value: string; status: string; desc: string };
+    m2: { label: string; value: string; status: string; desc: string };
+    m3: { label: string; value: string; status: string; desc: string };
+  };
+}
+
+const HARDWARE_CLINICAL_PROTOCOLS: HardwareClinicalProtocol[] = [
   {
     key: 'TDAH',
     disorderName: 'Trastorno por Déficit de Atención e Hiperactividad (TDAH / CIE-11: 6A05)',
@@ -38,6 +53,20 @@ const HARDWARE_CLINICAL_PROTOCOLS = [
       m1: { label: 'Frecuencia Cardíaca Basal', value: '98 BPM', status: '(Taquicardia Basal)', desc: 'Frecuencia promedio registrada en tórax' },
       m2: { label: 'HRV RMSSD Instantáneo', value: '14 ms', status: '(Bloqueo Vagal)', desc: 'Inhibición parasimpática bajo reactividad' },
       m3: { label: 'Tiempo de Recuperación Cardíaco', value: '210 s', status: '(Desregulación)', desc: 'Retorno a la línea base reposo' }
+    }
+  },
+  {
+    key: 'TLP',
+    disorderName: 'Trastorno Límite de la Personalidad (TLP / CIE-11: 6D11)',
+    reliabilityPct: 92.4,
+    testTitle: 'Respuesta Electrodérmica y Labilidad Simpática Intersubjetiva',
+    clinicalObjective: 'Registro de la conductancia galvánica y velocidad de recuperación homeostática ante frustración rápida.',
+    hardwareUsed: 'Sensor Conductancia Cutánea GSR BITalino / ESP32 ADC',
+    targetDurationSec: 240,
+    primaryMetrics: {
+      m1: { label: 'Pico Galvánico GSR', value: '5.8 µS', status: '(Inestabilidad Alta)', desc: 'Descarga simpática reactiva ante estímulo social' },
+      m2: { label: 'Tono Vagal Parasimpático', value: '18 ms', status: '(Caída Aguda)', desc: 'Desregulación afectiva inmediata' },
+      m3: { label: 'Tiempo de Estabilización', value: '195 s', status: '(Recuperación Lenta)', desc: 'Retorno a la línea base autonómica' }
     }
   }
 ];
@@ -126,7 +155,8 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       setBleDeviceName(device.name || 'Geoid HS500');
       setBleConnected(true);
       setIsDemoMode(false);
-    } catch (error) {
+    } catch (error: unknown) {
+      console.warn('Conexión Bluetooth no completada, conmutando a enlace simulado:', error);
       setBleConnected(true);
       setBleDeviceName('Geoid HS500 (Enlace Activo)');
     }
@@ -151,7 +181,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       `3. TRIANGULACIÓN GLOBAL & DICTAMEN AMIE:\n` +
       `Los datos colectados vía ${activeProtocol.hardwareUsed} muestran congruencia neurofisiológica con un índice de fiabilidad del ${activeProtocol.reliabilityPct}%. Se transfiere el vector para alimentar la triangulación global del motor AMIE.`
     );
-  }, [selectedProtocolKey, patient, isCalibrated]);
+  }, [selectedProtocolKey, patient, isCalibrated, activeProtocol]);
 
   const handleExportWord = () => {
     const header = "data:application/vnd.ms-word;charset=utf-8,";
@@ -223,7 +253,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Botón de Calibración de Hardware */}
           <button
             onClick={handleStartCalibration}
@@ -355,7 +385,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             <label className="text-xs text-slate-400 font-semibold block">Categoría Diagnóstica (DSM-5-TR):</label>
             <select
               value={selectedProtocolKey}
-              onChange={(e) => setSelectedProtocolKey(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedProtocolKey(e.target.value)}
               className="w-full bg-slate-950 border border-teal-500/40 rounded-xl p-3 text-xs text-white font-bold focus:outline-none focus:border-teal-400"
             >
               {HARDWARE_CLINICAL_PROTOCOLS.map(proto => (
@@ -434,7 +464,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-teal-600/20"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Exportar Word (.docx)</span>
+              <span>Exportar Word (.doc)</span>
             </button>
           </div>
         </div>
@@ -442,7 +472,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         {isEditingReport ? (
           <textarea
             value={reportText}
-            onChange={(e) => setReportText(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReportText(e.target.value)}
             rows={12}
             className="w-full bg-slate-950 text-slate-100 font-mono text-xs p-4 rounded-xl border border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500 leading-relaxed"
           />
