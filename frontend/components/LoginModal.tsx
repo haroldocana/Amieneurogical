@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Stethoscope, Lock, User, AlertCircle, ArrowRight, RefreshCw, UserPlus, CheckCircle2, KeyRound } from 'lucide-react';
-import { authenticateDoctor, registerDoctorUser, getRegisteredUsers, updateDoctorAiCredits, DoctorUser } from '../services/userService';
+import { Stethoscope, Lock, User, AlertCircle, ArrowRight, RefreshCw, UserPlus, CheckCircle2, KeyRound } from 'lucide-react';
 
 interface LoginModalProps {
   onSuccess: (authData: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => void;
@@ -8,34 +7,26 @@ interface LoginModalProps {
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'superadmin'>('login');
+  const API_BASE_URL = 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api';
 
-  // Estado para Inicio de Sesión
-  const [username, setUsername] = useState('harold01');
-  const [password, setPassword] = useState('AMIE_2025_SECURE');
-  const [colegiado, setColegiado] = useState('749210');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Estado para Auto-Registro de Médico
+  // Formulario Login
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [colegiado, setColegiado] = useState('');
+
+  // Formulario Registro
   const [regUsername, setRegUsername] = useState('');
   const [regDoctorName, setRegDoctorName] = useState('');
   const [regColegiado, setRegColegiado] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regEmail, setRegEmail] = useState('');
   const [regSuccessMsg, setRegSuccessMsg] = useState<string | null>(null);
 
-  // Estado para SuperAdmin
+  // Formulario SuperAdmin
   const [adminPin, setAdminPin] = useState('');
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [adminUsersList, setAdminUsersList] = useState<DoctorUser[]>([]);
-  const [adminDoctorName, setAdminDoctorName] = useState('');
-  const [adminColegiado, setAdminColegiado] = useState('');
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminAiLimit, setAdminAiLimit] = useState<number>(100);
-  const [adminSuccessMsg, setAdminSuccessMsg] = useState<string | null>(null);
-
-  const refreshAdminUsers = () => {
-    setAdminUsersList(getRegisteredUsers());
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,160 +34,111 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
 
     const numericColegiado = parseInt(colegiado, 10);
     if (isNaN(numericColegiado) || !/^\d+$/.test(colegiado.trim())) {
-      setError('El No. de Colegiado debe ser puramente numérico (ej. 749210).');
+      setError('El No. de Colegiado debe ser numérico.');
       return;
     }
 
     setLoading(true);
-    const cleanUsername = username.trim() || 'harold01';
 
     try {
-      const localDoctor = authenticateDoctor(cleanUsername, numericColegiado);
-
-      const response = await fetch('https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: cleanUsername,
+          username: username.trim(),
           password: password,
           colegiado: numericColegiado,
         })
-      }).catch(() => null);
+      });
 
-      let authToken = localDoctor?.licenseKey || `amie-jwt-${numericColegiado}-${Date.now()}`;
-      let docName = localDoctor?.doctorName || 'Dr. Alejandro Morales Rivera';
+      const data = await response.json();
 
-      if (response && response.ok) {
-        const data = await response.json();
-        docName = data.doctorName || docName;
-        authToken = data.token || authToken;
+      if (!response.ok) {
+        throw new Error(data.error || 'Credenciales rechazadas por el servidor.');
       }
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem('amie_auth_token', authToken);
-        localStorage.setItem('amie_doctor_name', docName);
-        localStorage.setItem('amie_username', cleanUsername);
-        localStorage.setItem('amie_colegiado_number', String(numericColegiado));
+        localStorage.setItem('amie_auth_token', data.token);
+        localStorage.setItem('amie_doctor_name', data.doctorName);
+        localStorage.setItem('amie_username', data.username);
+        localStorage.setItem('amie_colegiado_number', String(data.colegiadoNumber));
       }
 
       onSuccess({
-        doctorName: docName,
-        colegiadoNumber: numericColegiado,
-        token: authToken,
-        username: cleanUsername
+        doctorName: data.doctorName,
+        colegiadoNumber: data.colegiadoNumber,
+        token: data.token,
+        username: data.username
       });
     } catch (err: any) {
-      const fallbackToken = `amie-jwt-fallback-${numericColegiado}`;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('amie_auth_token', fallbackToken);
-        localStorage.setItem('amie_doctor_name', 'Dr. Alejandro Morales Rivera');
-        localStorage.setItem('amie_username', cleanUsername);
-        localStorage.setItem('amie_colegiado_number', String(numericColegiado));
-      }
-      onSuccess({
-        doctorName: 'Dr. Alejandro Morales Rivera',
-        colegiadoNumber: numericColegiado,
-        token: fallbackToken,
-        username: cleanUsername
-      });
+      setError(err.message || 'Fallo de autenticación en la base de datos.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setRegSuccessMsg(null);
 
     const numericColegiado = parseInt(regColegiado, 10);
-    if (isNaN(numericColegiado) || !/^\d+$/.test(regColegiado.trim())) {
-      setError('El No. de Colegiado debe ser puramente numérico (ej. 123456).');
-      return;
-    }
-
-    if (!regUsername.trim() || !regDoctorName.trim()) {
-      setError('Todos los campos son obligatorios para dar de alta la licencia.');
-      return;
-    }
-
-    try {
-      const newUser = registerDoctorUser({
-        username: regUsername.trim(),
-        doctorName: regDoctorName.trim(),
-        colegiadoNumber: numericColegiado
-      });
-
-      setRegSuccessMsg(`¡Médico registrado! Licencia asignada: ${newUser.licenseKey}`);
-      setUsername(newUser.username);
-      setColegiado(String(newUser.colegiadoNumber));
-
-      setTimeout(() => {
-        setActiveTab('login');
-        setRegSuccessMsg(null);
-      }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Error al registrar la licencia médica.');
-    }
-  };
-
-  const handleAdminAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (adminPin === 'ADMIN_AMIE_2026' || adminPin === '749210') {
-      setIsAdminAuthenticated(true);
-      refreshAdminUsers();
-    } else {
-      setError('Clave Maestra de SuperAdmin incorrecta.');
-    }
-  };
-
-  const handleCreateLicenseAdmin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setAdminSuccessMsg(null);
-
-    const numColegiado = parseInt(adminColegiado, 10);
-    if (isNaN(numColegiado)) {
+    if (isNaN(numericColegiado)) {
       setError('El No. de Colegiado debe ser puramente numérico.');
       return;
     }
 
-    if (!adminPassword.trim()) {
-      setError('Debes ingresar una contraseña inicial para el especialista.');
-      return;
-    }
-
+    setLoading(true);
     try {
-      const newUser = registerDoctorUser(
-        {
-          username: adminUsername.trim(),
-          doctorName: adminDoctorName.trim(),
-          colegiadoNumber: numColegiado,
-        },
-        adminAiLimit,
-        adminPassword.trim()
-      );
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: regUsername.trim(),
+          doctorName: regDoctorName.trim(),
+          email: regEmail.trim(),
+          colegiadoNumber: numericColegiado,
+          password: regPassword,
+          accountType: 'INDIVIDUAL'
+        })
+      });
 
-      setAdminSuccessMsg(`Licencia #${newUser.licenseKey} emitida exitosamente para ${newUser.doctorName}.`);
-      setAdminDoctorName('');
-      setAdminColegiado('');
-      setAdminUsername('');
-      setAdminPassword('');
-      refreshAdminUsers();
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error al emitir la licencia.');
+
+      setRegSuccessMsg(`¡Médico registrado en MongoDB! Licencia individual activa.`);
+      setUsername(data.username || regUsername.trim());
+      setColegiado(String(numericColegiado));
+
+      setTimeout(() => {
+        setActiveTab('login');
+        setRegSuccessMsg(null);
+      }, 2500);
     } catch (err: any) {
-      setError(err.message || 'Error al emitir la licencia.');
+      setError(err.message || 'No se pudo crear el usuario.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpdateQuotaAdmin = (targetUsername: string, currentLimit: number) => {
-    const newQuotaStr = prompt(`Ingresa la nueva cuota de IA para ${targetUsername}:`, String(currentLimit));
-    if (newQuotaStr !== null) {
-      const newQuota = parseInt(newQuotaStr, 10);
-      if (!isNaN(newQuota) && newQuota >= 0) {
-        updateDoctorAiCredits(targetUsername, newQuota);
-        refreshAdminUsers();
-      }
+  const handleAdminAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminPin })
+      });
+
+      if (!response.ok) throw new Error('Clave Maestra de Administrador inválida.');
+      alert("Autenticado como SuperAdmin. Accediendo a la gestión global de licencias.");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -284,7 +226,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="harold01"
+                  placeholder="ID de usuario"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-slate-100 text-xs focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -308,12 +250,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-2.5 bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 active:scale-95 transition flex items-center justify-center gap-2"
+              className="w-full mt-2 py-2.5 bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 active:scale-95 transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Validando Credenciales...</span>
+                  <span>Validando en Base de Datos...</span>
                 </>
               ) : (
                 <>
@@ -341,6 +283,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
             </div>
 
             <div>
+              <label className="block text-slate-300 font-medium mb-1">Correo Electrónico Médico *</label>
+              <input
+                type="email"
+                required
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                placeholder="doctor@clinica.com"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 text-xs focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
               <label className="block text-slate-300 font-medium mb-1">Nombre Completo Médico *</label>
               <input
                 type="text"
@@ -352,139 +306,71 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
               />
             </div>
 
-            <div>
-              <label className="block text-slate-300 font-medium mb-1">No. de Colegiado *</label>
-              <input
-                type="text"
-                required
-                value={regColegiado}
-                onChange={(e) => setRegColegiado(e.target.value)}
-                placeholder="749210"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-sky-500"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">No. Colegiado *</label>
+                <input
+                  type="text"
+                  required
+                  value={regColegiado}
+                  onChange={(e) => setRegColegiado(e.target.value)}
+                  placeholder="749210"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Contraseña *</label>
+                <input
+                  type="password"
+                  required
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-sky-500"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
-              className="w-full mt-2 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center gap-2"
+              disabled={loading}
+              className="w-full mt-2 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <UserPlus className="w-4 h-4" />
-              <span>Registrar Médico y Asignar Licencia</span>
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+              <span>Registrar Médico e Iniciar Licencia</span>
             </button>
           </form>
         )}
 
         {/* 3. Módulo SuperAdmin */}
         {activeTab === 'superadmin' && (
-          <div>
-            {!isAdminAuthenticated ? (
-              <form onSubmit={handleAdminAuth} className="space-y-3.5 text-xs">
-                <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl text-amber-200">
-                  <span className="font-bold block mb-0.5">Módulo de Emisión SuperAdmin</span>
-                  <span>Ingresa la Clave Maestra para gestionar la base global de licencias.</span>
-                </div>
+          <form onSubmit={handleAdminAuth} className="space-y-3.5 text-xs">
+            <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl text-amber-200">
+              <span className="font-bold block mb-0.5">Validación de Servidor</span>
+              <span>Ingresa la Clave Maestra de Administrador para gestión de licencias.</span>
+            </div>
 
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Clave Maestra *</label>
-                  <input
-                    type="password"
-                    required
-                    value={adminPin}
-                    onChange={(e) => setAdminPin(e.target.value)}
-                    placeholder="Clave de Administrador"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
-                  />
-                </div>
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Clave Maestra *</label>
+              <input
+                type="password"
+                required
+                value={adminPin}
+                onChange={(e) => setAdminPin(e.target.value)}
+                placeholder="Clave de Administrador"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+              />
+            </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition"
-                >
-                  Autenticar Administrador
-                </button>
-              </form>
-            ) : (
-              <div className="space-y-4 text-xs max-h-[380px] overflow-y-auto pr-1">
-                {adminSuccessMsg && (
-                  <div className="p-2 bg-emerald-950 border border-emerald-500/40 text-emerald-200 rounded">
-                    {adminSuccessMsg}
-                  </div>
-                )}
-
-                <form onSubmit={handleCreateLicenseAdmin} className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                  <span className="font-bold text-amber-400 block uppercase text-[11px]">Emitir Nueva Licencia</span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nombre Completo Médico"
-                    value={adminDoctorName}
-                    onChange={(e) => setAdminDoctorName(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      required
-                      placeholder="No. Colegiado"
-                      value={adminColegiado}
-                      onChange={(e) => setAdminColegiado(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white font-mono"
-                    />
-                    <input
-                      type="number"
-                      required
-                      placeholder="Cuota IA"
-                      value={adminAiLimit}
-                      onChange={(e) => setAdminAiLimit(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white font-mono"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Usuario ID"
-                      value={adminUsername}
-                      onChange={(e) => setAdminUsername(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Contraseña Inicial *"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-white font-mono"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded transition mt-1"
-                  >
-                    Emitir Licencia con Clave
-                  </button>
-                </form>
-
-                <div className="space-y-2">
-                  <span className="font-bold text-slate-300 block uppercase text-[11px]">Licencias Vigentes ({adminUsersList.length})</span>
-                  {adminUsersList.map(u => (
-                    <div key={u.username} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-white block">{u.doctorName}</span>
-                        <span className="text-slate-400 font-mono text-[10px]">User: {u.username} | Col: #{u.colegiadoNumber}</span>
-                      </div>
-                      <button
-                        onClick={() => handleUpdateQuotaAdmin(u.username, u.aiCreditsLimit)}
-                        className="px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded font-mono font-bold text-[10px]"
-                      >
-                        {u.aiCredits}/{u.aiCreditsLimit} IA
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+              <span>Verificar Administrador</span>
+            </button>
+          </form>
         )}
 
         <div className="mt-4 pt-3 border-t border-slate-800 text-center text-[11px] text-slate-500 font-mono">
