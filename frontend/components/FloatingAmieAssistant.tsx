@@ -6,20 +6,14 @@ import {
   LayoutDashboard,
   Microscope,
   GitCompare,
-  GraduationCap,
   Cpu,
   Brain,
   Search,
   ArrowRight,
-  ShieldAlert,
-  Smartphone,
-  Zap,
   Sparkles,
   CloudDownload,
-  BookOpen,
   CheckCircle2,
-  Lock,
-  Layers
+  Lock
 } from 'lucide-react';
 
 interface FloatingAmieAssistantProps {
@@ -294,7 +288,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
 
             {/* Footer */}
             <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
-              <span>AMIE Clinical Engine v3.7</span>
+              <span>AMIE Clinical Engine v3.8</span>
               <button
                 onClick={() => setIsOpen(false)}
                 className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold"
