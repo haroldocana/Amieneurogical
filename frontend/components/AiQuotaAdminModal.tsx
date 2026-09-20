@@ -19,7 +19,7 @@ export const AiQuotaAdminModal: React.FC<AiQuotaAdminModalProps> = ({ isOpen, on
   const [users, setUsers] = useState<DoctorUserSummary[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [addTokens, setAddTokens] = useState<number>(100);
-  const [extensionYears, setExtensionYears] = useState<number>(1); // 1, 2 o 3 Años
+  const [extensionYears, setExtensionYears] = useState<number>(1);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,7 +81,7 @@ export const AiQuotaAdminModal: React.FC<AiQuotaAdminModalProps> = ({ isOpen, on
       setSuccessMsg(`Bolsón e extensión de licencia por ${extensionYears} año(s) aplicados exitosamente.`);
       fetchUsersList();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Fallo de conexión.');
+      setErrorMsg(err.message || 'Fallo de conexión con el servidor.');
     } finally {
       setLoading(false);
     }
@@ -121,7 +121,7 @@ export const AiQuotaAdminModal: React.FC<AiQuotaAdminModalProps> = ({ isOpen, on
           </div>
         )}
 
-        {/* Formulario */}
+        {/* Formulario de Asignación */}
         <form onSubmit={handleAssignQuota} className="space-y-4 text-xs mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800">
           <div>
             <label className="block text-slate-300 font-medium mb-1">Seleccionar Médico Especialista</label>
