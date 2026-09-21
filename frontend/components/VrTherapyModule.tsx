@@ -21,7 +21,7 @@ interface ClinicalProtocol {
   expectedPhysioPattern: string;
   primaryBiomarkers: string;
   metric1: { label: string; value: string; status: string; desc: string };
-  metric2: { label: string; value: string; status: string; desc: string };
+  metric2: { label: label: string; value: string; status: string; desc: string };
   metric3: { label: string; value: string; status: string; desc: string };
   graphGsrData: number[];
   graphHrvData: number[];
@@ -271,7 +271,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         console.log(`✅ Enlace WebSocket activo con visor Quest 3S en ${socketUrl}`);
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = (event: MessageEvent) => {
         try {
           const liveData = JSON.parse(event.data);
           setTelemetry(prev => ({
@@ -290,7 +290,13 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
       ws.onclose = () => setIsConnected(false);
 
       return () => {
-        if (wsRef.current) wsRef.current.close();
+        if (wsRef.current) {
+          wsRef.current.onopen = null;
+          wsRef.current.onmessage = null;
+          wsRef.current.onerror = null;
+          wsRef.current.onclose = null;
+          wsRef.current.close();
+        }
       };
     } catch (e) {
       console.warn('Error al conectar WebSocket:', e);
@@ -430,7 +436,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
                 <label className="text-[10px] text-slate-400 block mb-1">Modo de Comunicación</label>
                 <select 
                   value={connectionType} 
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConnectionType(e.target.value as any)}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConnectionType(e.target.value as 'websocket' | 'render_proxy' | 'simulation')}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg text-xs p-2 text-white focus:outline-none focus:border-cyan-500"
                 >
                   <option value="websocket">Direct WebSocket (Local LAN Quest 3S)</option>
@@ -581,7 +587,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         <div className="h-44 w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-end gap-2 relative overflow-hidden">
           {telemetry.gsrMicroSiemens.map((val, idx) => {
             const hrvVal = telemetry.hrvRmssdMs[idx] || 30;
-            // Cálculo seguro de altura (máximo 100%, mínimo 5% para que sea visible)
             const barHeightPct = Math.min(100, Math.max(5, (val / 7) * 100));
 
             return (
