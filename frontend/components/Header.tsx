@@ -9,7 +9,7 @@ import {
   UserCheck,
   HelpCircle,
   Search,
-  CloudDownload,
+  DownloadCloud,
   User,
   LogOut
 } from 'lucide-react';
@@ -132,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </>
                 ) : (
                   <>
-                    <CloudDownload className="w-3.5 h-3.5 text-cyan-200" />
+                    <DownloadCloud className="w-3.5 h-3.5 text-cyan-200" />
                     <span>Sincronizar PAC</span>
                   </>
                 )}
