@@ -12,6 +12,7 @@ import { ScientificNeuroEvaluator } from './components/ScientificNeuroEvaluator'
 import { DifferentialBiasResolver } from './components/DifferentialBiasResolver';
 import { NeuroSensoryModule } from './components/NeuroSensoryModule';
 import { InteractiveNeuroViewer } from './components/InteractiveNeuroViewer';
+import { HolographicNeuroViewer3D } from './components/HolographicNeuroViewer3D';
 import { PsychiatryReferralView } from './components/PsychiatryReferralView';
 import { AdminSaaSPanel } from './components/AdminSaaSPanel';
 import { AmieClinicalAcademy } from './components/AmieClinicalAcademy';
@@ -43,7 +44,8 @@ import {
   AlertTriangle,
   Glasses,
   Sparkles,
-  Usb
+  Usb,
+  Layers
 } from 'lucide-react';
 
 type AppTab = 
@@ -66,6 +68,7 @@ export default function App() {
 
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
+  const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
 
   // Clinical Case State
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
@@ -146,7 +149,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } finally {
+    } fontally {
       setIsAnalyzing(false);
     }
   };
@@ -548,7 +551,47 @@ export default function App() {
         )}
 
         {activeTab === 'academy' && <AmieClinicalAcademy />}
-        {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
+        
+        {/* Tab 5: Neurotopografía 3D (Soporta Selector de Modos) */}
+        {activeTab === 'neuro_3d' && (
+          <div className="space-y-4">
+            <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-400" />
+                Modo de Visualización Encefalográfica
+              </span>
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+                <button
+                  onClick={() => setNeuroViewerMode('classic')}
+                  className={`px-3 py-1 rounded-md font-semibold transition ${
+                    neuroViewerMode === 'classic'
+                      ? 'bg-sky-600 text-white shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Visor Anatómicoc
+                </button>
+                <button
+                  onClick={() => setNeuroViewerMode('holographic')}
+                  className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 ${
+                    neuroViewerMode === 'holographic'
+                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-cyan-300" />
+                  Visor Holográfico 3D
+                </button>
+              </div>
+            </div>
+
+            {neuroViewerMode === 'classic' ? (
+              <InteractiveNeuroViewer patient={currentPatient} />
+            ) : (
+              <HolographicNeuroViewer3D patient={currentPatient} />
+            )}
+          </div>
+        )}
         
         {/* Tab 6: Módulo qEEG */}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
