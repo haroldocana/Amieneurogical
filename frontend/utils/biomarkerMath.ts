@@ -5,7 +5,7 @@
 /**
  * Calcula el Índice de Habituación H a partir de una serie de lecturas de GSR (Conductancia Cutánea).
  * H = (Pico Inicial - Nivel Final) / Tiempo de Exposición (en minutos)
- * Un índice H alto indica buena extinción/habituación al estímulo de estrés.
+ * Un índice H alto indica buena extinción/habituación. H negativo indica Sensibilización (empeoramiento).
  */
 export const calculateHabituationIndex = (gsrSeries: number[], durationSec: number): number => {
   if (!gsrSeries || gsrSeries.length < 2 || durationSec <= 0) return 0;
@@ -17,24 +17,35 @@ export const calculateHabituationIndex = (gsrSeries: number[], durationSec: numb
   const finalLevel = gsrSeries[gsrSeries.length - 1];
   const durationMin = durationSec / 60;
   
+  // No usamos Math.max(0, h) porque H negativo es clínicamente relevante (Indica Sensibilización)
   const h = (initialPeak - finalLevel) / durationMin;
-  return Number(Math.max(0, h).toFixed(2));
+  return Number(h.toFixed(2));
 };
 
 /**
  * Clasifica la respuesta autonómica según la Variabilidad Cardíaca (RMSSD en ms)
  */
 export const classifyVagalTone = (rmssdMs: number): { label: string; color: string } => {
+  if (isNaN(rmssdMs) || rmssdMs <= 0) return { label: 'Lectura Inválida', color: 'text-slate-400' };
   if (rmssdMs < 20) return { label: 'Rigidez Parasimpática / Alto Estrés', color: 'text-rose-400' };
   if (rmssdMs <= 45) return { label: 'Tono Vagal Moderado', color: 'text-amber-400' };
   return { label: 'Alta Regulación Parasimpática', color: 'text-emerald-400' };
 };
 
 /**
+ * Filtra los intervalos R-R para eliminar artefactos ectópicos fisiológicamente imposibles.
+ * Retiene solo intervalos R-R entre 300ms (200 lpm) y 2000ms (30 lpm).
+ */
+const filterRRIntervals = (rrIntervalsMs: number[]): number[] => {
+  return rrIntervalsMs.filter(rr => rr >= 300 && rr <= 2000);
+};
+
+/**
  * Calcula RMSSD (Root Mean Square of Successive Differences) a partir de intervalos R-R (ms)
  * Biomarcador principal del tono vagal / parasimpático.
  */
-export const calculateRMSSD = (rrIntervalsMs: number[]): number => {
+export const calculateRMSSD = (rawRRIntervalsMs: number[]): number => {
+  const rrIntervalsMs = filterRRIntervals(rawRRIntervalsMs);
   if (!rrIntervalsMs || rrIntervalsMs.length < 2) return 0;
   
   let sumSquaredDiffs = 0;
@@ -51,7 +62,8 @@ export const calculateRMSSD = (rrIntervalsMs: number[]): number => {
  * Calcula SDNN (Standard Deviation of NN intervals)
  * Refleja la flexibilidad autonómica global (simpática + parasimpática).
  */
-export const calculateSDNN = (rrIntervalsMs: number[]): number => {
+export const calculateSDNN = (rawRRIntervalsMs: number[]): number => {
+  const rrIntervalsMs = filterRRIntervals(rawRRIntervalsMs);
   if (!rrIntervalsMs || rrIntervalsMs.length < 2) return 0;
   
   const mean = rrIntervalsMs.reduce((acc, val) => acc + val, 0) / rrIntervalsMs.length;
@@ -65,12 +77,15 @@ export const calculateSDNN = (rrIntervalsMs: number[]): number => {
  * SI = AMo / (2 * VR * Mo)
  * Valores > 150 insinúan alta sobrecarga simpática / agotamiento emocional.
  */
-export const calculateBaevskyStressIndex = (rrIntervalsMs: number[]): number => {
+export const calculateBaevskyStressIndex = (rawRRIntervalsMs: number[]): number => {
+  const rrIntervalsMs = filterRRIntervals(rawRRIntervalsMs);
   if (!rrIntervalsMs || rrIntervalsMs.length < 10) return 0;
 
   const minRR = Math.min(...rrIntervalsMs) / 1000; // a segundos
   const maxRR = Math.max(...rrIntervalsMs) / 1000;
   const vr = maxRR - minRR; // Variabilidad R-R (MxDM)
+
+  if (vr === 0) return 0; // Previene división por cero en taquicardia fija
 
   // Moda (Mo) y Amplitud de la Moda (AMo) con binning de 50ms
   const binSize = 50;
@@ -88,9 +103,9 @@ export const calculateBaevskyStressIndex = (rrIntervalsMs: number[]): number => 
   }
 
   const mo = (modeBin + binSize / 2) / 1000; // Moda en segundos
-  const amo = (maxCount / rrIntervalsMs.length) * 100; // Amplitud en %
+  if (mo === 0) return 0;
 
-  if (vr === 0 || mo === 0) return 0;
+  const amo = (maxCount / rrIntervalsMs.length) * 100; // Amplitud en %
 
   const stressIndex = amo / (2 * mo * vr);
   return Number(stressIndex.toFixed(1));
@@ -98,7 +113,7 @@ export const calculateBaevskyStressIndex = (rrIntervalsMs: number[]): number => 
 
 /**
  * Detección de Respuestas Galvánicas Fásicas (SCR Peaks / Respuestas Emocionales Puntuales)
- * Cuenta picos de micro-conductancia superiores a un umbral (ej. 0.05 uS)
+ * Cuenta picos de micro-conductancia superiores a un umbral dinámico (ej. 0.05 uS)
  */
 export const detectGSRScrs = (gsrSeries: number[], thresholdMicroSiemens = 0.05): number => {
   if (!gsrSeries || gsrSeries.length < 3) return 0;
@@ -121,7 +136,10 @@ export const detectGSRScrs = (gsrSeries: number[], thresholdMicroSiemens = 0.05)
  * Valores < 0 señalan hiperactividad frontal derecha (Sesgo de evitación / Depresión / Ansiedad).
  */
 export const calculateFrontalAlphaAsymmetry = (leftAlphaPower: number, rightAlphaPower: number): number => {
-  if (leftAlphaPower <= 0 || rightAlphaPower <= 0) return 0;
+  // Protección contra logaritmos imposibles (NaN)
+  if (leftAlphaPower <= 0 || rightAlphaPower <= 0 || isNaN(leftAlphaPower) || isNaN(rightAlphaPower)) {
+    return 0; 
+  }
   const faa = Math.log(rightAlphaPower) - Math.log(leftAlphaPower);
   return Number(faa.toFixed(3));
 };
@@ -131,7 +149,7 @@ export const calculateFrontalAlphaAsymmetry = (leftAlphaPower: number, rightAlph
  * Valores elevados (> 4.5 en niños, > 3.0 en adultos) sugieren patrón neurobiológico atencional TDAH.
  */
 export const calculateThetaBetaRatio = (thetaPower: number, betaPower: number): number => {
-  if (betaPower <= 0) return 0;
+  if (betaPower <= 0 || isNaN(betaPower) || isNaN(thetaPower)) return 0;
   const tbr = thetaPower / betaPower;
   return Number(tbr.toFixed(2));
 };
@@ -142,7 +160,7 @@ export const calculateThetaBetaRatio = (thetaPower: number, betaPower: number): 
  * Mide activación simpática / carga cognitiva instantánea.
  */
 export const calculatePupilDilationRatio = (currentMm: number, baselineMm: number): number => {
-  if (baselineMm <= 0) return 0;
+  if (baselineMm <= 0 || isNaN(baselineMm) || isNaN(currentMm)) return 0;
   const ratio = ((currentMm - baselineMm) / baselineMm) * 100;
   return Number(ratio.toFixed(2));
 };
