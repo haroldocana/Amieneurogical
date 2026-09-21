@@ -27,7 +27,6 @@ interface ClinicalProtocol {
   graphHrvData: number[];
 }
 
-// CATÁLOGO EXTENDIDO DE 12 TRASTORNOS Y ENFERMEDADES DSM-5-TR / CIE-11
 const EXTENDED_CLINICAL_PROTOCOLS: ClinicalProtocol[] = [
   {
     key: 'TLP',
@@ -117,7 +116,7 @@ const EXTENDED_CLINICAL_PROTOCOLS: ClinicalProtocol[] = [
     clinicalObjective: 'Medición de la tasa de extinción del distrés (H) e inhibición de la respuesta de sobresalto (Startle Response).',
     stimulusParameters: 'Procesamiento EMDR inmersivo en 3D con desacoplamiento de pistas traumáticas contextuales.',
     targetDurationSec: 360,
-    expectedPhysioPattern: 'Pico agudo de GSR seguido de curva de extinción sustained (H > 2.0).',
+    expectedPhysioPattern: 'Pico agudo de GSR seguido de curva de extinción sostenida (H > 2.0).',
     primaryBiomarkers: 'Índice de Habituación Terapéutica (H) + Respuesta Galvánica de Alarma',
     metric1: { label: 'Respuesta de Sobresalto (Startle)', value: '6.2 µS', status: '(Hiperalerta)', desc: 'Pico agudo galvánico ante estímulo' },
     metric2: { label: 'Tono Vagal (HRV RMSSD)', value: '15 ms', status: '(Inhibición Vagal)', desc: 'Bloqueo parasimpático agudo' },
@@ -251,7 +250,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  // 1. CONEXIÓN EN TIEMPO REAL VÍA WEBSOCKET
   useEffect(() => {
     if (connectionType === 'simulation') {
       setIsConnected(true);
@@ -268,7 +266,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
       ws.onopen = () => {
         setIsConnected(true);
-        console.log(`✅ Enlace WebSocket activo con visor Quest 3S en ${socketUrl}`);
+        console.log(`Enlace WebSocket activo con visor Quest 3S en ${socketUrl}`);
       };
 
       ws.onmessage = (event: MessageEvent) => {
@@ -304,7 +302,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     }
   }, [connectionType, ipAddress]);
 
-  // 2. ACTUALIZACIÓN DE TELEMETRÍA Y REPORTE AL CAMBIAR PROTOCOLO O PACIENTE
   useEffect(() => {
     setTelemetry(prev => ({
       ...prev,
@@ -333,18 +330,17 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     );
   }, [selectedProtocolKey, patient, activeProtocol]);
 
-  // 3. CRONÓMETRO Y SIMULACIÓN EN VIVO DURANTE EJECUCIÓN
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (isSessionRunning) {
       interval = setInterval(() => {
         setSessionTimer(prev => prev + 1);
 
-        // Si es simulación, varía suavemente los datos para dar sensación de vida
         if (connectionType === 'simulation') {
           setTelemetry(prev => {
             const newGsr = prev.gsrMicroSiemens.map(val => Number((val + (Math.random() * 0.2 - 0.1)).toFixed(2)));
-            return { ...prev, gsrMicroSiemens: newGsr };
+            const newHrv = prev.hrvRmssdMs.map(val => Math.max(10, Math.min(80, Math.round(val + (Math.random() * 2 - 1)))));
+            return { ...prev, gsrMicroSiemens: newGsr, hrvRmssdMs: newHrv };
           });
         }
       }, 1000);
@@ -356,9 +352,8 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     };
   }, [isSessionRunning, connectionType]);
 
-  // EXPORTACIÓN CON SOPORTE COMPLETO UTF-8 BOM PARA MICROSOFT WORD
   const handleExportWord = () => {
-    const bom = "\uFEFF"; // Byte Order Mark para compatibilidad de acentos en Word
+    const bom = "\uFEFF";
     const header = "data:application/vnd.ms-word;charset=utf-8,";
     const htmlContent = `<html><head><meta charset='utf-8'></head><body style='font-family:Arial,sans-serif;padding:20px;'>` +
       `<h2 style='color:#0284c7;'>AMIE CLINICAL WORKSTATION — INFORME OFICIAL VR QUEST 3S</h2>` +
@@ -386,7 +381,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
   return (
     <div className="space-y-5">
-      {/* 1. ENCABEZADO Y TELEMETRÍA VR */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -425,7 +419,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
           </div>
         </div>
 
-        {/* PANEL DE CONFIGURACIÓN RED */}
         {isConfigOpen && (
           <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl space-y-3">
             <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
@@ -473,7 +466,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         )}
       </div>
 
-      {/* 2. SELECTOR DE PROTOCOLOS DSM-5 / CIE-11 */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-wider">
@@ -541,7 +533,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
-      {/* 3. MÉTRICAS CLAVE DEL PROTOCOLO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
@@ -575,7 +566,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
-      {/* 4. CURVA DE RESPUESTA CON BARRAS AJUSTADAS */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
@@ -607,7 +597,6 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
-      {/* 5. INFORME CLÍNICO EJECUTIVO CON EDICIÓN Y EXPORTACIÓN */}
       <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
