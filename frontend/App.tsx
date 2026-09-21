@@ -23,8 +23,12 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
-import { VrPainManagementModule } from './components/VrPainManagementModule'; // Módulo 1 (Analgesia VR)
-import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule'; // Módulo 2 (Mirror VR FND)
+
+// MÓDULOS DE FRONTERA HIPNO-VR & CLOSED-LOOP
+import { VrPainManagementModule } from './components/VrPainManagementModule';         // Módulo 1: Analgesia
+import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule'; // Módulo 2: Mirror VR (FND)
+import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule'; // Módulo 3: Reconsolidación Memoria
+
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
@@ -49,7 +53,8 @@ import {
   Usb,
   Layers,
   ThermometerSnowflake,
-  UserCheck
+  UserCheck,
+  RotateCcw
 } from 'lucide-react';
 
 type AppTab = 
@@ -91,8 +96,11 @@ export default function App() {
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
-  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false); // Módulo 1 (Analgesia VR)
-  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false); // Módulo 2 (Mirror VR FND)
+  
+  // Modales de Módulos Hipno-VR Avanzados
+  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false);     // Módulo 1: Analgesia
+  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false);       // Módulo 2: Mirror VR
+  const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState(false); // Módulo 3: Reconsolidación Memoria
 
   // USB Device State
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
@@ -183,7 +191,7 @@ export default function App() {
       } else {
         setErrorMsg('Error de comunicación con Cloud Function: ' + msg);
       }
-    } finally {
+    } flex {
       setIsSyncing(false);
     }
   };
@@ -581,10 +589,20 @@ export default function App() {
         {/* Tab 6: Módulo qEEG */}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
         
-        {/* Tab 7: Módulo VR Inmersivo con Botones de Consolas Fullscreen */}
+        {/* Tab 7: Módulo VR Inmersivo con Botones de las 3 Consolas Avanzadas */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-3 flex-wrap">
+              {/* Módulo 3: Reconsolidación Memoria */}
+              <button
+                onClick={() => setIsFullscreenMemoryOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-200" />
+                <span>Consola Reconsolidación Memoria & Fobias</span>
+              </button>
+
+              {/* Módulo 2: Mirror VR */}
               <button
                 onClick={() => setIsFullscreenFndOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition"
@@ -593,6 +611,7 @@ export default function App() {
                 <span>Consola Neuro-Rehabilitación (Mirror VR)</span>
               </button>
 
+              {/* Módulo 1: Analgesia */}
               <button
                 onClick={() => setIsFullscreenPainOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
@@ -601,6 +620,7 @@ export default function App() {
                 <span>Consola Analgesia VR (Zero-Opioid Pain)</span>
               </button>
 
+              {/* Consola Hipnosis Trauma */}
               <button
                 onClick={() => setIsFullscreenHypnosisOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
@@ -657,7 +677,7 @@ export default function App() {
         defaultView={dsmModalView}
       />
 
-      {/* Modal Fullscreen 1: Consola Terapéutica VR (VRET / EMDR) */}
+      {/* Modales Fullscreen */}
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
           patient={currentPatient}
@@ -666,7 +686,6 @@ export default function App() {
         />
       )}
 
-      {/* Modal Fullscreen 2: Consola de Diagnóstico e Inferencia VR (CPT-3D / AAT / Cyberball) */}
       {isFullscreenDiagnosticOpen && (
         <FullscreenDiagnosticRunner
           patient={currentPatient}
@@ -675,7 +694,6 @@ export default function App() {
         />
       )}
 
-      {/* Modal Fullscreen 3: Consola de Hipnosis Clínica Adaptativa por Etapa Evolutiva */}
       {isFullscreenHypnosisOpen && (
         <VrDevelopmentalTraumaFullscreenMonitor
           patient={currentPatient}
@@ -683,7 +701,7 @@ export default function App() {
         />
       )}
 
-      {/* Modal Fullscreen 4: Consola de Analgesia Inmersiva y Bloqueo Nociceptivo (Zero-Opioid) */}
+      {/* Módulo 1: Analgesia Inmersiva */}
       {isFullscreenPainOpen && (
         <VrPainManagementModule
           patient={currentPatient}
@@ -691,11 +709,19 @@ export default function App() {
         />
       )}
 
-      {/* Modal Fullscreen 5: Consola Neuro-Rehabilitación (Mirror VR - FND) */}
+      {/* Módulo 2: Neuro-Rehabilitación Mirror VR */}
       {isFullscreenFndOpen && (
         <VrFunctionalNeurologyModule
           patient={currentPatient}
           onClose={() => setIsFullscreenFndOpen(false)}
+        />
+      )}
+
+      {/* Módulo 3: Reconsolidación Memoria & Fobias */}
+      {isFullscreenMemoryOpen && (
+        <VrMemoryReconsolidationModule
+          patient={currentPatient}
+          onClose={() => setIsFullscreenMemoryOpen(false)}
         />
       )}
     </div>
