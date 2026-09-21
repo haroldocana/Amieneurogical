@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { 
   Glasses, Activity, HeartPulse, FileText, CheckCircle2, ShieldAlert, 
@@ -249,22 +249,26 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
 
-  // ESCUCHA WEBSOCKET EN TIEMPO REAL DESDE EL QUEST 3S
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // 1. CONEXIÓN EN TIEMPO REAL VÍA WEBSOCKET
   useEffect(() => {
-    if (connectionType === 'simulation') return;
+    if (connectionType === 'simulation') {
+      setIsConnected(true);
+      return;
+    }
 
     const socketUrl = connectionType === 'websocket'
       ? `ws://${ipAddress}:8080`
       : `wss://amieneurogical.onrender.com/ws/quest3s`;
 
-    let ws: WebSocket | null = null;
-
     try {
-      ws = new WebSocket(socketUrl);
+      const ws = new WebSocket(socketUrl);
+      wsRef.current = ws;
 
       ws.onopen = () => {
         setIsConnected(true);
-        console.log(`Enlace WebSocket activo con Quest 3S en ${socketUrl}`);
+        console.log(`✅ Enlace WebSocket activo con visor Quest 3S en ${socketUrl}`);
       };
 
       ws.onmessage = (event) => {
@@ -278,25 +282,23 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
             saccadicRateHz: liveData.saccadicHz ?? prev.saccadicRateHz
           }));
         } catch (e) {
-          console.warn('Payload no válido recibido del Quest 3S:', e);
+          console.warn('Payload no válido recibido del visor:', e);
         }
       };
 
       ws.onerror = () => setIsConnected(false);
       ws.onclose = () => setIsConnected(false);
+
+      return () => {
+        if (wsRef.current) wsRef.current.close();
+      };
     } catch (e) {
-      console.warn('Error al iniciar enlace WebSocket:', e);
+      console.warn('Error al conectar WebSocket:', e);
       setIsConnected(false);
     }
-
-    return () => {
-      if (ws) {
-        ws.close();
-      }
-    };
   }, [connectionType, ipAddress]);
 
-  // ACTULIZA TELEMETRÍA Y REPORTE AL CAMBIAR PROTOCOLO O PACIENTE
+  // 2. ACTUALIZACIÓN DE TELEMETRÍA Y REPORTE AL CAMBIAR PROTOCOLO O PACIENTE
   useEffect(() => {
     setTelemetry(prev => ({
       ...prev,
@@ -307,11 +309,11 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     setReportText(
       `INFORME MÉDICO-EJECUTIVO DE EVALUACIÓN NEUROFISIOLÓGICA VR QUEST 3S\n` +
       `===================================================================\n` +
-      `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age} años | GÉNERO: ${patient.gender}\n` +
+      `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age || 'N/A'} años | GÉNERO: ${patient.gender || 'N/A'}\n` +
       `CATEGORÍA CLÍNICA: ${activeProtocol.disorderName}\n` +
       `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
       `PROTOCOLO INMERSIVO: ${activeProtocol.scenarioTitle}\n` +
-      `DISPOSITIVO: Meta Quest 3S (Frecuencia de Muestreo Fisiológico: 60 Hz)\n\n` +
+      `DISPOSITIVO: Meta Quest 3S / Pico Neo 3 (Muestreo Bio-fisiológico: 60 Hz)\n\n` +
       `1. OBJETIVO TERAPÉUTICO Y PARÁMETROS DEL ESTÍMULO:\n` +
       `- Objetivo: ${activeProtocol.clinicalObjective}\n` +
       `- Configuración del Entorno 3D: ${activeProtocol.stimulusParameters}\n\n` +
@@ -325,12 +327,20 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     );
   }, [selectedProtocolKey, patient, activeProtocol]);
 
-  // TEMPORIZADOR DE SESIÓN INMERSIVA
+  // 3. CRONÓMETRO Y SIMULACIÓN EN VIVO DURANTE EJECUCIÓN
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (isSessionRunning) {
       interval = setInterval(() => {
         setSessionTimer(prev => prev + 1);
+
+        // Si es simulación, varía suavemente los datos para dar sensación de vida
+        if (connectionType === 'simulation') {
+          setTelemetry(prev => {
+            const newGsr = prev.gsrMicroSiemens.map(val => Number((val + (Math.random() * 0.2 - 0.1)).toFixed(2)));
+            return { ...prev, gsrMicroSiemens: newGsr };
+          });
+        }
       }, 1000);
     } else if (interval) {
       clearInterval(interval);
@@ -338,18 +348,20 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isSessionRunning]);
+  }, [isSessionRunning, connectionType]);
 
+  // EXPORTACIÓN CON SOPORTE COMPLETO UTF-8 BOM PARA MICROSOFT WORD
   const handleExportWord = () => {
+    const bom = "\uFEFF"; // Byte Order Mark para compatibilidad de acentos en Word
     const header = "data:application/vnd.ms-word;charset=utf-8,";
-    const content = encodeURIComponent(
-      `<html><head><meta charset='utf-8'></head><body style='font-family:Arial,sans-serif;padding:20px;'>` +
+    const htmlContent = `<html><head><meta charset='utf-8'></head><body style='font-family:Arial,sans-serif;padding:20px;'>` +
       `<h2 style='color:#0284c7;'>AMIE CLINICAL WORKSTATION — INFORME OFICIAL VR QUEST 3S</h2>` +
       `<pre style='font-family:Arial,sans-serif;white-space:pre-wrap;'>${reportText}</pre>` +
-      `</body></html>`
-    );
+      `</body></html>`;
+
+    const encodedUri = header + encodeURIComponent(bom + htmlContent);
     const link = document.createElement("a");
-    link.href = header + content;
+    link.href = encodedUri;
     link.download = `Informe_Clinico_VR_${selectedProtocolKey}_${patient.id || 'PAC-8104'}.doc`;
     link.click();
   };
@@ -368,6 +380,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
   return (
     <div className="space-y-5">
+      {/* 1. ENCABEZADO Y TELEMETRÍA VR */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -376,18 +389,18 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                Módulo Terapéutico VR Meta Quest 3S
+                Módulo Terapéutico VR Meta Quest 3S / Pico Neo 3
                 <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] rounded-full font-semibold">
                   MÉTRICAS ADAPTATIVAS EN TIEMPO REAL
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Infección activa de datos vía WebSocket / LAN directo desde el visor Meta Quest 3S.
+                Infección activa de datos vía WebSocket / LAN directo desde el visor VR.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setIsConfigOpen(!isConfigOpen)}
               className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-700"
@@ -406,6 +419,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
           </div>
         </div>
 
+        {/* PANEL DE CONFIGURACIÓN RED */}
         {isConfigOpen && (
           <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl space-y-3">
             <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
@@ -453,6 +467,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         )}
       </div>
 
+      {/* 2. SELECTOR DE PROTOCOLOS DSM-5 / CIE-11 */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-wider">
@@ -520,6 +535,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
+      {/* 3. MÉTRICAS CLAVE DEL PROTOCOLO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
@@ -553,6 +569,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
+      {/* 4. CURVA DE RESPUESTA CON BARRAS AJUSTADAS */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
@@ -561,14 +578,17 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
           <span className="text-[10px] text-slate-400">Ventana Temporal de Muestreo: 300s</span>
         </div>
 
-        <div className="h-44 w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-end gap-2 relative">
+        <div className="h-44 w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-end gap-2 relative overflow-hidden">
           {telemetry.gsrMicroSiemens.map((val, idx) => {
             const hrvVal = telemetry.hrvRmssdMs[idx] || 30;
+            // Cálculo seguro de altura (máximo 100%, mínimo 5% para que sea visible)
+            const barHeightPct = Math.min(100, Math.max(5, (val / 7) * 100));
+
             return (
               <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
                 <div 
-                  style={{ height: `${(val / 6) * 100}%` }} 
-                  className="w-full bg-gradient-to-t from-cyan-600 to-rose-500 rounded-t opacity-80 group-hover:opacity-100 transition"
+                  style={{ height: `${barHeightPct}%` }} 
+                  className="w-full bg-gradient-to-t from-cyan-600 to-rose-500 rounded-t opacity-80 group-hover:opacity-100 transition-all duration-300"
                 />
                 <span className="text-[9px] text-slate-500 font-mono">t+{idx * 30}s</span>
 
@@ -582,6 +602,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
+      {/* 5. INFORME CLÍNICO EJECUTIVO CON EDICIÓN Y EXPORTACIÓN */}
       <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
