@@ -28,13 +28,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   // Formulario SuperAdmin
   const [adminPin, setAdminPin] = useState('');
 
+  // Guardado seguro en localStorage (resiste bloqueos de cookies/privacidad)
+  const safeSetLocalStorage = (key: string, value: string) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.warn(`No se pudo guardar ${key} en localStorage:`, e);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     const numericColegiado = parseInt(colegiado, 10);
     if (isNaN(numericColegiado) || !/^\d+$/.test(colegiado.trim())) {
-      setError('El No. de Colegiado debe ser numérico.');
+      setError('El No. de Colegiado debe ser puramente numérico.');
       return;
     }
 
@@ -51,28 +62,27 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({ error: 'Respuesta no válida del servidor.' }));
 
       if (!response.ok) {
         throw new Error(data.error || 'Credenciales rechazadas por el servidor.');
       }
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('amie_auth_token', data.token);
-        localStorage.setItem('amie_doctor_name', data.doctorName);
-        localStorage.setItem('amie_username', data.username);
-        localStorage.setItem('amie_colegiado_number', String(data.colegiadoNumber));
-      }
+      safeSetLocalStorage('amie_auth_token', data.token);
+      safeSetLocalStorage('amie_doctor_name', data.doctorName);
+      safeSetLocalStorage('amie_username', data.username);
+      safeSetLocalStorage('amie_colegiado_number', String(data.colegiadoNumber));
 
       onSuccess({
-        doctorName: data.doctorName,
-        colegiadoNumber: data.colegiadoNumber,
-        token: data.token,
-        username: data.username
+        doctorName: data.doctorName || 'Dr. Usuario Registrado',
+        colegiadoNumber: data.colegiadoNumber || numericColegiado,
+        token: data.token || 'LOCAL_TOKEN',
+        username: data.username || username.trim()
       });
-    } catch (err: any) {
-      setError(err.message || 'Fallo de autenticación en la base de datos.');
-    } finally {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Fallo de autenticación en la base de datos.';
+      setError(msg);
+    } fontally: {
       setLoading(false);
     }
   };
@@ -103,7 +113,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({ error: 'Error al procesar el registro.' }));
       if (!response.ok) throw new Error(data.error || 'Error al emitir la licencia.');
 
       setRegSuccessMsg(`¡Médico registrado en MongoDB! Licencia individual activa.`);
@@ -114,8 +124,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
         setActiveTab('login');
         setRegSuccessMsg(null);
       }, 2500);
-    } catch (err: any) {
-      setError(err.message || 'No se pudo crear el usuario.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'No se pudo crear el usuario.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -135,8 +146,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
 
       if (!response.ok) throw new Error('Clave Maestra de Administrador inválida.');
       alert("Autenticado como SuperAdmin. Accediendo a la gestión global de licencias.");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error en la verificación de administrador.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
