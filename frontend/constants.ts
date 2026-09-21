@@ -55,7 +55,7 @@ export const INITIAL_LICENSES: MedicalLicenseAccount[] = [
 ];
 
 // ============================================================================
-// CASOS CLÍNICOS PRE-CARGADOS (PRESETS) - COMPATIBILIDAD DUAL
+// CASOS CLÍNICOS PRE-CARGADOS (PRESETS)
 // ============================================================================
 export const CLINICAL_CASE_PRESETS: { 
   name: string; 
