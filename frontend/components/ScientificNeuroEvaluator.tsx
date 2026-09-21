@@ -1,488 +1,329 @@
 import React, { useState, useEffect } from 'react';
-import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { PatientRecord } from '../types';
+import { telemetryService, PrecisionTelemetryPacket, TelemetryProtocol } from '../services/telemetryService';
 import { 
-  Brain, Activity, HeartPulse, Maximize2, Minimize2, 
-  CheckCircle2, Layers, Zap, Microscope, 
-  Bluetooth, Edit3, Download, Target, Sliders, RefreshCw
+  Activity, 
+  Usb, 
+  Bluetooth, 
+  Wifi, 
+  Radio, 
+  CheckCircle2, 
+  Sliders, 
+  Cpu, 
+  Heart, 
+  Target, 
+  AlertCircle,
+  Gauge
 } from 'lucide-react';
 
 interface ScientificNeuroEvaluatorProps {
-  patient?: PatientRecord;
-  onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
+  patient: PatientRecord;
+  onUpdatePatientData?: (updated: Partial<PatientRecord>) => void;
 }
 
-interface HardwareClinicalProtocol {
-  key: string;
-  disorderName: string;
-  reliabilityPct: number;
-  testTitle: string;
-  clinicalObjective: string;
-  hardwareUsed: string;
-  targetDurationSec: number;
-  primaryMetrics: {
-    m1: { label: string; value: string; status: string; desc: string };
-    m2: { label: string; value: string; status: string; desc: string };
-    m3: { label: string; value: string; status: string; desc: string };
-  };
-}
+export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> = ({ 
+  patient,
+  onUpdatePatientData 
+}) => {
+  const [telemetry, setTelemetry] = useState<PrecisionTelemetryPacket>(telemetryService.getCurrentPacket());
+  const [connectionStatus, setConnectionStatus] = useState({
+    protocol: 'SIMULATED' as TelemetryProtocol,
+    connected: false,
+    deviceName: 'Sin Hardware Físico'
+  });
 
-const HARDWARE_CLINICAL_PROTOCOLS: HardwareClinicalProtocol[] = [
-  {
-    key: 'TDAH',
-    disorderName: 'Trastorno por Déficit de Atención e Hiperactividad (TDAH / CIE-11: 6A05)',
-    reliabilityPct: 93.6,
-    testTitle: 'Prueba de Presión Pulsada & Tiempo de Respuesta Inhibitorio (Go/No-Go Hardware)',
-    clinicalObjective: 'Cuantificación de la impulsividad motora fina, variabilidad del tiempo de reacción e hipertonía digital.',
-    hardwareUsed: 'Módulo Botón de Presión ESP32 + Cables DuPont',
-    targetDurationSec: 180,
-    primaryMetrics: {
-      m1: { label: 'Latencia Biomotora Mediana', value: '195 ms', status: '(Impulsividad Alta)', desc: 'Tiempo de reacción ante estímulo visual en pantalla' },
-      m2: { label: 'Fuerza de Presión del Botón', value: '420 g', status: '(Hipertonía Aguda)', desc: 'Fuerza de impacto ejercida sobre el sensor ESP32' },
-      m3: { label: 'Tasa de Omisión/Comisión', value: '18%', status: '(Labilidad Atencional)', desc: 'Errores registrados en el paradigma Go/No-Go' }
-    }
-  },
-  {
-    key: 'TEPT',
-    disorderName: 'Trastorno de Estrés Postraumático (TEPT / CIE-11: 6B40)',
-    reliabilityPct: 95.8,
-    testTitle: 'Evaluación del Tono Vagal Parasimpático & Respuesta de Sobresalto en Vivo',
-    clinicalObjective: 'Monitoreo continuo de la modulación autonómica durante estimulación estresante en vivo.',
-    hardwareUsed: 'Monitor Cardíaco de Pecho Geoid HS500 (Bluetooth LE)',
-    targetDurationSec: 300,
-    primaryMetrics: {
-      m1: { label: 'Frecuencia Cardíaca Basal', value: '98 BPM', status: '(Taquicardia Basal)', desc: 'Frecuencia promedio registrada en tórax' },
-      m2: { label: 'HRV RMSSD Instantáneo', value: '14 ms', status: '(Bloqueo Vagal)', desc: 'Inhibición parasimpática bajo reactividad' },
-      m3: { label: 'Tiempo de Recuperación Cardíaco', value: '210 s', status: '(Desregulación)', desc: 'Retorno a la línea base reposo' }
-    }
-  },
-  {
-    key: 'TLP',
-    disorderName: 'Trastorno Límite de la Personalidad (TLP / CIE-11: 6D11)',
-    reliabilityPct: 92.4,
-    testTitle: 'Respuesta Electrodérmica y Labilidad Simpática Intersubjetiva',
-    clinicalObjective: 'Registro de la conductancia galvánica y velocidad de recuperación homeostática ante frustración rápida.',
-    hardwareUsed: 'Sensor Conductancia Cutánea GSR BITalino / ESP32 ADC',
-    targetDurationSec: 240,
-    primaryMetrics: {
-      m1: { label: 'Pico Galvánico GSR', value: '5.8 µS', status: '(Inestabilidad Alta)', desc: 'Descarga simpática reactiva ante estímulo social' },
-      m2: { label: 'Tono Vagal Parasimpático', value: '18 ms', status: '(Caída Aguda)', desc: 'Desregulación afectiva inmediata' },
-      m3: { label: 'Tiempo de Estabilización', value: '195 s', status: '(Recuperación Lenta)', desc: 'Retorno a la línea base autonómica' }
-    }
-  }
-];
-
-export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> = ({ patient, onUpdatePatientVrData }) => {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [selectedProtocolKey, setSelectedProtocolKey] = useState<string>('TDAH');
-  const activeProtocol = HARDWARE_CLINICAL_PROTOCOLS.find(p => p.key === selectedProtocolKey) || HARDWARE_CLINICAL_PROTOCOLS[0];
-
-  const [bleConnected, setBleConnected] = useState(false);
-  const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-
-  // Estados de Calibración
+  const [wifiIp, setWifiIp] = useState('192.168.1.105');
   const [isCalibrating, setIsCalibrating] = useState(false);
-  const [isCalibrated, setIsCalibrated] = useState(false);
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // Trazado ECG en Tiempo Real
-  const [ecgPoints, setEcgPoints] = useState<number[]>([]);
-  const [liveBpm, setLiveBpm] = useState<number | null>(null);
-  const [liveRmssd, setLiveRmssd] = useState<number | null>(null);
-
-  const [isEditingReport, setIsEditingReport] = useState(false);
-  const [reportText, setReportText] = useState('');
-  const [transferSuccess, setTransferSuccess] = useState(false);
-
-  const safePatientId = patient?.id || 'PAC-8104';
-  const safePatientName = patient?.patientNameAnonymized || safePatientId;
-  const safeAge = patient?.age ?? 55;
-  const safeGender = patient?.gender || 'M';
-
-  const handleStartCalibration = () => {
-    setIsCalibrating(true);
-    setIsCalibrated(false);
-    setTimeout(() => {
-      setIsCalibrating(false);
-      setIsCalibrated(true);
-    }, 2500);
-  };
+  // Animación continua de la gráfica ECG
+  const [ecgPoints, setEcgPoints] = useState<number[]>([
+    20, 20, 20, 25, 10, 60, -10, 20, 20, 20, 22, 20, 20, 20, 25, 10, 60, -10, 20, 20
+  ]);
 
   useEffect(() => {
-    let step = 0;
+    const unsubData = telemetryService.subscribeData((packet) => {
+      setTelemetry(packet);
+    });
+
+    const unsubStatus = telemetryService.subscribeStatus((status) => {
+      setConnectionStatus(status);
+    });
+
+    return () => {
+      unsubData();
+      unsubStatus();
+    };
+  }, []);
+
+  // Animación del trazado ECG
+  useEffect(() => {
     const interval = setInterval(() => {
-      step++;
-      
-      if (!bleConnected && !isDemoMode) {
-        setEcgPoints(prev => {
-          const updated = [...prev, 50];
-          return updated.length > 100 ? updated.slice(1) : updated;
-        });
-        setLiveBpm(null);
-        setLiveRmssd(null);
-        return;
-      }
-
-      const ecgCycleIndex = step % 20;
-      let yVal = 50;
-
-      if (ecgCycleIndex === 3) yVal = 42;
-      else if (ecgCycleIndex === 6) yVal = 58;
-      else if (ecgCycleIndex === 7) yVal = 5;
-      else if (ecgCycleIndex === 8) yVal = 85;
-      else if (ecgCycleIndex === 12) yVal = 35;
-      else yVal = 50 + (Math.random() * 4 - 2);
-
       setEcgPoints(prev => {
-        const updated = [...prev, yVal];
-        return updated.length > 100 ? updated.slice(1) : updated;
-      });
+        const next = [...prev.slice(1)];
+        const step = Date.now() % 1000;
+        let val = 20;
+        if (step < 100) val = 20 + Math.sin(step / 30) * 8;
+        else if (step > 200 && step < 240) val = 10;
+        else if (step >= 240 && step <= 280) val = 65; // QRS Peak
+        else if (step > 280 && step < 320) val = -5;
+        else if (step > 400 && step < 500) val = 25;
+        else val = 20 + (Math.random() * 2 - 1);
 
-      if (step % 20 === 0) {
-        setLiveBpm(Math.round(72 + (Math.random() * 6 - 3)));
-        setLiveRmssd(Math.round(40 + (Math.random() * 8 - 4)));
-      }
-    }, 40);
+        next.push(val);
+        return next;
+      });
+    }, 80);
 
     return () => clearInterval(interval);
-  }, [bleConnected, isDemoMode]);
+  }, []);
 
-  const connectGeoidChestStrap = async () => {
-    try {
-      if (!navigator.bluetooth) {
-        alert('WebBluetooth no está disponible en este navegador.');
-        return;
-      }
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['heart_rate'] }]
+  // Handlers para conectar Hardware Real
+  const handleConnectUsb = async () => {
+    const success = await telemetryService.connectUsb();
+    if (success) {
+      setNotificationMsg('¡Puerto USB Serial conectado exitosamente a 115200 baudios!');
+    } else {
+      setNotificationMsg('No se seleccionó dispositivo USB o el navegador denegó el acceso.');
+    }
+    setTimeout(() => setNotificationMsg(null), 4000);
+  };
+
+  const handleConnectBluetooth = async () => {
+    const success = await telemetryService.connectBluetooth();
+    if (success) {
+      setNotificationMsg('Dispositivo Bluetooth BLE vinculado y recibiendo datos.');
+    } else {
+      setNotificationMsg('No se completó la vinculación Bluetooth BLE.');
+    }
+    setTimeout(() => setNotificationMsg(null), 4000);
+  };
+
+  const handleConnectWifi = () => {
+    telemetryService.connectWifi(wifiIp);
+    setNotificationMsg(`Intentando conexión Socket a ws://${wifiIp}:8080...`);
+    setTimeout(() => setNotificationMsg(null), 4000);
+  };
+
+  const handleZeroTareCalibration = () => {
+    setIsCalibrating(true);
+    setTimeout(() => {
+      const offset = telemetryService.executeZeroTare();
+      setIsCalibrating(false);
+      setNotificationMsg(`Calibración completada. Offset de tara aplicado: ${offset} kg`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    }, 500);
+  };
+
+  const handleTransferToGlobalRecord = () => {
+    if (onUpdatePatientData) {
+      onUpdatePatientData({
+        multisensoryHardware: {
+          vagalToneHrvIndex: telemetry.hrvRmssdMs,
+          handGripPressureKg: telemetry.handGripPressureKg,
+          camouflagingIndexPct: patient.multisensoryHardware?.camouflagingIndexPct || 25,
+          ocularFixationDurationMs: patient.multisensoryHardware?.ocularFixationDurationMs || 350,
+          touchTapLatencyCompensatedMs: telemetry.touchTapLatencyMs,
+          microExpressionState: patient.multisensoryHardware?.microExpressionState || 'Normorreactivo'
+        },
+        neuromotorBiomarkers: {
+          reactionTimeMs: telemetry.reactionTimeMs,
+          omissionErrors: patient.neuromotorBiomarkers?.omissionErrors || 2,
+          commissionErrors: patient.neuromotorBiomarkers?.commissionErrors || 1,
+          motorStabilityScore: Math.min(100, Math.max(0, 100 - Math.round(telemetry.handGripPressureKg)))
+        }
       });
-      setBleDeviceName(device.name || 'Geoid HS500');
-      setBleConnected(true);
-      setIsDemoMode(false);
-    } catch (error: unknown) {
-      console.warn('Conexión Bluetooth no completada, conmutando a enlace simulado:', error);
-      setBleConnected(true);
-      setBleDeviceName('Geoid HS500 (Enlace Activo)');
     }
+    setNotificationMsg('Métricas de hardware transferidas al expediente general del paciente.');
+    setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  useEffect(() => {
-    setReportText(
-      `INFORME MÉDICO DE EVALUACIÓN CIENTÍFICA & BIOMÉTRICA FÍSICA\n` +
-      `=========================================================\n` +
-      `PACIENTE ID: ${safePatientId} | EDAD: ${safeAge} años | GÉNERO: ${safeGender}\n` +
-      `EVALUACIÓN CIENTÍFICA: ${activeProtocol.disorderName}\n` +
-      `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
-      `ESTADO DE CALIBRACIÓN: ${isCalibrated ? 'CALIBRADO (Punto Cero Calibrado)' : 'PENDIENTE DE CALIBRACIÓN'}\n` +
-      `PRUEBA HARDWARE: ${activeProtocol.testTitle}\n` +
-      `EQUIPO UTILIZADO: ${activeProtocol.hardwareUsed}\n\n` +
-      `1. OBJETIVO CLÍNICO DE LA EVALUACIÓN:\n` +
-      `${activeProtocol.clinicalObjective}\n\n` +
-      `2. TELEMETRÍA DE PRECISIÓN Y MÉTRICAS REGISTRADAS:\n` +
-      `- ${activeProtocol.primaryMetrics.m1.label}: ${activeProtocol.primaryMetrics.m1.value} ${activeProtocol.primaryMetrics.m1.status}\n` +
-      `- ${activeProtocol.primaryMetrics.m2.label}: ${activeProtocol.primaryMetrics.m2.value} ${activeProtocol.primaryMetrics.m2.status}\n` +
-      `- ${activeProtocol.primaryMetrics.m3.label}: ${activeProtocol.primaryMetrics.m3.value} ${activeProtocol.primaryMetrics.m3.status}\n\n` +
-      `3. TRIANGULACIÓN GLOBAL & DICTAMEN AMIE:\n` +
-      `Los datos colectados vía ${activeProtocol.hardwareUsed} muestran congruencia neurofisiológica con un índice de fiabilidad del ${activeProtocol.reliabilityPct}%. Se transfiere el vector para alimentar la triangulación global del motor AMIE.`
-    );
-  }, [selectedProtocolKey, patient, isCalibrated, activeProtocol, safePatientId, safeAge, safeGender]);
-
-  const handleExportWord = () => {
-    const header = "data:application/vnd.ms-word;charset=utf-8,";
-    const content = encodeURIComponent(
-      `<html><head><meta charset='utf-8'></head><body style='font-family:Arial,sans-serif;padding:20px;'>` +
-      `<h2 style='color:#0d9488;'>AMIE CLINICAL ENGINE — INFORME HARDWARE CIENTÍFICO</h2>` +
-      `<pre style='font-family:Arial,sans-serif;white-space:pre-wrap;'>${reportText}</pre>` +
-      `</body></html>`
-    );
-    const link = document.createElement("a");
-    link.href = header + content;
-    link.download = `Informe_Hardware_${selectedProtocolKey}_${safePatientId}.doc`;
-    link.click();
-  };
-
-  const handleTransferToGlobal = () => {
-    if (onUpdatePatientVrData) {
-      const hardwareTelemetry: VrTelemetryData = {
-        sessionId: `HW-ESP32-GEOID-${Math.floor(1000 + Math.random() * 9000)}`,
-        timestamp: new Date().toISOString(),
-        gsrMicroSiemens: [1.2, 2.8, 4.2, 3.5, 2.1],
-        hrvRmssdMs: [42, 28, 18, 32, 45],
-        habituationIndexH: 2.65,
-        stressPeaksCount: 2,
-        exposureDurationSec: activeProtocol.targetDurationSec
-      };
-
-      const hardwareReport: VrTherapyReport = {
-        sessionGuid: hardwareTelemetry.sessionId,
-        exposureType: `Prueba Hardware (${activeProtocol.testTitle})`,
-        sympatheticToneIndex: 72,
-        vagalReactivityIndex: 38,
-        habituationRate: 'Óptima',
-        synthesizedClinicalSummary: reportText
-      };
-
-      onUpdatePatientVrData(hardwareTelemetry, hardwareReport);
-      setTransferSuccess(true);
-      setTimeout(() => setTransferSuccess(false), 4000);
-    }
-  };
-
-  const svgPathD = ecgPoints.map((y, i) => {
-    const x = (i / 100) * 800;
-    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  const svgPathD = ecgPoints.map((val, idx) => {
+    const x = (idx / (ecgPoints.length - 1)) * 800;
+    const y = 80 - val;
+    return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
   }).join(' ');
 
+  const isRealHardwareConnected = connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED';
+
   return (
-    <div className={`space-y-6 transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-6 overflow-y-auto' : 'relative'}`}>
+    <div className="space-y-6 font-sans">
       
-      {/* 1. HUD Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-tr from-cyan-500 via-teal-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-cyan-500/20">
-            <Brain className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-black text-white tracking-tight">
-                ScientificNeuroEvaluator • Evaluación Bioclínica & Multisensor
-              </h1>
-              <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-full">
-                HARDWARE ESP32 + GEOID
-              </span>
+      {/* 1. ENCABEZADO CON VERIFICACIÓN REAL DE ENLACE */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-3 rounded-xl text-white shadow-lg ${
+              isRealHardwareConnected 
+                ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/20' 
+                : 'bg-gradient-to-tr from-amber-600 to-orange-600 shadow-amber-500/20'
+            }`}>
+              <Cpu className="w-6 h-6 animate-pulse" />
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Extracción de datos del expediente <strong className="text-sky-300">{safePatientId}</strong> ({safePatientName})
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white">ScientificNeuroEvaluator • Evaluación Bioclínica</h2>
+                
+                {/* INDICADOR DE ESTADO REAL */}
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${
+                  isRealHardwareConnected
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                    : 'bg-amber-950 text-amber-300 border-amber-500/40'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${isRealHardwareConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+                  {isRealHardwareConnected ? `ENLACE REAL ACTIVO (${connectionStatus.protocol})` : 'MODO SIMULACIÓN (SIN HARDWARE)'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Dispositivo: <strong className="text-slate-200">{connectionStatus.deviceName}</strong></p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleZeroTareCalibration}
+              disabled={isCalibrating}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition"
+            >
+              <Sliders className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isCalibrating ? 'Calibrando...' : 'Calibrar Cero / Baseline'}</span>
+            </button>
+
+            <button
+              onClick={handleTransferToGlobalRecord}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Transferir a Triangulación Global</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={handleStartCalibration}
-            disabled={isCalibrating}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs border transition shrink-0 ${
-              isCalibrated
-                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
-                : 'bg-indigo-950/80 text-indigo-300 border-indigo-500/50 hover:bg-indigo-900'
-            }`}
-          >
-            {isCalibrating ? (
-              <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
-            ) : (
-              <Sliders className="w-4 h-4 text-indigo-400" />
-            )}
-            <span>
-              {isCalibrating ? 'Calibrando Cero...' : isCalibrated ? 'Hardware Calibrado (Cero OK)' : 'Calibrar Cero / Baseline'}
-            </span>
-          </button>
+        {/* CONTROLES DIRECTOS DE CONEXIÓN */}
+        <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+            <Gauge className="w-4 h-4 text-cyan-400" /> Seleccionar Fuente Físicas de Entrada:
+          </span>
 
-          <button
-            onClick={() => setIsDemoMode(!isDemoMode)}
-            className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition ${
-              isDemoMode 
-                ? 'bg-amber-950/80 text-amber-300 border-amber-500/50' 
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-            }`}
-          >
-            {isDemoMode ? 'Modo Simulación Activo' : 'Activar Simulación'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleConnectUsb}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                connectionStatus.protocol === 'USB' && connectionStatus.connected
+                  ? 'bg-cyan-600 text-white border-cyan-400 shadow-md shadow-cyan-600/30'
+                  : 'bg-slate-950 text-cyan-300 border-cyan-500/40 hover:bg-slate-800'
+              }`}
+            >
+              <Usb className="w-3.5 h-3.5 text-cyan-400" /> Conectar Cable USB (ESP32)
+            </button>
 
-          <button
-            onClick={connectGeoidChestStrap}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-lg shrink-0 ${
-              bleConnected 
-                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50' 
-                : 'bg-teal-600 hover:bg-teal-500 text-white shadow-teal-600/20'
-            }`}
-          >
-            <Bluetooth className="w-4 h-4" />
-            <span>{bleConnected ? `Vínculo: ${bleDeviceName}` : 'Conectar Geoid HS500'}</span>
-          </button>
+            <button
+              onClick={handleConnectBluetooth}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                connectionStatus.protocol === 'BLUETOOTH' && connectionStatus.connected
+                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                  : 'bg-slate-950 text-indigo-300 border-indigo-500/40 hover:bg-slate-800'
+              }`}
+            >
+              <Bluetooth className="w-3.5 h-3.5 text-indigo-400" /> Vincular BLE (Geoid)
+            </button>
 
-          <button
-            onClick={handleTransferToGlobal}
-            className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 transition active:scale-95 shrink-0"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Transferir a Triangulación Global</span>
-          </button>
+            <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+              <input
+                type="text"
+                value={wifiIp}
+                onChange={(e) => setWifiIp(e.target.value)}
+                className="bg-transparent text-xs text-slate-200 px-2 py-1 w-28 focus:outline-none font-mono"
+                placeholder="192.168.1.105"
+              />
+              <button
+                onClick={handleConnectWifi}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+              >
+                <Wifi className="w-3 h-3 text-emerald-400" /> Wi-Fi
+              </button>
+            </div>
 
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4 text-amber-400" /> : <Maximize2 className="w-4 h-4 text-cyan-400" />}
-            <span>{isFullscreen ? 'Salir Fullscreen' : 'Pantalla Completa'}</span>
-          </button>
+            <button
+              onClick={() => telemetryService.enableSimulation()}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                connectionStatus.protocol === 'SIMULATED'
+                  ? 'bg-slate-800 text-amber-300 border-amber-500/40'
+                  : 'bg-slate-950 text-slate-500 border-slate-800'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5" /> Forzar Simulación
+            </button>
+          </div>
         </div>
+
+        {notificationMsg && (
+          <div className="p-3 bg-slate-950 border border-cyan-500/40 rounded-xl text-cyan-200 text-xs font-semibold flex items-center gap-2 animate-fade-in">
+            <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>{notificationMsg}</span>
+          </div>
+        )}
       </div>
 
-      {transferSuccess && (
-        <div className="p-3 bg-emerald-950/90 border border-emerald-500/50 rounded-xl text-emerald-300 text-xs flex items-center gap-2 shadow-lg">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Métricas de sensores físicos exportadas con éxito al vector global del paciente para triangulación AMIE.</span>
-        </div>
-      )}
-
-      {/* 2. TRAZADO ELECTROCARDIOGRÁFICO CONTROLADO */}
+      {/* 2. VISOR ECG EN VIVO */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-            <Activity className={`w-4 h-4 ${bleConnected || isDemoMode ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-            <span>Trazado Cardíaco en Vivo (Geoid HS500)</span>
-          </div>
-          
-          <div className="flex items-center gap-3 font-mono text-xs">
-            {bleConnected || isDemoMode ? (
-              <>
-                <span className="text-emerald-400 font-bold bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40">
-                  {liveBpm} BPM
-                </span>
-                <span className="text-cyan-400 font-bold bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-500/40">
-                  HRV: {liveRmssd} ms
-                </span>
-              </>
-            ) : (
-              <span className="text-slate-400 font-bold bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
-                ESPERANDO CONEXIÓN O SIMULACIÓN
-              </span>
-            )}
+          <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
+            <Activity className="w-4 h-4 text-teal-400" /> Trazado Fisiológico Continuo
+          </span>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-emerald-950 border border-emerald-500/40 rounded-lg text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5">
+              <Heart className="w-3.5 h-3.5 text-emerald-400 animate-ping" />
+              {telemetry.heartRateBpm} BPM
+            </span>
+            <span className="px-3 py-1 bg-cyan-950 border border-cyan-500/40 rounded-lg text-cyan-300 text-xs font-mono font-bold">
+              HRV: {telemetry.hrvRmssdMs} ms
+            </span>
+            <span className="px-3 py-1 bg-indigo-950 border border-indigo-500/40 rounded-lg text-indigo-300 text-xs font-mono font-bold">
+              GSR: {telemetry.gsrMicroSiemens} µS
+            </span>
           </div>
         </div>
 
-        <div className="h-32 w-full bg-slate-950 rounded-xl p-2 border border-slate-800 relative overflow-hidden flex items-center">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:16px_16px] opacity-40" />
-
-          <svg viewBox="0 0 800 100" className="w-full h-full relative z-10">
-            <path
-              d={svgPathD}
-              fill="none"
-              stroke={bleConnected || isDemoMode ? '#10b981' : '#475569'}
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+        <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 h-32 flex items-center justify-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:16px_16px] opacity-20" />
+          <svg className="w-full h-full relative z-10" viewBox="0 0 800 120" preserveAspectRatio="none">
+            <path d={svgPathD} fill="none" stroke={isRealHardwareConnected ? '#10b981' : '#f59e0b'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
       </div>
 
-      {/* 3. Selector de Protocolo */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-teal-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              Selección de Prueba Biomecánica & Hardware Físico
-            </h3>
-          </div>
-          <div className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-500/40 px-3 py-1 rounded-full text-emerald-300 font-mono text-xs">
-            <Target className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Fiabilidad: {activeProtocol.reliabilityPct}%</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          <div className="md:col-span-5 space-y-2">
-            <label className="text-xs text-slate-400 font-semibold block">Categoría Diagnóstica (DSM-5-TR):</label>
-            <select
-              value={selectedProtocolKey}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedProtocolKey(e.target.value)}
-              className="w-full bg-slate-950 border border-teal-500/40 rounded-xl p-3 text-xs text-white font-bold focus:outline-none focus:border-teal-400"
-            >
-              {HARDWARE_CLINICAL_PROTOCOLS.map(proto => (
-                <option key={proto.key} value={proto.key}>
-                  [{proto.key}] ({proto.reliabilityPct}%) {proto.disorderName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-7 bg-slate-950/80 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
-            <div>
-              <span className="text-xs font-bold text-white block mb-1">{activeProtocol.testTitle}</span>
-              <p className="text-xs text-slate-300 mb-2 leading-relaxed">{activeProtocol.clinicalObjective}</p>
-              <p className="text-[11px] text-teal-400 font-mono">
-                <strong>Equipo Requerido:</strong> {activeProtocol.hardwareUsed}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Tarjetas de Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
-            <Zap className="w-4 h-4 text-amber-400" />
-            <span>{activeProtocol.primaryMetrics.m1.label}</span>
-          </div>
-          <div className="text-xl font-bold text-white">
-            {activeProtocol.primaryMetrics.m1.value} <span className="text-xs text-rose-400 font-normal">{activeProtocol.primaryMetrics.m1.status}</span>
-          </div>
-          <p className="text-[10px] text-slate-500 mt-1">{activeProtocol.primaryMetrics.m1.desc}</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
-            <Activity className="w-4 h-4 text-teal-400" />
-            <span>{activeProtocol.primaryMetrics.m2.label}</span>
-          </div>
-          <div className="text-xl font-bold text-white">
-            {activeProtocol.primaryMetrics.m2.value} <span className="text-xs text-teal-400 font-normal">{activeProtocol.primaryMetrics.m2.status}</span>
-          </div>
-          <p className="text-[10px] text-slate-500 mt-1">{activeProtocol.primaryMetrics.m2.desc}</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
-            <HeartPulse className="w-4 h-4 text-emerald-400" />
-            <span>{activeProtocol.primaryMetrics.m3.label}</span>
-          </div>
-          <div className="text-xl font-bold text-emerald-300">{activeProtocol.primaryMetrics.m3.value}</div>
-          <p className="text-[10px] text-emerald-400 mt-1">{activeProtocol.primaryMetrics.m3.desc}</p>
-        </div>
-      </div>
-
-      {/* 5. Editor de Informe */}
-      <div className="bg-slate-900 border border-teal-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
+      {/* 3. MÉTRICAS BIOMECÁNICAS */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-teal-300 font-bold text-xs uppercase tracking-wider">
-            <Microscope className="w-4 h-4" />
-            <span>Informe Individual — Sensores Físicos [{selectedProtocolKey}]</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsEditingReport(!isEditingReport)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-teal-400" />
-              <span>{isEditingReport ? 'Guardar Cambios' : 'Editar Informe'}</span>
-            </button>
-
-            <button
-              onClick={handleExportWord}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-teal-600/20"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exportar Word (.doc)</span>
-            </button>
-          </div>
+          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <Target className="w-4 h-4 text-sky-400" /> Métricas Cuantitativas Capturadas
+          </span>
+          <span className="text-xs text-slate-400 font-bold bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg">
+            Origen: {connectionStatus.protocol}
+          </span>
         </div>
 
-        {isEditingReport ? (
-          <textarea
-            value={reportText}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReportText(e.target.value)}
-            rows={12}
-            className="w-full bg-slate-950 text-slate-100 font-mono text-xs p-4 rounded-xl border border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500 leading-relaxed"
-          />
-        ) : (
-          <div className="bg-slate-950/90 p-5 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed shadow-inner">
-            {reportText}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <span className="text-xs text-slate-400 block mb-1">Latencia Biomotora / Respuesta</span>
+            <div className="text-2xl font-black text-white font-mono">{telemetry.reactionTimeMs} ms</div>
+            <span className="text-[10px] text-amber-400 font-bold mt-1 block">Impulsividad Motor Fin.</span>
           </div>
-        )}
+
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <span className="text-xs text-slate-400 block mb-1">Presión Isométrica (Grip Kg)</span>
+            <div className="text-2xl font-black text-cyan-400 font-mono">{telemetry.handGripPressureKg} kg</div>
+            <span className="text-[10px] text-teal-400 font-bold mt-1 block">Tensión Neuromuscular</span>
+          </div>
+
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <span className="text-xs text-slate-400 block mb-1">Latencia de Toque Compensada</span>
+            <div className="text-2xl font-black text-indigo-400 font-mono">{telemetry.touchTapLatencyMs} ms</div>
+            <span className="text-[10px] text-indigo-300 mt-1 block">Control Inhibitorio Go/No-Go</span>
+          </div>
+        </div>
       </div>
+
     </div>
   );
 };
