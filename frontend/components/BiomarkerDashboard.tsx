@@ -16,36 +16,48 @@ import {
   Cell,
   ReferenceLine
 } from 'recharts';
-import { Gauge, Activity, Cpu, Moon, Zap, Users, Brain, HeartPulse, Usb } from 'lucide-react';
+import { Cpu, Zap, HeartPulse, Usb } from 'lucide-react';
 
 interface BiomarkerDashboardProps {
-  patient: PatientRecord;
+  patient?: PatientRecord;
 }
 
 export const BiomarkerDashboard: React.FC<BiomarkerDashboardProps> = ({ patient }) => {
   const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
 
-  // Functional Areas data for Radar
+  // 🛡️ Extraer con valores de respaldo seguros (Fallback defensivo)
+  const functionalAreas = patient?.functionalAreas || {
+    sleep: 50,
+    appetite: 50,
+    energy: 50,
+    social: 50,
+    attention: 50
+  };
+
   const functionalData = [
-    { subject: 'Sueño', score: patient.functionalAreas.sleep, fullMark: 100 },
-    { subject: 'Apetito', score: patient.functionalAreas.appetite, fullMark: 100 },
-    { subject: 'Energía', score: patient.functionalAreas.energy, fullMark: 100 },
-    { subject: 'Social', score: patient.functionalAreas.social, fullMark: 100 },
-    { subject: 'Atención', score: patient.functionalAreas.attention, fullMark: 100 },
+    { subject: 'Sueño', score: functionalAreas.sleep ?? 50, fullMark: 100 },
+    { subject: 'Apetito', score: functionalAreas.appetite ?? 50, fullMark: 100 },
+    { subject: 'Energía', score: functionalAreas.energy ?? 50, fullMark: 100 },
+    { subject: 'Social', score: functionalAreas.social ?? 50, fullMark: 100 },
+    { subject: 'Atención', score: functionalAreas.attention ?? 50, fullMark: 100 },
   ];
 
   // QEEG Z-scores
-  const qeegData = patient.qeegZScores
+  const qeegZ = patient?.qeegZScores;
+  const qeegData = qeegZ
     ? [
-        { metric: 'Theta/Beta Frontal', z: patient.qeegZScores.frontalThetaBetaRatio },
-        { metric: 'Asimetría Temp.', z: patient.qeegZScores.temporalAsymmetry },
-        { metric: 'Actividad Delta (Z)', z: patient.qeegZScores.deltaSlowActivityZ },
-        { metric: 'Frec. Pico Alfa', z: (patient.qeegZScores.alphaPeakFrequencyHz - 10) / 1.5 }
+        { metric: 'Theta/Beta Frontal', z: qeegZ.frontalThetaBetaRatio ?? 0 },
+        { metric: 'Asimetría Temp.', z: qeegZ.temporalAsymmetry ?? 0 },
+        { metric: 'Actividad Delta (Z)', z: qeegZ.deltaSlowActivityZ ?? 0 },
+        { metric: 'Frec. Pico Alfa', z: ((qeegZ.alphaPeakFrequencyHz ?? 10) - 10) / 1.5 }
       ]
     : [];
 
-  const sadScore = patient.psychometricScores.sadPersons ?? 0;
+  const sadScore = patient?.psychometricScores?.sadPersons ?? 0;
   const isHighRisk = sadScore >= 6;
+
+  // Neuromotor Biomarkers
+  const neuromotor = patient?.neuromotorBiomarkers;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl flex flex-col gap-4">
@@ -134,30 +146,30 @@ export const BiomarkerDashboard: React.FC<BiomarkerDashboardProps> = ({ patient 
       </div>
 
       {/* Hardware Telemetry Strip */}
-      {patient.neuromotorBiomarkers && (
+      {neuromotor && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 text-xs">
           <div className="p-2 rounded bg-slate-900 border border-slate-800">
             <div className="text-[10px] text-slate-400">Latencia TR (USB)</div>
             <div className="text-base font-bold text-cyan-300 font-mono">
-              {patient.neuromotorBiomarkers.reactionTimeMs} <span className="text-[10px] font-normal">ms</span>
+              {neuromotor.reactionTimeMs ?? 240} <span className="text-[10px] font-normal">ms</span>
             </div>
             <div className="text-[10px] text-slate-500">
-              {patient.neuromotorBiomarkers.reactionTimeMs > 400 ? '⚠️ Enlentecimiento psicomotor' : patient.neuromotorBiomarkers.reactionTimeMs < 210 ? '⚡ Taquipsiquia/Impulsividad' : 'Rango Normal (220-350ms)'}
+              {(neuromotor.reactionTimeMs ?? 240) > 400 ? '⚠️ Enlentecimiento psicomotor' : (neuromotor.reactionTimeMs ?? 240) < 210 ? '⚡ Taquipsiquia/Impulsividad' : 'Rango Normal (220-350ms)'}
             </div>
           </div>
 
           <div className="p-2 rounded bg-slate-900 border border-slate-800">
             <div className="text-[10px] text-slate-400">Control Inhibitorio (Falsas Alarmas)</div>
-            <div className={`text-base font-bold font-mono ${patient.neuromotorBiomarkers.commissionErrors > 6 ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {patient.neuromotorBiomarkers.commissionErrors} <span className="text-[10px] font-normal">comisiones</span>
+            <div className={`text-base font-bold font-mono ${(neuromotor.commissionErrors ?? 0) > 6 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {neuromotor.commissionErrors ?? 0} <span className="text-[10px] font-normal">comisiones</span>
             </div>
             <div className="text-[10px] text-slate-500">Frenado orbitofrontal</div>
           </div>
 
           <div className="p-2 rounded bg-slate-900 border border-slate-800">
             <div className="text-[10px] text-slate-400">Lapsos Atencionales (Omisiones)</div>
-            <div className={`text-base font-bold font-mono ${patient.neuromotorBiomarkers.omissionErrors > 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {patient.neuromotorBiomarkers.omissionErrors} <span className="text-[10px] font-normal">omisiones</span>
+            <div className={`text-base font-bold font-mono ${(neuromotor.omissionErrors ?? 0) > 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {neuromotor.omissionErrors ?? 0} <span className="text-[10px] font-normal">omisiones</span>
             </div>
             <div className="text-[10px] text-slate-500">Foco sostenido dorsolateral</div>
           </div>
