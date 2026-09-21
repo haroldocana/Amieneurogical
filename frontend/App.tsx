@@ -23,7 +23,8 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
-import { VrPainManagementModule } from './components/VrPainManagementModule'; // Módulo de Analgesia
+import { VrPainManagementModule } from './components/VrPainManagementModule'; // Módulo 1 (Analgesia VR)
+import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule'; // Módulo 2 (Mirror VR FND)
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
@@ -47,7 +48,8 @@ import {
   Sparkles,
   Usb,
   Layers,
-  ThermometerSnowflake
+  ThermometerSnowflake,
+  UserCheck
 } from 'lucide-react';
 
 type AppTab = 
@@ -89,7 +91,8 @@ export default function App() {
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
-  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false); // Estado para Módulo 1 (Analgesia VR)
+  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false); // Módulo 1 (Analgesia VR)
+  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false); // Módulo 2 (Mirror VR FND)
 
   // USB Device State
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
@@ -583,6 +586,14 @@ export default function App() {
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-3 flex-wrap">
               <button
+                onClick={() => setIsFullscreenFndOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition"
+              >
+                <UserCheck className="w-4 h-4 text-indigo-200" />
+                <span>Consola Neuro-Rehabilitación (Mirror VR)</span>
+              </button>
+
+              <button
                 onClick={() => setIsFullscreenPainOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
               >
@@ -677,6 +688,14 @@ export default function App() {
         <VrPainManagementModule
           patient={currentPatient}
           onClose={() => setIsFullscreenPainOpen(false)}
+        />
+      )}
+
+      {/* Modal Fullscreen 5: Consola Neuro-Rehabilitación (Mirror VR - FND) */}
+      {isFullscreenFndOpen && (
+        <VrFunctionalNeurologyModule
+          patient={currentPatient}
+          onClose={() => setIsFullscreenFndOpen(false)}
         />
       )}
     </div>
