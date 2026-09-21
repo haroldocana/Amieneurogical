@@ -226,9 +226,21 @@ export default function App() {
     return <LoginModal onSuccess={handleLoginSuccess} />;
   }
 
-  const safePatientId = currentPatient?.id || 'PAC-8104';
-  const safeAge = currentPatient?.age ?? 55;
-  const safeGender = currentPatient?.gender || 'M';
+  // Objeto de paciente con protección absoluta contra propiedades undefined
+  const safePatient: PatientRecord = {
+    ...SAFE_DEFAULT_PATIENT,
+    ...(currentPatient || {}),
+    neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT?.neuromotorBiomarkers || {
+      reactionTimeMs: 240,
+      omissionErrors: 0,
+      commissionErrors: 0,
+      motorStabilityScore: 85
+    }
+  };
+
+  const safePatientId = safePatient.id || 'PAC-8104';
+  const safeAge = safePatient.age ?? 55;
+  const safeGender = safePatient.gender || 'M';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
@@ -497,20 +509,20 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
               <div className="lg:col-span-5 space-y-5 flex flex-col">
                 <PatientJsonEditor
-                  patient={currentPatient}
+                  patient={safePatient}
                   onChange={setCurrentPatient}
                   onSelectPreset={handleSelectPreset}
                 />
-                <PatientSentinelDashboard patient={currentPatient} />
-                <SessionAudioAcoustics audioRecordings={currentPatient?.audioRecordings} />
-                <BiomarkerDashboard patient={currentPatient} />
+                <PatientSentinelDashboard patient={safePatient} />
+                <SessionAudioAcoustics audioRecordings={safePatient.audioRecordings} />
+                <BiomarkerDashboard patient={safePatient} />
               </div>
 
               <div className="lg:col-span-7 space-y-5">
                 {analysis ? (
                   <>
                     <ClinicalOutputViewer analysis={analysis} />
-                    <AmieChatCopilot patient={currentPatient} analysis={analysis} />
+                    <AmieChatCopilot patient={safePatient} analysis={analysis} />
                   </>
                 ) : (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex flex-col items-center justify-center h-full min-h-[480px] shadow-2xl">
@@ -539,13 +551,13 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={currentPatient} />}
+        {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
         
         {/* Tab 3: Diferenciador & Sesgos + Matriz de Triangulación Bioclínica */}
         {activeTab === 'differential_bias' && (
           <div className="space-y-6">
-            <DifferentialBiasResolver patient={currentPatient} />
-            <DiagnosticTriangulationView patient={currentPatient} analysis={analysis} />
+            <DifferentialBiasResolver patient={safePatient} />
+            <DiagnosticTriangulationView patient={safePatient} analysis={analysis} />
           </div>
         )}
 
@@ -585,9 +597,9 @@ export default function App() {
             </div>
 
             {neuroViewerMode === 'classic' ? (
-              <InteractiveNeuroViewer patient={currentPatient} />
+              <InteractiveNeuroViewer patient={safePatient} />
             ) : (
-              <HolographicNeuroViewer3D patient={currentPatient} />
+              <HolographicNeuroViewer3D patient={safePatient} />
             )}
           </div>
         )}
@@ -671,7 +683,7 @@ export default function App() {
             </div>
 
             <VrTherapyModule
-              patient={currentPatient}
+              patient={safePatient}
               onUpdatePatientVrData={handleUpdatePatientVrData}
             />
           </div>
@@ -679,7 +691,7 @@ export default function App() {
 
         {activeTab === 'referral' && (
           <PsychiatryReferralView
-            patient={currentPatient}
+            patient={safePatient}
             analysis={analysis}
             currentDoctorName={doctorName}
             colegiadoNumber={colegiadoNumber}
@@ -703,7 +715,7 @@ export default function App() {
       {/* Modales Fullscreen */}
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenConsoleOpen(false)}
           onUpdatePatientVrData={handleUpdatePatientVrData}
         />
@@ -711,7 +723,7 @@ export default function App() {
 
       {isFullscreenDiagnosticOpen && (
         <FullscreenDiagnosticRunner
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenDiagnosticOpen(false)}
           onUpdatePatientVrData={handleUpdatePatientVrData}
         />
@@ -719,7 +731,7 @@ export default function App() {
 
       {isFullscreenHypnosisOpen && (
         <VrDevelopmentalTraumaFullscreenMonitor
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenHypnosisOpen(false)}
         />
       )}
@@ -727,7 +739,7 @@ export default function App() {
       {/* Módulo 1: Analgesia Inmersiva */}
       {isFullscreenPainOpen && (
         <VrPainManagementModule
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenPainOpen(false)}
         />
       )}
@@ -735,7 +747,7 @@ export default function App() {
       {/* Módulo 2: Neuro-Rehabilitación Mirror VR */}
       {isFullscreenFndOpen && (
         <VrFunctionalNeurologyModule
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenFndOpen(false)}
         />
       )}
@@ -743,7 +755,7 @@ export default function App() {
       {/* Módulo 3: Reconsolidación Memoria & Fobias */}
       {isFullscreenMemoryOpen && (
         <VrMemoryReconsolidationModule
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenMemoryOpen(false)}
         />
       )}
@@ -751,7 +763,7 @@ export default function App() {
       {/* Módulo 4: TDAH & Función Ejecutiva */}
       {isFullscreenExecOpen && (
         <VrExecutiveFunctionModule
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenExecOpen(false)}
         />
       )}
@@ -759,7 +771,7 @@ export default function App() {
       {/* Módulo 5: Gamma 40Hz Insight (TOC/TEA) */}
       {isFullscreenGammaOpen && (
         <VrGammaInsightModule
-          patient={currentPatient}
+          patient={safePatient}
           onClose={() => setIsFullscreenGammaOpen(false)}
         />
       )}
