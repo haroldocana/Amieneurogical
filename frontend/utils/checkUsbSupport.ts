@@ -22,7 +22,7 @@ export interface NeuromotorTelemetrySample {
 }
 
 /**
- * Filtros de Vendor ID para hardware biomédico, tarjetas EEG y convertidores serie comunes
+ * Filtros de Vendor ID (VID) para hardware biomédico, tarjetas EEG y convertidores serie comunes
  */
 export const BIOMEDICAL_USB_VENDOR_FILTERS = [
   { usbVendorId: 0x0403 }, // FTDI (OpenBCI Cyton/Ganglion, BITalino)
@@ -56,7 +56,7 @@ export const checkUsbCompatibility = (): UsbCompatibilityResult => {
 };
 
 /**
- * Escucha eventos de conexión y desconexión física de hardware en tiempo real (Hot-Plugging)
+ * Escucha eventos de conexión y desconexión física de hardware en tiempo real (Hot-Plugging WebUSB / WebSerial / WebHID)
  */
 export const subscribeUsbDeviceEvents = (
   onDeviceConnected: (deviceName: string) => void,
@@ -65,35 +65,97 @@ export const subscribeUsbDeviceEvents = (
   if (typeof navigator === 'undefined') return () => {};
 
   const handleConnect = (event: any) => {
-    const name = event.device?.productName || 'Dispositivo Biomédico / Sensor USB';
+    const name = event.device?.productName || event.device?.name || 'Dispositivo Biomédico / Sensor USB';
     onDeviceConnected(name);
   };
 
   const handleDisconnect = (event: any) => {
-    const name = event.device?.productName || 'Dispositivo Biomédico USB';
+    const name = event.device?.productName || event.device?.name || 'Dispositivo Biomédico USB';
     onDeviceDisconnected(name);
   };
 
-  if ('hid' in navigator) {
-    (navigator as any).hid.addEventListener('connect', handleConnect);
-    (navigator as any).hid.addEventListener('disconnect', handleDisconnect);
-  }
+  const nav = navigator as any;
 
-  if ('serial' in navigator) {
-    (navigator as any).serial.addEventListener('connect', handleConnect);
-    (navigator as any).serial.addEventListener('disconnect', handleDisconnect);
+  // Suscripción a los 3 protocolos WebUSB, WebSerial y WebHID
+  if ('usb' in nav) {
+    nav.usb.addEventListener('connect', handleConnect);
+    nav.usb.addEventListener('disconnect', handleDisconnect);
+  }
+  if ('hid' in nav) {
+    nav.hid.addEventListener('connect', handleConnect);
+    nav.hid.addEventListener('disconnect', handleDisconnect);
+  }
+  if ('serial' in nav) {
+    nav.serial.addEventListener('connect', handleConnect);
+    nav.serial.addEventListener('disconnect', handleDisconnect);
   }
 
   return () => {
-    if ('hid' in navigator) {
-      (navigator as any).hid.removeEventListener('connect', handleConnect);
-      (navigator as any).hid.removeEventListener('disconnect', handleDisconnect);
+    if ('usb' in nav) {
+      nav.usb.removeEventListener('connect', handleConnect);
+      nav.usb.removeEventListener('disconnect', handleDisconnect);
     }
-    if ('serial' in navigator) {
-      (navigator as any).serial.removeEventListener('connect', handleConnect);
-      (navigator as any).serial.removeEventListener('disconnect', handleDisconnect);
+    if ('hid' in nav) {
+      nav.hid.removeEventListener('connect', handleConnect);
+      nav.hid.removeEventListener('disconnect', handleDisconnect);
+    }
+    if ('serial' in nav) {
+      nav.serial.removeEventListener('connect', handleConnect);
+      nav.serial.removeEventListener('disconnect', handleDisconnect);
     }
   };
+};
+
+/**
+ * Solicita emparejamiento explícito con un dispositivo biomédico vía WebSerial, WebUSB o WebHID
+ * (Requerido por UsbHardwareDiagnosticModal.tsx)
+ */
+export const requestUsbDevicePermission = async (): Promise<string | null> => {
+  if (typeof navigator === 'undefined') return null;
+  const nav = navigator as any;
+
+  // 1. Intentar por WebSerial
+  if ('serial' in nav) {
+    try {
+      const port = await nav.serial.requestPort({
+        filters: BIOMEDICAL_USB_VENDOR_FILTERS
+      });
+      const info = port.getInfo();
+      return info.usbVendorId 
+        ? `Sensor Biomédico Serie USB (VID: 0x${info.usbVendorId.toString(16)})` 
+        : 'Sensor Biomédico Serie USB';
+    } catch (e: any) {
+      if (e.name === 'NotFoundError') return null; // El usuario canceló la selección
+    }
+  }
+
+  // 2. Intentar por WebUSB
+  if ('usb' in nav) {
+    try {
+      const device = await nav.usb.requestDevice({
+        filters: BIOMEDICAL_USB_VENDOR_FILTERS
+      });
+      return device.productName || `Dispositivo USB Biomédico (VID: 0x${device.vendorId.toString(16)})`;
+    } catch (e: any) {
+      if (e.name === 'NotFoundError') return null;
+    }
+  }
+
+  // 3. Intentar por WebHID
+  if ('hid' in nav) {
+    try {
+      const devices = await nav.hid.requestDevice({
+        filters: BIOMEDICAL_USB_VENDOR_FILTERS
+      });
+      if (devices && devices.length > 0) {
+        return devices[0].productName || 'Sensor HID Biomédico';
+      }
+    } catch (e: any) {
+      if (e.name === 'NotFoundError') return null;
+    }
+  }
+
+  return null;
 };
 
 /**
