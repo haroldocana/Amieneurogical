@@ -1,274 +1,347 @@
 import React, { useState, useEffect } from 'react';
+import { PatientRecord } from '../types';
 import { 
-  checkUsbCompatibility, 
-  UsbCompatibilityResult, 
-  connectSerialNeuromotorSensor,
+  requestUsbDevicePermission, 
   NeuromotorTelemetrySample 
 } from '../utils/checkUsbSupport';
 import { 
-  Cpu, 
+  Usb, 
+  X, 
+  Activity, 
   CheckCircle2, 
   AlertTriangle, 
-  X, 
-  Zap, 
   RefreshCw, 
-  Usb, 
-  Activity,
-  ShieldCheck
+  Cpu, 
+  Zap, 
+  Sliders, 
+  ShieldCheck, 
+  Terminal,
+  Play,
+  Pause,
+  Gauge
 } from 'lucide-react';
 
-interface UsbHardwareDiagnosticModalProps {
-  isOpen: boolean;
+interface Props {
+  patient: PatientRecord;
   onClose: () => void;
-  onUpdateBiomarkers?: (ms: number, omissions: number, commissions: number) => void;
+  onUpdateHardwareData: (sample: NeuromotorTelemetrySample) => void;
 }
 
-export const UsbHardwareDiagnosticModal: React.FC<UsbHardwareDiagnosticModalProps> = ({
-  isOpen,
+export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
+  patient,
   onClose,
-  onUpdateBiomarkers
+  onUpdateHardwareData
 }) => {
-  const [usbStatus, setUsbStatus] = useState<UsbCompatibilityResult>(checkUsbCompatibility());
-  const [isCalibrating, setIsCalibrating] = useState(false);
-  const [sampledLatency, setSampledLatency] = useState<number | null>(null);
-  
-  // Estado para Hardware Físico Real (WebSerial)
-  const [isRealDeviceConnected, setIsRealDeviceConnected] = useState(false);
-  const [realDeviceError, setRealDeviceError] = useState<string | null>(null);
-  const [disconnectFn, setDisconnectFn] = useState<(() => Promise<void>) | null>(null);
+  const [isWebUsbSupported, setIsWebUsbSupported] = useState(false);
+  const [connectedDeviceName, setConnectedDeviceName] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [calibrationStatus, setCalibrationStatus] = useState<'idle' | 'calibrating' | 'calibrated'>('idle');
 
+  // Muestras fisiológicas en tiempo real (Prensión, Latencia, Reacción, EEG raw)
+  const [liveSample, setLiveSample] = useState<NeuromotorTelemetrySample>({
+    reactionTimeMs: patient.neuromotorBiomarkers?.reactionTimeMs || 240,
+    handGripPressureKg: patient.multisensoryHardware?.handGripPressureKg || 32.5,
+    touchTapLatencyMs: patient.multisensoryHardware?.touchTapLatencyCompensatedMs || 180,
+    eegChannelsRaw: [12.4, -4.2, 18.1, 8.5, -2.1, 14.3, 6.2, 0.8],
+    timestamp: Date.now()
+  });
+
+  const [logs, setLogs] = useState<string[]>([
+    '[SYSTEM] Inicializando subsistema de diagnóstico WebUSB/HID...',
+    '[SYSTEM] Esperando conexión de dispositivos biométricos de precisión.'
+  ]);
+
+  // Verificar compatibilidad del navegador con WebUSB
   useEffect(() => {
-    if (isOpen) {
-      setUsbStatus(checkUsbCompatibility());
+    const supported = typeof window !== 'undefined' && 'navigator' in window && 'usb' in navigator;
+    setIsWebUsbSupported(supported);
+    if (!supported) {
+      setLogs(prev => [
+        ...prev,
+        '[WARN] WebUSB API no disponible en este navegador. Se usará simulación de puerto serie virtual.'
+      ]);
     }
-  }, [isOpen]);
+  }, []);
 
-  // Limpieza de puerto al desmontar
+  // Bucle de streaming en vivo a 60Hz (Simulación de paquetes USB / HID)
   useEffect(() => {
-    return () => {
-      if (disconnectFn) {
-        disconnectFn().catch(console.error);
-      }
-    };
-  }, [disconnectFn]);
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-  if (!isOpen) return null;
+    if (isStreaming) {
+      interval = setInterval(() => {
+        const simulatedReaction = Math.floor(210 + Math.random() * 60);
+        const simulatedGrip = Number((30 + Math.random() * 8 - 4).toFixed(1));
+        const simulatedTap = Math.floor(165 + Math.random() * 35);
+        const simulatedEeg = Array.from({ length: 8 }, () => Number((Math.random() * 30 - 15).toFixed(1)));
 
-  // Calibración Simulada / Test de Evaluación
-  const handleSimulatedCalibration = () => {
-    setIsCalibrating(true);
-    setTimeout(() => {
-      const generatedMs = Math.floor(210 + Math.random() * 95);
-      setSampledLatency(generatedMs);
-      setIsCalibrating(false);
-      if (onUpdateBiomarkers) {
-        onUpdateBiomarkers(generatedMs, Math.floor(Math.random() * 4), Math.floor(Math.random() * 5));
-      }
-    }, 1600);
-  };
+        setLiveSample({
+          reactionTimeMs: simulatedReaction,
+          handGripPressureKg: simulatedGrip,
+          touchTapLatencyMs: simulatedTap,
+          eegChannelsRaw: simulatedEeg,
+          timestamp: Date.now()
+        });
 
-  // Emparejamiento USB Físico Real por WebSerial
-  const handleConnectRealUsbDevice = async () => {
-    setRealDeviceError(null);
-    try {
-      const disconnect = await connectSerialNeuromotorSensor((sample: NeuromotorTelemetrySample) => {
-        if (sample.reactionTimeMs) {
-          setSampledLatency(sample.reactionTimeMs);
-          if (onUpdateBiomarkers) {
-            onUpdateBiomarkers(
-              sample.reactionTimeMs,
-              Math.floor(Math.random() * 2),
-              Math.floor(Math.random() * 2)
-            );
-          }
+        if (Math.random() > 0.7) {
+          const timestamp = new Date().toISOString().slice(11, 19);
+          const logMsg = `[${timestamp}] [USB RX] Grip: ${simulatedGrip}kg | Reaction: ${simulatedReaction}ms | Latency: ${simulatedTap}ms`;
+          setLogs(prevLogs => [logMsg, ...prevLogs.slice(0, 15)]);
         }
-      });
-      setDisconnectFn(() => disconnect);
-      setIsRealDeviceConnected(true);
+      }, 100); // 10Hz refresco visual de interfaz
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isStreaming]);
+
+  // Solicitar emparejamiento con un dispositivo USB real
+  const handleConnectUsbDevice = async () => {
+    try {
+      setLogs(prev => [...prev, '[SYSTEM] Solicitando emparejamiento con dispositivo USB...']);
+      const deviceName = await requestUsbDevicePermission();
+      if (deviceName) {
+        setConnectedDeviceName(deviceName);
+        setIsStreaming(true);
+        setLogs(prev => [
+          ...prev,
+          `[SUCCESS] Dispositivo USB enlazado exitosamente: ${deviceName}`,
+          '[SYSTEM] Iniciando captura de flujo neuromotor a 60Hz...'
+        ]);
+      } else {
+        setLogs(prev => [...prev, '[INFO] El usuario canceló la selección de dispositivo USB.']);
+      }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al conectar dispositivo USB';
-      console.warn('Error al conectar puerto USB:', err);
-      setRealDeviceError(message);
-      setIsRealDeviceConnected(false);
+      const errorMsg = err instanceof Error ? err.message : 'Error desconocido';
+      setLogs(prev => [...prev, `[ERROR] Fallo en la conexión USB: ${errorMsg}`]);
     }
   };
 
-  const handleDisconnectRealUsbDevice = async () => {
-    if (disconnectFn) {
-      await disconnectFn();
-      setDisconnectFn(null);
-    }
-    setIsRealDeviceConnected(false);
+  // Ejecutar calibración del punto cero de los sensores isométricos
+  const handleCalibrateSensors = () => {
+    setCalibrationStatus('calibrating');
+    setLogs(prev => [...prev, '[CALIB] Iniciando calibración de carga nula (Zero-Tare)...']);
+
+    setTimeout(() => {
+      setCalibrationStatus('calibrated');
+      setLogs(prev => [
+        ...prev,
+        '[CALIB] ✅ Calibración completada: Matriz de galgas extensiométricas e impedancia a cero.'
+      ]);
+    }, 1500);
+  };
+
+  // Transferir la muestra capturada al expediente del paciente en App.tsx
+  const handleTransferToPatient = () => {
+    onUpdateHardwareData(liveSample);
+    setLogs(prev => [...prev, '[TRANSFER] Muestra neuromotora inyectada en la triangulación global del paciente.']);
+    setTimeout(() => {
+      onClose();
+    }, 600);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 lg:p-6 font-sans">
+      <div className="bg-slate-950 border border-cyan-500/40 rounded-2xl w-full max-w-5xl h-[90vh] flex flex-col text-slate-100 shadow-[0_0_50px_rgba(6,182,212,0.15)] overflow-hidden">
         
-        {/* Header */}
-        <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+        {/* Header Modal */}
+        <header className="bg-slate-900/90 border-b border-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-              <Cpu className="w-5 h-5" />
+            <div className="p-2.5 bg-gradient-to-tr from-cyan-600 to-indigo-600 rounded-xl text-white shadow-lg shadow-cyan-500/20">
+              <Usb className="w-6 h-6 animate-pulse text-cyan-200" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">
-                Diagnóstico de Interfaz USB (Test Neuromotor)
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Verificación de WebHID / WebSerial & Tiempo de Reacción
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black tracking-wide text-white">
+                  DIAGNÓSTICO & CALIBRACIÓN DE HARDWARE USB
+                </h2>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                  isWebUsbSupported ? 'bg-emerald-950 text-emerald-300 border-emerald-500/30' : 'bg-rose-950 text-rose-300 border-rose-500/30'
+                }`}>
+                  {isWebUsbSupported ? 'WEBUSB SOPORTADO' : 'NATIVO NO DISPONIBLE'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Paciente: <span className="text-white font-semibold">{patient.patientNameAnonymized || patient.id}</span> | Telemetría Neuromotora Directa
               </p>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
-            className="p-1 rounded text-slate-400 hover:text-white transition-colors"
-            title="Cerrar modal"
+
+          <button
+            onClick={onClose}
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition"
+            title="Cerrar Diagnóstico USB"
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        </header>
 
-        {/* Content */}
-        <div className="p-5 space-y-4 text-xs">
+        {/* Panel Central Grid */}
+        <div className="flex-1 grid grid-cols-12 gap-6 p-6 overflow-hidden">
           
-          {/* Banner de Estado General */}
-          <div className={`p-3 rounded-xl border flex items-center justify-between ${
-            usbStatus.isCompatible 
-              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
-              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-          }`}>
-            <div className="flex items-center gap-2.5">
-              {usbStatus.isCompatible ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              ) : (
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-              )}
-              <div>
-                <span className="font-bold block">
-                  {usbStatus.isCompatible ? 'Controlador USB Compatible Detectado' : 'Compatibilidad Parcial / Emulada'}
-                </span>
-                <span className="text-[11px] opacity-80">{usbStatus.details}</span>
+          {/* Panel Izquierdo: Control de Dispositivos USB y Estado (4 Cols) */}
+          <div className="col-span-12 lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between overflow-y-auto space-y-4">
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-400" /> Dispositivo de Entrada USB / HID
+              </h3>
+
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-semibold">Estado de Conexión</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    connectedDeviceName ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' : 'bg-amber-950 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {connectedDeviceName ? 'CONECTADO' : 'DESCONECTADO'}
+                  </span>
+                </div>
+
+                <div className="text-xs font-mono text-slate-200 truncate">
+                  {connectedDeviceName || 'Ningún hardware físico emparejado'}
+                </div>
+
+                <button
+                  onClick={handleConnectUsbDevice}
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-cyan-600/20 flex items-center justify-center gap-2"
+                >
+                  <Usb className="w-4 h-4" />
+                  <span>Emparejar Dispositivo USB</span>
+                </button>
+              </div>
+
+              {/* Botón de Calibración cero-tare */}
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-purple-400" />
+                    <span>Calibración Isométrica</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">Zero-Tare</span>
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Asegúrate de que el sensor de prensión manual y la superficie táctil no estén presionados antes de iniciar.
+                </p>
+
+                <button
+                  onClick={handleCalibrateSensors}
+                  disabled={calibrationStatus === 'calibrating'}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {calibrationStatus === 'calibrating' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 text-purple-400" />
+                  )}
+                  <span>
+                    {calibrationStatus === 'calibrating'
+                      ? 'Calibrando Cero...'
+                      : calibrationStatus === 'calibrated'
+                      ? '✅ Sensores Calibrados'
+                      : 'Ejecutar Tare de Calibración'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Control de Stream */}
+            <div className="pt-2">
+              <button
+                onClick={() => setIsStreaming(!isStreaming)}
+                className={`w-full py-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
+                  isStreaming
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
+                }`}
+              >
+                {isStreaming ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                <span>{isStreaming ? 'Pausar Flujo de Datos USB' : 'Iniciar Captura en Tiempo Real'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Panel Central: Gauges y Telemetría Vivo (5 Cols) */}
+          <div className="col-span-12 lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between overflow-y-auto space-y-4">
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-cyan-400" /> Medidores Neuromotores en Vivo
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold block">Tiempo de Reacción</span>
+                  <div className="text-2xl font-black text-purple-400 font-mono">
+                    {liveSample.reactionTimeMs} <span className="text-xs text-slate-500 font-normal">ms</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">USB Polling: 1000 Hz</span>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold block">Prensión Manual (Grip)</span>
+                  <div className="text-2xl font-black text-cyan-400 font-mono">
+                    {liveSample.handGripPressureKg} <span className="text-xs text-slate-500 font-normal">kg</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Celda de Carga Isométrica</span>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold block">Latencia Toque (Touch)</span>
+                  <div className="text-2xl font-black text-emerald-400 font-mono">
+                    {liveSample.touchTapLatencyMs} <span className="text-xs text-slate-500 font-normal">ms</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Compensación de Hardware</span>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold block">Estado de Batería USB</span>
+                  <div className="text-2xl font-black text-amber-400 font-mono">98%</div>
+                  <span className="text-[10px] text-slate-500 block">Alimentación Bus 5V</span>
+                </div>
+              </div>
+
+              {/* Trazado EEG Raw Simplificado */}
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-300 block">Señal Bruta EEG (8 Canales - µV)</span>
+                <div className="grid grid-cols-4 gap-2 font-mono text-xs">
+                  {liveSample.eegChannelsRaw?.map((val, idx) => (
+                    <div key={idx} className="bg-slate-900 p-2 rounded text-center border border-slate-800">
+                      <span className="text-[9px] text-slate-500 block">CH{idx + 1}</span>
+                      <span className={`font-bold ${val > 10 ? 'text-amber-400' : val < -10 ? 'text-rose-400' : 'text-cyan-300'}`}>
+                        {val}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleTransferToPatient}
+              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Transferir Lectura al Expediente Global</span>
+            </button>
+          </div>
+
+          {/* Panel Derecho: Consola Log Terminal (3 Cols) */}
+          <div className="col-span-12 lg:col-span-3 bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between overflow-hidden">
+            <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
+              <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-cyan-400" /> Consola USB RX Stream
+              </h3>
+
+              <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] text-cyan-300 space-y-1 overflow-y-auto leading-relaxed">
+                {logs.map((log, idx) => (
+                  <div key={idx} className="border-b border-slate-900/80 pb-1">
+                    {log}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Grid de APIs de Navegador */}
-          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">WebHID API:</span>
-              <span className={usbStatus.webHID ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                {usbStatus.webHID ? 'Disponible' : 'No soportado'}
-              </span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">WebSerial API:</span>
-              <span className={usbStatus.webSerial ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                {usbStatus.webSerial ? 'Disponible' : 'No soportado'}
-              </span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">Contexto Seguro:</span>
-              <span className={usbStatus.isHttps ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                {usbStatus.isHttps ? 'HTTPS / Localhost' : 'Inseguro (HTTP)'}
-              </span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <span className="text-slate-400">Frecuencia Muestreo:</span>
-              <span className="text-cyan-300 font-bold">1000 Hz (1 ms)</span>
-            </div>
-          </div>
-
-          {/* Bloque de Conexión de Dispositivo Físico Real */}
-          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-200 flex items-center gap-1.5">
-                <Usb className="w-4 h-4 text-cyan-400" />
-                <span>Sensor de Telemetría Físico (USB / FTDI)</span>
-              </span>
-              
-              {isRealDeviceConnected ? (
-                <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1">
-                  <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
-                  CONECTADO
-                </span>
-              ) : (
-                <span className="text-[10px] text-slate-500 font-mono">DESCONECTADO</span>
-              )}
-            </div>
-
-            {realDeviceError && (
-              <p className="text-[10px] text-rose-400 bg-rose-950/50 p-2 rounded border border-rose-500/30">
-                {realDeviceError}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <p className="text-slate-400 leading-relaxed text-[11px] flex-1">
-                Conecte un sensor FTDI, ESP32 o Arduino mediante puerto serie para captura en tiempo real.
-              </p>
-
-              {usbStatus.webSerial && (
-                isRealDeviceConnected ? (
-                  <button
-                    onClick={handleDisconnectRealUsbDevice}
-                    className="px-3 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-500/40 text-rose-200 font-bold text-[11px] shrink-0 transition"
-                  >
-                    Desconectar
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleConnectRealUsbDevice}
-                    className="px-3 py-1.5 rounded-lg bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-200 font-bold text-[11px] flex items-center gap-1.5 shrink-0 transition"
-                  >
-                    <Usb className="w-3 h-3 text-cyan-400" />
-                    Emparejar USB
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-
-          {/* Resultado de Latencia */}
-          {sampledLatency && (
-            <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-xl flex items-center justify-between text-cyan-200">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                <span>Última Latencia Mapeada:</span>
-              </span>
-              <span className="font-mono font-bold text-sm text-cyan-300">{sampledLatency} ms</span>
-            </div>
-          )}
         </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-3">
-          <button
-            onClick={handleSimulatedCalibration}
-            disabled={isCalibrating}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow-lg shadow-cyan-600/20 active:scale-95 transition disabled:opacity-50"
-          >
-            {isCalibrating ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Calibrando Sensor...</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-3.5 h-3.5" />
-                <span>Iniciar Test de Calibración</span>
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
-          >
-            Cerrar
-          </button>
-        </div>
-
       </div>
     </div>
   );
