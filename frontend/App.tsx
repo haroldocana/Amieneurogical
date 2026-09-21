@@ -24,12 +24,12 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
-// MÓDULOS DE FRONTERA HIPNO-VR & CLOSED-LOOP (SUITE COMPLETA 5/5)
-import { VrPainManagementModule } from './components/VrPainManagementModule';         // Módulo 1: Analgesia
-import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule'; // Módulo 2: Mirror VR (FND)
-import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule'; // Módulo 3: Reconsolidación Memoria
-import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';   // Módulo 4: TDAH & Función Ejecutiva
-import { VrGammaInsightModule } from './components/VrGammaInsightModule';             // Módulo 5: Gamma 40Hz & Insight
+// MÓDULOS HIPNO-VR & CLOSED-LOOP (SUITE COMPLETA 5/5)
+import { VrPainManagementModule } from './components/VrPainManagementModule';
+import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
+import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
+import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
+import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
@@ -102,27 +102,31 @@ export default function App() {
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
   
   // Modales de Módulos Hipno-VR Avanzados (5/5)
-  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false);     // Módulo 1: Analgesia
-  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false);       // Módulo 2: Mirror VR
-  const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState(false); // Módulo 3: Reconsolidación Memoria
-  const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState(false);     // Módulo 4: TDAH & Exec Control
-  const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState(false);   // Módulo 5: Gamma 40Hz Insight
+  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false);
+  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false);
+  const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState(false);
+  const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState(false);
+  const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState(false);
 
   // USB Device State
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
   // Recuperación automática de sesión activa desde localStorage
   useEffect(() => {
-    const savedToken = localStorage.getItem('amie_auth_token');
-    const savedDoctor = localStorage.getItem('amie_doctor_name');
-    const savedUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username');
-    const savedColegiado = localStorage.getItem('amie_colegiado_number');
+    try {
+      const savedToken = localStorage.getItem('amie_auth_token');
+      const savedDoctor = localStorage.getItem('amie_doctor_name');
+      const savedUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username');
+      const savedColegiado = localStorage.getItem('amie_colegiado_number');
 
-    if (savedToken && savedDoctor) {
-      setDoctorName(savedDoctor);
-      setDoctorUsername(savedUsername || 'harold01');
-      setColegiadoNumber(Number(savedColegiado) || 749210);
-      setIsAuthenticated(true);
+      if (savedToken && savedDoctor) {
+        setDoctorName(savedDoctor);
+        setDoctorUsername(savedUsername || 'harold01');
+        setColegiadoNumber(Number(savedColegiado) || 749210);
+        setIsAuthenticated(true);
+      }
+    } catch (e) {
+      console.warn('No se pudo acceder a localStorage:', e);
     }
   }, []);
 
@@ -151,9 +155,11 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    if (typeof window !== 'undefined') {
+    try {
       localStorage.clear();
       sessionStorage.clear();
+    } catch (e) {
+      console.warn('Error al limpiar almacenamiento local:', e);
     }
     setIsAuthenticated(false);
   };
@@ -195,7 +201,7 @@ export default function App() {
       if (msg.includes('no existe o no tiene datos cargados') || msg.includes('Acceso denegado')) {
         setSyncNotFoundAlert(msg);
       } else {
-        setErrorMsg('Error de comunicación con Cloud Function: ' + msg);
+        setErrorMsg('Error de comunicación con servidor: ' + msg);
       }
     } finally {
       setIsSyncing(false);
@@ -211,7 +217,6 @@ export default function App() {
     }
   };
 
-  // Handler para transferir la biometría VR al expediente global del paciente
   const handleUpdatePatientVrData = (telemetry: VrTelemetryData, report: VrTherapyReport) => {
     setCurrentPatient(prev => ({
       ...prev,
@@ -226,15 +231,26 @@ export default function App() {
     return <LoginModal onSuccess={handleLoginSuccess} />;
   }
 
-  // Objeto de paciente con protección absoluta contra propiedades undefined
+  // 🛡️ Objeto safePatient con protección absoluta para evitar crashes por undefined
   const safePatient: PatientRecord = {
     ...SAFE_DEFAULT_PATIENT,
     ...(currentPatient || {}),
+    functionalAreas: currentPatient?.functionalAreas || SAFE_DEFAULT_PATIENT?.functionalAreas || {
+      sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50
+    },
     neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT?.neuromotorBiomarkers || {
       reactionTimeMs: 240,
       omissionErrors: 0,
       commissionErrors: 0,
       motorStabilityScore: 85
+    },
+    audioRecordings: currentPatient?.audioRecordings || [],
+    psychometricScores: currentPatient?.psychometricScores || {},
+    qeegZScores: currentPatient?.qeegZScores || {
+      frontalThetaBetaRatio: 1.8,
+      temporalAsymmetry: 0.2,
+      deltaSlowActivityZ: 0.4,
+      alphaPeakFrequencyHz: 10.2
     }
   };
 
@@ -265,7 +281,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Barra superior secundaria para estado de USB */}
+      {/* Estado de hardware USB */}
       {usbDeviceName && (
         <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
           <Usb className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
@@ -273,12 +289,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Primary Tab Navigation Bar */}
+      {/* Barra de Navegación Principal */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
             
-            {/* Workstation */}
             <HoverTooltip
               title="Workstation Clínico"
               description="Núcleo de triaje y triangulación de riesgos, datos del expediente JSON, psicometría y dictamen AMIE en 5 bloques."
@@ -298,10 +313,9 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* Evaluador Científico */}
             <HoverTooltip
               title="Evaluador Científico & Multisensor"
-              description="Scoring de afinidad terapéutica (0-100%) para Depresión, TLP, Esquizofrenia y TEA con telemetría de tono vagal y camouflaging."
+              description="Scoring de afinidad terapéutica (0-100%) para Depresión, TLP, Esquizofrenia y TEA."
               clinicalUtility="Mapeo de respuesta a psicofármacos y neuromodulación."
               badge="Módulo 2"
             >
@@ -318,10 +332,9 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* Diferenciador & Sesgos */}
             <HoverTooltip
               title="Diferenciador Bioclínico & Antisesgo"
-              description="Cruce de 4 ejes (qEEG + Voz + Psicometría + APK), decodificador NLP de sesgos en notas y Gemelo Digital de Riesgo Iatrogénico."
+              description="Cruce de 4 ejes (qEEG + Voz + Psicometría + APK) y decodificador NLP."
               clinicalUtility="Eliminación de sesgos de confirmación y género."
               badge="Módulo 3"
             >
@@ -338,10 +351,9 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* Capacitación AMIE */}
             <HoverTooltip
               title="Capacitación AMIE & Simulador IA"
-              description="Pacientes virtuales fotorrealistas con micro-expresiones dinámicas, casos por ciclo evolutivo y generador Cisne Negro con scoring (0-100 pts)."
+              description="Pacientes virtuales fotorrealistas y casos por ciclo evolutivo."
               clinicalUtility="Entrenamiento inmersivo acreditado bajo DSM-5-TR."
               badge="Módulo 4"
             >
@@ -358,11 +370,10 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* Neurotopografía 3D */}
             <HoverTooltip
               title="Neurotopografía 3D Holográfica"
-              description="Mapeador de potencia relativa continua (µV²/Hz) por bandas (Delta, Theta, Alpha, Beta) con 4 vistas satelitales y seguimiento saccádico."
-              clinicalUtility="Contraste de neurobiomarcadores con benchmarks de patología."
+              description="Mapeador de potencia relativa continua por bandas (Delta, Theta, Alpha, Beta)."
+              clinicalUtility="Contraste de neurobiomarcadores con benchmarks."
               badge="Módulo 5"
             >
               <button
@@ -378,10 +389,9 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* qEEG & Carga */}
             <HoverTooltip
               title="qEEG & Carga de Archivos"
-              description="Carga de archivos nativos de electroencefalografía (.EDF/.BDF/.EEG/.CSV), cálculo de espectros FFT y mapeo 10-20."
+              description="Carga de archivos nativos de electroencefalografía (.EDF/.BDF/.EEG/.CSV)."
               clinicalUtility="Inspección de ondas crudas y potencias por canal."
               badge="Señales Crudas"
             >
@@ -398,11 +408,10 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* VR Quest 3S / Pico 3 Pro */}
             <HoverTooltip
-              title="Módulo Terapéutico VR (Pico Neo 3 Pro / Quest 3S)"
-              description="Exposición inmersiva con biofeedback en tiempo real (GSR, Geoid HS500 HRV) e informe individual sintetizado."
-              clinicalUtility="Cálculo del índice de habituación H y transferencia a la triangulación global."
+              title="Módulo Terapéutico VR (Pico Neo 3 / Quest 3S)"
+              description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV)."
+              clinicalUtility="Cálculo del índice de habituación H."
               badge="Biometría VR"
             >
               <button
@@ -418,11 +427,10 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* Referencia */}
             <HoverTooltip
               title="Referencia a Psiquiatría"
-              description="Generación estructurada de hoja de derivación oficial e interconsulta médica con checklist de contención 24/7."
-              clinicalUtility="Gestión de crisis y derivación urgente protegida."
+              description="Generación estructurada de hoja de derivación oficial e interconsulta."
+              clinicalUtility="Gestión de crisis y derivación urgente."
               badge="Interconsulta"
             >
               <button
@@ -438,11 +446,10 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* SaaS */}
             <HoverTooltip
               title="Perfil de Licencia & Control IA"
-              description="Monitoreo de vigencia de licencia, consumo del bolsón de IA y administración de contraseña."
-              clinicalUtility="Perfil de usuario e indicadores institucionales."
+              description="Monitoreo de vigencia de licencia y consumo del bolsón de IA."
+              clinicalUtility="Perfil de usuario e indicadores."
               badge="Perfil"
             >
               <button
@@ -462,7 +469,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Tab Content */}
+      {/* Contenido Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
         {syncNotFoundAlert && (
           <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl animate-shake">
@@ -501,7 +508,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 1: Workstation Clínico */}
+        {/* Tab 1: Workstation */}
         {activeTab === 'workstation' && (
           <div className="space-y-5">
             {analysis?.riskAlerts && <RiskAlertBanner alerts={analysis.riskAlerts} />}
@@ -553,7 +560,7 @@ export default function App() {
 
         {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
         
-        {/* Tab 3: Diferenciador & Sesgos + Matriz de Triangulación Bioclínica */}
+        {/* Tab 3: Diferenciador & Sesgos */}
         {activeTab === 'differential_bias' && (
           <div className="space-y-6">
             <DifferentialBiasResolver patient={safePatient} />
@@ -607,11 +614,10 @@ export default function App() {
         {/* Tab 6: Módulo qEEG */}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
         
-        {/* Tab 7: Módulo VR Inmersivo con Botones de las 5 Consolas Avanzadas */}
+        {/* Tab 7: Módulo VR Inmersivo */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
-              {/* Módulo 5: Gamma 40Hz Insight */}
               <button
                 onClick={() => setIsFullscreenGammaOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition"
@@ -620,7 +626,6 @@ export default function App() {
                 <span>Consola Gamma 40Hz (TOC / TEA)</span>
               </button>
 
-              {/* Módulo 4: TDAH & Función Ejecutiva */}
               <button
                 onClick={() => setIsFullscreenExecOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition"
@@ -629,7 +634,6 @@ export default function App() {
                 <span>Consola TDAH (Executive Control)</span>
               </button>
 
-              {/* Módulo 3: Reconsolidación Memoria */}
               <button
                 onClick={() => setIsFullscreenMemoryOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition"
@@ -638,7 +642,6 @@ export default function App() {
                 <span>Consola Memoria & Fobias</span>
               </button>
 
-              {/* Módulo 2: Mirror VR */}
               <button
                 onClick={() => setIsFullscreenFndOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition"
@@ -647,7 +650,6 @@ export default function App() {
                 <span>Consola Mirror VR (FND)</span>
               </button>
 
-              {/* Módulo 1: Analgesia */}
               <button
                 onClick={() => setIsFullscreenPainOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
@@ -656,12 +658,11 @@ export default function App() {
                 <span>Consola Analgesia VR</span>
               </button>
 
-              {/* Consola Hipnosis Trauma */}
               <button
                 onClick={() => setIsFullscreenHypnosisOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
               >
-                <Sparkles className="w-4 h-4 text-purple-200 animate-spin-slow" />
+                <Sparkles className="w-4 h-4 text-purple-200" />
                 <span>Consola Hipnosis & Trauma</span>
               </button>
 
@@ -736,7 +737,6 @@ export default function App() {
         />
       )}
 
-      {/* Módulo 1: Analgesia Inmersiva */}
       {isFullscreenPainOpen && (
         <VrPainManagementModule
           patient={safePatient}
@@ -744,7 +744,6 @@ export default function App() {
         />
       )}
 
-      {/* Módulo 2: Neuro-Rehabilitación Mirror VR */}
       {isFullscreenFndOpen && (
         <VrFunctionalNeurologyModule
           patient={safePatient}
@@ -752,7 +751,6 @@ export default function App() {
         />
       )}
 
-      {/* Módulo 3: Reconsolidación Memoria & Fobias */}
       {isFullscreenMemoryOpen && (
         <VrMemoryReconsolidationModule
           patient={safePatient}
@@ -760,7 +758,6 @@ export default function App() {
         />
       )}
 
-      {/* Módulo 4: TDAH & Función Ejecutiva */}
       {isFullscreenExecOpen && (
         <VrExecutiveFunctionModule
           patient={safePatient}
@@ -768,7 +765,6 @@ export default function App() {
         />
       )}
 
-      {/* Módulo 5: Gamma 40Hz Insight (TOC/TEA) */}
       {isFullscreenGammaOpen && (
         <VrGammaInsightModule
           patient={safePatient}
