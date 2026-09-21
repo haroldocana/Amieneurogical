@@ -3,14 +3,14 @@ import { PatientRecord } from '../types';
 import { Smartphone, Moon, Activity, PhoneCall, ShieldAlert, Zap, Clock } from 'lucide-react';
 
 interface PatientSentinelDashboardProps {
-  patient: PatientRecord;
+  patient?: PatientRecord;
 }
 
 export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> = ({ patient }) => {
-  const sleepValue = patient.functionalAreas?.sleep ?? 50;
+  const sleepValue = patient?.functionalAreas?.sleep ?? 50;
 
-  const sentinel = patient.sentinelTelemetry || {
-    pacId: patient.id || 'PAC-0001',
+  const sentinel = patient?.sentinelTelemetry || {
+    pacId: patient?.id || 'PAC-0001',
     deviceSyncTime: 'En línea',
     sleepMetrics: {
       nightWakeups: sleepValue < 30 ? 4 : 1,
@@ -19,14 +19,14 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
       sleepEfficiencyPct: Math.round(sleepValue * 0.8 + 15)
     },
     behavioralBiometrics: {
-      typingLatencyMs: patient.neuromotorBiomarkers?.reactionTimeMs || 320,
+      typingLatencyMs: patient?.neuromotorBiomarkers?.reactionTimeMs || 320,
       screenActiveTimeMinutes: sleepValue < 30 ? 110 : 20,
-      biomotorLatencyMs: patient.neuromotorBiomarkers?.reactionTimeMs || 320,
+      biomotorLatencyMs: patient?.neuromotorBiomarkers?.reactionTimeMs || 320,
       activityRestlessnessIndex: 100 - sleepValue
     },
     safetyStatus: {
-      riskLevel: (patient.psychometricScores?.sadPersons ?? 0) >= 7 ? 'CRÍTICO' : (patient.psychometricScores?.sadPersons ?? 0) >= 4 ? 'ALTO' : 'BAJO',
-      activeContentionTriggered: (patient.psychometricScores?.sadPersons ?? 0) >= 6 || (patient.psychometricScores?.cssrsLevel ?? 0) >= 4,
+      riskLevel: (patient?.psychometricScores?.sadPersons ?? 0) >= 7 ? 'CRÍTICO' : (patient?.psychometricScores?.sadPersons ?? 0) >= 4 ? 'ALTO' : 'BAJO',
+      activeContentionTriggered: (patient?.psychometricScores?.sadPersons ?? 0) >= 6 || (patient?.psychometricScores?.cssrsLevel ?? 0) >= 4,
       passiveRiskRationale: 'Monitoreo biomotor pasivo correlacionado con registro de ciclo sueño-vigilia.',
       emergencyContact: {
         name: 'Contacto Primario Asignado',
@@ -67,7 +67,7 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
                 APK Centinela • Medición Pasiva
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700">
-                {sentinel.pacId || patient.id}
+                {sentinel.pacId || patient?.id || 'PAC-0001'}
               </span>
             </div>
             <span className="text-[10px] text-slate-400">
@@ -144,7 +144,7 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
         {/* Eficiencia Sueño */}
         <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-300">
           <div className="text-[10px] text-slate-400 mb-0.5 flex items-center gap-1">
-            <Zap className="w-3 h-3 text-purple-400" /> Eficiencia Sueño
+            <Zap className="w-3.5 h-3.5 text-purple-400" /> Eficiencia Sueño
           </div>
           <div className="text-base font-bold font-mono text-purple-300">
             {sleepEff}%
