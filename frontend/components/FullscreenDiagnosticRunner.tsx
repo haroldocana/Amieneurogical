@@ -3,7 +3,7 @@ import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { Usb, Cpu, Activity, X, Play, CheckCircle2, RotateCcw, Terminal, ArrowRight } from 'lucide-react';
 
 interface FullscreenDiagnosticRunnerProps {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onClose: () => void;
   onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
@@ -42,13 +42,14 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
         setIsConnected(true);
         setLogs(prev => [...prev, '[USB_RX] Conexión virtual de respaldo activada (60 Hz).']);
       }
-    } catch (err: unknown) {
+    } catch {
       setIsConnected(true);
       setLogs(prev => [...prev, '[INFO] Modo local activado. Calibración virtual lista.']);
     }
   };
 
-  const handleTransferAndClose = () => {
+  const handleTransferAndClose = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (onUpdatePatientVrData) {
       const mockTelemetry: VrTelemetryData = {
         sessionId: `USB-DIAG-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -75,14 +76,14 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md"
       onClick={onClose}
     >
       <div 
         className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* CABECERA CON BOTÓN DE CIERRE DIRECTO */}
+        {/* CABECERA CON BOTÓN X */}
         <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-cyan-600/20 text-cyan-400 rounded-lg border border-cyan-500/30">
@@ -114,7 +115,6 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
         {/* CONTENIDO DE CALIBRACIÓN */}
         <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-5 bg-slate-900">
           
-          {/* COLUMNA 1: HARDWARE Y TARE */}
           <div className="md:col-span-4 space-y-4">
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <span className="text-xs font-bold text-cyan-400 flex items-center gap-2">
@@ -148,9 +148,6 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
               <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
                 <RotateCcw className="w-4 h-4 text-cyan-400" /> Calibración Isométrica Zero-Tare
               </span>
-              <p className="text-[11px] text-slate-400">
-                Asegúrate de que el sensor de prensión manual y la superficie táctil no estén presionados antes de iniciar.
-              </p>
               <button
                 type="button"
                 onClick={() => setLogs(prev => [...prev, '[TARE] Tare completado. Línea base calibrada.'])}
@@ -161,7 +158,6 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
             </div>
           </div>
 
-          {/* COLUMNA 2: MÉTRICAS Y ACCIONES */}
           <div className="md:col-span-5 space-y-4">
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <span className="text-xs font-bold text-cyan-300 flex items-center gap-2">
@@ -172,22 +168,10 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
                 <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
                   <span className="text-[10px] text-slate-400 block">Tiempo de Reacción</span>
                   <span className="text-lg font-bold text-white font-mono">240 <span className="text-xs font-normal text-slate-400">ms</span></span>
-                  <span className="text-[9px] text-slate-500 block">USB Polling: 1000 Hz</span>
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
                   <span className="text-[10px] text-slate-400 block">Prensión Manual (Grip)</span>
                   <span className="text-lg font-bold text-cyan-300 font-mono">32.5 <span className="text-xs font-normal text-slate-400">kg</span></span>
-                  <span className="text-[9px] text-slate-500 block">Celda de Carga Isométrica</span>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Latencia Toque (Touch)</span>
-                  <span className="text-lg font-bold text-white font-mono">180 <span className="text-xs font-normal text-slate-400">ms</span></span>
-                  <span className="text-[9px] text-slate-500 block">Compensación de Hardware</span>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Estado de Batería USB</span>
-                  <span className="text-lg font-bold text-amber-400 font-mono">98%</span>
-                  <span className="text-[9px] text-slate-500 block">Alimentación Bus 5V</span>
                 </div>
               </div>
 
@@ -198,21 +182,16 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
                   <div className="bg-slate-950 p-1 rounded text-cyan-300">CH2: -4.2</div>
                   <div className="bg-slate-950 p-1 rounded text-cyan-300">CH3: 18.1</div>
                   <div className="bg-slate-950 p-1 rounded text-cyan-300">CH4: 8.5</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH5: -2.1</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH6: 14.3</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH7: 6.2</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH8: 0.8</div>
                 </div>
               </div>
             </div>
 
-            {/* BOTONES DE ENTRADA Y CIERRE DE PANTALLA */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setIsCapturing(!isCapturing);
-                  setLogs(prev => [...prev, isCapturing ? '[STREAM] Captura pausada.' : '[STREAM] Captura en tiempo real iniciada.']);
+                  setLogs(prev => [...prev, isCapturing ? '[STREAM] Captura pausada.' : '[STREAM] Captura iniciada.']);
                 }}
                 className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
@@ -231,15 +210,14 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
             </div>
           </div>
 
-          {/* COLUMNA 3: CONSOLA STREAM */}
           <div className="md:col-span-3 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between h-full min-h-[260px]">
             <div className="space-y-2">
               <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5 font-mono">
-                <Terminal className="w-3.5 h-3.5 text-cyan-400" /> CONSOLA USB RX STREAM
+                <Terminal className="w-3.5 h-3.5 text-cyan-400" /> CONSOLA USB STREAM
               </span>
-              <div className="h-48 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-400 p-2 bg-slate-900 rounded-lg border border-slate-800">
+              <div className="h-44 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-400 p-2 bg-slate-900 rounded-lg border border-slate-800">
                 {logs.map((log, i) => (
-                  <p key={i} className="leading-relaxed">{log}</p>
+                  <p key={i}>{log}</p>
                 ))}
               </div>
             </div>
@@ -249,7 +227,7 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
               onClick={onClose}
               className="mt-3 w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg"
             >
-              <span>Ir a la Workstation</span>
+              <span>Entrar a Workstation</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
