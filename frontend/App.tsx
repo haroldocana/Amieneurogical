@@ -23,6 +23,7 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
+import { VrPainManagementModule } from './components/VrPainManagementModule'; // Módulo de Analgesia
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
@@ -45,7 +46,8 @@ import {
   Glasses,
   Sparkles,
   Usb,
-  Layers
+  Layers,
+  ThermometerSnowflake
 } from 'lucide-react';
 
 type AppTab = 
@@ -87,6 +89,7 @@ export default function App() {
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
+  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false); // Estado para Módulo 1 (Analgesia VR)
 
   // USB Device State
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
@@ -149,7 +152,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } fontally {
+    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -200,27 +203,6 @@ export default function App() {
     }));
     setSyncSuccessMsg('Métricas de VR transferidas exitosamente a la Triangulación Global.');
     setTimeout(() => setSyncSuccessMsg(null), 4500);
-  };
-
-  // Handler para actualizar la telemetría de hardware USB / EEG sin sobreescribir el resto del expediente
-  const handleUpdateUsbHardwareData = (sample: NeuromotorTelemetrySample) => {
-    setCurrentPatient(prev => ({
-      ...prev,
-      neuromotorBiomarkers: {
-        reactionTimeMs: sample.reactionTimeMs ?? prev.neuromotorBiomarkers?.reactionTimeMs ?? 240,
-        omissionErrors: prev.neuromotorBiomarkers?.omissionErrors ?? 0,
-        commissionErrors: prev.neuromotorBiomarkers?.commissionErrors ?? 0,
-        motorStabilityScore: prev.neuromotorBiomarkers?.motorStabilityScore ?? 85
-      },
-      multisensoryHardware: {
-        vagalToneHrvIndex: prev.multisensoryHardware?.vagalToneHrvIndex ?? 45,
-        handGripPressureKg: sample.handGripPressureKg ?? prev.multisensoryHardware?.handGripPressureKg ?? 32.5,
-        camouflagingIndexPct: prev.multisensoryHardware?.camouflagingIndexPct ?? 15,
-        ocularFixationDurationMs: prev.multisensoryHardware?.ocularFixationDurationMs ?? 2100,
-        touchTapLatencyCompensatedMs: sample.touchTapLatencyMs ?? prev.multisensoryHardware?.touchTapLatencyCompensatedMs ?? 180,
-        microExpressionState: prev.multisensoryHardware?.microExpressionState ?? 'Normorreactivo'
-      }
-    }));
   };
 
   if (!isAuthenticated) {
@@ -552,7 +534,7 @@ export default function App() {
 
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         
-        {/* Tab 5: Neurotopografía 3D (Soporta Selector de Modos) */}
+        {/* Tab 5: Neurotopografía 3D */}
         {activeTab === 'neuro_3d' && (
           <div className="space-y-4">
             <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
@@ -569,7 +551,7 @@ export default function App() {
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Visor Anatómicoc
+                  Visor Anatómico
                 </button>
                 <button
                   onClick={() => setNeuroViewerMode('holographic')}
@@ -600,6 +582,14 @@ export default function App() {
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-3 flex-wrap">
+              <button
+                onClick={() => setIsFullscreenPainOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
+              >
+                <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
+                <span>Consola Analgesia VR (Zero-Opioid Pain)</span>
+              </button>
+
               <button
                 onClick={() => setIsFullscreenHypnosisOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
@@ -679,6 +669,14 @@ export default function App() {
         <VrDevelopmentalTraumaFullscreenMonitor
           patient={currentPatient}
           onClose={() => setIsFullscreenHypnosisOpen(false)}
+        />
+      )}
+
+      {/* Modal Fullscreen 4: Consola de Analgesia Inmersiva y Bloqueo Nociceptivo (Zero-Opioid) */}
+      {isFullscreenPainOpen && (
+        <VrPainManagementModule
+          patient={currentPatient}
+          onClose={() => setIsFullscreenPainOpen(false)}
         />
       )}
     </div>
