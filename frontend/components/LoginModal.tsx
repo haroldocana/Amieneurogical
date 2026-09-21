@@ -28,7 +28,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   // Formulario SuperAdmin
   const [adminPin, setAdminPin] = useState('');
 
-  // Guardado seguro en localStorage (resiste bloqueos de cookies/privacidad)
   const safeSetLocalStorage = (key: string, value: string) => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -81,7 +80,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Fallo de autenticación en el servidor central.';
-      setError(msg === 'Failed to fetch' ? 'Error de conexión con el servidor remoto (CORS o red caída).' : msg);
+      setError(msg === 'Failed to fetch' ? 'Error de conexión con el servidor remoto.' : msg);
     } finally {
       setLoading(false);
     }
@@ -147,7 +146,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || data.message || 'Clave Maestra de Administrador inválida o rechazada.');
+        throw new Error(data.error || data.message || 'Clave Maestra de Administrador inválida.');
       }
 
       safeSetLocalStorage('amie_auth_token', data.token || 'SUPERADMIN_TOKEN');
@@ -163,7 +162,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error en la verificación de administrador.';
-      setError(msg === 'Failed to fetch' ? 'Error de conexión con el servidor (Failed to fetch). Revisa la configuración CORS en Cloud Run.' : msg);
+      setError(msg === 'Failed to fetch' ? 'Error de conexión con el servidor de autenticación.' : msg);
     } finally {
       setLoading(false);
     }
@@ -174,7 +173,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Encabezado */}
         <div className="flex items-center gap-3 mb-4">
           <div className="h-11 w-11 rounded-xl bg-gradient-to-tr from-sky-600 via-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20">
             <Stethoscope className="w-6 h-6" />
@@ -189,7 +187,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           </div>
         </div>
 
-        {/* Navegación Pestañas */}
         <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold mb-4">
           <button
             type="button"
@@ -229,7 +226,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           </div>
         )}
 
-        {/* 1. Formulario de Login */}
         {activeTab === 'login' && (
           <form onSubmit={handleLogin} className="space-y-3.5 text-xs">
             <div>
@@ -294,7 +290,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           </form>
         )}
 
-        {/* 2. Formulario de Registro */}
         {activeTab === 'register' && (
           <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
             <div>
@@ -369,7 +364,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           </form>
         )}
 
-        {/* 3. Módulo SuperAdmin */}
         {activeTab === 'superadmin' && (
           <form onSubmit={handleAdminAuth} className="space-y-3.5 text-xs">
             <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl text-amber-200">
