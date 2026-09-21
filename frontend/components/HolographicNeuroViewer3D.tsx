@@ -1,18 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { PatientRecord } from '../types';
 import { 
-  Brain, 
   Layers, 
   Activity, 
   Zap, 
-  Maximize, 
   RotateCcw,
   ShieldAlert,
   Target
 } from 'lucide-react';
 
 interface Props {
-  patient: PatientRecord;
+  patient?: PatientRecord;
 }
 
 type FrequencyBand = 'delta' | 'theta' | 'alfa' | 'beta' | 'highBeta';
@@ -23,20 +21,27 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
   const [viewAngle, setViewAngle] = useState<ViewAngle>('isometric');
   const [isRotating, setIsRotating] = useState(true);
 
-  // Extraer datos qEEG del paciente o usar valores por defecto si no existen
-  const qeegData = patient.qeegBiomarkers?.regionalZScores || {
+  // Extraer datos qEEG del paciente de forma 100% segura
+  const qeegData = patient?.qeegBiomarkers?.regionalZScores || {
     frontal: { region: 'Frontal', deltaZ: 0, thetaZ: 0, alfaZ: 0, betaZ: 0, highBetaZ: 0 },
     parietal: { region: 'Parietal', deltaZ: 0, thetaZ: 0, alfaZ: 0, betaZ: 0, highBetaZ: 0 },
     temporal: { region: 'Temporal', deltaZ: 0, thetaZ: 0, alfaZ: 0, betaZ: 0, highBetaZ: 0 },
     occipital: { region: 'Occipital', deltaZ: 0, thetaZ: 0, alfaZ: 0, betaZ: 0, highBetaZ: 0 }
   };
 
-  // Extraer el Z-Score específico para la banda seleccionada
+  // Extraer el Z-Score específico tolerando tanto "alfaZ" como "alphaZ"
   const getZScoreForBand = (region: keyof typeof qeegData) => {
-    return qeegData[region][`${activeBand}Z` as keyof typeof qeegData[typeof region]] as number || 0;
+    const regionObj = qeegData[region] as Record<string, any>;
+    if (!regionObj) return 0;
+
+    let key = `${activeBand}Z`;
+    if (activeBand === 'alfa' && regionObj['alphaZ'] !== undefined) {
+      key = 'alphaZ';
+    }
+    return typeof regionObj[key] === 'number' ? regionObj[key] : 0;
   };
 
-  // Mapear Z-Score a color (Rojo = Exceso, Azul = Déficit, Verde/Cian = Normal)
+  // Mapear Z-Score a color
   const getHeatmapColor = (zScore: number) => {
     if (zScore >= 2.0) return 'rgba(225, 29, 72, 0.8)';   // Rose-600 (Muy alto)
     if (zScore >= 1.0) return 'rgba(245, 158, 11, 0.8)';  // Amber-500 (Alto)
@@ -45,7 +50,6 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
     return 'rgba(16, 185, 129, 0.6)';                     // Emerald-500 (Normal)
   };
 
-  // Detalles clínicos de la banda activa
   const bandDetails = {
     delta: { name: 'Delta (1-4 Hz)', desc: 'Asociado a sueño profundo, patología de sustancia blanca o deterioro cognitivo agudo.' },
     theta: { name: 'Theta (4-8 Hz)', desc: 'Asociado a somnolencia, TDAH (ratio Theta/Beta alto) o estados hipnagógicos.' },
@@ -54,7 +58,6 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
     highBeta: { name: 'High Beta (30+ Hz)', desc: 'Sobrecarga cognitiva, rumiación, hiperactivación de la amígdala y crisis de pánico.' }
   };
 
-  // Clases CSS para simular la rotación 3D en el navegador
   const getTransformStyle = () => {
     const base = isRotating ? 'animate-[spin_20s_linear_infinite] ' : '';
     switch (viewAngle) {
@@ -114,7 +117,7 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* PANEL IZQUIERDO: Control de Frecuencias y Datos Crudos */}
+        {/* PANEL IZQUIERDO */}
         <div className="lg:col-span-4 space-y-4">
           <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-xl space-y-3">
             <h3 className="text-xs font-bold text-cyan-300 uppercase flex items-center gap-2">
@@ -162,7 +165,7 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
                 );
               })}
             </div>
-            {patient.qeegBiomarkers?.regionalZScores.frontal.interpretation && (
+            {patient?.qeegBiomarkers?.regionalZScores?.frontal?.interpretation && (
               <div className="mt-2 p-2 bg-rose-950/30 border border-rose-500/20 rounded text-[10px] text-rose-200 flex gap-2">
                 <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
                 <span>{patient.qeegBiomarkers.regionalZScores.frontal.interpretation}</span>
@@ -171,18 +174,15 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
           </div>
         </div>
 
-        {/* PANEL DERECHO: Visor Holográfico 3D (CSS Simulado) */}
+        {/* PANEL DERECHO */}
         <div className="lg:col-span-8 bg-slate-950/80 border border-slate-800 rounded-xl relative overflow-hidden flex items-center justify-center min-h-[400px]">
           
-          {/* Fondo Cyberpunk (Grid) */}
           <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(6,182,212,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.2)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none z-10" />
 
-          {/* Renderizado 3D */}
           <div className="relative w-64 h-80 perspective-1000">
             <div className={`w-full h-full relative transition-transform duration-1000 transform-style-3d ${getTransformStyle()}`}>
               
-              {/* Base de la Cabeza Holográfica (Óvalo transparente) */}
               <div className="absolute inset-0 border-2 border-cyan-900/30 rounded-full shadow-[0_0_50px_rgba(6,182,212,0.1)_inset]" />
 
               {/* Lóbulo Frontal */}
@@ -194,7 +194,7 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
                 FRONTAL
               </div>
 
-              {/* Lóbulo Parietal (Centro/Atrás) */}
+              {/* Lóbulo Parietal */}
               <div 
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-24 rounded-[50%] blur-md transition-colors duration-500"
                 style={{ backgroundColor: getHeatmapColor(getZScoreForBand('parietal')), transform: 'translateZ(30px)' }}
@@ -215,7 +215,7 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
                 style={{ backgroundColor: getHeatmapColor(getZScoreForBand('temporal')), transform: 'translateZ(20px)' }}
               />
 
-              {/* Lóbulo Occipital (Atrás/Abajo) */}
+              {/* Lóbulo Occipital */}
               <div 
                 className="absolute bottom-8 left-1/2 -translate-x-1/2 w-24 h-20 rounded-[50%] blur-md transition-colors duration-500"
                 style={{ backgroundColor: getHeatmapColor(getZScoreForBand('occipital')), transform: 'translateZ(10px)' }}
@@ -224,7 +224,6 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
                 OCCIPITAL
               </div>
 
-              {/* Ejes de conectividad central (Coherencia) */}
               <div className="absolute inset-0 flex items-center justify-center opacity-30">
                 <div className="w-1 h-3/4 bg-cyan-400 blur-sm transform translate-z-[25px]" />
                 <div className="w-3/4 h-1 bg-cyan-400 blur-sm absolute transform translate-z-[25px]" />
@@ -232,7 +231,6 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
             </div>
           </div>
 
-          {/* Leyenda de Colores Heatmap */}
           <div className="absolute bottom-4 right-4 z-20 bg-slate-900/90 border border-slate-700 p-2 rounded-lg backdrop-blur-sm">
             <span className="text-[9px] text-slate-400 font-bold block mb-1">LEYENDA (Z-SCORE)</span>
             <div className="flex items-center gap-1 text-[9px] font-mono">
@@ -246,7 +244,6 @@ export const HolographicNeuroViewer3D: React.FC<Props> = ({ patient }) => {
             </div>
           </div>
 
-          {/* Indicador de Frecuencia Activa */}
           <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
             <Zap className="w-5 h-5 text-cyan-400 animate-pulse" />
             <div className="text-cyan-300 font-mono font-bold text-sm tracking-wider uppercase">
