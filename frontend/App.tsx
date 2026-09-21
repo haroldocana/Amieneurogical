@@ -673,7 +673,6 @@ export default function App() {
             <VrTherapyModule
               patient={currentPatient}
               onUpdatePatientVrData={handleUpdatePatientVrData}
-              onOpenFullscreenConsole={() => setIsFullscreenConsoleOpen(true)}
             />
           </div>
         )}
