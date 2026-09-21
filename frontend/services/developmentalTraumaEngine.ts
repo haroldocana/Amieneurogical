@@ -1,3 +1,7 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - MOTOR DE TRAUMA EVOLUTIVO Y ADAPTACIÓN HIPNO-VR
+// ============================================================================
+
 export type DevelopmentalStage = 'CHILDHOOD' | 'ADOLESCENCE' | 'EARLY_ADULT' | 'MATURE_ADULT' | 'GERIATRIC';
 
 export type TraumaTypology = 
@@ -24,13 +28,13 @@ export interface AdaptedProgramConfig {
 }
 
 /**
- * Genera la configuración optimizada para el entorno de la Pico Neo 3 basada en edad y trauma
+ * Genera la configuración optimizada para el entorno VR basada en Edad y Tipología de Trauma
  */
 export const calculateAdaptedProgram = (
   age: number,
-  traumaType: TraumaTypology
+  traumaType: TraumaTypology = 'COMPLEX_REPETITIVE'
 ): AdaptedProgramConfig => {
-  // 1. Clasificación por Etapa Evolutiva
+  // 1. Clasificación por Etapa Evolutiva (Base)
   let stage: DevelopmentalStage = 'EARLY_ADULT';
   if (age < 12) stage = 'CHILDHOOD';
   else if (age >= 12 && age < 18) stage = 'ADOLESCENCE';
@@ -38,10 +42,12 @@ export const calculateAdaptedProgram = (
   else if (age >= 36 && age < 65) stage = 'MATURE_ADULT';
   else stage = 'GERIATRIC';
 
-  // 2. Matriz de Configuración Adaptativa
+  // 2. Matriz de Configuración Base por Etapa
+  let config: AdaptedProgramConfig;
+
   switch (stage) {
     case 'CHILDHOOD':
-      return {
+      config = {
         stage,
         stageNameEs: 'Infancia (4-11 años)',
         recommendedBinauralHz: 7.5,
@@ -52,12 +58,13 @@ export const calculateAdaptedProgram = (
         voiceStyle: 'PLAYFUL_PROTECTIVE',
         gsrSafetyThresholduS: 2.5,
         minHrvThresholdMs: 40,
-        vrMotionSpeedMultiplier: 0.3, // Movimientos muy lentos y estables
+        vrMotionSpeedMultiplier: 0.3,
         clinicalRationale: 'Sistemas límbicos infantiles requieren estimulación de alta seguridad visual sin brusquedad. Uso de metáforas lúdicas para evitar desorganización del apego.'
       };
+      break;
 
     case 'ADOLESCENCE':
-      return {
+      config = {
         stage,
         stageNameEs: 'Adolescencia (12-17 años)',
         recommendedBinauralHz: 6.5,
@@ -71,9 +78,10 @@ export const calculateAdaptedProgram = (
         vrMotionSpeedMultiplier: 0.7,
         clinicalRationale: 'Enfoque centrado en la reconstrucción del Yo y la autonomía. Evita tonos paternalistas para no detonar reactividad defensiva.'
       };
+      break;
 
     case 'EARLY_ADULT':
-      return {
+      config = {
         stage,
         stageNameEs: 'Adulto Joven (18-35 años)',
         recommendedBinauralHz: 5.2,
@@ -87,9 +95,10 @@ export const calculateAdaptedProgram = (
         vrMotionSpeedMultiplier: 1.0,
         clinicalRationale: 'Máxima tolerancia a la inducción Theta profunda. Procesamiento enfocado en la deconstrucción de flashbacks de alta intensidad.'
       };
+      break;
 
     case 'MATURE_ADULT':
-      return {
+      config = {
         stage,
         stageNameEs: 'Adulto Maduro (36-64 años)',
         recommendedBinauralHz: 4.8,
@@ -103,21 +112,64 @@ export const calculateAdaptedProgram = (
         vrMotionSpeedMultiplier: 0.8,
         clinicalRationale: 'Aborda la huella somática del TEPT Complejo (C-PTSD) acumulado. Sincronización con el tono vagal para aliviar la carga alostática.'
       };
+      break;
 
     case 'GERIATRIC':
-      return {
+    default:
+      config = {
         stage,
         stageNameEs: 'Geriátrico / Adulto Mayor (65+ años)',
-        recommendedBinauralHz: 8.0, // Frecuencia Alfa para mantener la orientación espacial
+        recommendedBinauralHz: 8.0,
         minBinauralHz: 7.0,
         maxBinauralHz: 10.0,
         visualMetaphorId: 'SERENE_CHRONICLE_ROOM',
-        visualMetaphorNameEs: 'Habitación de Crónicas Serenas (Integración de Vida)',
+        visualMetaphorNameEs: 'Habitación de Crónicas Serenes (Integración de Vida)',
         voiceStyle: 'SERENE_REASSURING',
         gsrSafetyThresholduS: 3.0,
         minHrvThresholdMs: 35,
-        vrMotionSpeedMultiplier: 0.2, // Estático o sin movimiento de cámara
+        vrMotionSpeedMultiplier: 0.2,
         clinicalRationale: 'Evita la estimulación desorientadora. Utiliza frecuencias Alfa para favorecer la integración del recuerdo sin compromiso cenestésico ni riesgo de mareo.'
       };
+      break;
   }
+
+  // 3. Modulación Específica por Tipología de Trauma (Segunda Capa Bio-Adaptativa)
+  switch (traumaType) {
+    case 'ATTACHMENT_DEVELOPMENTAL':
+      // Trauma de apego: Reduce el umbral de seguridad GSR para evitar disociación silenciosa
+      config.gsrSafetyThresholduS = Math.max(1.8, +(config.gsrSafetyThresholduS - 0.5).toFixed(1));
+      config.clinicalRationale += ' [Modulación Apego: Umbral GSR reducido para prevenir disociación severa por abandono.]';
+      break;
+
+    case 'MEDICAL_SOMATIC':
+      // Trauma somático/dolor: Inyecta frecuencias binaurales tendientes a Delta/Theta bajo
+      config.recommendedBinauralHz = Math.max(config.minBinauralHz, +(config.recommendedBinauralHz - 0.8).toFixed(1));
+      config.voiceStyle = 'SOMATIC_VISCERAL';
+      config.clinicalRationale += ' [Modulación Somática: Inducción de analgesia neuro-visceral y relajación muscular profunda.]';
+      break;
+
+    case 'COMPLEX_REPETITIVE':
+      // TEPT Complejo: Reduce la velocidad de movimiento para no detonar hipervigilancia
+      config.vrMotionSpeedMultiplier = +(config.vrMotionSpeedMultiplier * 0.8).toFixed(2);
+      config.clinicalRationale += ' [Modulación C-PTSD: Velocidad de cámara reducida para mitigar la hipervigilancia de la amígdala.]';
+      break;
+
+    case 'INTERPERSONAL_ABUSE':
+      // Abuso interpersonal: Prioriza voces no autoritarias
+      if (stage !== 'CHILDHOOD') config.voiceStyle = 'EMPOWERING_NEUTRAL';
+      config.clinicalRationale += ' [Modulación Abuso: Tono narrativo de reafirmación de límites y agencia personal.]';
+      break;
+
+    case 'LOSS_BEREAVEMENT':
+      config.voiceStyle = 'SERENE_REASSURING';
+      config.clinicalRationale += ' [Modulación Duelo: Enfoque en la consolidación afectiva y la integración del afecto perdiendo el dolor agudo.]';
+      break;
+
+    case 'SINGLE_EVENT_ACUTE':
+    default:
+      // Mantiene los valores estándar calibrados por etapa de edad
+      break;
+  }
+
+  return config;
 };
