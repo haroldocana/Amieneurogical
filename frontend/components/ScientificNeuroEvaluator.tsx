@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 interface ScientificNeuroEvaluatorProps {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
@@ -93,7 +93,11 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   const [reportText, setReportText] = useState('');
   const [transferSuccess, setTransferSuccess] = useState(false);
 
-  // Proceso de Calibración de Sensores
+  const safePatientId = patient?.id || 'PAC-8104';
+  const safePatientName = patient?.patientNameAnonymized || safePatientId;
+  const safeAge = patient?.age ?? 55;
+  const safeGender = patient?.gender || 'M';
+
   const handleStartCalibration = () => {
     setIsCalibrating(true);
     setIsCalibrated(false);
@@ -103,7 +107,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     }, 2500);
   };
 
-  // Generador de Onda ECG: Dibuja línea plana si no hay conexión ni modo simulación
   useEffect(() => {
     let step = 0;
     const interval = setInterval(() => {
@@ -166,7 +169,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     setReportText(
       `INFORME MÉDICO DE EVALUACIÓN CIENTÍFICA & BIOMÉTRICA FÍSICA\n` +
       `=========================================================\n` +
-      `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age} años | GÉNERO: ${patient.gender}\n` +
+      `PACIENTE ID: ${safePatientId} | EDAD: ${safeAge} años | GÉNERO: ${safeGender}\n` +
       `EVALUACIÓN CIENTÍFICA: ${activeProtocol.disorderName}\n` +
       `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
       `ESTADO DE CALIBRACIÓN: ${isCalibrated ? 'CALIBRADO (Punto Cero Calibrado)' : 'PENDIENTE DE CALIBRACIÓN'}\n` +
@@ -181,7 +184,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       `3. TRIANGULACIÓN GLOBAL & DICTAMEN AMIE:\n` +
       `Los datos colectados vía ${activeProtocol.hardwareUsed} muestran congruencia neurofisiológica con un índice de fiabilidad del ${activeProtocol.reliabilityPct}%. Se transfiere el vector para alimentar la triangulación global del motor AMIE.`
     );
-  }, [selectedProtocolKey, patient, isCalibrated, activeProtocol]);
+  }, [selectedProtocolKey, patient, isCalibrated, activeProtocol, safePatientId, safeAge, safeGender]);
 
   const handleExportWord = () => {
     const header = "data:application/vnd.ms-word;charset=utf-8,";
@@ -193,7 +196,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     );
     const link = document.createElement("a");
     link.href = header + content;
-    link.download = `Informe_Hardware_${selectedProtocolKey}_${patient.id || 'PAC-8104'}.doc`;
+    link.download = `Informe_Hardware_${selectedProtocolKey}_${safePatientId}.doc`;
     link.click();
   };
 
@@ -248,13 +251,12 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Extracción de datos del expediente <strong className="text-sky-300">{patient.id}</strong> ({patient.patientNameAnonymized})
+              Extracción de datos del expediente <strong className="text-sky-300">{safePatientId}</strong> ({safePatientName})
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Botón de Calibración de Hardware */}
           <button
             onClick={handleStartCalibration}
             disabled={isCalibrating}
@@ -348,7 +350,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
         </div>
 
-        {/* Lienzo SVG */}
         <div className="h-32 w-full bg-slate-950 rounded-xl p-2 border border-slate-800 relative overflow-hidden flex items-center">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:16px_16px] opacity-40" />
 
