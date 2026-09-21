@@ -24,16 +24,18 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
-// MÓDULOS DE FRONTERA HIPNO-VR & CLOSED-LOOP
+// MÓDULOS DE FRONTERA HIPNO-VR & CLOSED-LOOP (SUITE COMPLETA 5/5)
 import { VrPainManagementModule } from './components/VrPainManagementModule';         // Módulo 1: Analgesia
 import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule'; // Módulo 2: Mirror VR (FND)
 import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule'; // Módulo 3: Reconsolidación Memoria
+import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';   // Módulo 4: TDAH & Función Ejecutiva
+import { VrGammaInsightModule } from './components/VrGammaInsightModule';             // Módulo 5: Gamma 40Hz & Insight
 
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
-import { subscribeUsbDeviceEvents, NeuromotorTelemetrySample } from './utils/checkUsbSupport';
+import { subscribeUsbDeviceEvents } from './utils/checkUsbSupport';
 import {
   Activity,
   LayoutDashboard,
@@ -54,7 +56,9 @@ import {
   Layers,
   ThermometerSnowflake,
   UserCheck,
-  RotateCcw
+  RotateCcw,
+  Target,
+  Lightbulb
 } from 'lucide-react';
 
 type AppTab = 
@@ -97,10 +101,12 @@ export default function App() {
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
   
-  // Modales de Módulos Hipno-VR Avanzados
+  // Modales de Módulos Hipno-VR Avanzados (5/5)
   const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false);     // Módulo 1: Analgesia
   const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false);       // Módulo 2: Mirror VR
   const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState(false); // Módulo 3: Reconsolidación Memoria
+  const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState(false);     // Módulo 4: TDAH & Exec Control
+  const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState(false);   // Módulo 5: Gamma 40Hz Insight
 
   // USB Device State
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
@@ -191,7 +197,7 @@ export default function App() {
       } else {
         setErrorMsg('Error de comunicación con Cloud Function: ' + msg);
       }
-    } flex {
+    } finally {
       setIsSyncing(false);
     }
   };
@@ -589,60 +595,78 @@ export default function App() {
         {/* Tab 6: Módulo qEEG */}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
         
-        {/* Tab 7: Módulo VR Inmersivo con Botones de las 3 Consolas Avanzadas */}
+        {/* Tab 7: Módulo VR Inmersivo con Botones de las 5 Consolas Avanzadas */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-end gap-3 flex-wrap">
+            <div className="flex items-center justify-end gap-2.5 flex-wrap">
+              {/* Módulo 5: Gamma 40Hz Insight */}
+              <button
+                onClick={() => setIsFullscreenGammaOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition"
+              >
+                <Lightbulb className="w-4 h-4 text-amber-100" />
+                <span>Consola Gamma 40Hz (TOC / TEA)</span>
+              </button>
+
+              {/* Módulo 4: TDAH & Función Ejecutiva */}
+              <button
+                onClick={() => setIsFullscreenExecOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition"
+              >
+                <Target className="w-4 h-4 text-sky-200" />
+                <span>Consola TDAH (Executive Control)</span>
+              </button>
+
               {/* Módulo 3: Reconsolidación Memoria */}
               <button
                 onClick={() => setIsFullscreenMemoryOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition"
               >
                 <RotateCcw className="w-4 h-4 text-rose-200" />
-                <span>Consola Reconsolidación Memoria & Fobias</span>
+                <span>Consola Memoria & Fobias</span>
               </button>
 
               {/* Módulo 2: Mirror VR */}
               <button
                 onClick={() => setIsFullscreenFndOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition"
               >
                 <UserCheck className="w-4 h-4 text-indigo-200" />
-                <span>Consola Neuro-Rehabilitación (Mirror VR)</span>
+                <span>Consola Mirror VR (FND)</span>
               </button>
 
               {/* Módulo 1: Analgesia */}
               <button
                 onClick={() => setIsFullscreenPainOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
               >
                 <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
-                <span>Consola Analgesia VR (Zero-Opioid Pain)</span>
+                <span>Consola Analgesia VR</span>
               </button>
 
               {/* Consola Hipnosis Trauma */}
               <button
                 onClick={() => setIsFullscreenHypnosisOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
               >
                 <Sparkles className="w-4 h-4 text-purple-200 animate-spin-slow" />
-                <span>Consola Hipnosis & Trauma Evolutivo</span>
+                <span>Consola Hipnosis & Trauma</span>
               </button>
 
               <button
                 onClick={() => setIsFullscreenDiagnosticOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition"
               >
                 <Brain className="w-4 h-4" />
-                <span>Consola de Diagnóstico (Pruebas 3D)</span>
+                <span>Consola Diagnóstico 3D</span>
               </button>
 
               <button
                 onClick={() => setIsFullscreenConsoleOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
               >
                 <Glasses className="w-4 h-4" />
-                <span>Consola de Tratamiento (Exposición)</span>
+                <span>Consola Tratamiento</span>
               </button>
             </div>
 
@@ -722,6 +746,22 @@ export default function App() {
         <VrMemoryReconsolidationModule
           patient={currentPatient}
           onClose={() => setIsFullscreenMemoryOpen(false)}
+        />
+      )}
+
+      {/* Módulo 4: TDAH & Función Ejecutiva */}
+      {isFullscreenExecOpen && (
+        <VrExecutiveFunctionModule
+          patient={currentPatient}
+          onClose={() => setIsFullscreenExecOpen(false)}
+        />
+      )}
+
+      {/* Módulo 5: Gamma 40Hz Insight (TOC/TEA) */}
+      {isFullscreenGammaOpen && (
+        <VrGammaInsightModule
+          patient={currentPatient}
+          onClose={() => setIsFullscreenGammaOpen(false)}
         />
       )}
     </div>
