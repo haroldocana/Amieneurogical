@@ -1,12 +1,72 @@
-import { PatientRecord } from './types';
+import { PatientRecord, MedicalLicenseAccount } from './types';
 
 // ============================================================================
-// CASOS CLÍNICOS DE PRUEBA (PRESETS) - COMPATIBLES CON EL NUEVO TIPADO
+// PRINCIPIOS DIAGNÓSTICOS DE JAMES MORRISON (DSM-5)
 // ============================================================================
+export const MORRISON_CLINICAL_PRINCIPLES = [
+  { letter: 'A', title: 'Seguridad en Diagnóstico Diferencial', text: 'Establezca su diagnóstico diferencial en forma jerárquica conforme a la seguridad del paciente (trastornos orgánicos y tratables primero).' },
+  { letter: 'B', title: 'Antecedentes Familiares', text: 'Los antecedentes familiares orientan el diagnóstico; revalúe tras entrevistar a la familia.' },
+  { letter: 'C', title: 'Etiología Física & Tratamientos', text: 'Los trastornos físicos y su farmacoterapia pueden inducir o agravar los síntomas mentales.' },
+  { letter: 'D', title: 'Descarte Somatomorfo', text: 'Descarte trastorno de síntomas somáticos cuando los síntomas no coincidan con la anatomía o los tratamientos no funcionen.' },
+  { letter: 'E', title: 'Consumo de Sustancias', text: 'El consumo de sustancias (intoxicación/abstinencia) puede inducir casi cualquier cuadro psicopatológico.' },
+  { letter: 'F', title: 'Prioridad al Estado de Ánimo', text: 'Por su alta prevalencia, letalidad y respuesta a tratamiento, siempre descarte trastornos del estado de ánimo.' },
+  { letter: 'G', title: 'Antecedentes > Aspecto Actual', text: 'Los antecedentes longitudinales tienen mayor peso predictivo que el corte transversal actual.' },
+  { letter: 'H', title: 'Recencia de Antecedentes', text: 'Los antecedentes más recientes tienen más valor diagnóstico que los de mayor antigüedad.' },
+  { letter: 'I', title: 'Fuentes Colaterales', text: 'La información de informantes confiables con frecuencia supera los relatos con anosognosia o simulación.' },
+  { letter: 'J', title: 'Signos > Síntomas', text: 'Los signos objetivos observables tienen más valor que las quejas subjetivas no verificadas.' },
+  { letter: 'M', title: 'Navaja de Occam', text: 'Elija la explicación más simple y unificadora antes de acumular diagnósticos independientes.' },
+  { letter: 'N', title: 'Caballos vs Cebras', text: 'Piense primero en las afecciones más comunes antes que en patologías exóticas.' },
+  { letter: 'P', title: 'Predictor de Conducta', text: 'El elemento que mejor predice el comportamiento futuro es el comportamiento previo en circunstancias análogas.' },
+  { letter: 'Q', title: 'Conteo de Criterios', text: 'A mayor número de síntomas cardinales de un trastorno, mayor probabilidad de certeza diagnóstica.' },
+  { letter: 'W', title: 'Evitar TP en Cuadro Agudo', text: 'Evite diagnosticar trastornos de la personalidad durante un cuadro agudo del Eje I o crisis descompensatoria.' },
+  { letter: 'X', title: 'Jerarquía de Tratabilidad', text: 'Enliste diagnósticos múltiples priorizando el más urgente y sensible al tratamiento médico.' }
+];
 
-export const CLINICAL_CASE_PRESETS: { label: string; record: PatientRecord }[] = [
+// ============================================================================
+// BASE DE DATOS LOCAL DE LICENCIAMIENTO SAAS (MOCK/DEMO)
+// ============================================================================
+export const INITIAL_LICENSES: MedicalLicenseAccount[] = [
   {
-    label: "Caso 1: Trauma y Riesgo Autolítico (PAC-8104)",
+    id: 'LIC-00891',
+    doctorName: 'Dr. Alejandro Morales Rivera',
+    colegiadoNumber: 749210,
+    username: 'dr.morales@hospitalgeneral.med',
+    hospitalClinic: 'Hospital Central de Especialidades Psiquiátricas',
+    specialty: 'Psiquiatría de Enlace & Neuropsiquiatría',
+    tier: 'Institucional',
+    storageBucketUri: 'gs://base-conocimiento-medica/licencias/dr.morales@hospitalgeneral.med.json',
+    createdAt: '2024-01-15',
+    expiresAt: '2026-12-31',
+    status: 'Activa'
+  },
+  {
+    id: 'LIC-00892',
+    doctorName: 'Dra. Gabriela Enríquez Cotera',
+    colegiadoNumber: 883194,
+    username: 'dra.enriquez@neuromed.cl',
+    hospitalClinic: 'Instituto de Neurociencias y Salud Mental',
+    specialty: 'Neurología Clínica & Psicofarmacología',
+    tier: 'Investigación',
+    storageBucketUri: 'gs://base-conocimiento-medica/licencias/dra.enriquez@neuromed.cl.json',
+    createdAt: '2024-03-01',
+    expiresAt: '2026-03-01',
+    status: 'Activa'
+  }
+];
+
+// ============================================================================
+// CASOS CLÍNICOS PRE-CARGADOS (PRESETS) - COMPATIBILIDAD DUAL
+// ============================================================================
+export const CLINICAL_CASE_PRESETS: { 
+  name: string; 
+  label: string; 
+  description: string; 
+  record: PatientRecord 
+}[] = [
+  {
+    name: 'Caso 1: Trauma y Riesgo Autolítico (PAC-8104)',
+    label: 'Caso 1: Trauma y Riesgo Autolítico (PAC-8104)',
+    description: 'Ideación suicida estructurada tras colapso sociofuncional, insomnio de despertar precoz.',
     record: {
       id: 'PAC-8104',
       patientNameAnonymized: 'Paciente ID: PAC-8104',
@@ -56,7 +116,9 @@ export const CLINICAL_CASE_PRESETS: { label: string; record: PatientRecord }[] =
     }
   },
   {
-    label: "Caso 2: Ansiedad Generalizada y TDAH (PAC-2291)",
+    name: 'Caso 2: Ansiedad Generalizada y TDAH (PAC-2291)',
+    label: 'Caso 2: Ansiedad Generalizada y TDAH (PAC-2291)',
+    description: 'Dificultad severa para concentrarse en el trabajo y ataques de pánico ocasionales.',
     record: {
       id: 'PAC-2291',
       patientNameAnonymized: 'Paciente ID: PAC-2291',
@@ -106,3 +168,31 @@ export const CLINICAL_CASE_PRESETS: { label: string; record: PatientRecord }[] =
     }
   }
 ];
+
+// ============================================================================
+// CONFIGURACIÓN MAESTRA DE ENTORNOS VR (52 TRASTORNOS CIE-11 / DSM-5)
+// ============================================================================
+export const MASTER_VR_ENVIRONMENTS = {
+  version: "3.8.0-AMIE-CLINICAL",
+  systemName: "AMIE VR 52-DISORDER MASTER CONFIGURATION",
+  updatedAt: "2026-03-20T00:00:00Z",
+  environmentsCount: 10,
+  coveredDisordersCount: 52,
+  defaultSamplingRateHz: 60,
+  masterEnvironments: [
+    {
+      id: "ENV_01_CLASSROOM_OFFICE",
+      name: "Aula / Oficina de Carga Atencional y Cognitiva",
+      unitySceneName: "Scene_Classroom_CPT3D",
+      supportedClinicalTasks: ["CPT_3D_GO_NO_GO", "N_BACK_MEMORY", "STROOP_3D_SPATIAL"],
+      targetDisorders: [
+        { code: "6A05.0", dsm5: "314.01", name: "TDAH Presentación Combinada" },
+        { code: "6A05.1", dsm5: "314.00", name: "TDAH Presentación Inatenta" },
+        { code: "6A05.2", dsm5: "314.01", name: "TDAH Presentación Hiperactiva/Impulsiva" }
+      ],
+      controllableParameters: {
+        distractorDensity360: { type: "range", min: 0, max: 12, default: 4, unit: "active_distractors" }
+      }
+    }
+  ]
+};
