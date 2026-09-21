@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  patient: PatientRecord;
-  analysis: AmieClinicalAnalysis | null;
+  patient?: PatientRecord;
+  analysis?: AmieClinicalAnalysis | null;
 }
 
 interface VectorScore {
@@ -30,12 +30,12 @@ export const DiagnosticTriangulationView: React.FC<Props> = ({ patient, analysis
   const phq = patient?.psychometricScores?.phq9 ?? 0;
   const gad = patient?.psychometricScores?.gad7 ?? 0;
   const cssrs = patient?.psychometricScores?.cssrsLevel ?? 0;
-  const psychometricSeverity = Math.min(100, Math.round(((phq / 27) * 0.4 + (gad / 21) * 0.3 + (cssrs / 5) * 0.3) * 100));
+  const psychometricSeverity = Math.min(100, Math.max(0, Math.round(((phq / 27) * 0.4 + (gad / 21) * 0.3 + (cssrs / 5) * 0.3) * 100)));
 
   // Eje 2: qEEG & Topografía Cerebral
   const thetaZ = patient?.qeegBiomarkers?.regionalZScores?.frontal?.thetaZ ?? 0;
   const deltaZ = patient?.qeegBiomarkers?.regionalZScores?.frontal?.deltaZ ?? 0;
-  const qeegSeverity = Math.min(100, Math.round((Math.max(0, thetaZ) / 4.0 * 0.6 + Math.max(0, deltaZ) / 4.0 * 0.4) * 100));
+  const qeegSeverity = Math.min(100, Math.max(0, Math.round((Math.max(0, thetaZ) / 4.0 * 0.6 + Math.max(0, deltaZ) / 4.0 * 0.4) * 100)));
 
   // Eje 3: Telemetría VR & Biofeedback Autonómico (GSR + HRV)
   const gsrSeries = patient?.vrTelemetryData?.gsrMicroSiemens;
@@ -43,12 +43,12 @@ export const DiagnosticTriangulationView: React.FC<Props> = ({ patient, analysis
     ? gsrSeries.reduce((a, b) => a + b, 0) / gsrSeries.length 
     : 2.2;
   const hrvVal = patient?.multisensoryHardware?.vagalToneHrvIndex ?? 42;
-  const vrSeverity = Math.min(100, Math.round(((gsrAvg / 6.0) * 0.5 + Math.max(0, 50 - hrvVal) / 50 * 0.5) * 100));
+  const vrSeverity = Math.min(100, Math.max(0, Math.round(((gsrAvg / 6.0) * 0.5 + Math.max(0, 50 - hrvVal) / 50 * 0.5) * 100)));
 
   // Eje 4: Telemetría Pasiva APK Centinela
   const wakeups = patient?.sentinelTelemetry?.sleepMetrics?.nightWakeups ?? 1;
   const typingLat = patient?.sentinelTelemetry?.behavioralBiometrics?.typingLatencyMs ?? 220;
-  const sentinelSeverity = Math.min(100, Math.round(((wakeups / 5) * 0.5 + Math.min(1, typingLat / 600) * 0.5) * 100));
+  const sentinelSeverity = Math.min(100, Math.max(0, Math.round(((wakeups / 5) * 0.5 + Math.min(1, typingLat / 600) * 0.5) * 100)));
 
   // Eje 5: Biometría Acústica & Expresión Facial
   const microState = patient?.multisensoryHardware?.microExpressionState ?? 'Normorreactivo';
@@ -113,15 +113,16 @@ export const DiagnosticTriangulationView: React.FC<Props> = ({ patient, analysis
   ];
 
   // Severidad Global Calculada
-  const liveGlobalSeverity = Math.round(
+  const liveGlobalSeverity = Math.min(100, Math.max(0, Math.round(
     vectors.reduce((acc, v) => acc + (v.severityScorePct * (v.weightPct / 100)), 0)
-  );
+  )));
 
   // Detección de Enmascaramiento / Disimulo
   const isCamouflagingDetected = psychometricSeverity < 35 && (vrSeverity > 60 || qeegSeverity > 60);
   const isDissimulationRisk = phq < 5 && cssrs >= 3;
 
-  const convergenceScore = analysis?.bioclinicalTriangulation?.convergenceScore ?? (100 - Math.abs(psychometricSeverity - vrSeverity));
+  const rawConvergence = analysis?.bioclinicalTriangulation?.convergenceScore ?? (100 - Math.abs(psychometricSeverity - vrSeverity));
+  const convergenceScore = Math.min(100, Math.max(0, Math.round(rawConvergence)));
 
   return (
     <div className="space-y-6">
@@ -275,21 +276,27 @@ export const DiagnosticTriangulationView: React.FC<Props> = ({ patient, analysis
 
           {analysis?.differentialMatrix && analysis.differentialMatrix.length > 0 ? (
             <div className="space-y-3">
-              {analysis.differentialMatrix.map((diff: any, idx: number) => (
+              {analysis.differentialMatrix.map((diff, idx) => (
                 <div key={idx} className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row gap-4">
                   <div className="md:w-1/3 border-r border-slate-800 pr-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-white">{diff.disorderName}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-500/30 font-bold">
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                        diff.status === 'Confirmado' 
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' 
+                          : 'bg-rose-950 text-rose-400 border border-rose-500/30'
+                      }`}>
                         {diff.status}
                       </span>
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono">
                       CIE-10 / CIE-11: {diff.codeCIE10} | Certeza: {diff.certaintyPct}%
                     </div>
-                    <div className="text-[10px] text-purple-300 bg-purple-950/40 p-2 rounded border border-purple-500/20 italic">
-                      Regla Morrison: {diff.morrisonPrincipleApplied}
-                    </div>
+                    {diff.morrisonPrincipleApplied && (
+                      <div className="text-[10px] text-purple-300 bg-purple-950/40 p-2 rounded border border-purple-500/20 italic">
+                        Regla Morrison: {diff.morrisonPrincipleApplied}
+                      </div>
+                    )}
                   </div>
 
                   <div className="md:w-2/3 space-y-2">
