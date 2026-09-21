@@ -73,17 +73,17 @@ type AppTab =
   | 'saas';
 
 export default function App() {
-  // Authentication State
+  // Estado de Autenticación
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [doctorName, setDoctorName] = useState('Dr. Alejandro Morales Rivera');
   const [doctorUsername, setDoctorUsername] = useState('harold01');
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
-  // Active Navigation Tab
+  // Navegación por Pestañas
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
   const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
 
-  // Clinical Case State
+  // Estado del Expediente del Paciente
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
   });
@@ -94,24 +94,37 @@ export default function App() {
   const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Modals & Fullscreen Controls
+  // Control estricto de modales flotantes (Todos inician cerrados en false)
   const [isDsmModalOpen, setIsDsmModalOpen] = useState(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
   
-  // Modales de Módulos Hipno-VR Avanzados (5/5)
+  // Modales Hipno-VR
   const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false);
   const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false);
   const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState(false);
   const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState(false);
   const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState(false);
 
-  // USB Device State
+  // Estado Hardware USB
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
-  // Recuperación automática de sesión activa desde localStorage
+  // Cierre de modales abiertos al inicio
+  const closeAllModals = () => {
+    setIsDsmModalOpen(false);
+    setIsFullscreenConsoleOpen(false);
+    setIsFullscreenDiagnosticOpen(false);
+    setIsFullscreenHypnosisOpen(false);
+    setIsFullscreenPainOpen(false);
+    setIsFullscreenFndOpen(false);
+    setIsFullscreenMemoryOpen(false);
+    setIsFullscreenExecOpen(false);
+    setIsFullscreenGammaOpen(false);
+  };
+
+  // Recuperación automática de sesión activa
   useEffect(() => {
     try {
       const savedToken = localStorage.getItem('amie_auth_token');
@@ -124,13 +137,14 @@ export default function App() {
         setDoctorUsername(savedUsername || 'harold01');
         setColegiadoNumber(Number(savedColegiado) || 749210);
         setIsAuthenticated(true);
+        closeAllModals();
       }
     } catch (e) {
       console.warn('No se pudo acceder a localStorage:', e);
     }
   }, []);
 
-  // Suscripción a eventos de hardware USB (Hot-Plugging)
+  // Suscripción a eventos USB (Hot-Plugging)
   useEffect(() => {
     const unsubscribe = subscribeUsbDeviceEvents(
       (deviceName) => {
@@ -151,6 +165,8 @@ export default function App() {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
     setColegiadoNumber(auth.colegiadoNumber || 749210);
+    closeAllModals();
+    setActiveTab('workstation');
     setIsAuthenticated(true);
   };
 
@@ -161,6 +177,7 @@ export default function App() {
     } catch (e) {
       console.warn('Error al limpiar almacenamiento local:', e);
     }
+    closeAllModals();
     setIsAuthenticated(false);
   };
 
@@ -231,7 +248,7 @@ export default function App() {
     return <LoginModal onSuccess={handleLoginSuccess} />;
   }
 
-  // 🛡️ Objeto safePatient con protección absoluta para evitar crashes por undefined
+  // Objeto safePatient con protección absoluta para evitar crashes por undefined
   const safePatient: PatientRecord = {
     ...SAFE_DEFAULT_PATIENT,
     ...(currentPatient || {}),
@@ -703,7 +720,7 @@ export default function App() {
 
       <FloatingAmieAssistant
         currentPatientId={safePatientId}
-        onNavigateTab={(targetTab) => setActiveTab(targetTab)}
+        onNavigateTab={(targetTab) => setActiveTab(targetTab as AppTab)}
         activeTab={activeTab}
       />
 
