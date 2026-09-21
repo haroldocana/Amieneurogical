@@ -11,7 +11,7 @@ import {
   Search,
   ArrowRight,
   Sparkles,
-  CloudDownload,
+  DownloadCloud,
   CheckCircle2,
   Lock
 } from 'lucide-react';
@@ -113,7 +113,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
     {
       id: 'sync_pac',
       tabKey: 'workstation' as const,
-      icon: CloudDownload,
+      icon: DownloadCloud,
       title: 'f) Sincronizador PAC',
       subtitle: 'Cruce de Metadatos Filiatorios con Cloud Function',
       color: 'text-emerald-400',
