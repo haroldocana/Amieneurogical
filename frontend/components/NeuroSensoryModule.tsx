@@ -20,7 +20,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // Global Spectral Band Powers
+  // Potencias Espectrales Globales (qEEG)
   const [bandPowers] = useState<QeegBandPowers>({
     delta: 24,
     theta: 32,
@@ -37,7 +37,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
       setIsProcessing(true);
       setUploadSuccess(false);
 
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         setIsProcessing(false);
         setUploadSuccess(true);
         if (onAttachQeegToPatient) {
@@ -49,14 +49,12 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
           });
         }
       }, 1400);
-
-      return () => clearTimeout(timer);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Module Title */}
+      {/* Encabezado del Módulo */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -72,7 +70,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
           </p>
         </div>
 
-        {/* Upload Zone */}
+        {/* Zona de Carga de Archivos */}
         <div className="flex items-center gap-3">
           <label className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/20 active:scale-95 transition">
             <Upload className="w-4 h-4" />
@@ -87,7 +85,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
         </div>
       </div>
 
-      {/* File Upload Status */}
+      {/* Estado del Archivo Cargado */}
       {selectedFile && (
         <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs shadow-md">
           <div className="flex items-center gap-2">
@@ -108,16 +106,16 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
         </div>
       )}
 
-      {/* Interactive 3D HUD Neuro-Spectral FFT Viewer (Paso seguro de patient) */}
+      {/* Visor Encefalográfico Interactivo HUD 3D */}
       <InteractiveNeuroViewer patient={patient} />
 
-      {/* Spectral Band Power Distribution */}
+      {/* Distribución de Potencia por Banda Espectral */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-indigo-400" />
             <h2 className="font-bold text-xs uppercase tracking-wider text-slate-200">
-              Distribución de Potencia Relativa por Banda Espectral Quantitativa (qEEG)
+              Distribución de Potencia Relativa por Banda Espectral Cuantitativa (qEEG)
             </h2>
           </div>
           <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
@@ -130,7 +128,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
             <span className="text-[10px] text-slate-400 block mb-1">Delta (0.5 - 4 Hz)</span>
             <div className="text-lg font-bold font-mono text-cyan-300">{bandPowers.delta}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-cyan-400 h-full rounded-full" style={{ width: `${bandPowers.delta}%` }} />
+              <div className="bg-cyan-400 h-full rounded-full transition-all duration-500" style={{ width: `${bandPowers.delta}%` }} />
             </div>
           </div>
 
@@ -138,7 +136,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
             <span className="text-[10px] text-slate-400 block mb-1">Theta (4 - 8 Hz)</span>
             <div className="text-lg font-bold font-mono text-purple-300">{bandPowers.theta}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-purple-400 h-full rounded-full" style={{ width: `${bandPowers.theta}%` }} />
+              <div className="bg-purple-400 h-full rounded-full transition-all duration-500" style={{ width: `${bandPowers.theta}%` }} />
             </div>
           </div>
 
@@ -146,7 +144,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
             <span className="text-[10px] text-slate-400 block mb-1">Alfa (8 - 12 Hz)</span>
             <div className="text-lg font-bold font-mono text-emerald-300">{bandPowers.alfa}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${bandPowers.alfa}%` }} />
+              <div className="bg-emerald-400 h-full rounded-full transition-all duration-500" style={{ width: `${bandPowers.alfa}%` }} />
             </div>
           </div>
 
@@ -154,7 +152,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
             <span className="text-[10px] text-slate-400 block mb-1">Beta (12 - 20 Hz)</span>
             <div className="text-lg font-bold font-mono text-amber-300">{bandPowers.beta}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-amber-400 h-full rounded-full" style={{ width: `${bandPowers.beta}%` }} />
+              <div className="bg-amber-400 h-full rounded-full transition-all duration-500" style={{ width: `${bandPowers.beta}%` }} />
             </div>
           </div>
 
@@ -162,7 +160,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
             <span className="text-[10px] text-slate-400 block mb-1">High Beta (20 - 30 Hz)</span>
             <div className="text-lg font-bold font-mono text-rose-300">{bandPowers.highBeta}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-rose-400 h-full rounded-full" style={{ width: `${bandPowers.highBeta * 3}%` }} />
+              <div className="bg-rose-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, bandPowers.highBeta * 3)}%` }} />
             </div>
           </div>
 
@@ -170,7 +168,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
             <span className="text-[10px] text-slate-400 block mb-1">Gamma (30 - 45 Hz)</span>
             <div className="text-lg font-bold font-mono text-indigo-300">{bandPowers.gamma}%</div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-indigo-400 h-full rounded-full" style={{ width: `${bandPowers.gamma * 8}%` }} />
+              <div className="bg-indigo-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, bandPowers.gamma * 8)}%` }} />
             </div>
           </div>
         </div>
