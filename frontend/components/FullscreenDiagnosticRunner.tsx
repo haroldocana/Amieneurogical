@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onClose: () => void;
   onUpdatePatientVrData: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
@@ -29,6 +29,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
   const [selectedTest, setSelectedTest] = useState<DiagnosticTest>('CPT_3D_ADHD');
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testTimeSec, setTestTimeSec] = useState(0);
+
+  // 🛡️ Datos de paciente con resguardo ante undefined
+  const safePatientName = patient?.patientNameAnonymized || patient?.id || 'Paciente Anónimo';
+  const safePatientId = patient?.id || 'PAC-DEFAULT';
 
   // Métricas del Test en Tiempo Real (Capturadas a 60Hz)
   const [reactionTimeMs, setReactionTimeMs] = useState(412);
@@ -152,7 +156,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Paciente: <span className="text-white font-semibold">{patient.patientNameAnonymized || patient.id}</span> ({patient.id}) | Mapeo RDoC / DSM-5-TR
+              Paciente: <span className="text-white font-semibold">{safePatientName}</span> ({safePatientId}) | Mapeo RDoC / DSM-5-TR
             </p>
           </div>
         </div>
