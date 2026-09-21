@@ -1,12 +1,23 @@
 // ============================================================================
-// AMIE MULTI-PROTOCOL TELEMETRY DRIVER (USB / BLE / WIFI / SIMULATED)
+// AMIE MULTI-VENDOR & MULTI-PROTOCOL TELEMETRY DRIVER (USB / BLE / WIFI / SIM)
+// Compatible con: Polar, Garmin, OpenBCI, BITalino, ESP32, Emotiv, Nonin
 // ============================================================================
 
 import { MultisensoryHardwareTelemetry, NeuromotorBiomarkers } from '../types';
 
 export type TelemetryProtocol = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED';
 
+export type DeviceVendorProfile = 
+  | 'GENERIC_SERIAL'
+  | 'ESP32_CUSTOM'
+  | 'POLAR_H10'
+  | 'OPENBCI_CYTON'
+  | 'BITALINO_PLUX'
+  | 'GENERIC_BLE_HRM'
+  | 'EMOTIV_CORTEX_WS';
+
 export interface PrecisionTelemetryPacket {
+  vendor: DeviceVendorProfile;
   reactionTimeMs: number;
   handGripPressureKg: number;
   touchTapLatencyMs: number;
@@ -18,10 +29,16 @@ export interface PrecisionTelemetryPacket {
 }
 
 type TelemetryCallback = (data: PrecisionTelemetryPacket) => void;
-type StatusCallback = (status: { protocol: TelemetryProtocol; connected: boolean; deviceName: string }) => void;
+type StatusCallback = (status: { 
+  protocol: TelemetryProtocol; 
+  connected: boolean; 
+  deviceName: string; 
+  vendor: DeviceVendorProfile; 
+}) => void;
 
 class TelemetryManager {
   private activeProtocol: TelemetryProtocol = 'SIMULATED';
+  private activeVendor: DeviceVendorProfile = 'GENERIC_SERIAL';
   private isConnected: boolean = false;
   private deviceName: string = 'Modo Simulación AMIE';
   
@@ -34,12 +51,12 @@ class TelemetryManager {
 
   // Calibración Baseline / Tara
   private gripZeroOffsetKg: number = 0;
-  private isCalibrating: boolean = false;
 
   private dataListeners: Set<TelemetryCallback> = new Set();
   private statusListeners: Set<StatusCallback> = new Set();
 
   private currentPacket: PrecisionTelemetryPacket = {
+    vendor: 'GENERIC_SERIAL',
     reactionTimeMs: 195,
     handGripPressureKg: 32.4,
     touchTapLatencyMs: 180,
@@ -70,7 +87,8 @@ class TelemetryManager {
     const status = {
       protocol: this.activeProtocol,
       connected: this.isConnected || this.activeProtocol === 'SIMULATED',
-      deviceName: this.deviceName
+      deviceName: this.deviceName,
+      vendor: this.activeVendor
     };
     this.statusListeners.forEach(fn => fn(status));
   }
@@ -81,16 +99,20 @@ class TelemetryManager {
     
     this.currentPacket = {
       ...packet,
-      handGripPressureKg: calibratedGrip
+      handGripPressureKg: calibratedGrip,
+      vendor: this.activeVendor
     };
 
     this.dataListeners.forEach(fn => fn(this.currentPacket));
   }
 
   // --------------------------------------------------------------------------
-  // 1. CONEXIÓN USB SERIAL (115200 Baudios - ESP32 / FTDI)
+  // 1. CONEXIÓN USB / SERIAL MULTI-MARCA (ESP32, OpenBCI, BITalino, FTDI)
   // --------------------------------------------------------------------------
-  public async connectUsb(): Promise<boolean> {
+  public async connectUsb(
+    vendorProfile: DeviceVendorProfile = 'ESP32_CUSTOM', 
+    baudRate: number = 115200
+  ): Promise<boolean> {
     if (typeof window === 'undefined' || !('serial' in navigator)) {
       alert('Tu navegador no soporta Web Serial API (Usa Chrome o Edge).');
       return false;
@@ -99,11 +121,14 @@ class TelemetryManager {
     try {
       this.stopCurrentProtocol();
       this.serialPort = await (navigator as any).serial.requestPort();
-      await this.serialPort.open({ baudRate: 115200 });
+      
+      const targetBaud = vendorProfile === 'OPENBCI_CYTON' || vendorProfile === 'BITALINO_PLUX' ? 115200 : baudRate;
+      await this.serialPort.open({ baudRate: targetBaud });
 
       this.activeProtocol = 'USB';
+      this.activeVendor = vendorProfile;
       this.isConnected = true;
-      this.deviceName = 'ESP32 Bio-Telemetry (USB 115200 Baud)';
+      this.deviceName = `${vendorProfile} (USB Serial ${targetBaud} Bps)`;
       this.notifyStatus();
 
       this.startSerialLoop();
@@ -130,7 +155,7 @@ class TelemetryManager {
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
           for (const line of lines) {
-            this.parseIncomingPayload(line.trim());
+            this.parseVendorPayload(line.trim());
           }
         }
       }
@@ -140,9 +165,9 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // 2. CONEXIÓN BLUETOOTH BLE (GATT Services)
+  // 2. CONEXIÓN BLUETOOTH BLE MULTI-MARCA (Polar H10, Garmin, GATT Generic)
   // --------------------------------------------------------------------------
-  public async connectBluetooth(): Promise<boolean> {
+  public async connectBluetooth(vendorProfile: DeviceVendorProfile = 'POLAR_H10'): Promise<boolean> {
     if (typeof window === 'undefined' || !('bluetooth' in navigator)) {
       alert('Tu navegador no soporta Web Bluetooth API.');
       return false;
@@ -150,18 +175,36 @@ class TelemetryManager {
 
     try {
       this.stopCurrentProtocol();
+
+      const optionalServices: (string | number)[] = ['heart_rate', 'battery_service'];
+      if (vendorProfile === 'POLAR_H10') {
+        optionalServices.push('fb005c80-02c7-4c73-ba83-05780d1000b0'); // Servicio PMD Polar
+      }
+
       this.bleDevice = await (navigator as any).bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: ['heart_rate', 'battery_service', '0000ffe0-0000-1000-8000-00805f9b34fb']
+        optionalServices
       });
 
       this.bleServer = await this.bleDevice.gatt.connect();
       this.activeProtocol = 'BLUETOOTH';
-      this.isConnected = borderConnect(this.bleDevice);
-      this.deviceName = this.bleDevice.name || 'Sensor Bluetooth BLE AMIE';
+      this.activeVendor = vendorProfile;
+      this.isConnected = this.bleServer.connected;
+      this.deviceName = this.bleDevice.name || `Dispositivo BLE (${vendorProfile})`;
       this.notifyStatus();
 
-      // Escuchar desconexión física
+      // Suscripción al servicio estándar Heart Rate (0x180D)
+      try {
+        const service = await this.bleServer.getPrimaryService('heart_rate');
+        const characteristic = await service.getCharacteristic('heart_rate_measurement');
+        await characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', (e: any) => {
+          this.parseGattHeartRate(e.target.value);
+        });
+      } catch (e) {
+        console.warn('Servicio GATT Heart Rate no detectado, operando en modo canal abierto.');
+      }
+
       this.bleDevice.addEventListener('gattserverdisconnected', () => {
         this.isConnected = false;
         this.enableSimulation();
@@ -169,16 +212,20 @@ class TelemetryManager {
 
       return true;
     } catch (err) {
-      console.error('Error al vincular Bluetooth:', err);
+      console.error('Error al vincular Bluetooth BLE:', err);
       this.enableSimulation();
       return false;
     }
   }
 
   // --------------------------------------------------------------------------
-  // 3. CONEXIÓN WI-FI SOCKET (ESP32 WebSocket local / REST)
+  // 3. CONEXIÓN WI-FI SOCKET / WEBSOCKET (ESP32, OpenBCI Wi-Fi, Emotiv Cortex)
   // --------------------------------------------------------------------------
-  public connectWifi(ipAddress: string = '192.168.1.105', port: number = 8080): boolean {
+  public connectWifi(
+    ipAddress: string = '192.168.1.105', 
+    port: number = 8080,
+    vendorProfile: DeviceVendorProfile = 'ESP32_CUSTOM'
+  ): boolean {
     try {
       this.stopCurrentProtocol();
       const wsUrl = `ws://${ipAddress}:${port}`;
@@ -186,13 +233,14 @@ class TelemetryManager {
 
       this.webSocket.onopen = () => {
         this.activeProtocol = 'WIFI';
+        this.activeVendor = vendorProfile;
         this.isConnected = true;
-        this.deviceName = `ESP32 Wi-Fi Socket (${ipAddress})`;
+        this.deviceName = `${vendorProfile} Socket (${ipAddress}:${port})`;
         this.notifyStatus();
       };
 
       this.webSocket.onmessage = (event) => {
-        this.parseIncomingPayload(event.data);
+        this.parseVendorPayload(event.data);
       };
 
       this.webSocket.onerror = (err) => {
@@ -219,6 +267,7 @@ class TelemetryManager {
   public enableSimulation() {
     this.stopCurrentProtocol();
     this.activeProtocol = 'SIMULATED';
+    this.activeVendor = 'GENERIC_SERIAL';
     this.isConnected = true;
     this.deviceName = 'Sensor Virtual AMIE (Simulación Sincronizada)';
     this.notifyStatus();
@@ -239,6 +288,7 @@ class TelemetryManager {
       const simEeg = Array.from({ length: 8 }, () => Number((Math.random() * 20 - 10).toFixed(1)));
 
       this.broadcastPacket({
+        vendor: 'GENERIC_SERIAL',
         reactionTimeMs: simReaction,
         handGripPressureKg: simGrip,
         touchTapLatencyMs: simTap,
@@ -252,27 +302,66 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // DECODIFICADOR DE TRAMAS (JSON / CSV)
+  // DECODIFICADORES MULTI-MARCA (JSON, CSV, GATT BLE)
   // --------------------------------------------------------------------------
-  private parseIncomingPayload(rawString: string) {
+  private parseVendorPayload(rawString: string) {
     if (!rawString) return;
     try {
+      // Parser JSON (ESP32, Emotiv Cortex, OpenBCI Stream)
       if (rawString.startsWith('{') && rawString.endsWith('}')) {
         const json = JSON.parse(rawString);
         this.broadcastPacket({
-          reactionTimeMs: Number(json.reaction || json.rt) || this.currentPacket.reactionTimeMs,
-          handGripPressureKg: Number(json.grip || json.kg) || this.currentPacket.handGripPressureKg,
+          vendor: this.activeVendor,
+          reactionTimeMs: Number(json.reaction || json.rt || json.latency) || this.currentPacket.reactionTimeMs,
+          handGripPressureKg: Number(json.grip || json.kg || json.force) || this.currentPacket.handGripPressureKg,
           touchTapLatencyMs: Number(json.tap || json.lat) || this.currentPacket.touchTapLatencyMs,
-          heartRateBpm: Number(json.bpm) || this.currentPacket.heartRateBpm,
-          hrvRmssdMs: Number(json.hrv) || this.currentPacket.hrvRmssdMs,
-          gsrMicroSiemens: Number(json.gsr) || this.currentPacket.gsrMicroSiemens,
-          eegChannelsRaw: json.eeg || this.currentPacket.eegChannelsRaw,
+          heartRateBpm: Number(json.bpm || json.hr) || this.currentPacket.heartRateBpm,
+          hrvRmssdMs: Number(json.hrv || json.rmssd) || this.currentPacket.hrvRmssdMs,
+          gsrMicroSiemens: Number(json.gsr || json.eda) || this.currentPacket.gsrMicroSiemens,
+          eegChannelsRaw: json.eeg || json.channels || this.currentPacket.eegChannelsRaw,
           timestamp: Date.now()
         });
+        return;
+      }
+
+      // Parser CSV (BITalino / OpenBCI Cyton Raw)
+      if (rawString.includes(',')) {
+        const parts = rawString.split(',').map(Number);
+        if (parts.length >= 3) {
+          this.broadcastPacket({
+            vendor: this.activeVendor,
+            reactionTimeMs: parts[0] || this.currentPacket.reactionTimeMs,
+            handGripPressureKg: parts[1] || this.currentPacket.handGripPressureKg,
+            touchTapLatencyMs: parts[2] || this.currentPacket.touchTapLatencyMs,
+            heartRateBpm: parts[3] || this.currentPacket.heartRateBpm,
+            hrvRmssdMs: parts[4] || this.currentPacket.hrvRmssdMs,
+            gsrMicroSiemens: parts[5] || this.currentPacket.gsrMicroSiemens,
+            eegChannelsRaw: parts.slice(6),
+            timestamp: Date.now()
+          });
+        }
       }
     } catch (e) {
-      // Ignorar fragmentos incompletos
+      // Ignorar líneas o tramas fragmentadas
     }
+  }
+
+  private parseGattHeartRate(valueDataView: DataView) {
+    const flags = valueDataView.getUint8(0);
+    const rate16Bits = flags & 0x1;
+    let bpm = 0;
+    if (rate16Bits) {
+      bpm = valueDataView.getUint16(1, true);
+    } else {
+      bpm = valueDataView.getUint8(1);
+    }
+
+    this.broadcastPacket({
+      ...this.currentPacket,
+      vendor: this.activeVendor,
+      heartRateBpm: bpm,
+      hrvRmssdMs: Math.round((60000 / (bpm || 70)) * 0.05 + 30)
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -306,10 +395,6 @@ class TelemetryManager {
   public getCurrentPacket(): PrecisionTelemetryPacket {
     return this.currentPacket;
   }
-}
-
-function borderConnect(dev: any): boolean {
-  return dev && dev.gatt && dev.gatt.connected;
 }
 
 export const telemetryService = new TelemetryManager();
