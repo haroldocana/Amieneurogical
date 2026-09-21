@@ -26,7 +26,7 @@ import { DiagnosticTriangulationView } from './components/DiagnosticTriangulatio
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
-import { subscribeUsbDeviceEvents, NeuromotorTelemetrySample } from './utils/checkUsbSupport'; // <-- Importación añadida
+import { subscribeUsbDeviceEvents, NeuromotorTelemetrySample } from './utils/checkUsbSupport';
 import {
   Activity,
   LayoutDashboard,
@@ -43,10 +43,19 @@ import {
   AlertTriangle,
   Glasses,
   Sparkles,
-  Usb // <-- Icono añadido
+  Usb
 } from 'lucide-react';
 
-type AppTab = 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'vr_therapy' | 'referral' | 'saas';
+type AppTab = 
+  | 'workstation' 
+  | 'scientific_evaluator' 
+  | 'differential_bias' 
+  | 'academy' 
+  | 'neuro_3d' 
+  | 'neurosensometry' 
+  | 'vr_therapy' 
+  | 'referral' 
+  | 'saas';
 
 export default function App() {
   // Authentication State
@@ -133,9 +142,10 @@ export default function App() {
     try {
       const result = await runAmieClinicalAnalysis(currentPatient);
       setAnalysis(result);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setErrorMsg(err.message || 'Error al conectar con el motor clínico AMIE.');
+      const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
+      setErrorMsg(msg);
     } finally {
       setIsAnalyzing(false);
     }
@@ -157,11 +167,12 @@ export default function App() {
         setSyncSuccessMsg(syncResult.message || `Expediente ${pacId} sincronizado exitosamente.`);
         setTimeout(() => setSyncSuccessMsg(null), 4500);
       }
-    } catch (err: any) {
-      if (err?.message && err.message.includes('no existe o no tiene datos cargados')) {
-        setSyncNotFoundAlert(err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Fallo de conexión';
+      if (msg.includes('no existe o no tiene datos cargados') || msg.includes('Acceso denegado')) {
+        setSyncNotFoundAlert(msg);
       } else {
-        setErrorMsg('Error de comunicación con Cloud Function: ' + (err?.message || 'Fallo de conexión'));
+        setErrorMsg('Error de comunicación con Cloud Function: ' + msg);
       }
     } finally {
       setIsSyncing(false);
@@ -193,15 +204,19 @@ export default function App() {
     setCurrentPatient(prev => ({
       ...prev,
       neuromotorBiomarkers: {
-        ...prev.neuromotorBiomarkers,
-        reactionTimeMs: sample.reactionTimeMs ?? prev.neuromotorBiomarkers?.reactionTimeMs ?? 240
+        reactionTimeMs: sample.reactionTimeMs ?? prev.neuromotorBiomarkers?.reactionTimeMs ?? 240,
+        omissionErrors: prev.neuromotorBiomarkers?.omissionErrors ?? 0,
+        commissionErrors: prev.neuromotorBiomarkers?.commissionErrors ?? 0,
+        motorStabilityScore: prev.neuromotorBiomarkers?.motorStabilityScore ?? 85
       },
       multisensoryHardware: {
-        ...prev.multisensoryHardware,
+        vagalToneHrvIndex: prev.multisensoryHardware?.vagalToneHrvIndex ?? 45,
         handGripPressureKg: sample.handGripPressureKg ?? prev.multisensoryHardware?.handGripPressureKg ?? 32.5,
-        touchTapLatencyCompensatedMs: sample.touchTapLatencyMs ?? prev.multisensoryHardware?.touchTapLatencyCompensatedMs ?? 180
+        camouflagingIndexPct: prev.multisensoryHardware?.camouflagingIndexPct ?? 15,
+        ocularFixationDurationMs: prev.multisensoryHardware?.ocularFixationDurationMs ?? 2100,
+        touchTapLatencyCompensatedMs: sample.touchTapLatencyMs ?? prev.multisensoryHardware?.touchTapLatencyCompensatedMs ?? 180,
+        microExpressionState: prev.multisensoryHardware?.microExpressionState ?? 'Normorreactivo'
       }
-      // NOTA: sample.eegChannelsRaw se puede propagar aquí si el PatientRecord tiene un campo para ello
     }));
   };
 
@@ -535,7 +550,7 @@ export default function App() {
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={currentPatient} />}
         
-        {/* Módulo qEEG: Aquí se puede inyectar el listener de handleUpdateUsbHardwareData si lo conectas */}
+        {/* Tab 6: Módulo qEEG */}
         {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
         
         {/* Tab 7: Módulo VR Inmersivo con Botones de Consolas Fullscreen */}
@@ -616,7 +631,7 @@ export default function App() {
         />
       )}
 
-      {/* Modal Fullscreen 3: Consola de Hipnosis Clinical Adaptativa por Etapa Evolutiva */}
+      {/* Modal Fullscreen 3: Consola de Hipnosis Clínica Adaptativa por Etapa Evolutiva */}
       {isFullscreenHypnosisOpen && (
         <VrDevelopmentalTraumaFullscreenMonitor
           patient={currentPatient}
