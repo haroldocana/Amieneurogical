@@ -13,9 +13,14 @@ export interface QeegAttachmentPayload {
 interface NeuroSensoryModuleProps {
   patient?: PatientRecord;
   onAttachQeegToPatient?: (biomarkers: QeegAttachmentPayload) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
-export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient, onAttachQeegToPatient }) => {
+export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ 
+  patient, 
+  onAttachQeegToPatient,
+  onNavigateTab 
+}) => {
   const [isUsbModalOpen, setIsUsbModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
@@ -51,14 +56,16 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
 
   const handleCloseModal = (e?: React.MouseEvent) => {
     if (e) {
-      e.preventDefault();
       e.stopPropagation();
     }
     setIsUsbModalOpen(false);
   };
 
-  // BOTÓN CLAVE: Conecta hardware, vincula biometría y CIERRA EL MODAL para entrar a todos los módulos
-  const handleConnectAndAccessAllModules = () => {
+  // BOTÓN CLAVE: Conecta hardware, vincula biometría y CIERRA EL MODAL AL INSTANTE
+  const handleConnectAndAccessAllModules = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     setIsConnected(true);
     setLogs(prev => [...prev, '[SYSTEM] Conexión aprobada. Transfiriendo telemetría e ingresando a módulos...']);
 
@@ -71,9 +78,13 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
       });
     }
 
-    setTimeout(() => {
-      setIsUsbModalOpen(false);
-    }, 300);
+    // Cierre inmediato del modal flotante
+    setIsUsbModalOpen(false);
+
+    // Navegación opcional si se pasó la función desde el padre
+    if (onNavigateTab) {
+      onNavigateTab('workstation');
+    }
   };
 
   const handlePairUsb = async () => {
@@ -87,7 +98,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
         setIsConnected(true);
         setLogs(prev => [...prev, '[USB_RX] Conexión simulada activa en puerto VIRTUAL_COM1 (60 Hz)']);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsConnected(true);
       setLogs(prev => [...prev, '[INFO] Modo local activado. Conexión virtual de respaldo lista.']);
     }
@@ -142,7 +153,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
           <button
             type="button"
             onClick={() => setIsUsbModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-cyan-600/20 active:scale-95 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-cyan-600/20 active:scale-95 transition cursor-pointer"
           >
             <Usb className="w-4 h-4" />
             <span>Calibración / Diagnóstico USB</span>
@@ -217,7 +228,8 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 active:scale-90"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 active:scale-90 cursor-pointer z-10 relative"
+                aria-label="Cerrar modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -244,7 +256,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
                   <button
                     type="button"
                     onClick={handlePairUsb}
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Usb className="w-4 h-4" />
                     <span>{isConnected ? 'Re-Emparejar USB' : 'Emparejar Dispositivo USB'}</span>
@@ -258,7 +270,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
                   <button
                     type="button"
                     onClick={() => setLogs(prev => [...prev, '[TARE] Tare completado. Línea base calibrada.'])}
-                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition"
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition cursor-pointer"
                   >
                     Ejecutar Tare de Calibración
                   </button>
@@ -293,12 +305,12 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
                   </div>
                 </div>
 
-                {/* BOTÓN PRINCIPAL REQUERIDO: ACCIONA LA CONEXIÓN Y ABRE EL ACCESO A TODOS LOS MÓDULOS */}
+                {/* BOTÓN PRINCIPAL: ACCIONA LA CONEXIÓN Y CIERRA EL MODAL INMEDIATAMENTE */}
                 <div className="space-y-2">
                   <button
                     type="button"
                     onClick={handleConnectAndAccessAllModules}
-                    className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xl shadow-emerald-900/30 active:scale-95 transition flex items-center justify-center gap-2 border border-emerald-400/30"
+                    className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xl shadow-emerald-900/30 active:scale-95 transition flex items-center justify-center gap-2 border border-emerald-400/30 cursor-pointer z-10 relative"
                   >
                     <CheckCircle2 className="w-4 h-4 text-emerald-200" />
                     <span>Activar Conexión y Entrar a Todos los Módulos</span>
@@ -308,10 +320,10 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient,
                   <button
                     type="button"
                     onClick={handleStartCapture}
-                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Play className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Iniciar Captura en Tiempo Real</span>
+                    <span>{isCapturing ? 'Captura en Curso...' : 'Iniciar Captura en Tiempo Real'}</span>
                   </button>
                 </div>
               </div>
