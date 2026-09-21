@@ -10,7 +10,7 @@ import { AmieChatCopilot } from './components/AmieChatCopilot';
 import { DsmGuideModal } from './components/DsmGuideModal';
 import { ScientificNeuroEvaluator } from './components/ScientificNeuroEvaluator';
 import { DifferentialBiasResolver } from './components/DifferentialBiasResolver';
-import { NeuroSensoryModule } from './components/NeuroSensoryModule';
+import { NeuroSensoryModule, QeegAttachmentPayload } from './components/NeuroSensoryModule';
 import { InteractiveNeuroViewer } from './components/InteractiveNeuroViewer';
 import { HolographicNeuroViewer3D } from './components/HolographicNeuroViewer3D';
 import { PsychiatryReferralView } from './components/PsychiatryReferralView';
@@ -192,7 +192,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } finally {
+    } fontally {
       setIsAnalyzing(false);
     }
   };
@@ -244,11 +244,30 @@ export default function App() {
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
+  const handleAttachQeegToPatient = (biomarkers: QeegAttachmentPayload) => {
+    setCurrentPatient(prev => ({
+      ...prev,
+      qeegBiomarkers: {
+        recordingDate: biomarkers.recordingDate,
+        channelsCount: biomarkers.channelsCount,
+        samplingRateHz: biomarkers.samplingRateHz,
+        bandPowers: biomarkers.bandPowers,
+        regionalZScores: prev.qeegBiomarkers?.regionalZScores || {
+          frontal: { region: 'Frontal', deltaZ: 0.2, thetaZ: 1.8, alfaZ: -0.4, betaZ: 0.1, highBetaZ: 0.0 },
+          parietal: { region: 'Parietal', deltaZ: 0.1, thetaZ: 0.5, alfaZ: 0.2, betaZ: -0.1, highBetaZ: 0.0 },
+          temporal: { region: 'Temporal', deltaZ: 0.3, thetaZ: 0.8, alfaZ: -0.2, betaZ: 0.2, highBetaZ: 0.0 },
+          occipital: { region: 'Occipital', deltaZ: 0.0, thetaZ: 0.2, alfaZ: 1.1, betaZ: -0.3, highBetaZ: 0.0 }
+        }
+      }
+    }));
+    setSyncSuccessMsg('Estudio qEEG/Neurosensométrico vinculado al expediente activo.');
+    setTimeout(() => setSyncSuccessMsg(null), 4500);
+  };
+
   if (!isAuthenticated) {
     return <LoginModal onSuccess={handleLoginSuccess} />;
   }
 
-  // Objeto safePatient con protección absoluta para evitar crashes por undefined
   const safePatient: PatientRecord = {
     ...SAFE_DEFAULT_PATIENT,
     ...(currentPatient || {}),
@@ -629,7 +648,12 @@ export default function App() {
         )}
         
         {/* Tab 6: Módulo qEEG */}
-        {activeTab === 'neurosensometry' && <NeuroSensoryModule />}
+        {activeTab === 'neurosensometry' && (
+          <NeuroSensoryModule 
+            patient={safePatient} 
+            onAttachQeegToPatient={handleAttachQeegToPatient} 
+          />
+        )}
         
         {/* Tab 7: Módulo VR Inmersivo */}
         {activeTab === 'vr_therapy' && (
