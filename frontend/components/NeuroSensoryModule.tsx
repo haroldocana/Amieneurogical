@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { QeegBandPowers } from '../types';
+import React, { useState } from 'react';
+import { QeegBandPowers, PatientRecord } from '../types';
 import { InteractiveNeuroViewer } from './InteractiveNeuroViewer';
 import { Upload, FileCheck, Brain, RefreshCw, CheckCircle, BarChart3, Zap } from 'lucide-react';
 
@@ -11,10 +11,11 @@ export interface QeegAttachmentPayload {
 }
 
 interface NeuroSensoryModuleProps {
+  patient?: PatientRecord;
   onAttachQeegToPatient?: (biomarkers: QeegAttachmentPayload) => void;
 }
 
-export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttachQeegToPatient }) => {
+export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ patient, onAttachQeegToPatient }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -107,10 +108,10 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({ onAttach
         </div>
       )}
 
-      {/* Interactive 3D HUD Neuro-Spectral FFT Viewer */}
-      <InteractiveNeuroViewer />
+      {/* Interactive 3D HUD Neuro-Spectral FFT Viewer (Paso seguro de patient) */}
+      <InteractiveNeuroViewer patient={patient} />
 
-      {/* Spectral Band Power Distribution (Delta, Theta, Alfa, Beta, High Beta, Gamma) */}
+      {/* Spectral Band Power Distribution */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
