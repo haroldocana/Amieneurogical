@@ -3,7 +3,7 @@ import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { X, Play, Pause, RotateCcw, Activity, Glasses } from 'lucide-react';
 
 interface Props {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onClose: () => void;
   onUpdatePatientVrData: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
@@ -12,14 +12,20 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose, 
   const [isRunning, setIsRunning] = useState(false);
   const [timer, setTimer] = useState(0);
 
+  // 🛡️ Fallbacks defensivos para datos de paciente
+  const safePatientId = patient?.id || 'PAC-8104';
+  const safePatientName = patient?.patientNameAnonymized || safePatientId;
+
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (isRunning) {
       interval = setInterval(() => setTimer(prev => prev + 1), 1000);
     } else {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isRunning]);
 
   const handleFinish = () => {
@@ -38,7 +44,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose, 
       sympatheticToneIndex: 62,
       vagalReactivityIndex: 45,
       habituationRate: 'Óptima',
-      synthesizedClinicalSummary: `Sesión de tratamiento completada en ${timer} segundos para el paciente ${patient.id || 'PAC-8104'}.`
+      synthesizedClinicalSummary: `Sesión de tratamiento completada en ${timer} segundos para el paciente ${safePatientName} (${safePatientId}).`
     };
     onUpdatePatientVrData(telemetry, report);
     onClose();
@@ -53,7 +59,9 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose, 
           </div>
           <div>
             <h2 className="text-lg font-bold text-white">Consola de Tratamiento VR Inmersivo</h2>
-            <p className="text-xs text-slate-400">Paciente ID: {patient.id || 'PAC-8104'}</p>
+            <p className="text-xs text-slate-400">
+              Paciente: <span className="text-slate-200 font-semibold">{safePatientName}</span> ({safePatientId})
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300">
