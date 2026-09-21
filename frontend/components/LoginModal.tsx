@@ -80,9 +80,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
         username: data.username || username.trim()
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Fallo de autenticación en la base de datos.';
-      setError(msg);
-    } fontally: {
+      const msg = err instanceof Error ? err.message : 'Fallo de autenticación en el servidor central.';
+      setError(msg === 'Failed to fetch' ? 'Error de conexión con el servidor remoto (CORS o red caída).' : msg);
+    } finally {
       setLoading(false);
     }
   };
@@ -116,7 +116,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       const data = await response.json().catch(() => ({ error: 'Error al procesar el registro.' }));
       if (!response.ok) throw new Error(data.error || 'Error al emitir la licencia.');
 
-      setRegSuccessMsg(`¡Médico registrado en MongoDB! Licencia individual activa.`);
+      setRegSuccessMsg(`¡Médico registrado en la base de datos! Licencia individual activa.`);
       setUsername(data.username || regUsername.trim());
       setColegiado(String(numericColegiado));
 
@@ -126,7 +126,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       }, 2500);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'No se pudo crear el usuario.';
-      setError(msg);
+      setError(msg === 'Failed to fetch' ? 'Error de conexión con la API de registro.' : msg);
     } finally {
       setLoading(false);
     }
@@ -141,14 +141,29 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       const response = await fetch(`${API_BASE_URL}/admin/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminPin })
+        body: JSON.stringify({ masterKey: adminPin.trim() })
       });
 
-      if (!response.ok) throw new Error('Clave Maestra de Administrador inválida.');
-      alert("Autenticado como SuperAdmin. Accediendo a la gestión global de licencias.");
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Clave Maestra de Administrador inválida o rechazada.');
+      }
+
+      safeSetLocalStorage('amie_auth_token', data.token || 'SUPERADMIN_TOKEN');
+      safeSetLocalStorage('amie_doctor_name', 'SuperAdmin AMIE');
+      safeSetLocalStorage('amie_username', 'superadmin');
+      safeSetLocalStorage('amie_colegiado_number', '0');
+
+      onSuccess({
+        doctorName: 'SuperAdmin AMIE',
+        colegiadoNumber: 0,
+        token: data.token || 'SUPERADMIN_TOKEN',
+        username: 'superadmin'
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error en la verificación de administrador.';
-      setError(msg);
+      setError(msg === 'Failed to fetch' ? 'Error de conexión con el servidor (Failed to fetch). Revisa la configuración CORS en Cloud Run.' : msg);
     } finally {
       setLoading(false);
     }
@@ -358,7 +373,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
         {activeTab === 'superadmin' && (
           <form onSubmit={handleAdminAuth} className="space-y-3.5 text-xs">
             <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl text-amber-200">
-              <span className="font-bold block mb-0.5">Validación de Servidor</span>
+              <span className="font-bold block mb-0.5">Validación en Servidor</span>
               <span>Ingresa la Clave Maestra de Administrador para gestión de licencias.</span>
             </div>
 
