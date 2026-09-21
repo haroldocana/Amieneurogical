@@ -21,7 +21,7 @@ interface ClinicalProtocol {
   expectedPhysioPattern: string;
   primaryBiomarkers: string;
   metric1: { label: string; value: string; status: string; desc: string };
-  metric2: { label: label: string; value: string; status: string; desc: string };
+  metric2: { label: string; value: string; status: string; desc: string };
   metric3: { label: string; value: string; status: string; desc: string };
   graphGsrData: number[];
   graphHrvData: number[];
@@ -117,7 +117,7 @@ const EXTENDED_CLINICAL_PROTOCOLS: ClinicalProtocol[] = [
     clinicalObjective: 'Medición de la tasa de extinción del distrés (H) e inhibición de la respuesta de sobresalto (Startle Response).',
     stimulusParameters: 'Procesamiento EMDR inmersivo en 3D con desacoplamiento de pistas traumáticas contextuales.',
     targetDurationSec: 360,
-    expectedPhysioPattern: 'Pico agudo de GSR seguido de curva de extinción sostenida (H > 2.0).',
+    expectedPhysioPattern: 'Pico agudo de GSR seguido de curva de extinción sustained (H > 2.0).',
     primaryBiomarkers: 'Índice de Habituación Terapéutica (H) + Respuesta Galvánica de Alarma',
     metric1: { label: 'Respuesta de Sobresalto (Startle)', value: '6.2 µS', status: '(Hiperalerta)', desc: 'Pico agudo galvánico ante estímulo' },
     metric2: { label: 'Tono Vagal (HRV RMSSD)', value: '15 ms', status: '(Inhibición Vagal)', desc: 'Bloqueo parasimpático agudo' },
