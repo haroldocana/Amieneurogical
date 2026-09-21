@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onClose: () => void;
   onUpdateHardwareData: (sample: NeuromotorTelemetrySample) => void;
 }
@@ -37,11 +37,11 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
   const [isStreaming, setIsStreaming] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<'idle' | 'calibrating' | 'calibrated'>('idle');
 
-  // Muestras fisiológicas en tiempo real (Prensión, Latencia, Reacción, EEG raw)
+  // Muestras fisiológicas en tiempo real con accesos seguros
   const [liveSample, setLiveSample] = useState<NeuromotorTelemetrySample>({
-    reactionTimeMs: patient.neuromotorBiomarkers?.reactionTimeMs || 240,
-    handGripPressureKg: patient.multisensoryHardware?.handGripPressureKg || 32.5,
-    touchTapLatencyMs: patient.multisensoryHardware?.touchTapLatencyCompensatedMs || 180,
+    reactionTimeMs: patient?.neuromotorBiomarkers?.reactionTimeMs || 240,
+    handGripPressureKg: patient?.multisensoryHardware?.handGripPressureKg || 32.5,
+    touchTapLatencyMs: patient?.multisensoryHardware?.touchTapLatencyCompensatedMs || 180,
     eegChannelsRaw: [12.4, -4.2, 18.1, 8.5, -2.1, 14.3, 6.2, 0.8],
     timestamp: Date.now()
   });
@@ -63,7 +63,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
     }
   }, []);
 
-  // Bucle de streaming en vivo a 60Hz (Simulación de paquetes USB / HID)
+  // Bucle de streaming en vivo a 60Hz
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
 
@@ -87,7 +87,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
           const logMsg = `[${timestamp}] [USB RX] Grip: ${simulatedGrip}kg | Reaction: ${simulatedReaction}ms | Latency: ${simulatedTap}ms`;
           setLogs(prevLogs => [logMsg, ...prevLogs.slice(0, 15)]);
         }
-      }, 100); // 10Hz refresco visual de interfaz
+      }, 100);
     }
 
     return () => {
@@ -117,7 +117,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
     }
   };
 
-  // Ejecutar calibración del punto cero de los sensores isométricos
+  // Ejecutar calibración del punto cero
   const handleCalibrateSensors = () => {
     setCalibrationStatus('calibrating');
     setLogs(prev => [...prev, '[CALIB] Iniciando calibración de carga nula (Zero-Tare)...']);
@@ -131,7 +131,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
     }, 1500);
   };
 
-  // Transferir la muestra capturada al expediente del paciente en App.tsx
+  // Transferir la muestra capturada al expediente del paciente
   const handleTransferToPatient = () => {
     onUpdateHardwareData(liveSample);
     setLogs(prev => [...prev, '[TRANSFER] Muestra neuromotora inyectada en la triangulación global del paciente.']);
@@ -139,6 +139,8 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
       onClose();
     }, 600);
   };
+
+  const patientDisplayName = patient?.patientNameAnonymized || patient?.id || 'PAC-8104';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 lg:p-6 font-sans">
@@ -162,7 +164,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Paciente: <span className="text-white font-semibold">{patient.patientNameAnonymized || patient.id}</span> | Telemetría Neuromotora Directa
+                Paciente: <span className="text-white font-semibold">{patientDisplayName}</span> | Telemetría Neuromotora Directa
               </p>
             </div>
           </div>
@@ -179,7 +181,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
         {/* Panel Central Grid */}
         <div className="flex-1 grid grid-cols-12 gap-6 p-6 overflow-hidden">
           
-          {/* Panel Izquierdo: Control de Dispositivos USB y Estado (4 Cols) */}
+          {/* Panel Izquierdo */}
           <div className="col-span-12 lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between overflow-y-auto space-y-4">
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
@@ -209,7 +211,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 </button>
               </div>
 
-              {/* Botón de Calibración cero-tare */}
+              {/* Botón de Calibración */}
               <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -260,7 +262,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Panel Central: Gauges y Telemetría Vivo (5 Cols) */}
+          {/* Panel Central */}
           <div className="col-span-12 lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between overflow-y-auto space-y-4">
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
@@ -299,7 +301,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Trazado EEG Raw Simplificado */}
+              {/* Trazado EEG Raw */}
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
                 <span className="text-xs font-bold text-slate-300 block">Señal Bruta EEG (8 Canales - µV)</span>
                 <div className="grid grid-cols-4 gap-2 font-mono text-xs">
@@ -324,7 +326,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
             </button>
           </div>
 
-          {/* Panel Derecho: Consola Log Terminal (3 Cols) */}
+          {/* Panel Derecho */}
           <div className="col-span-12 lg:col-span-3 bg-slate-900/80 border border-slate-800 rounded-xl p-5 flex flex-col justify-between overflow-hidden">
             <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
               <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
