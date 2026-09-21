@@ -4,7 +4,7 @@ import { CLINICAL_CASE_PRESETS } from '../constants';
 import { FileCode, Sparkles, AlertTriangle, Glasses, Mic } from 'lucide-react';
 
 interface PatientJsonEditorProps {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onChange: (updated: PatientRecord) => void;
   onSelectPreset: (presetRecord: PatientRecord) => void;
 }
@@ -15,11 +15,11 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
   onSelectPreset,
 }) => {
   const [activeTab, setActiveTab] = useState<'form' | 'json'>('form');
-  const [jsonString, setJsonString] = useState<string>(JSON.stringify(patient, null, 2));
+  const [jsonString, setJsonString] = useState<string>(JSON.stringify(patient || {}, null, 2));
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   useEffect(() => {
-    setJsonString(JSON.stringify(patient, null, 2));
+    setJsonString(JSON.stringify(patient || {}, null, 2));
   }, [patient]);
 
   const handleJsonTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -39,11 +39,29 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
   };
 
   const handlePresetClick = (idx: number) => {
-    const selected = CLINICAL_CASE_PRESETS[idx].record as PatientRecord;
-    onSelectPreset(selected);
-    onChange(selected);
-    setJsonString(JSON.stringify(selected, null, 2));
-    setJsonError(null);
+    const selected = CLINICAL_CASE_PRESETS[idx]?.record as PatientRecord;
+    if (selected) {
+      onSelectPreset(selected);
+      onChange(selected);
+      setJsonString(JSON.stringify(selected, null, 2));
+      setJsonError(null);
+    }
+  };
+
+  const safePatient: PatientRecord = patient || {
+    id: 'PAC-8104',
+    name: 'Paciente Anonimizado',
+    age: 55,
+    gender: 'M',
+    consultationReason: '',
+    anamnesis: '',
+    psychometricScores: {},
+    neuromotorBiomarkers: {
+      reactionTimeMs: 240,
+      omissionErrors: 0,
+      commissionErrors: 0,
+      motorStabilityScore: 85
+    }
   };
 
   return (
@@ -55,8 +73,8 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
             <h2 className="text-sm font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
               <FileCode className="w-4 h-4" /> Expediente Clínico Digital Multimodal
             </h2>
-            <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
-              ID: {patient.id}
+            <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">
+              ID: {safePatient.id || 'PAC-8104'}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -69,7 +87,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
           <button
             onClick={() => {
               setActiveTab('form');
-              setJsonString(JSON.stringify(patient, null, 2));
+              setJsonString(JSON.stringify(safePatient, null, 2));
             }}
             className={`px-3 py-1 text-xs font-medium rounded-md transition ${
               activeTab === 'form' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'
@@ -80,7 +98,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
           <button
             onClick={() => {
               setActiveTab('json');
-              setJsonString(JSON.stringify(patient, null, 2));
+              setJsonString(JSON.stringify(safePatient, null, 2));
             }}
             className={`px-3 py-1 text-xs font-medium rounded-md transition ${
               activeTab === 'json' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'
@@ -138,9 +156,9 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                 <label className="block text-slate-400 mb-1">Paciente (Anonimizado)</label>
                 <input
                   type="text"
-                  value={patient.patientNameAnonymized || ''}
+                  value={safePatient.patientNameAnonymized || ''}
                   onChange={(e) =>
-                    onChange({ ...patient, patientNameAnonymized: e.target.value })
+                    onChange({ ...safePatient, patientNameAnonymized: e.target.value })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none"
                 />
@@ -149,9 +167,9 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                 <label className="block text-slate-400 mb-1">Edad</label>
                 <input
                   type="number"
-                  value={patient.age || 0}
+                  value={safePatient.age || 0}
                   onChange={(e) =>
-                    onChange({ ...patient, age: parseInt(e.target.value) || 0 })
+                    onChange({ ...safePatient, age: parseInt(e.target.value) || 0 })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none"
                 />
@@ -159,9 +177,9 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               <div>
                 <label className="block text-slate-400 mb-1">Género</label>
                 <select
-                  value={patient.gender || 'M'}
+                  value={safePatient.gender || 'M'}
                   onChange={(e) =>
-                    onChange({ ...patient, gender: e.target.value as 'M' | 'F' | 'Other' })
+                    onChange({ ...safePatient, gender: e.target.value as 'M' | 'F' | 'Other' })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none"
                 >
@@ -177,9 +195,9 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               <label className="block text-slate-400 mb-1">Motivo de Consulta Cardinal</label>
               <input
                 type="text"
-                value={patient.consultationReason || ''}
+                value={safePatient.consultationReason || ''}
                 onChange={(e) =>
-                  onChange({ ...patient, consultationReason: e.target.value })
+                  onChange({ ...safePatient, consultationReason: e.target.value })
                 }
                 className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none"
               />
@@ -189,8 +207,8 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
               <label className="block text-slate-400 mb-1">Anamnesis & Evolución Longitudinal</label>
               <textarea
                 rows={3}
-                value={patient.anamnesis || ''}
-                onChange={(e) => onChange({ ...patient, anamnesis: e.target.value })}
+                value={safePatient.anamnesis || ''}
+                onChange={(e) => onChange({ ...safePatient, anamnesis: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:border-sky-500 focus:outline-none leading-relaxed"
               />
             </div>
@@ -206,12 +224,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">PHQ-9 (Depresión)</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores?.phq9 ?? ''}
+                    value={safePatient.psychometricScores?.phq9 ?? ''}
                     onChange={(e) =>
                       onChange({
-                        ...patient,
+                        ...safePatient,
                         psychometricScores: {
-                          ...patient.psychometricScores,
+                          ...safePatient.psychometricScores,
                           phq9: parseInt(e.target.value) || 0,
                         },
                       })
@@ -223,12 +241,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">GAD-7 (Ansiedad)</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores?.gad7 ?? ''}
+                    value={safePatient.psychometricScores?.gad7 ?? ''}
                     onChange={(e) =>
                       onChange({
-                        ...patient,
+                        ...safePatient,
                         psychometricScores: {
-                          ...patient.psychometricScores,
+                          ...safePatient.psychometricScores,
                           gad7: parseInt(e.target.value) || 0,
                         },
                       })
@@ -240,12 +258,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">SAD PERSONS</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores?.sadPersons ?? ''}
+                    value={safePatient.psychometricScores?.sadPersons ?? ''}
                     onChange={(e) =>
                       onChange({
-                        ...patient,
+                        ...safePatient,
                         psychometricScores: {
-                          ...patient.psychometricScores,
+                          ...safePatient.psychometricScores,
                           sadPersons: parseInt(e.target.value) || 0,
                         },
                       })
@@ -257,12 +275,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <span className="text-[11px] text-slate-400">MMSE Cognición</span>
                   <input
                     type="number"
-                    value={patient.psychometricScores?.mmse ?? ''}
+                    value={safePatient.psychometricScores?.mmse ?? ''}
                     onChange={(e) =>
                       onChange({
-                        ...patient,
+                        ...safePatient,
                         psychometricScores: {
-                          ...patient.psychometricScores,
+                          ...safePatient.psychometricScores,
                           mmse: parseInt(e.target.value) || 0,
                         },
                       })
@@ -274,85 +292,103 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
             </div>
 
             {/* Hardware Biomarkers */}
-            {patient.neuromotorBiomarkers && (
-              <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
-                <h3 className="font-semibold text-slate-300 text-xs mb-2 flex items-center justify-between">
-                  <span>Biomarcadores de Hardware (Neuromotor & QEEG)</span>
-                  <span className="text-[10px] text-cyan-400 font-normal">Milisegundos & Z-Scores</span>
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div>
-                    <span className="text-[11px] text-slate-400">Latencia TR (ms)</span>
-                    <input
-                      type="number"
-                      value={patient.neuromotorBiomarkers.reactionTimeMs || 0}
-                      onChange={(e) =>
-                        onChange({
-                          ...patient,
-                          neuromotorBiomarkers: {
-                            ...patient.neuromotorBiomarkers!,
-                            reactionTimeMs: parseInt(e.target.value) || 0,
-                          },
-                        })
-                      }
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-cyan-300 focus:border-cyan-500"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400">Errores Omisión</span>
-                    <input
-                      type="number"
-                      value={patient.neuromotorBiomarkers.omissionErrors || 0}
-                      onChange={(e) =>
-                        onChange({
-                          ...patient,
-                          neuromotorBiomarkers: {
-                            ...patient.neuromotorBiomarkers!,
-                            omissionErrors: parseInt(e.target.value) || 0,
-                          },
-                        })
-                      }
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400">Falsas Alarmas (Comisión)</span>
-                    <input
-                      type="number"
-                      value={patient.neuromotorBiomarkers.commissionErrors || 0}
-                      onChange={(e) =>
-                        onChange({
-                          ...patient,
-                          neuromotorBiomarkers: {
-                            ...patient.neuromotorBiomarkers!,
-                            commissionErrors: parseInt(e.target.value) || 0,
-                          },
-                        })
-                      }
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-amber-300"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400">QEEG Theta/Beta (Z)</span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={patient.qeegZScores?.frontalThetaBetaRatio ?? 0}
-                      onChange={(e) =>
-                        onChange({
-                          ...patient,
-                          qeegZScores: {
-                            ...patient.qeegZScores!,
-                            frontalThetaBetaRatio: parseFloat(e.target.value) || 0,
-                          },
-                        })
-                      }
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-purple-300"
-                    />
-                  </div>
+            <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
+              <h3 className="font-semibold text-slate-300 text-xs mb-2 flex items-center justify-between">
+                <span>Biomarcadores de Hardware (Neuromotor & QEEG)</span>
+                <span className="text-[10px] text-cyan-400 font-normal">Milisegundos & Z-Scores</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <span className="text-[11px] text-slate-400">Latencia TR (ms)</span>
+                  <input
+                    type="number"
+                    value={safePatient.neuromotorBiomarkers?.reactionTimeMs || 0}
+                    onChange={(e) =>
+                      onChange({
+                        ...safePatient,
+                        neuromotorBiomarkers: {
+                          ...(safePatient.neuromotorBiomarkers || {
+                            reactionTimeMs: 240,
+                            omissionErrors: 0,
+                            commissionErrors: 0,
+                            motorStabilityScore: 85
+                          }),
+                          reactionTimeMs: parseInt(e.target.value) || 0,
+                        },
+                      })
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-cyan-300 focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400">Errores Omisión</span>
+                  <input
+                    type="number"
+                    value={safePatient.neuromotorBiomarkers?.omissionErrors || 0}
+                    onChange={(e) =>
+                      onChange({
+                        ...safePatient,
+                        neuromotorBiomarkers: {
+                          ...(safePatient.neuromotorBiomarkers || {
+                            reactionTimeMs: 240,
+                            omissionErrors: 0,
+                            commissionErrors: 0,
+                            motorStabilityScore: 85
+                          }),
+                          omissionErrors: parseInt(e.target.value) || 0,
+                        },
+                      })
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400">Falsas Alarmas (Comisión)</span>
+                  <input
+                    type="number"
+                    value={safePatient.neuromotorBiomarkers?.commissionErrors || 0}
+                    onChange={(e) =>
+                      onChange({
+                        ...safePatient,
+                        neuromotorBiomarkers: {
+                          ...(safePatient.neuromotorBiomarkers || {
+                            reactionTimeMs: 240,
+                            omissionErrors: 0,
+                            commissionErrors: 0,
+                            motorStabilityScore: 85
+                          }),
+                          commissionErrors: parseInt(e.target.value) || 0,
+                        },
+                      })
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-amber-300"
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400">QEEG Theta/Beta (Z)</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={safePatient.qeegZScores?.frontalThetaBetaRatio ?? 0}
+                    onChange={(e) =>
+                      onChange({
+                        ...safePatient,
+                        qeegZScores: {
+                          ...(safePatient.qeegZScores || {
+                            frontalThetaBetaRatio: 1.8,
+                            temporalAsymmetry: 0.2,
+                            deltaSlowActivityZ: 0.4,
+                            alphaPeakFrequencyHz: 10.2
+                          }),
+                          frontalThetaBetaRatio: parseFloat(e.target.value) || 0,
+                        },
+                      })
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-purple-300"
+                  />
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Módulos de Inmersión VR y Acústica */}
             <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800">
@@ -367,12 +403,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <input
                     type="text"
                     placeholder="Ej. Acrofobia, Relajación..."
-                    value={patient.immersionMetrics?.vrScenario || ''}
+                    value={safePatient.immersionMetrics?.vrScenario || ''}
                     onChange={(e) =>
                       onChange({
-                        ...patient,
+                        ...safePatient,
                         immersionMetrics: {
-                          ...patient.immersionMetrics,
+                          ...safePatient.immersionMetrics,
                           vrScenario: e.target.value,
                         },
                       })
@@ -387,12 +423,12 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                     min="0"
                     max="100"
                     placeholder="0-100"
-                    value={patient.immersionMetrics?.vrTolerance ?? ''}
+                    value={safePatient.immersionMetrics?.vrTolerance ?? ''}
                     onChange={(e) =>
                       onChange({
-                        ...patient,
+                        ...safePatient,
                         immersionMetrics: {
-                          ...patient.immersionMetrics,
+                          ...safePatient.immersionMetrics,
                           vrTolerance: parseInt(e.target.value) || 0,
                         },
                       })
@@ -405,7 +441,7 @@ export const PatientJsonEditor: React.FC<PatientJsonEditorProps> = ({
                   <input
                     type="number"
                     placeholder="Ej. 120 (Normal)"
-                    value={patient.audioRecordings?.[0]?.acousticBiometrics?.speechRateWpm ?? ''}
+                    value={safePatient.audioRecordings?.[0]?.acousticBiometrics?.speechRateWpm ?? ''}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-emerald-300 focus:border-emerald-500 focus:outline-none"
                     disabled
                   />
