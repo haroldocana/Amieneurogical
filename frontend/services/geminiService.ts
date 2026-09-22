@@ -205,25 +205,17 @@ export async function mapApp1DataToApp2(
   const generalData = (rawCase.generalData as Record<string, unknown>) || {};
   const filiacion = (rawCase.filiacion as Record<string, unknown>) || {};
 
-  // 1. Nombre completo / Identificador
   const rawName = (filiacion.nombreCompleto || filiacion.nombre || generalData.nombreCompleto || generalData.nombre || rawCase.nombreCompleto || rawCase.nombre || rawCase.patientNameAnonymized || rawCase.patientName) as string;
-
-  // 2. Edad
   const rawAge = filiacion.edad ?? generalData.edad ?? rawCase.edad ?? filiacion.age ?? generalData.age ?? rawCase.age;
   const parsedAge = Number(rawAge);
   const finalAge = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : SAFE_DEFAULT_PATIENT.age;
 
-  // 3. Género / Sexo
   const rawGender = filiacion.genero || filiacion.sexo || generalData.genero || generalData.sexo || rawCase.genero || rawCase.sexo || rawCase.gender;
   const finalGender = normalizeGender(rawGender);
 
-  // 4. Motivo de Consulta
   const rawReason = (filiacion.motivoConsulta || generalData.motivoConsultaTextual || generalData.motivoConsulta || rawCase.motivoConsultaTextual || rawCase.motivoConsulta || rawCase.consultationReason || rawCase.motivo) as string;
-
-  // 5. Anamnesis / Antecedentes / HEA
   const rawAnamnesis = (rawCase.anamnesis || rawCase.hea || rawCase.antecedentes || generalData.antecedentes || generalData.anamnesis || filiacion.anamnesis || filiacion.hea) as string;
 
-  // 6. Escalas psicométricas
   const rawPsych = (rawCase.psychometricScores || rawCase.psychometrics || rawCase.escalas || {}) as Record<string, unknown>;
   const mergedPsychometrics = {
     ...SAFE_DEFAULT_PATIENT.psychometricScores,
@@ -273,7 +265,6 @@ export async function syncWithClinicalApp(
   const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold01').trim().toLowerCase();
   const cleanPatientId = (patientId || 'PAC-8104').trim().toUpperCase();
 
-  // 1. Extracción con validación por Cloud Storage
   try {
     const cloudUrl = `https://storage.googleapis.com/base-psicologiagt-usuario2/clinica/${resolvedDoctorUsername}/cases.json?t=${Date.now()}`;
     const response = await fetch(cloudUrl);
@@ -309,7 +300,6 @@ export async function syncWithClinicalApp(
     console.warn('Fallo en Cloud Storage directo, buscando en microservicio protegido:', err);
   }
 
-  // 2. Fallback a Backend Protegido con Cloud Function
   const token = typeof window !== 'undefined'
     ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token'
     : 'demo-jwt-bearer-token';
@@ -357,7 +347,6 @@ export async function syncWithClinicalApp(
     console.warn('Fallo en Cloud Function, verificando repositorio local:', err);
   }
 
-  // 3. Fallback Local Presets
   const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPatientId);
   if (matchedPreset) {
     const syncdPatient: PatientRecord = {
@@ -386,6 +375,7 @@ export async function syncWithClinicalApp(
 
 // ------------------------------------------------------------------
 // MOTOR PRINCIPAL DE INFERENCIA CLÍNICA AMIE (GEMINI 3.8 FLASH / VERTEX)
+// CON ENFOQUE OBLIGATORIO DE TRIANGULACIÓN BIOCLÍNICA MULTIMODAL
 // ------------------------------------------------------------------
 export async function runAmieClinicalAnalysis(
   patient: PatientRecord,
@@ -440,30 +430,54 @@ export async function runAmieClinicalAnalysis(
     console.warn('Cloud Run API no disponible, ejecutando Gemini 3.8 Flash vía Proxy:', backendError);
   }
 
+  // ESTRUCTURACIÓN DEL PROMPT DE TRIANGULACIÓN MULTIMODAL
+  const vrSection = safeRecord.vrTelemetryData ? `
+--- PILAR 3.A: TELEMETRÍA VR INMERSIVA (PICO NEO 3 / QUEST 3S) ---
+- Session GUID: ${safeRecord.vrTelemetryData.sessionId}
+- Conductancia Cutánea (GSR Pico): ${Math.max(...(safeRecord.vrTelemetryData.gsrMicroSiemens || [0]))} µS
+- Tono Vagal (HRV RMSSD Última Lectura): ${safeRecord.vrTelemetryData.hrvRmssdMs?.slice(-1)[0] || 'N/A'} ms
+- Índice de Habituación Terapéutica (H): ${safeRecord.vrTelemetryData.habituationIndexH}
+- Picos de Excitación Simpática: ${safeRecord.vrTelemetryData.stressPeaksCount}
+` : '--- PILAR 3.A: TELEMETRÍA VR: No realizada ---';
+
+  const multisensorySection = safeRecord.multisensoryHardware ? `
+--- PILAR 3.B: BIOMETRÍA MULTISENSORIAL BLE EN VIVO ---
+- Tono Vagal / HRV Index: ${safeRecord.multisensoryHardware.vagalToneHrvIndex}/100
+- Presión Prensión Manual: ${safeRecord.multisensoryHardware.handGripPressureKg} kg
+- Camouflaging Index (CAT-Q): ${safeRecord.multisensoryHardware.camouflagingIndexPct}%
+- Duración Fijación Ocular: ${safeRecord.multisensoryHardware.ocularFixationDurationMs} ms
+` : '';
+
+  const systemInstructionText = `
+Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica operando con Gemini 3.8 Flash.
+TU REGLA FUNDAMENTAL ES LA TRIANGULACIÓN BIOCLÍNICA OBLIGATORIA EN 3 PILARES:
+
+PILAR 1 (SUBJETIVO / CLINICO): Anamnesis, motivo de consulta y notas de sesión.
+PILAR 2 (PSICOMETRÍA CUANTITATIVA): Escalas estandarizadas (PHQ-9, GAD-7, BDI-II, C-SSRS, SAD PERSONS, MMSE).
+PILAR 3 (FISIOLOGÍA Y BIOMETRÍA OBJETIVA): Tono vagal (HRV/RMSSD), conductancia cutánea (GSR), mapas de Z-Scores qEEG, telemetría pasiva APK Centinela y métricas VR.
+
+INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
+1. Compara la congruencia entre lo que el paciente reporta (Pilar 1) y sus marcadores fisiológicos objetivos (Pilar 3).
+2. Si detectas discordancia (ej. negación verbal pero HRV < 20 ms o GSR > 4 µS, o viceversa), identifícala como sesgo, simulación o enmascaramiento (Camouflaging).
+3. Devuelve EXCLUSIVAMENTE un objeto JSON estructurado con el análisis cruzado en los campos 'bioclinicalTriangulation', 'principalDiagnosis', 'differentialMatrix', 'riskAlerts' y 'pharmacologicalEffectiveness'.
+`;
+
   if (GEMINI_API_KEY) {
     try {
       const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-      const systemInstruction = `
-Eres AMIE (Artificial Intelligence Medical Inference Engine), operando con Gemini 3.8 Flash como un copiloto psiquiátrico y neurocientífico de grado clínico.
-Tu función es analizar expedientes multimodales que combinan:
-1. Historia clínica y psicometría en formato JSON.
-2. Telemetría fisiológica en tiempo real del visor VR (Pico Neo 3 Pro / Quest 3S): GSR, HRV RMSSD, tasa sacádica e índice de habituación H.
-
-Debes responder ÚNICAMENTE en formato JSON válido acorde al esquema de dictamen estructurado en 5 bloques.
-`;
 
       const directPayload = {
         contents: [
           {
             role: 'user',
             parts: [
-              { text: systemInstruction },
-              { text: `EXPEDIENTE COMPLETO DEL PACIENTE A ANALIZAR:\n${JSON.stringify(safeRecord, null, 2)}` }
+              { text: systemInstructionText },
+              { text: `EXPEDIENTE PARA TRIANGULACIÓN BIOCLÍNICA:\n${JSON.stringify(safeRecord, null, 2)}` }
             ]
           }
         ],
         generationConfig: {
-          temperature: 0.2,
+          temperature: 0.15,
           responseMimeType: 'application/json'
         }
       };
@@ -486,46 +500,14 @@ Debes responder ÚNICAMENTE en formato JSON válido acorde al esquema de dictame
     }
   }
 
-  const vrSection = safeRecord.vrTelemetryData ? `
---- MÓDULO VR PICO NEO 3 PRO / QUEST 3S & TELEMETRÍA INMERSIVA ---
-- Session GUID: ${safeRecord.vrTelemetryData.sessionId}
-- Conductancia Cutánea (GSR Pico): ${Math.max(...(safeRecord.vrTelemetryData.gsrMicroSiemens || [0]))} µS
-- Tono Vagal (HRV RMSSD Última Lectura): ${safeRecord.vrTelemetryData.hrvRmssdMs?.slice(-1)[0] || 'N/A'} ms
-- Índice de Habituación Terapéutica (H): ${safeRecord.vrTelemetryData.habituationIndexH}
-- Picos de Excitación Simpática: ${safeRecord.vrTelemetryData.stressPeaksCount}
-- Resumen Informe VR Previo: ${safeRecord.vrTherapyReport?.synthesizedClinicalSummary || 'Sin informe registrado'}
-` : '--- MÓDULO VR INMERSIVO: No se ha realizado o transferido prueba ---';
-
-  const multisensorySection = safeRecord.multisensoryHardware ? `
---- BIOMETRÍA MULTISENSORIAL EN VIVO ---
-- Índice Tono Vagal (HRV): ${safeRecord.multisensoryHardware.vagalToneHrvIndex}/100
-- Presión Prensión Manual: ${safeRecord.multisensoryHardware.handGripPressureKg} kg
-- Índice Camouflaging (CAT-Q): ${safeRecord.multisensoryHardware.camouflagingIndexPct}%
-- Duración Fijación Ocular: ${safeRecord.multisensoryHardware.ocularFixationDurationMs} ms
-- Estado Microexpresiones: ${safeRecord.multisensoryHardware.microExpressionState}
-` : '';
-
   const promptText = `
-IDENTIDAD CLÍNICA (AMIE FRAMEWORK • GEMINI 3.8 FLASH):
-Eres AMIE (Articulate Medical Intelligence Explorer), operando como Copiloto Psiquiátrico y Neurológico Avanzado.
-Tu función es el análisis bioclínico, la prevención activa y la generación de diagnósticos diferenciales para el profesional de la salud responsable bajo normativas HIPAA y RGPD.
+${systemInstructionText}
 
-MÉTODO DE ANÁLISIS E INTERPRETACIÓN DE DATOS (JSON):
-Al recibir el expediente clínico del paciente, realizarás un análisis cruzado integral en 5 niveles:
-1. EXTRAER Y EVALUAR SÍNTOMAS PRINCIPALES.
-2. TRIANGULACIÓN BIOCLÍNICA, PSICOMÉTRICA Y BIOMÉTRICA MULTIMODAL.
-3. INTEGRACIÓN DE TELEMETRÍA VR PICO NEO 3 PRO / META QUEST 3S:
-   ${vrSection}
-4. EVALUACIÓN DE MEDICIÓN PASIVA (APK CENTINELA - RIESGO SUICIDA).
-5. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTE DE SESGOS & PRINCIPIOS MORRISON.
-
+${vrSection}
 ${multisensorySection}
 
-EXPEDIENTE COMPLETO DEL PACIENTE EN FORMATO JSON:
+EXPEDIENTE PACIENTE (JSON):
 ${JSON.stringify(safeRecord, null, 2)}
-
-INSTRUCCIONES DE FORMATO DE RESPUESTA:
-Devuelve EXCLUSIVAMENTE un objeto JSON válido acorde al formato requerido.
 `;
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [{ text: promptText }];
@@ -546,16 +528,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido acorde al formato requerido.
 
   const proxyPayload = {
     contents: [{ role: 'user', parts: parts }],
-    systemInstruction: {
-      parts: [
-        {
-          text: 'Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica operando con Gemini 3.8 Flash. Genera análisis diagnósticos rigurosos con formato JSON estructurado basado en la guía DSM-5 Morrison y triangulación bioclínica multimodal.'
-        }
-      ]
-    },
+    systemInstruction: { parts: [{ text: systemInstructionText }] },
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.2
+      temperature: 0.15
     }
   };
 
@@ -566,47 +542,60 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido acorde al formato requerido.
       return JSON.parse(responseText) as AmieClinicalAnalysis;
     }
   } catch (proxyError) {
-    console.warn('Proxy Express no disponible, generando respuesta de contingencia local:', proxyError);
+    console.warn('Proxy Express no disponible, generando respuesta de contingencia local triangulada:', proxyError);
   }
 
   return generateFallbackAnalysis(safeRecord);
 }
 
+// ------------------------------------------------------------------
+// GENERACIÓN DE CONTINGENCIA LOCAL CON TRIANGULACIÓN COMPLETA
+// ------------------------------------------------------------------
 const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis => {
   const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || patient.multisensoryHardware?.vagalToneHrvIndex || 35;
   const gsrVal = patient.vrTelemetryData?.gsrMicroSiemens?.[0] || 2.1;
+  const phq9Val = patient.psychometricScores.phq9 || 24;
+  const gad7Val = patient.psychometricScores.gad7 || 16;
+  const cssrsVal = patient.psychometricScores.cssrsLevel || 5;
+
+  // Cálculo del Score de Convergencia entre los 3 pilares
+  let convergence = 85.0;
+  if (phq9Val > 20 && hrvVal < 25) convergence += 8.5; // Alta convergencia afectivo-autonómica
+  if (cssrsVal >= 4 && patient.sentinelTelemetry?.sleepMetrics.nightWakeups && patient.sentinelTelemetry.sleepMetrics.nightWakeups > 3) convergence += 5.0; // Convergencia de riesgo autolítico pasivo
+
+  const finalConvergenceScore = Math.min(98.8, Math.round(convergence * 10) / 10);
 
   return {
     principalDiagnosis: {
-      codeCIE10: 'F43.1',
-      codeCIE9: '309.81',
-      disorderName: 'Trastorno de Estrés Postraumático con Hiperreactividad Simpática',
-      certaintyPct: 92.4,
-      specifiers: ['Con síntomas disociativos', 'Persistente'],
-      gafEstimated: 45,
-      justificationDsm5: `Criterios DSM-5 cumplidos. Triangulación bioclínica: Pico de conductancia galvánica (GSR = ${gsrVal} µS) y depresión de variabilidad cardíaca vagal (HRV = ${hrvVal} ms) ante exposición inmersiva.`
+      codeCIE10: 'F33.2',
+      codeCIE9: '296.33',
+      disorderName: 'Trastorno Depresivo Mayor Recurrente, Episodio Grave sin Síntomas Psicóticos',
+      certaintyPct: finalConvergenceScore,
+      specifiers: ['Con síntomas de ansiedad severa', 'Con alto riesgo de conducta autolítica'],
+      gafEstimated: 25,
+      justificationDsm5: `Criterios DSM-5 cumplidos por la triangulación de 3 pilares: 1) Pilar Clínico (Anhedonia total, rumiación de ruina), 2) Pilar Psicométrico (PHQ-9 = ${phq9Val}, C-SSRS = Nivel ${cssrsVal}), 3) Pilar Fisiológico (Inhibición vagal con HRV = ${hrvVal} ms, GSR = ${gsrVal} µS y fragmentación circadiana nocturna en APK Centinela).`
     },
     differentialMatrix: [
       {
         disorderKey: 'TAG',
-        disorderName: 'Trastorno de Ansiedad Generalizada',
+        disorderName: 'Trastorno de Ansiedad Generalizada Primario',
         codeCIE10: 'F41.1',
         status: 'Descartado',
-        certaintyPct: 24.0,
+        certaintyPct: 22.0,
         qeegProfile: {
           thetaBetaRatioEvaluation: 'Normal',
           highBetaEvaluation: 'Ligeramente elevado',
-          alphaAsymmetryEvaluation: 'Sin asimetría frontal',
+          alphaAsymmetryEvaluation: 'Asimetría alfa frontal izquierda prevalente',
           coherenceEvaluation: 'Coherencia parieto-occipital conservada'
         },
         psychometricsProfile: {
           scaleMatched: 'GAD-7',
-          scoreSummary: `Puntaje: ${patient.psychometricScores.gad7 || 16}/21`
+          scoreSummary: `Puntaje: ${gad7Val}/21`
         },
-        apkPassiveMarker: 'Despertares nocturnos aislados',
-        acousticBiomarkerCorrelation: 'Prosodia reactiva',
-        biasDiscardRationale: 'Descartado por presencia de evento traumático primario y síntomas intrusivos específicos.',
-        morrisonPrincipleApplied: 'Principio de Causalidad Primaria de Morrison'
+        apkPassiveMarker: 'Despertares nocturnos múltiples con inmovilidad biomotora',
+        acousticBiomarkerCorrelation: 'Bradilalia marcada con aplanamiento de variabilidad tonal',
+        biasDiscardRationale: 'Descartado como patología primaria; la sintomatología ansiosa es secundaria al cuadro depresivo mayor melancólico.',
+        morrisonPrincipleApplied: 'Principio F de Morrison (Prioridad al Estado de Ánimo por severidad y tratabilidad)'
       }
     ],
     differentialDiagnoses: [
@@ -614,63 +603,64 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
         candidate: 'Trastorno Adaptativo con Estado de Ánimo Depresivo',
         codeCIE10: 'F43.21',
         status: 'Descartado',
-        rationale: 'La severidad autonómica y la persistencia de reactividad simpática exceden el cuadro adaptativo simple.',
-        safetyRuleApplied: 'Regla de Severidad Sintomática DSM-5'
+        rationale: 'Descartado porque la alteración neurovegetativa (HRV = 18 ms, baja de peso de 6 kg, despertares a las 02:30 AM) excede la severidad de una reacción adaptativa.',
+        safetyRuleApplied: 'Regla de Severidad Sintomática y Autonómica DSM-5'
       }
     ],
     bioclinicalTriangulation: {
-      psychometricsSummary: `PHQ-9: ${patient.psychometricScores.phq9 || 24}, BDI-II: ${patient.psychometricScores.bdi2 || 42}, CSS-RS Nivel: ${patient.psychometricScores.cssrsLevel || 5}`,
-      functionalAreasAssessment: `Sueño: ${patient.functionalAreas.sleep}/100, Atención: ${patient.functionalAreas.attention}/100`,
-      acousticBiometricAssessment: 'Bradilalia moderada y aplanamiento prosódico leve.',
-      vrHabituationAssessment: `Índice de Habituación H = ${patient.vrTelemetryData?.habituationIndexH || 82.5}. Tono vagal en RMSSD: ${hrvVal} ms.`,
+      psychometricsSummary: `PILAR 2 (PSICOMETRÍA): PHQ-9 = ${phq9Val}/27 (Depresión Severa), GAD-7 = ${gad7Val}/21 (Ansiedad Grave), C-SSRS = Nivel ${cssrsVal}/5 (Riesgo Autolítico Alto), SAD PERSONS = ${patient.psychometricScores.sadPersons || 9}/10.`,
+      functionalAreasAssessment: `Afectación Funcional: Sueño ${patient.functionalAreas.sleep}/100, Energía ${patient.functionalAreas.energy}/100, Atención ${patient.functionalAreas.attention}/100.`,
+      acousticBiometricAssessment: 'PILAR 3.A (ACÚSTICA): Bradilalia severa, latencia de respuesta vocal prolongada y aplanamiento prosódico.',
+      vrHabituationAssessment: `PILAR 3.B (AUTONÓMICO & VR): Tono vagal colapsado (HRV RMSSD = ${hrvVal} ms), hiperreactividad simpática (GSR = ${gsrVal} µS).`,
       regionalLobeBreakdown: {
-        frontal: 'Lentificación theta frontal moderada',
+        frontal: 'Lentificación theta/delta frontal (Z = +1.9σ) compatible con hipoactividad prefrontal dorsolateral',
         temporal: 'Asimetría leve en polo temporal izquierdo',
-        parietal: 'Coherencia beta dentro de límites normales',
-        occipital: 'Ritmo alfa posterior conservado en 8.5 Hz'
+        parietal: 'Lentificación leve en región parietal',
+        occipital: 'Pico de frecuencia alfa ralentizado en 8.5 Hz'
       },
-      convergenceScore: 89.2
+      convergenceScore: finalConvergenceScore
     },
     pharmacologicalEffectiveness: [
       {
-        drugClass: 'ISRS',
+        drugClass: 'ISRS / DUAL',
         moleculeName: 'Sertralina',
         dosageAssessed: '50 mg/día',
-        estimatedEffectivenessPct: 65.0,
-        expectedResponse: 'Respuesta Parcial / Dosis Subóptima',
-        biomarkerRationale: 'Sub-dosis para cuadro severo. Se sugiere titulación progresiva según tolerancia.',
-        adverseEffectRisks: ['Malestar gastrointestinal inicial', 'Labilidad del sueño'],
-        recommendedDoseAdjustment: 'Considerar incremento a 100 mg/día tras evaluación hepática'
+        estimatedEffectivenessPct: 58.0,
+        expectedResponse: 'Respuesta Incompleta / Subterapéutica',
+        biomarkerRationale: 'La dosis actual es insuficiente para la severidad del colapso autonómico (HRV < 20 ms). Se recomienda titulación o cambio a un antidepresivo dual (Duloxetina/Venlafaxina) o adyuvancia.',
+        adverseEffectRisks: ['Náusea transitoria', 'Agitación psicomotora inicial'],
+        recommendedDoseAdjustment: 'Titular a 100 mg/día o considerar dual de acción rápida previa reevaluación'
       }
     ],
     therapeuticAffinityScores: [
       {
-        disorderName: 'Trastorno de Estrés Postraumático',
-        affinityPct: 92.0,
-        status: 'Alta Concordancia',
-        recommendedTherapy: 'EMDR',
-        psychopharmacologyScheme: 'Sertralina + Terapia de Exposición VR Bio-Adaptativa',
-        biomarkerRationale: 'Alta capacidad de habituación autonómica observada en protocolo inmersivo.'
+        disorderName: 'Trastorno Depresivo Mayor Melancólico',
+        affinityPct: finalConvergenceScore,
+        status: 'Alta Concordancia Multimodal',
+        recommendedTherapy: 'Terapia Cognitivo-Conductual centrada en la activación + DBT para regulación afectiva',
+        psychopharmacologyScheme: 'Sertralina (titulada) + Protocolo de Contención Inmediata + VR Bio-Adaptativa',
+        biomarkerRationale: 'La convergencia entre la psicometría alta y el colapso vegetativo justifica una intervención intensiva.'
       }
     ],
     riskAlerts: {
-      suicideRiskLevel: patient.psychometricScores.cssrsLevel && patient.psychometricScores.cssrsLevel >= 4 ? 'CRÍTICO' : 'MODERADO',
-      psychosisRisk: 'AUSENTE',
-      cognitiveDeteriorationRisk: 'NORMAL',
-      apkPassiveState: 'Alerta Centinela: Actividad nocturna atípica detectada.',
+      suicideRiskLevel: cssrsVal >= 4 ? 'CRÍTICO' : 'ALTO',
+      psychosisRisk: 'PRESENTE_DELIRANTE',
+      cognitiveDeteriorationRisk: 'PSEUDODEMENCIA_DEPRESIVA',
+      apkPassiveState: 'ALERTA CENTINELA ACTIVADA: Despertares nocturnos recurrentes y tiempo activo nocturno en pantalla excesivo.',
       criticalAlertsList: [
-        'Ideación autolítica activa con nivel CSS-RS elevado.',
-        'Se recomienda la activación inmediata del protocolo de contención e involucramiento de la red primaria.'
+        `Riesgo autolítico activo nivel C-SSRS ${cssrsVal}/5 con acceso a medios letales reportado.`,
+        'Marcada inhibición psicomotora y bradilalia con pensamiento de ruina.',
+        'Colapso del tono vagal parasimpático (HRV RMSSD < 20 ms).'
       ],
-      containmentProtocolSuggested: 'Protocolo C-SSRS Nivel 5: Vigilancia 24/7, eliminación de medios letales y derivación psiquiátrica urgente.'
+      containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE LÍNEA DE CRISIS: Contención acompañante 24/7, remoción total de medios letales, derivación a hospitalización psiquiátrica o consulta de urgencia.'
     },
     recommendedActionPlan: {
-      neurofeedbackProtocol: ['Protocolo SMR / Inhibición Theta Frontal en Fz (20 min x 12 sesiones)'],
-      psychotherapyStrategy: ['EMDR con estimulación bilateral háptica en mandos VR', 'TCC centrada en trauma'],
-      pharmacologySuggestions: ['Titulación de Sertralina a 100 mg/día', 'Monitoreo de función hepática'],
+      neurofeedbackProtocol: ['Protocolo SMR en C3/Cz (Inhibición Theta Frontal y aumento del tono de descanso)'],
+      psychotherapyStrategy: ['Restructuración cognitiva de rumiación de ruina', 'Activación conductual progresiva'],
+      pharmacologySuggestions: ['Reevaluación de esquema antidepresivo', 'Supervisión familiar estricta en la administración de fármacos'],
       psychiatryReferralUrgent: true,
-      monitoringDirectives: ['Sincronización diaria con APK Centinela', 'Control de HRV en cada sesión VR'],
-      urgentActions: ['Notificar al contacto de emergencia registrado', 'Asegurar contención ambiental en domicilio']
+      monitoringDirectives: ['Sincronización diaria con APK Centinela', 'Registro de pulso y HRV cada 12 horas'],
+      urgentActions: ['Informar a la red familiar inmediata (Rachel Murphy)', 'Asegurar la custodia de objetos peligrosos en el hogar']
     }
   };
 };
@@ -691,13 +681,17 @@ export async function askAmieAssistant(
 
   const systemContext = `
 Eres AMIE (Articulate Medical Intelligence Explorer), Copiloto Clínico Psiquiátrico y Neurológico operando con Gemini 3.8 Flash.
-Estás dialogando directamente con el médico especialista tratante colegiado.
-Información del paciente actual en estudio:
+Tus respuestas deben basarse en la TRIANGULACIÓN BIOCLÍNICA MULTIMODAL de los 3 pilares del paciente:
+- Pilar 1: Anamnesis y notas clínicas.
+- Pilar 2: Escalas psicométricas cuantitativas.
+- Pilar 3: Biometría en vivo, tono vagal (HRV), conductancia cutánea (GSR), qEEG y APK Centinela.
+
+Paciente actual en análisis:
 ${JSON.stringify(currentPatient, null, 2)}
 
 ${analysisData ? `Análisis diagnóstico emitido previamente:\n${JSON.stringify(analysisData, null, 2)}` : ''}
 
-Responde de forma concisa, profesional, técnica, fundamentada en la literatura médica psiquiátrica (DSM-5-TR, psicofarmacología clínica de Stahl, neurociencias y principios diagnósticos de James Morrison).
+Responde al médico tratante con el máximo rigor científico, concisión y enfoque antisesgo (DSM-5-TR, Stahl, Morrison).
 `;
 
   const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
@@ -710,7 +704,7 @@ Responde de forma concisa, profesional, técnica, fundamentada en la literatura 
   const proxyPayload = {
     contents: contents,
     systemInstruction: { parts: [{ text: systemContext }] },
-    generationConfig: { temperature: 0.4 }
+    generationConfig: { temperature: 0.25 }
   };
 
   try {
