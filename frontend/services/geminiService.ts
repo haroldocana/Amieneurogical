@@ -124,9 +124,6 @@ export const SAFE_DEFAULT_PATIENT: PatientRecord = {
 // FUNCIONES AUXILIARES DE TRANSFORMACIÓN Y PROXY
 // ------------------------------------------------------------------
 
-/**
- * Canaliza solicitudes hacia Vertex AI o Gemini a través del Backend Proxy en Express (Render)
- */
 async function callVertexViaProxy(originalUrl: string, payloadBody: unknown) {
   const response = await fetch(`${BACKEND_URL}/api-proxy`, {
     method: 'POST',
@@ -148,11 +145,11 @@ async function callVertexViaProxy(originalUrl: string, payloadBody: unknown) {
   return await response.json();
 }
 
-function normalizeGender(rawSex?: string): 'M' | 'F' | 'Other' {
-  if (!rawSex) return 'F';
-  const val = rawSex.trim().toUpperCase();
-  if (val.startsWith('F') || val === 'FEMENINO' || val === 'MUJER') return 'F';
-  if (val.startsWith('M') || val === 'MASCULINO' || val === 'HOMBRE') return 'M';
+function normalizeGender(rawSex?: unknown): 'M' | 'F' | 'Other' {
+  if (!rawSex) return 'M';
+  const val = String(rawSex).trim().toUpperCase();
+  if (val.startsWith('M') || val.includes('MASC') || val === 'HOMBRE') return 'M';
+  if (val.startsWith('F') || val.includes('FEM') || val === 'MUJER') return 'F';
   return 'Other';
 }
 
@@ -198,7 +195,7 @@ export async function mapApp1DataToApp2(
   });
 
   const lastSession = sessions[sessions.length - 1] || {};
-  const rawFunctional = lastSession.functionalAreas || rawCase.functionalAreas || {};
+  const rawFunctional = lastSession.functionalAreas || rawCase.functionalAreas || rawCase.areasFuncionales || {};
   const mappedFunctionalAreas = normalizeFunctionalAreas(rawFunctional);
 
   const mappedNotes = sessions
@@ -206,25 +203,57 @@ export async function mapApp1DataToApp2(
     .filter(Boolean);
 
   const generalData = (rawCase.generalData as Record<string, unknown>) || {};
+  const filiacion = (rawCase.filiacion as Record<string, unknown>) || {};
+
+  // 1. Nombre completo / Identificador
+  const rawName = (filiacion.nombreCompleto || filiacion.nombre || generalData.nombreCompleto || generalData.nombre || rawCase.nombreCompleto || rawCase.nombre || rawCase.patientNameAnonymized || rawCase.patientName) as string;
+
+  // 2. Edad
+  const rawAge = filiacion.edad ?? generalData.edad ?? rawCase.edad ?? filiacion.age ?? generalData.age ?? rawCase.age;
+  const parsedAge = Number(rawAge);
+  const finalAge = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : SAFE_DEFAULT_PATIENT.age;
+
+  // 3. Género / Sexo
+  const rawGender = filiacion.genero || filiacion.sexo || generalData.genero || generalData.sexo || rawCase.genero || rawCase.sexo || rawCase.gender;
+  const finalGender = normalizeGender(rawGender);
+
+  // 4. Motivo de Consulta
+  const rawReason = (filiacion.motivoConsulta || generalData.motivoConsultaTextual || generalData.motivoConsulta || rawCase.motivoConsultaTextual || rawCase.motivoConsulta || rawCase.consultationReason || rawCase.motivo) as string;
+
+  // 5. Anamnesis / Antecedentes / HEA
+  const rawAnamnesis = (rawCase.anamnesis || rawCase.hea || rawCase.antecedentes || generalData.antecedentes || generalData.anamnesis || filiacion.anamnesis || filiacion.hea) as string;
+
+  // 6. Escalas psicométricas
+  const rawPsych = (rawCase.psychometricScores || rawCase.psychometrics || rawCase.escalas || {}) as Record<string, unknown>;
+  const mergedPsychometrics = {
+    ...SAFE_DEFAULT_PATIENT.psychometricScores,
+    ...exactPsychometrics,
+    ...(typeof rawPsych === 'object' ? rawPsych : {})
+  };
+
+  if (typeof rawCase.phq9 === 'number') mergedPsychometrics.phq9 = rawCase.phq9;
+  if (typeof rawCase.gad7 === 'number') mergedPsychometrics.gad7 = rawCase.gad7;
+  if (typeof rawCase.bdi2 === 'number') mergedPsychometrics.bdi2 = rawCase.bdi2;
+  if (typeof rawCase.sadPersons === 'number') mergedPsychometrics.sadPersons = rawCase.sadPersons;
+  if (typeof rawCase.mmse === 'number') mergedPsychometrics.mmse = rawCase.mmse;
+  if (typeof rawCase.cssrsLevel === 'number') mergedPsychometrics.cssrsLevel = rawCase.cssrsLevel;
 
   return {
     ...SAFE_DEFAULT_PATIENT,
-    id: (rawCase.id as string) || cleanPatientId,
-    patientNameAnonymized: `Paciente ID: ${(rawCase.id as string) || cleanPatientId}`,
-    age: Number(generalData.edad || rawCase.age) || 55,
-    gender: normalizeGender((generalData.sexo as string) || (rawCase.gender as string)),
-    consultationReason: (generalData.motivoConsultaTextual as string) || (rawCase.consultationReason as string) || 'Evaluación neuroclínica integral',
-    anamnesis: (generalData.antecedentes as string) || (rawCase.anamnesis as string) || 'Sin antecedentes registrados',
-    sessionNotes: mappedNotes.length > 0 ? mappedNotes : ['Sincronizado desde base de datos App 1'],
+    id: (rawCase.id as string) || (rawCase.pacId as string) || cleanPatientId,
+    patientNameAnonymized: rawName ? rawName : `Paciente ID: ${cleanPatientId}`,
+    age: finalAge,
+    gender: finalGender,
+    consultationReason: rawReason || 'Evaluación neuroclínica integral',
+    anamnesis: rawAnamnesis || 'Sin antecedentes registrados',
+    sessionNotes: mappedNotes.length > 0 ? mappedNotes : (rawCase.sessionNotes as string[]) || ['Sincronizado desde base de datos App 2 / Firestore'],
     functionalAreas: mappedFunctionalAreas,
-    psychometricScores: {
-      ...SAFE_DEFAULT_PATIENT.psychometricScores,
-      ...exactPsychometrics
-    },
+    psychometricScores: mergedPsychometrics as typeof SAFE_DEFAULT_PATIENT.psychometricScores,
     sentinelTelemetry: {
       ...SAFE_DEFAULT_PATIENT.sentinelTelemetry!,
+      ...((rawCase.sentinelTelemetry as object) || {}),
       pacId: cleanPatientId,
-      deviceSyncTime: `En línea (Extraído de App 1 - ${resolvedDoctorUsername})`
+      deviceSyncTime: `En línea (Sincronizado - ${resolvedDoctorUsername})`
     }
   };
 }
@@ -244,7 +273,7 @@ export async function syncWithClinicalApp(
   const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold01').trim().toLowerCase();
   const cleanPatientId = (patientId || 'PAC-8104').trim().toUpperCase();
 
-  // 1. Extracción con validación de seguridad por colegiado desde Cloud Storage
+  // 1. Extracción con validación por Cloud Storage
   try {
     const cloudUrl = `https://storage.googleapis.com/base-psicologiagt-usuario2/clinica/${resolvedDoctorUsername}/cases.json?t=${Date.now()}`;
     const response = await fetch(cloudUrl);
@@ -366,7 +395,6 @@ export async function runAmieClinicalAnalysis(
     ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01'
     : 'harold01';
 
-  // Consumir 1 crédito de IA por análisis
   consumeAiCredit(activeUsername);
 
   const token = typeof window !== 'undefined'
@@ -380,7 +408,6 @@ export async function runAmieClinicalAnalysis(
 
   const activeImage = qEegImageBase64 || safeRecord.qeegBiomarkers?.heatmapBase64 || null;
 
-  // RUTINA 1: INTENTAR CLOUD RUN API SI ESTÁ DISPONIBLE
   try {
     const apiPayload = {
       patientRecord: safeRecord,
@@ -413,7 +440,6 @@ export async function runAmieClinicalAnalysis(
     console.warn('Cloud Run API no disponible, ejecutando Gemini 3.8 Flash vía Proxy:', backendError);
   }
 
-  // RUTINA 2: INTENTAR GEMINI API DIRECTA SI EXISTE VITE_GEMINI_API_KEY (GEMINI 3.8 FLASH)
   if (GEMINI_API_KEY) {
     try {
       const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
@@ -460,7 +486,6 @@ Debes responder ÚNICAMENTE en formato JSON válido acorde al esquema de dictame
     }
   }
 
-  // RUTINA 3: LLAMADA A PROXY EXPRESS VERTEX AI (GEMINI 3.8 FLASH)
   const vrSection = safeRecord.vrTelemetryData ? `
 --- MÓDULO VR PICO NEO 3 PRO / QUEST 3S & TELEMETRÍA INMERSIVA ---
 - Session GUID: ${safeRecord.vrTelemetryData.sessionId}
@@ -544,13 +569,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido acorde al formato requerido.
     console.warn('Proxy Express no disponible, generando respuesta de contingencia local:', proxyError);
   }
 
-  // RUTINA 4: FALLBACK LOCAL EN CASO DE DESCONEXIÓN TOTAL
   return generateFallbackAnalysis(safeRecord);
 }
 
-/**
- * Fallback determinista en caso de desconexión de red o desarrollo sin llaves
- */
 const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis => {
   const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || patient.multisensoryHardware?.vagalToneHrvIndex || 35;
   const gsrVal = patient.vrTelemetryData?.gsrMicroSiemens?.[0] || 2.1;
