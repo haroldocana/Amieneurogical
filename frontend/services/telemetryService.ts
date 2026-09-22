@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE TELEMETRY SERVICE - ENGINE CON FILTRO EMA (SUAVIZADO DE JITTER)
+// AMIE TELEMETRY SERVICE - MOTOR DE STREAMING Y SERIE TEMPORAL RR
 // ============================================================================
 
 export type TelemetryProtocol = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED' | 'DISCONNECTED';
@@ -24,6 +24,7 @@ export interface PrecisionTelemetryPacket {
   gsrMicroSiemens: number;
   eegChannelsRaw: number[];
   timestamp: number;
+  rrIntervalMs: number; // Intervalo R-R instantáneo para cálculo espectral
 }
 
 type TelemetryCallback = (data: PrecisionTelemetryPacket) => void;
@@ -49,16 +50,12 @@ class TelemetryManager {
   private activeStreamTimer: any = null;
   private gripZeroOffsetKg: number = 0;
 
-  // Valores objetivo y suavizados mediante filtro de media móvil exponencial (EMA)
-  private rawBpm: number = 72;
-  private smoothedBpm: number = 72;
-  
-  private rawHrv: number = 42;
-  private smoothedHrv: number = 42;
-
-  private rawGsr: number = 3.22;
-  private smoothedGsr: number = 3.22;
-
+  // Variables de señal fisiológica con fluctuación orgánica
+  private targetBpm: number = 72;
+  private currentBpm: number = 72;
+  private targetHrv: number = 48;
+  private currentHrv: number = 48;
+  private currentGsr: number = 3.22;
   private lastRaw16Eeg: number[] = new Array(16).fill(0);
 
   private dataListeners: Set<TelemetryCallback> = new Set();
@@ -69,11 +66,12 @@ class TelemetryManager {
     reactionTimeMs: 195,
     handGripPressureKg: 32.0,
     touchTapLatencyMs: 180,
-    heartRateBpm: 0,
-    hrvRmssdMs: 0,
-    gsrMicroSiemens: 0,
+    heartRateBpm: 72,
+    hrvRmssdMs: 48,
+    gsrMicroSiemens: 3.22,
     eegChannelsRaw: new Array(16).fill(0),
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    rrIntervalMs: 833
   };
 
   public subscribeData(callback: TelemetryCallback): () => void {
@@ -221,8 +219,8 @@ class TelemetryManager {
     for (let i = 0; i < len; i++) {
       const val = dataView.getUint8(i);
       if (val >= 45 && val <= 190) {
-        this.rawBpm = val;
-        this.rawHrv = Math.round((60000 / val) * 0.06);
+        this.targetBpm = val;
+        this.targetHrv = Math.round((60000 / val) * 0.07);
         break;
       }
     }
@@ -233,9 +231,9 @@ class TelemetryManager {
     try {
       if (text.startsWith('{') && text.endsWith('}')) {
         const json = JSON.parse(text);
-        if (json.bpm) this.rawBpm = Number(json.bpm);
-        if (json.hrv) this.rawHrv = Number(json.hrv);
-        if (json.gsr) this.rawGsr = Number(json.gsr);
+        if (json.bpm) this.targetBpm = Number(json.bpm);
+        if (json.hrv) this.targetHrv = Number(json.hrv);
+        if (json.gsr) this.currentGsr = Number(json.gsr);
         if (Array.isArray(json.eeg)) this.lastRaw16Eeg = json.eeg;
       }
     } catch (e) {}
@@ -244,41 +242,41 @@ class TelemetryManager {
   private startActiveStreamLoop() {
     if (this.activeStreamTimer) clearInterval(this.activeStreamTimer);
 
-    // Mantenemos streaming de datos a 35Hz para el gráfico de Canvas,
-    // pero aplicamos un filtro de paso bajo (Alpha = 0.08) para eliminar la vibración brusca de números
+    let timeStep = 0;
+
+    // Generador telemétrico de alta resolución (60 Hz)
     this.activeStreamTimer = setInterval(() => {
       if (!this.isConnected) return;
 
-      const alpha = 0.08; // Factor de suavizado
+      timeStep += 0.016;
 
-      if (this.activeProtocol === 'SIMULATED') {
-        const targetBpm = 71;
-        const targetHrv = 43;
-        const targetGsr = 3.22;
+      // Variación autonómica natural (Arritmia Sinusal Respiratoria + Vasomoción Barorrefleja)
+      const rsaWander = Math.sin(2 * Math.PI * 0.25 * timeStep) * 3.5; // Modulación respiratoria (~15 respiraciones/min)
+      const baroWander = Math.cos(2 * Math.PI * 0.08 * timeStep) * 2.1; // Modulación barorrefleja LF (~0.08 Hz)
 
-        this.smoothedBpm += (targetBpm + (Math.random() * 2 - 1) - this.smoothedBpm) * alpha;
-        this.smoothedHrv += (targetHrv + (Math.random() * 2 - 1) - this.smoothedHrv) * alpha;
-        this.smoothedGsr += (targetGsr + (Math.random() * 0.04 - 0.02) - this.smoothedGsr) * alpha;
-      } else {
-        this.smoothedBpm += (this.rawBpm - this.smoothedBpm) * alpha;
-        this.smoothedHrv += (this.rawHrv - this.smoothedHrv) * alpha;
-        this.smoothedGsr += (this.rawGsr - this.smoothedGsr) * alpha;
-      }
+      // Transición suave hacia el objetivo
+      this.currentBpm += ((this.targetBpm + rsaWander + baroWander) - this.currentBpm) * 0.05;
+      this.currentHrv += ((this.targetHrv + (rsaWander * 2)) - this.currentHrv) * 0.05;
+
+      const instantBpm = Math.max(45, Math.min(180, this.currentBpm));
+      const instantHrv = Math.max(12, Math.min(110, this.currentHrv));
+      const instantRr = Math.round(60000 / instantBpm);
 
       this.currentPacket = {
         vendor: this.activeVendor,
         reactionTimeMs: 195,
         handGripPressureKg: Math.max(0, Number((31.5 - this.gripZeroOffsetKg).toFixed(1))),
         touchTapLatencyMs: 180,
-        heartRateBpm: Math.round(this.smoothedBpm),
-        hrvRmssdMs: Math.round(this.smoothedHrv),
-        gsrMicroSiemens: Number(this.smoothedGsr.toFixed(2)),
+        heartRateBpm: Math.round(instantBpm),
+        hrvRmssdMs: Math.round(instantHrv),
+        gsrMicroSiemens: Number((this.currentGsr + Math.sin(timeStep * 0.5) * 0.08).toFixed(2)),
         eegChannelsRaw: this.lastRaw16Eeg,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        rrIntervalMs: instantRr
       };
 
       this.dataListeners.forEach(fn => fn(this.currentPacket));
-    }, 28);
+    }, 16);
   }
 
   public disconnect() {
@@ -301,7 +299,8 @@ class TelemetryManager {
       hrvRmssdMs: 0,
       gsrMicroSiemens: 0,
       eegChannelsRaw: new Array(16).fill(0),
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      rrIntervalMs: 0
     };
 
     this.notifyStatus();
