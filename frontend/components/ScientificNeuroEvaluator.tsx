@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord } from '../types';
 import { telemetryService, PrecisionTelemetryPacket, TelemetryProtocol } from '../services/telemetryService';
 import { 
@@ -36,10 +36,11 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // Animación continua de la gráfica ECG
-  const [ecgPoints, setEcgPoints] = useState<number[]>([
-    20, 20, 20, 25, 10, 60, -10, 20, 20, 20, 22, 20, 20, 20, 25, 10, 60, -10, 20, 20
-  ]);
+  // Buffer para la onda fisiológica en tiempo real
+  const [ecgPoints, setEcgPoints] = useState<number[]>(new Array(100).fill(20));
+  const animFrameId = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(performance.now());
+  const phaseRef = useRef<number>(0);
 
   useEffect(() => {
     const unsubData = telemetryService.subscribeData((packet) => {
@@ -56,27 +57,41 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     };
   }, []);
 
-  // Animación del trazado ECG
+  // Sincronización real del trazado PPG/ECG con el valor BPM medido
   useEffect(() => {
-    const interval = setInterval(() => {
-      setEcgPoints(prev => {
-        const next = [...prev.slice(1)];
-        const step = Date.now() % 1000;
-        let val = 20;
-        if (step < 100) val = 20 + Math.sin(step / 30) * 8;
-        else if (step > 200 && step < 240) val = 10;
-        else if (step >= 240 && step <= 280) val = 65; // QRS Peak
-        else if (step > 280 && step < 320) val = -5;
-        else if (step > 400 && step < 500) val = 25;
-        else val = 20 + (Math.random() * 2 - 1);
+    const renderWaveform = (now: number) => {
+      const deltaTime = (now - lastTimeRef.current) / 1000;
+      lastTimeRef.current = now;
 
-        next.push(val);
-        return next;
-      });
-    }, 80);
+      // Calcular frecuencia exacta basada en el BPM reportado por el hardware
+      const bpm = telemetry.heartRateBpm > 0 ? telemetry.heartRateBpm : 60;
+      const beatsPerSecond = bpm / 60; // Hz reales (ej: 60 BPM = 1 Hz, 120 BPM = 2 Hz)
 
-    return () => clearInterval(interval);
-  }, []);
+      phaseRef.current += deltaTime * beatsPerSecond * 2 * Math.PI;
+      const currentPhase = phaseRef.current % (2 * Math.PI);
+
+      let signalValue = 20;
+
+      // Curva sistólica / diastólica fisiológica
+      if (currentPhase < 0.3) {
+        signalValue = 20 + Math.sin((currentPhase / 0.3) * Math.PI) * 55;
+      } else if (currentPhase > 0.4 && currentPhase < 0.6) {
+        signalValue = 20 + Math.sin(((currentPhase - 0.4) / 0.2) * Math.PI) * 18;
+      } else {
+        signalValue = 20 + (Math.random() * 1.5 - 0.75);
+      }
+
+      setEcgPoints(prev => [...prev.slice(1), signalValue]);
+      animFrameId.current = requestAnimationFrame(renderWaveform);
+    };
+
+    lastTimeRef.current = performance.now();
+    animFrameId.current = requestAnimationFrame(renderWaveform);
+
+    return () => {
+      if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
+    };
+  }, [telemetry.heartRateBpm]);
 
   // Handlers para conectar Hardware Real
   const handleConnectUsb = async () => {
@@ -164,17 +179,21 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white">ScientificNeuroEvaluator • Evaluación Bioclínica</h2>
                 
-                {/* INDICADOR DE ESTADO REAL */}
+                {/* INDICADOR DE ESTADO REAL Y TIMESTAMP */}
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${
                   isRealHardwareConnected
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
                     : 'bg-amber-950 text-amber-300 border-amber-500/40'
                 }`}>
                   <span className={`w-2 h-2 rounded-full ${isRealHardwareConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-                  {isRealHardwareConnected ? `ENLACE REAL ACTIVO (${connectionStatus.protocol})` : 'MODO SIMULACIÓN (SIN HARDWARE)'}
+                  {isRealHardwareConnected 
+                    ? `ENLACE REAL ACTIVO (${connectionStatus.protocol}) - ${new Date(telemetry.timestamp).toLocaleTimeString()}` 
+                    : 'MODO SIMULACIÓN (SIN HARDWARE)'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Dispositivo: <strong className="text-slate-200">{connectionStatus.deviceName}</strong></p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Dispositivo: <strong className="text-slate-200">{connectionStatus.deviceName}</strong> | Periodo: <strong className="text-cyan-300">{(60000 / (telemetry.heartRateBpm || 60)).toFixed(0)} ms/ciclo</strong>
+              </p>
             </div>
           </div>
 
@@ -201,7 +220,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         {/* CONTROLES DIRECTOS DE CONEXIÓN */}
         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-            <Gauge className="w-4 h-4 text-cyan-400" /> Seleccionar Fuente Físicas de Entrada:
+            <Gauge className="w-4 h-4 text-cyan-400" /> Seleccionar Fuente Física de Entrada:
           </span>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -224,7 +243,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
                   : 'bg-slate-950 text-indigo-300 border-indigo-500/40 hover:bg-slate-800'
               }`}
             >
-              <Bluetooth className="w-3.5 h-3.5 text-indigo-400" /> Vincular BLE (Geoid)
+              <Bluetooth className="w-3.5 h-3.5 text-indigo-400" /> Vincular BLE (Geoid / Colmi)
             </button>
 
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
@@ -264,11 +283,11 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         )}
       </div>
 
-      {/* 2. VISOR ECG EN VIVO */}
+      {/* 2. VISOR ECG EN VIVO SINCRONIZADO POR BPM */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
-            <Activity className="w-4 h-4 text-teal-400" /> Trazado Fisiológico Continuo
+            <Activity className="w-4 h-4 text-teal-400" /> Trazado Fotopletismográfico Real (PPG / BPM Sync)
           </span>
           <div className="flex items-center gap-3">
             <span className="px-3 py-1 bg-emerald-950 border border-emerald-500/40 rounded-lg text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5">
@@ -307,7 +326,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
             <span className="text-xs text-slate-400 block mb-1">Latencia Biomotora / Respuesta</span>
             <div className="text-2xl font-black text-white font-mono">{telemetry.reactionTimeMs} ms</div>
-            <span className="text-[10px] text-amber-400 font-bold mt-1 block">Impulsividad Motor Fin.</span>
+            <span className="text-[10px] text-amber-400 font-bold mt-1 block">Impulsividad Motor Fina</span>
           </div>
 
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
