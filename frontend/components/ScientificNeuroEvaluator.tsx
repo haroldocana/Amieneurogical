@@ -142,7 +142,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     return () => clearInterval(spectralInterval);
   }, [connectionStatus.connected]);
 
-  // 3. MOTOR DE DIBUJO PPG OSCILOSCOPIO + TACOGRAMA
+  // 3. MOTOR DE DIBUJO LIMPIO SIN ARTEFACTOS
   useEffect(() => {
     const ppgCanvas = ppgCanvasRef.current;
     const tachoCanvas = tachoCanvasRef.current;
@@ -159,25 +159,52 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     let lastRender = performance.now();
 
     const renderLoop = (now: number) => {
-      const deltaSec = (now - lastRender) / 1000;
+      const deltaSec = Math.min((now - lastRender) / 1000, 0.1);
       lastRender = now;
 
-      // A) RENDER PPG OSCILOSCOPIO (25 mm/s)
       const widthPpg = ppgCanvas.width;
       const heightPpg = ppgCanvas.height;
-      const speedPxPerSec = 140; 
-
-      sweepXRef.current = (sweepXRef.current + speedPxPerSec * deltaSec) % widthPpg;
-      const currentX = sweepXRef.current;
 
       const packet = latestTelemetryRef.current;
       const isConnected = connectionStatus.connected;
       const bpm = isConnected ? packet.heartRateBpm : 0;
+      const hasPulse = isConnected && bpm > 30;
 
-      let yVal = heightPpg / 2;
+      // A) RENDER PPG OSCILOSCOPIO
+      if (!hasPulse) {
+        // MODO STANDBY: Limpieza total sin rayas verticales
+        ctxPpg.fillStyle = '#020617';
+        ctxPpg.fillRect(0, 0, widthPpg, heightPpg);
 
-      // Dibujar latidos únicamente si hay pulso real > 30 BPM
-      if (isConnected && bpm > 30) {
+        // Rejilla Médica
+        ctxPpg.strokeStyle = '#0f172a';
+        ctxPpg.lineWidth = 0.5;
+        for (let y = 0; y < heightPpg; y += 15) {
+          ctxPpg.beginPath();
+          ctxPpg.moveTo(0, y);
+          ctxPpg.lineTo(widthPpg, y);
+          ctxPpg.stroke();
+        }
+        for (let x = 0; x < widthPpg; x += 30) {
+          ctxPpg.beginPath();
+          ctxPpg.moveTo(x, 0);
+          ctxPpg.lineTo(x, heightPpg);
+          ctxPpg.stroke();
+        }
+
+        // Flatline Central
+        ctxPpg.strokeStyle = '#334155';
+        ctxPpg.lineWidth = 1.5;
+        ctxPpg.beginPath();
+        ctxPpg.moveTo(0, heightPpg / 2);
+        ctxPpg.lineTo(widthPpg, heightPpg / 2);
+        ctxPpg.stroke();
+      } else {
+        // MODO BARRIDO EN VIVO (Sweep 25 mm/s)
+        const speedPxPerSec = 140; 
+        sweepXRef.current = (sweepXRef.current + speedPxPerSec * deltaSec) % widthPpg;
+        const currentX = sweepXRef.current;
+
         const beatsPerSec = bpm / 60;
         beatPhase = (beatPhase + deltaSec * beatsPerSec) % 1.0;
         breathPhase = (breathPhase + deltaSec * 0.25 * 2 * Math.PI) % (2 * Math.PI);
@@ -200,46 +227,45 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           normalizedPulse = Math.random() * 0.02;
         }
 
-        yVal = (heightPpg * 0.72) - (normalizedPulse * (heightPpg * 0.48)) + baselineDrift;
-      } else {
-        // FLATLINE ABSOLUTO cuando se quita el anillo
-        yVal = heightPpg / 2;
-      }
+        const yVal = (heightPpg * 0.72) - (normalizedPulse * (heightPpg * 0.48)) + baselineDrift;
 
-      // Borrador de barrido
-      const eraseWidth = 24;
-      ctxPpg.fillStyle = '#020617';
-      ctxPpg.fillRect(currentX, 0, eraseWidth, heightPpg);
+        // Limpieza de bloque frontal
+        const eraseWidth = 20;
+        ctxPpg.fillStyle = '#020617';
+        ctxPpg.fillRect(currentX, 0, eraseWidth, heightPpg);
 
-      // Re-dibujar malla médica
-      ctxPpg.strokeStyle = '#0f172a';
-      ctxPpg.lineWidth = 0.5;
-      for (let gridY = 0; gridY < heightPpg; gridY += 15) {
+        ctxPpg.strokeStyle = '#0f172a';
+        ctxPpg.lineWidth = 0.5;
+        for (let y = 0; y < heightPpg; y += 15) {
+          ctxPpg.beginPath();
+          ctxPpg.moveTo(currentX, y);
+          ctxPpg.lineTo(currentX + eraseWidth, y);
+          ctxPpg.stroke();
+        }
+
+        const prevX = (currentX - speedPxPerSec * deltaSec + widthPpg) % widthPpg;
+        const prevY = waveformBufferRef.current[Math.floor(prevX)] || (heightPpg / 2);
+        waveformBufferRef.current[Math.floor(currentX)] = yVal;
+
+        if (Math.abs(currentX - prevX) < 50) {
+          ctxPpg.save();
+          ctxPpg.shadowBlur = 6;
+          ctxPpg.shadowColor = '#10b981';
+          ctxPpg.strokeStyle = '#34d399';
+          ctxPpg.lineWidth = 2.0;
+          ctxPpg.beginPath();
+          ctxPpg.moveTo(prevX, prevY);
+          ctxPpg.lineTo(currentX, yVal);
+          ctxPpg.stroke();
+          ctxPpg.restore();
+        }
+
+        // Puntero de barrido
+        ctxPpg.fillStyle = '#67e8f9';
         ctxPpg.beginPath();
-        ctxPpg.moveTo(currentX, gridY);
-        ctxPpg.lineTo(currentX + eraseWidth, gridY);
-        ctxPpg.stroke();
+        ctxPpg.arc(currentX, yVal, 3, 0, Math.PI * 2);
+        ctxPpg.fill();
       }
-
-      // Trazado de línea
-      const prevX = (currentX - speedPxPerSec * deltaSec + widthPpg) % widthPpg;
-      const prevY = waveformBufferRef.current[Math.floor(prevX)] || (heightPpg / 2);
-      waveformBufferRef.current[Math.floor(currentX)] = yVal;
-
-      ctxPpg.save();
-      ctxPpg.shadowBlur = (isConnected && bpm > 30) ? 7 : 0;
-      ctxPpg.shadowColor = (isConnected && bpm > 30) ? '#10b981' : '#f59e0b';
-      ctxPpg.strokeStyle = (isConnected && bpm > 30) ? '#34d399' : '#334155';
-      ctxPpg.lineWidth = 2.0;
-      ctxPpg.beginPath();
-      ctxPpg.moveTo(prevX, prevY);
-      ctxPpg.lineTo(currentX, yVal);
-      ctxPpg.stroke();
-      ctxPpg.restore();
-
-      // Cursor vertical
-      ctxPpg.fillStyle = '#67e8f9';
-      ctxPpg.fillRect(currentX + 2, 0, 2, heightPpg);
 
       // B) RENDER TACOGRAMA
       const widthTacho = tachoCanvas.width;
@@ -258,7 +284,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         ctxTacho.stroke();
       });
 
-      const rrSeries = (isConnected && bpm > 30) ? rrHistoryRef.current : [];
+      const rrSeries = hasPulse ? rrHistoryRef.current : [];
       if (rrSeries.length > 1) {
         ctxTacho.strokeStyle = '#a855f7';
         ctxTacho.lineWidth = 2;
@@ -382,7 +408,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
                   {hasActivePulse 
                     ? `HARDWARE BLE EN VIVO (${connectionStatus.protocol})` 
                     : connectionStatus.connected 
-                      ? 'ANILLO OFF-BODY / SIN CONTACTO' 
+                      ? 'ANILLO / BANDA OFF-BODY (SIN CONTACTO)' 
                       : 'SIN DISPOSITIVO CONECTADO'}
                 </span>
               </div>
@@ -431,7 +457,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               onClick={handleConnectBluetooth}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 rounded-lg text-xs font-bold transition"
             >
-              <Bluetooth className="w-3.5 h-3.5" /> Vincular BLE (COLMI / Polar)
+              <Bluetooth className="w-3.5 h-3.5" /> Vincular BLE (GEOID / COLMI / Polar)
             </button>
 
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
