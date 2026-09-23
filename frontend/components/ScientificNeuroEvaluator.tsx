@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 interface ScientificNeuroEvaluatorProps {
-  patient: PatientRecord;
+  patient?: PatientRecord;
   onUpdatePatientData?: (updated: Partial<PatientRecord>) => void;
 }
 
@@ -48,13 +48,13 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   const sweepXRef = useRef<number>(0);
   const waveformBufferRef = useRef<number[]>([]);
 
-  // Búfer para cálculo espectral y Tacograma R-R (Móvil 50 latidos)
+  // Búfer para cálculo espectral y Tacograma R-R
   const rrHistoryRef = useRef<number[]>([]);
 
   const [packetRateHz, setPacketRateHz] = useState<number>(0);
   const [sqiPct, setSqiPct] = useState<number>(0);
 
-  // Dominio de Frecuencia Espectral Dinámico
+  // Dominio de Frecuencia Espectral
   const [spectralPower, setSpectralPower] = useState({
     lfPower: 0,
     hfPower: 0,
@@ -67,10 +67,11 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     const unsubData = telemetryService.subscribeData((packet) => {
       latestTelemetryRef.current = packet;
 
-      // Almacenar serie temporal RR solo si hay conexión y frecuencia válida
-      if (packet.rrIntervalMs > 0 && connectionStatus.connected) {
+      if (packet.heartRateBpm > 30 && packet.rrIntervalMs > 0 && connectionStatus.connected) {
         rrHistoryRef.current.push(packet.rrIntervalMs);
         if (rrHistoryRef.current.length > 50) rrHistoryRef.current.shift();
+      } else if (packet.heartRateBpm === 0) {
+        rrHistoryRef.current = [];
       }
     });
 
@@ -87,12 +88,14 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     };
   }, [connectionStatus.connected]);
 
-  // 2. MOTOR ESPECTRAL DINÁMICO & TACOGRAMA (Cálculo Frecuencial LF/HF y RMSSD)
+  // 2. MOTOR ESPECTRAL DINÁMICO & TACOGRAMA
   useEffect(() => {
     const spectralInterval = setInterval(() => {
-      if (!connectionStatus.connected) {
+      const packet = latestTelemetryRef.current;
+
+      if (!connectionStatus.connected || packet.heartRateBpm <= 30) {
         setDisplayTelemetry({
-          ...latestTelemetryRef.current,
+          ...packet,
           heartRateBpm: 0,
           hrvRmssdMs: 0,
           gsrMicroSiemens: 0
@@ -103,7 +106,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         return;
       }
 
-      const packet = latestTelemetryRef.current;
       setDisplayTelemetry({ ...packet });
 
       const rrSeries = rrHistoryRef.current;
@@ -114,11 +116,9 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
         const hrvFactor = packet.hrvRmssdMs;
         
-        // HF (Alta frecuencia: modulación respiratoria vagal rápida)
         let calculatedHf = Math.round(35 + (hrvFactor * 0.45) - (stdDev * 0.2));
         calculatedHf = Math.min(82, Math.max(18, calculatedHf));
 
-        // LF (Baja frecuencia: tono simpático barorreflejo)
         let calculatedLf = 100 - calculatedHf;
         let ratio = Number((calculatedLf / calculatedHf).toFixed(2));
         let peakHz = Number((packet.heartRateBpm / 60).toFixed(2));
@@ -142,7 +142,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     return () => clearInterval(spectralInterval);
   }, [connectionStatus.connected]);
 
-  // 3. MOTOR DE DIBUJO DUAL: PPG ANATÓMICO (Sweep Mode) + TACOGRAMA R-R (Canvas)
+  // 3. MOTOR DE DIBUJO PPG OSCILOSCOPIO + TACOGRAMA
   useEffect(() => {
     const ppgCanvas = ppgCanvasRef.current;
     const tachoCanvas = tachoCanvasRef.current;
@@ -162,9 +162,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       const deltaSec = (now - lastRender) / 1000;
       lastRender = now;
 
-      // ------------------------------------------------------------------
-      // A) RENDER PPG OSCILOSCOPIO (Velocidad Estándar 25 mm/s = 140 px/s)
-      // ------------------------------------------------------------------
+      // A) RENDER PPG OSCILOSCOPIO (25 mm/s)
       const widthPpg = ppgCanvas.width;
       const heightPpg = ppgCanvas.height;
       const speedPxPerSec = 140; 
@@ -178,6 +176,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
       let yVal = heightPpg / 2;
 
+      // Dibujar latidos únicamente si hay pulso real > 30 BPM
       if (isConnected && bpm > 30) {
         const beatsPerSec = bpm / 60;
         beatPhase = (beatPhase + deltaSec * beatsPerSec) % 1.0;
@@ -203,16 +202,16 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
         yVal = (heightPpg * 0.72) - (normalizedPulse * (heightPpg * 0.48)) + baselineDrift;
       } else {
-        // Línea plana absoluta (Flatline) cuando no hay conexión
+        // FLATLINE ABSOLUTO cuando se quita el anillo
         yVal = heightPpg / 2;
       }
 
-      // Borrador gradual de barrido
+      // Borrador de barrido
       const eraseWidth = 24;
       ctxPpg.fillStyle = '#020617';
       ctxPpg.fillRect(currentX, 0, eraseWidth, heightPpg);
 
-      // Re-dibujar Malla Médica en borrador
+      // Re-dibujar malla médica
       ctxPpg.strokeStyle = '#0f172a';
       ctxPpg.lineWidth = 0.5;
       for (let gridY = 0; gridY < heightPpg; gridY += 15) {
@@ -222,14 +221,14 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         ctxPpg.stroke();
       }
 
-      // Trazado continuo
+      // Trazado de línea
       const prevX = (currentX - speedPxPerSec * deltaSec + widthPpg) % widthPpg;
       const prevY = waveformBufferRef.current[Math.floor(prevX)] || (heightPpg / 2);
       waveformBufferRef.current[Math.floor(currentX)] = yVal;
 
       ctxPpg.save();
       ctxPpg.shadowBlur = (isConnected && bpm > 30) ? 7 : 0;
-      ctxPpg.shadowColor = isConnected ? '#10b981' : '#f59e0b';
+      ctxPpg.shadowColor = (isConnected && bpm > 30) ? '#10b981' : '#f59e0b';
       ctxPpg.strokeStyle = (isConnected && bpm > 30) ? '#34d399' : '#334155';
       ctxPpg.lineWidth = 2.0;
       ctxPpg.beginPath();
@@ -238,20 +237,17 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       ctxPpg.stroke();
       ctxPpg.restore();
 
-      // Cursor de Lectura Vertical
+      // Cursor vertical
       ctxPpg.fillStyle = '#67e8f9';
       ctxPpg.fillRect(currentX + 2, 0, 2, heightPpg);
 
-      // ------------------------------------------------------------------
-      // B) RENDER TACOGRAMA (GRÁFICA DE INTERVALOS R-R: 600ms - 1200ms)
-      // ------------------------------------------------------------------
+      // B) RENDER TACOGRAMA
       const widthTacho = tachoCanvas.width;
       const heightTacho = tachoCanvas.height;
 
       ctxTacho.fillStyle = '#020617';
       ctxTacho.fillRect(0, 0, widthTacho, heightTacho);
 
-      // Líneas de referencia horizontal (600, 800, 1000, 1200 ms)
       ctxTacho.strokeStyle = '#1e293b';
       ctxTacho.lineWidth = 1;
       [700, 800, 900, 1000, 1100].forEach((ms) => {
@@ -262,8 +258,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         ctxTacho.stroke();
       });
 
-      // Trazado paramétrico de puntos R-R solo si hay datos activos
-      const rrSeries = isConnected ? rrHistoryRef.current : [];
+      const rrSeries = (isConnected && bpm > 30) ? rrHistoryRef.current : [];
       if (rrSeries.length > 1) {
         ctxTacho.strokeStyle = '#a855f7';
         ctxTacho.lineWidth = 2;
@@ -278,7 +273,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         });
         ctxTacho.stroke();
 
-        // Nube de puntos de latidos
         rrSeries.forEach((rr, idx) => {
           const x = idx * stepX;
           const y = heightTacho - Math.max(0, Math.min(heightTacho, ((rr - 600) / 600) * heightTacho));
@@ -299,7 +293,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     };
   }, [connectionStatus.connected]);
 
-  // HANDLERS DE HARDWARE
+  // HANDLERS
   const handleConnectUsb = async () => {
     const success = await telemetryService.connectUsb();
     setNotificationMsg(success ? 'Hardware USB Serial enlazado.' : 'No se seleccionó dispositivo USB.');
@@ -329,8 +323,8 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   };
 
   const handleTransferToGlobalRecord = () => {
-    if (onUpdatePatientData) {
-      const hrvVal = connectionStatus.connected ? displayTelemetry.hrvRmssdMs : 0;
+    if (onUpdatePatientData && patient) {
+      const hrvVal = (connectionStatus.connected && displayTelemetry.heartRateBpm > 30) ? displayTelemetry.hrvRmssdMs : 0;
       onUpdatePatientData({
         multisensoryHardware: {
           ...patient.multisensoryHardware,
@@ -341,7 +335,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           touchTapLatencyCompensatedMs: connectionStatus.connected ? displayTelemetry.touchTapLatencyMs : 0,
           microExpressionState: hrvVal < 25 && hrvVal > 0 
             ? 'Inhibición Vagal / Estrés Agudo' 
-            : connectionStatus.connected ? 'Regulación Parasimpática Óptima' : 'Sin Registro'
+            : hrvVal > 0 ? 'Regulación Parasimpática Óptima' : 'Sin Registro'
         },
         neuromotorBiomarkers: {
           reactionTimeMs: connectionStatus.connected ? displayTelemetry.reactionTimeMs : 0,
@@ -356,39 +350,40 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   };
 
   const isRealHardwareConnected = connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED';
+  const hasActivePulse = isRealHardwareConnected && displayTelemetry.heartRateBpm > 30;
 
   return (
     <div className="space-y-6 font-sans">
       
-      {/* 1. CABECERA DE CONEXIÓN Y ESTADO */}
+      {/* 1. CABECERA */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className={`p-3 rounded-xl text-white shadow-lg ${
-              isRealHardwareConnected 
+              hasActivePulse 
                 ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/20' 
                 : connectionStatus.connected 
                   ? 'bg-gradient-to-tr from-amber-600 to-orange-600 shadow-amber-500/20'
                   : 'bg-slate-800 shadow-none'
             }`}>
-              <Cpu className={`w-6 h-6 ${connectionStatus.connected ? 'animate-pulse' : 'text-slate-500'}`} />
+              <Cpu className={`w-6 h-6 ${hasActivePulse ? 'animate-pulse' : 'text-slate-500'}`} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white">ScientificNeuroEvaluator • Monitor Clínico VFC</h2>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
-                  isRealHardwareConnected
+                  hasActivePulse
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
                     : connectionStatus.connected
                       ? 'bg-amber-950 text-amber-300 border-amber-500/40'
                       : 'bg-slate-950 text-slate-400 border-slate-800'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${isRealHardwareConnected ? 'bg-emerald-400 animate-ping' : connectionStatus.connected ? 'bg-amber-400' : 'bg-slate-600'}`} />
-                  {isRealHardwareConnected 
+                  <span className={`w-2 h-2 rounded-full ${hasActivePulse ? 'bg-emerald-400 animate-ping' : connectionStatus.connected ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                  {hasActivePulse 
                     ? `HARDWARE BLE EN VIVO (${connectionStatus.protocol})` 
                     : connectionStatus.connected 
-                      ? 'MODO SIMULACIÓN BIOMÉTRICA' 
-                      : 'SIN DISPOSITIVO CONECTADO (FLATLINE)'}
+                      ? 'ANILLO OFF-BODY / SIN CONTACTO' 
+                      : 'SIN DISPOSITIVO CONECTADO'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -418,7 +413,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
         </div>
 
-        {/* CONTROLES DIRECTOS DE PUERTO */}
+        {/* CONTROLES PUERTO */}
         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
             <Gauge className="w-4 h-4 text-cyan-400" /> Conectar Puerto de Hardware:
@@ -471,7 +466,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         )}
       </div>
 
-      {/* 2. MÓDULO 1: OSCILOSCOPIO FOTOPLETISEMOGRÁFICO PPG (Sweep 25 mm/s) */}
+      {/* 2. MÓDULO 1: PPG OSCILOSCOPIO */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-2">
@@ -479,14 +474,14 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </span>
           <div className="flex items-center gap-3">
             <span className="px-3 py-1 bg-emerald-950 border border-emerald-500/40 rounded-lg text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5 tabular-nums">
-              <Heart className={`w-3.5 h-3.5 text-emerald-400 ${connectionStatus.connected ? 'animate-ping' : ''}`} />
-              {connectionStatus.connected ? displayTelemetry.heartRateBpm : 0} BPM
+              <Heart className={`w-3.5 h-3.5 text-emerald-400 ${hasActivePulse ? 'animate-ping' : ''}`} />
+              {hasActivePulse ? displayTelemetry.heartRateBpm : 0} BPM
             </span>
             <span className="px-3 py-1 bg-cyan-950 border border-cyan-500/40 rounded-lg text-cyan-300 text-xs font-mono font-bold tabular-nums">
-              HRV RMSSD: {connectionStatus.connected ? displayTelemetry.hrvRmssdMs : 0} ms
+              HRV RMSSD: {hasActivePulse ? displayTelemetry.hrvRmssdMs : 0} ms
             </span>
             <span className="px-3 py-1 bg-indigo-950 border border-indigo-500/40 rounded-lg text-indigo-300 text-xs font-mono font-bold tabular-nums">
-              GSR: {connectionStatus.connected ? displayTelemetry.gsrMicroSiemens.toFixed(2) : '0.00'} µS
+              GSR: {hasActivePulse ? displayTelemetry.gsrMicroSiemens.toFixed(2) : '0.00'} µS
             </span>
           </div>
         </div>
@@ -501,14 +496,14 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 3. MÓDULO 2: TACOGRAMA EN TIEMPO REAL (Intervalos R-R: 600 - 1200 ms) */}
+      {/* 3. MÓDULO 2: TACOGRAMA */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-purple-400" /> Tacograma Paramétrico (Intervalos R-R en milisegundos)
           </span>
           <span className="text-xs font-mono font-bold text-purple-300 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg tabular-nums">
-            Último R-R: {connectionStatus.connected ? (rrHistoryRef.current[rrHistoryRef.current.length - 1] || 0) : 0} ms
+            Último R-R: {hasActivePulse ? (rrHistoryRef.current[rrHistoryRef.current.length - 1] || 0) : 0} ms
           </span>
         </div>
 
@@ -522,7 +517,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 4. MÓDULO 3: ESPECTRO DE FRECUENCIAS LF/HF Y BIOFEEDBACK AUTONÓMICO */}
+      {/* 4. MÓDULO 3: ESPECTRO DE FRECUENCIAS */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
@@ -535,7 +530,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           
-          {/* Tono Simpático (LF) */}
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
             <div className="flex justify-between items-center text-xs">
               <span className="text-amber-400 font-bold">Baja Frecuencia (LF: 0.04 - 0.15 Hz)</span>
@@ -550,7 +544,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             <span className="text-[10px] text-slate-500 block">Predominio Simpático / Estrés</span>
           </div>
 
-          {/* Tono Vagal / Parasimpático (HF) */}
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
             <div className="flex justify-between items-center text-xs">
               <span className="text-teal-400 font-bold">Alta Frecuencia (HF: 0.15 - 0.40 Hz)</span>
@@ -565,7 +558,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             <span className="text-[10px] text-slate-500 block">Modulación Vagal / Recuperación</span>
           </div>
 
-          {/* Balance Simpáticovagal LF/HF */}
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
             <div className="flex justify-between items-center">
               <span className="text-xs text-slate-400">Balance Simpáticovagal (LF/HF)</span>
@@ -573,9 +565,9 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             </div>
             <div className="text-2xl font-black text-cyan-400 font-mono tabular-nums">{spectralPower.lfHfRatio.toFixed(2)}</div>
             <span className={`text-[10px] font-bold block ${
-              !connectionStatus.connected ? 'text-slate-500' : spectralPower.lfHfRatio > 1.2 ? 'text-amber-400' : 'text-emerald-400'
+              !hasActivePulse ? 'text-slate-500' : spectralPower.lfHfRatio > 1.2 ? 'text-amber-400' : 'text-emerald-400'
             }`}>
-              {!connectionStatus.connected ? 'Sin Dispositivo Conectado' : spectralPower.lfHfRatio > 1.2 ? 'Predominio Simpático Activo' : 'Equilibrio Autonómico Óptimo'}
+              {!hasActivePulse ? 'Sin Pulso Activo' : spectralPower.lfHfRatio > 1.2 ? 'Predominio Simpático Activo' : 'Equilibrio Autonómico Óptimo'}
             </span>
           </div>
 
