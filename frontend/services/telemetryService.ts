@@ -1,30 +1,18 @@
 // ============================================================================
-// AMIE TELEMETRY SERVICE - MOTOR DE STREAMING Y SERIE TEMPORAL RR
+// AMIE TELEMETRY SERVICE - STRICT HARDWARE MODE
 // ============================================================================
 
 export type TelemetryProtocol = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED' | 'DISCONNECTED';
 
-export type DeviceVendorProfile = 
-  | 'GENERIC_SERIAL'
-  | 'ESP32_CUSTOM'
-  | 'POLAR_H10'
-  | 'COLMI_SMART_RING'
-  | 'OPENBCI_CYTON'
-  | 'OPENBCI_CYTON_DAISY'
-  | 'BITALINO_PLUX'
-  | 'GENERIC_BLE_HRM';
-
 export interface PrecisionTelemetryPacket {
-  vendor: DeviceVendorProfile;
   reactionTimeMs: number;
   handGripPressureKg: number;
   touchTapLatencyMs: number;
   heartRateBpm: number;
   hrvRmssdMs: number;
   gsrMicroSiemens: number;
-  eegChannelsRaw: number[];
+  rrIntervalMs: number; // Fundamental para dibujar la onda real
   timestamp: number;
-  rrIntervalMs: number; // Intervalo R-R instantáneo para cálculo espectral
 }
 
 type TelemetryCallback = (data: PrecisionTelemetryPacket) => void;
@@ -32,12 +20,10 @@ type StatusCallback = (status: {
   protocol: TelemetryProtocol; 
   connected: boolean; 
   deviceName: string; 
-  vendor: DeviceVendorProfile;
 }) => void;
 
 class TelemetryManager {
   private activeProtocol: TelemetryProtocol = 'DISCONNECTED';
-  private activeVendor: DeviceVendorProfile = 'GENERIC_SERIAL';
   private isConnected: boolean = false;
   private deviceName: string = 'Sin Dispositivo Conectado';
 
@@ -47,31 +33,26 @@ class TelemetryManager {
   private bleServer: any = null;
   private webSocket: WebSocket | null = null;
   
-  private activeStreamTimer: any = null;
-  private gripZeroOffsetKg: number = 0;
+  // Timer de simulación (solo se activa explícitamente)
+  private simulationInterval: any = null;
 
-  // Variables de señal fisiológica con fluctuación orgánica
-  private targetBpm: number = 72;
-  private currentBpm: number = 72;
-  private targetHrv: number = 48;
-  private currentHrv: number = 48;
-  private currentGsr: number = 3.22;
-  private lastRaw16Eeg: number[] = new Array(16).fill(0);
+  // Buffer de cálculo clínico
+  private gripZeroOffsetKg: number = 0;
+  private lastBeatTimestamp: number = 0;
+  private rrHistoryMs: number[] = [];
 
   private dataListeners: Set<TelemetryCallback> = new Set();
   private statusListeners: Set<StatusCallback> = new Set();
 
   private currentPacket: PrecisionTelemetryPacket = {
-    vendor: 'GENERIC_SERIAL',
-    reactionTimeMs: 195,
-    handGripPressureKg: 32.0,
-    touchTapLatencyMs: 180,
-    heartRateBpm: 72,
-    hrvRmssdMs: 48,
-    gsrMicroSiemens: 3.22,
-    eegChannelsRaw: new Array(16).fill(0),
-    timestamp: Date.now(),
-    rrIntervalMs: 833
+    reactionTimeMs: 0,
+    handGripPressureKg: 0,
+    touchTapLatencyMs: 0,
+    heartRateBpm: 0,
+    hrvRmssdMs: 0,
+    gsrMicroSiemens: 0,
+    rrIntervalMs: 0,
+    timestamp: Date.now()
   };
 
   public subscribeData(callback: TelemetryCallback): () => void {
@@ -90,69 +71,93 @@ class TelemetryManager {
     this.statusListeners.forEach(fn => fn({
       protocol: this.activeProtocol,
       connected: this.isConnected,
-      deviceName: this.deviceName,
-      vendor: this.activeVendor
+      deviceName: this.deviceName
     }));
   }
 
-  public async connectBluetooth(vendorProfile: DeviceVendorProfile = 'COLMI_SMART_RING'): Promise<boolean> {
-    if (typeof window === 'undefined' || !('bluetooth' in navigator)) return false;
+  // --------------------------------------------------------------------------
+  // 1. CONEXIÓN BLUETOOTH (POLAR / COLMI)
+  // --------------------------------------------------------------------------
+  public async connectBluetooth(): Promise<boolean> {
+    if (typeof window === 'undefined' || !('bluetooth' in navigator)) {
+      alert('Navegador incompatible con Web Bluetooth API.');
+      return false;
+    }
 
     try {
       this.disconnect();
-      const optionalServices: (string | number)[] = [
-        'heart_rate', 'battery_service', 'health_thermometer',
-        0x180D, 0x180F, 0x2A37, 0xFFE0, 0xFFF0, 0xFEE0, 0xFEE7,
-        '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-      ];
+      
+      const bleDevice = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['heart_rate'] // Estándar GATT 0x180D
+      });
 
-      this.bleDevice = await (navigator as any).bluetooth.requestDevice({ acceptAllDevices: true, optionalServices });
-      this.bleServer = await this.bleDevice.gatt.connect();
+      this.bleServer = await bleDevice.gatt.connect();
+      this.bleDevice = bleDevice;
       this.activeProtocol = 'BLUETOOTH';
-      this.activeVendor = vendorProfile;
       this.isConnected = true;
-      this.deviceName = this.bleDevice.name || `Sensor BLE (${vendorProfile})`;
+      this.deviceName = bleDevice.name || 'Sensor BLE Biométrico';
       this.notifyStatus();
 
-      const services = await this.bleServer.getPrimaryServices();
-      for (const service of services) {
-        try {
-          const chars = await service.getCharacteristics();
-          for (const char of chars) {
-            if (char.properties.notify || char.properties.indicate) {
-              await char.startNotifications();
-              char.addEventListener('characteristicvaluechanged', (e: any) => this.parseBLEPayload(e.target.value));
-            }
-          }
-        } catch (e) {}
-      }
+      const service = await this.bleServer.getPrimaryService('heart_rate');
+      const characteristic = await service.getCharacteristic('heart_rate_measurement');
+      
+      await characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', (e: any) => {
+        const dataView = e.target.value;
+        const flags = dataView.getUint8(0);
+        // Verificar si los BPM vienen en 8 o 16 bits
+        const bpm = (flags & 0x1) ? dataView.getUint16(1, true) : dataView.getUint8(1);
+        
+        let rrValue = 0;
+        // Si el sensor provee Intervalo R-R (Flag bit 4)
+        if (flags & 0x10) {
+          const rrIndex = (flags & 0x1) ? 3 : 2;
+          rrValue = dataView.getUint16(rrIndex, true); // En formato 1/1024 seg
+          rrValue = Math.round((rrValue / 1024) * 1000); // Convertir a ms
+        } else if (bpm > 0) {
+          // Fallback matemático si el hardware no da R-R nativo
+          rrValue = Math.round(60000 / bpm);
+        }
 
-      this.bleDevice.addEventListener('gattserverdisconnected', () => this.disconnect());
-      this.startActiveStreamLoop();
+        this.processRealHardwareData(bpm, rrValue, this.currentPacket.gsrMicroSiemens);
+      });
+
+      bleDevice.addEventListener('gattserverdisconnected', () => {
+        this.disconnect();
+      });
+
       return true;
     } catch (err) {
+      console.error('Fallo en enlace BLE:', err);
       this.disconnect();
       return false;
     }
   }
 
-  public async connectUsb(vendorProfile: DeviceVendorProfile = 'ESP32_CUSTOM'): Promise<boolean> {
-    if (typeof window === 'undefined' || !('serial' in navigator)) return false;
+  // --------------------------------------------------------------------------
+  // 2. CONEXIÓN USB SERIAL (ESP32)
+  // --------------------------------------------------------------------------
+  public async connectUsb(): Promise<boolean> {
+    if (typeof window === 'undefined' || !('serial' in navigator)) {
+      alert('Navegador incompatible con Web Serial API.');
+      return false;
+    }
+
     try {
       this.disconnect();
       this.serialPort = await (navigator as any).serial.requestPort();
       await this.serialPort.open({ baudRate: 115200 });
 
       this.activeProtocol = 'USB';
-      this.activeVendor = vendorProfile;
       this.isConnected = true;
-      this.deviceName = `${vendorProfile} (USB Directo)`;
+      this.deviceName = 'Microcontrolador ESP32 (USB)';
       this.notifyStatus();
 
       this.startSerialReadLoop();
-      this.startActiveStreamLoop();
       return true;
     } catch (err) {
+      console.error('Error USB Serial:', err);
       this.disconnect();
       return false;
     }
@@ -162,8 +167,8 @@ class TelemetryManager {
     const textDecoder = new TextDecoderStream();
     this.serialPort.readable.pipeTo(textDecoder.writable);
     this.serialReader = textDecoder.readable.getReader();
-    let buffer = '';
 
+    let buffer = '';
     try {
       while (this.isConnected && this.activeProtocol === 'USB') {
         const { value, done } = await this.serialReader.read();
@@ -172,7 +177,32 @@ class TelemetryManager {
           buffer += value;
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
-          for (const line of lines) this.parseTextPayload(line.trim());
+          
+          for (const line of lines) {
+            const text = line.trim();
+            if (!text) continue;
+
+            // Intenta parsear JSON serial
+            if (text.startsWith('{')) {
+              try {
+                const json = JSON.parse(text);
+                const bpm = Number(json.bpm || json.hr) || 0;
+                const rr = Number(json.rr || json.ibi) || (bpm > 0 ? 60000 / bpm : 0);
+                const gsr = Number(json.gsr || json.eda) || this.currentPacket.gsrMicroSiemens;
+                
+                this.processRealHardwareData(bpm, rr, gsr);
+              } catch (e) {}
+            } 
+            // Intenta parsear CSV (BPM, RR, GSR)
+            else if (text.includes(',')) {
+              const parts = text.split(',');
+              const bpm = parseFloat(parts[0]) || 0;
+              const rr = parseFloat(parts[1]) || (bpm > 0 ? 60000 / bpm : 0);
+              const gsr = parseFloat(parts[2]) || this.currentPacket.gsrMicroSiemens;
+              
+              this.processRealHardwareData(bpm, rr, gsr);
+            }
+          }
         }
       }
     } catch (err) {
@@ -180,135 +210,124 @@ class TelemetryManager {
     }
   }
 
-  public connectWifi(ipAddress: string = '192.168.1.105', port: number = 8080, vendorProfile: DeviceVendorProfile = 'ESP32_CUSTOM'): boolean {
+  // --------------------------------------------------------------------------
+  // 3. CONEXIÓN WI-FI WEBSOCKET
+  // --------------------------------------------------------------------------
+  public connectWifi(ipAddress: string) {
+    this.disconnect();
     try {
-      this.disconnect();
-      this.webSocket = new WebSocket(`ws://${ipAddress}:${port}`);
+      this.webSocket = new WebSocket(`ws://${ipAddress}:8080`);
       this.webSocket.onopen = () => {
         this.activeProtocol = 'WIFI';
-        this.activeVendor = vendorProfile;
         this.isConnected = true;
-        this.deviceName = `Socket Wi-Fi (${ipAddress})`;
+        this.deviceName = `Módulo TCP/IP (${ipAddress})`;
         this.notifyStatus();
-        this.startActiveStreamLoop();
       };
-      this.webSocket.onmessage = (event) => this.parseTextPayload(event.data);
+      this.webSocket.onmessage = (event) => {
+         try {
+           const json = JSON.parse(event.data);
+           const bpm = Number(json.bpm) || 0;
+           const rr = Number(json.rr) || (bpm > 0 ? 60000 / bpm : 0);
+           const gsr = Number(json.gsr) || this.currentPacket.gsrMicroSiemens;
+           this.processRealHardwareData(bpm, rr, gsr);
+         } catch(e) {}
+      };
       this.webSocket.onerror = () => this.disconnect();
       this.webSocket.onclose = () => this.disconnect();
-      return true;
-    } catch (err) {
+    } catch (e) {
       this.disconnect();
-      return false;
     }
   }
 
+  // --------------------------------------------------------------------------
+  // MOTOR DE CÁLCULO HRV REAL
+  // --------------------------------------------------------------------------
+  private processRealHardwareData(bpm: number, rrMs: number, gsrValue: number) {
+    if (bpm < 30 || bpm > 220) return; // Filtro de artefactos físicos
+
+    // Cálculo dinámico de HRV RMSSD usando los latidos REALES del sensor
+    this.rrHistoryMs.push(rrMs);
+    if (this.rrHistoryMs.length > 30) this.rrHistoryMs.shift();
+
+    let rmssd = 0;
+    if (this.rrHistoryMs.length > 2) {
+      let sumSquaredDiffs = 0;
+      for (let i = 0; i < this.rrHistoryMs.length - 1; i++) {
+        const diff = this.rrHistoryMs[i + 1] - this.rrHistoryMs[i];
+        sumSquaredDiffs += diff * diff;
+      }
+      rmssd = Math.round(Math.sqrt(sumSquaredDiffs / (this.rrHistoryMs.length - 1)));
+    }
+
+    this.currentPacket = {
+      ...this.currentPacket,
+      heartRateBpm: Math.round(bpm),
+      rrIntervalMs: Math.round(rrMs),
+      hrvRmssdMs: rmssd > 0 ? rmssd : this.currentPacket.hrvRmssdMs,
+      gsrMicroSiemens: Number(gsrValue.toFixed(2)),
+      timestamp: Date.now()
+    };
+
+    this.dataListeners.forEach(fn => fn(this.currentPacket));
+  }
+
+  // --------------------------------------------------------------------------
+  // 4. MODO SIMULACIÓN EXPLICITA
+  // --------------------------------------------------------------------------
   public enableSimulation() {
     this.disconnect();
     this.activeProtocol = 'SIMULATED';
-    this.activeVendor = 'GENERIC_SERIAL';
     this.isConnected = true;
-    this.deviceName = 'Sensor Virtual (Modo Simulación)';
+    this.deviceName = 'Generador Sintético AMIE';
     this.notifyStatus();
-    this.startActiveStreamLoop();
+
+    this.simulationInterval = setInterval(() => {
+      // Función matemática de prueba (solo corre si presionas el botón Simular)
+      const simBpm = 68 + Math.sin(Date.now() / 2000) * 8; 
+      const simRr = 60000 / simBpm;
+      const simGsr = 2.8 + Math.random() * 0.4;
+      this.processRealHardwareData(simBpm, simRr, simGsr);
+    }, 400); // 400ms = 2.5 Hz actualización
   }
 
-  private parseBLEPayload(dataView: DataView) {
-    const len = dataView.byteLength;
-    if (len === 0) return;
-
-    for (let i = 0; i < len; i++) {
-      const val = dataView.getUint8(i);
-      if (val >= 45 && val <= 190) {
-        this.targetBpm = val;
-        this.targetHrv = Math.round((60000 / val) * 0.07);
-        break;
-      }
-    }
-  }
-
-  private parseTextPayload(text: string) {
-    if (!text) return;
-    try {
-      if (text.startsWith('{') && text.endsWith('}')) {
-        const json = JSON.parse(text);
-        if (json.bpm) this.targetBpm = Number(json.bpm);
-        if (json.hrv) this.targetHrv = Number(json.hrv);
-        if (json.gsr) this.currentGsr = Number(json.gsr);
-        if (Array.isArray(json.eeg)) this.lastRaw16Eeg = json.eeg;
-      }
-    } catch (e) {}
-  }
-
-  private startActiveStreamLoop() {
-    if (this.activeStreamTimer) clearInterval(this.activeStreamTimer);
-
-    let timeStep = 0;
-
-    // Generador telemétrico de alta resolución (60 Hz)
-    this.activeStreamTimer = setInterval(() => {
-      if (!this.isConnected) return;
-
-      timeStep += 0.016;
-
-      // Variación autonómica natural (Arritmia Sinusal Respiratoria + Vasomoción Barorrefleja)
-      const rsaWander = Math.sin(2 * Math.PI * 0.25 * timeStep) * 3.5; // Modulación respiratoria (~15 respiraciones/min)
-      const baroWander = Math.cos(2 * Math.PI * 0.08 * timeStep) * 2.1; // Modulación barorrefleja LF (~0.08 Hz)
-
-      // Transición suave hacia el objetivo
-      this.currentBpm += ((this.targetBpm + rsaWander + baroWander) - this.currentBpm) * 0.05;
-      this.currentHrv += ((this.targetHrv + (rsaWander * 2)) - this.currentHrv) * 0.05;
-
-      const instantBpm = Math.max(45, Math.min(180, this.currentBpm));
-      const instantHrv = Math.max(12, Math.min(110, this.currentHrv));
-      const instantRr = Math.round(60000 / instantBpm);
-
-      this.currentPacket = {
-        vendor: this.activeVendor,
-        reactionTimeMs: 195,
-        handGripPressureKg: Math.max(0, Number((31.5 - this.gripZeroOffsetKg).toFixed(1))),
-        touchTapLatencyMs: 180,
-        heartRateBpm: Math.round(instantBpm),
-        hrvRmssdMs: Math.round(instantHrv),
-        gsrMicroSiemens: Number((this.currentGsr + Math.sin(timeStep * 0.5) * 0.08).toFixed(2)),
-        eegChannelsRaw: this.lastRaw16Eeg,
-        timestamp: Date.now(),
-        rrIntervalMs: instantRr
-      };
-
-      this.dataListeners.forEach(fn => fn(this.currentPacket));
-    }, 16);
-  }
-
+  // --------------------------------------------------------------------------
+  // LIMPIEZA ABSOLUTA
+  // --------------------------------------------------------------------------
   public disconnect() {
-    if (this.activeStreamTimer) clearInterval(this.activeStreamTimer);
-    if (this.serialReader) { try { this.serialReader.cancel(); } catch (e) {} this.serialReader = null; }
-    if (this.serialPort) { try { this.serialPort.close(); } catch (e) {} this.serialPort = null; }
-    if (this.bleServer && this.bleServer.connected) { try { this.bleServer.disconnect(); } catch (e) {} }
-    if (this.webSocket) { try { this.webSocket.close(); } catch (e) {} this.webSocket = null; }
+    if (this.simulationInterval) clearInterval(this.simulationInterval);
+    if (this.serialReader) try { this.serialReader.cancel(); } catch (e) {}
+    if (this.serialPort) try { this.serialPort.close(); } catch (e) {}
+    if (this.bleServer && this.bleServer.connected) try { this.bleServer.disconnect(); } catch (e) {}
+    if (this.webSocket) try { this.webSocket.close(); } catch (e) {}
+    
+    this.serialPort = null;
+    this.bleServer = null;
+    this.webSocket = null;
 
     this.activeProtocol = 'DISCONNECTED';
     this.isConnected = false;
     this.deviceName = 'Sin Dispositivo Conectado';
 
+    // Apaga (Flatline) todos los valores
     this.currentPacket = {
-      vendor: this.activeVendor,
       reactionTimeMs: 0,
       handGripPressureKg: 0,
       touchTapLatencyMs: 0,
       heartRateBpm: 0,
       hrvRmssdMs: 0,
       gsrMicroSiemens: 0,
-      eegChannelsRaw: new Array(16).fill(0),
-      timestamp: Date.now(),
-      rrIntervalMs: 0
+      rrIntervalMs: 0,
+      timestamp: Date.now()
     };
+    
+    this.rrHistoryMs = [];
 
     this.notifyStatus();
     this.dataListeners.forEach(fn => fn(this.currentPacket));
   }
 
   public executeZeroTare(): number {
-    this.gripZeroOffsetKg = 31.5;
+    this.gripZeroOffsetKg = this.currentPacket.handGripPressureKg;
     return this.gripZeroOffsetKg;
   }
 
