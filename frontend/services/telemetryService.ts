@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE TELEMETRY SERVICE - STRICT HARDWARE MODE
+// AMIE TELEMETRY SERVICE - STRICT HARDWARE MODE & OFF-BODY DETECTION
 // ============================================================================
 
 export type TelemetryProtocol = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED' | 'DISCONNECTED';
@@ -38,7 +38,6 @@ class TelemetryManager {
 
   // Buffer de cálculo clínico
   private gripZeroOffsetKg: number = 0;
-  private lastBeatTimestamp: number = 0;
   private rrHistoryMs: number[] = [];
 
   private dataListeners: Set<TelemetryCallback> = new Set();
@@ -76,7 +75,7 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // 1. CONEXIÓN BLUETOOTH (POLAR / COLMI)
+  // 1. CONEXIÓN BLUETOOTH CON FILTRO ANTI-FANTASMA (GATT OFF-BODY DETECT)
   // --------------------------------------------------------------------------
   public async connectBluetooth(): Promise<boolean> {
     if (typeof window === 'undefined' || !('bluetooth' in navigator)) {
@@ -106,17 +105,26 @@ class TelemetryManager {
       characteristic.addEventListener('characteristicvaluechanged', (e: any) => {
         const dataView = e.target.value;
         const flags = dataView.getUint8(0);
-        // Verificar si los BPM vienen en 8 o 16 bits
-        const bpm = (flags & 0x1) ? dataView.getUint16(1, true) : dataView.getUint8(1);
+        
+        // 🛡️ FILTRO 1: Detección de contacto con piel (GATT Bits 1 y 2)
+        // Bit 1 & Bit 2 = 0b10 (2): Sensor soportado pero SIN CONTACTO CON PIEL (Off-Body)
+        const sensorContactStatus = (flags >> 1) & 0x03;
+        if (sensorContactStatus === 2) {
+          // Anillo fuera del dedo -> Forzar Flatline inmediato
+          this.processRealHardwareData(0, 0, this.currentPacket.gsrMicroSiemens);
+          return;
+        }
+
+        // Extracción de BPM (8 o 16 bits)
+        let bpm = (flags & 0x1) ? dataView.getUint16(1, true) : dataView.getUint8(1);
         
         let rrValue = 0;
-        // Si el sensor provee Intervalo R-R (Flag bit 4)
+        // Intervalo R-R (Flag bit 4)
         if (flags & 0x10) {
           const rrIndex = (flags & 0x1) ? 3 : 2;
-          rrValue = dataView.getUint16(rrIndex, true); // En formato 1/1024 seg
+          rrValue = dataView.getUint16(rrIndex, true);
           rrValue = Math.round((rrValue / 1024) * 1000); // Convertir a ms
         } else if (bpm > 0) {
-          // Fallback matemático si el hardware no da R-R nativo
           rrValue = Math.round(60000 / bpm);
         }
 
@@ -182,7 +190,6 @@ class TelemetryManager {
             const text = line.trim();
             if (!text) continue;
 
-            // Intenta parsear JSON serial
             if (text.startsWith('{')) {
               try {
                 const json = JSON.parse(text);
@@ -192,9 +199,7 @@ class TelemetryManager {
                 
                 this.processRealHardwareData(bpm, rr, gsr);
               } catch (e) {}
-            } 
-            // Intenta parsear CSV (BPM, RR, GSR)
-            else if (text.includes(',')) {
+            } else if (text.includes(',')) {
               const parts = text.split(',');
               const bpm = parseFloat(parts[0]) || 0;
               const rr = parseFloat(parts[1]) || (bpm > 0 ? 60000 / bpm : 0);
@@ -240,12 +245,24 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // MOTOR DE CÁLCULO HRV REAL
+  // MOTOR DE CÁLCULO HRV REAL Y RESET POR FUERA DE RANGO
   // --------------------------------------------------------------------------
   private processRealHardwareData(bpm: number, rrMs: number, gsrValue: number) {
-    if (bpm < 30 || bpm > 220) return; // Filtro de artefactos físicos
+    // 🛡️ FILTRO 2: Si el pulso cae fuera del rango fisiológico (< 30 o > 220), forzar Flatline
+    if (bpm < 30 || bpm > 220) {
+      this.rrHistoryMs = [];
+      this.currentPacket = {
+        ...this.currentPacket,
+        heartRateBpm: 0,
+        rrIntervalMs: 0,
+        hrvRmssdMs: 0,
+        timestamp: Date.now()
+      };
+      this.dataListeners.forEach(fn => fn(this.currentPacket));
+      return;
+    }
 
-    // Cálculo dinámico de HRV RMSSD usando los latidos REALES del sensor
+    // Procesamiento de datos válidos con el anillo en el dedo
     this.rrHistoryMs.push(rrMs);
     if (this.rrHistoryMs.length > 30) this.rrHistoryMs.shift();
 
@@ -282,16 +299,15 @@ class TelemetryManager {
     this.notifyStatus();
 
     this.simulationInterval = setInterval(() => {
-      // Función matemática de prueba (solo corre si presionas el botón Simular)
       const simBpm = 68 + Math.sin(Date.now() / 2000) * 8; 
       const simRr = 60000 / simBpm;
       const simGsr = 2.8 + Math.random() * 0.4;
       this.processRealHardwareData(simBpm, simRr, simGsr);
-    }, 400); // 400ms = 2.5 Hz actualización
+    }, 400);
   }
 
   // --------------------------------------------------------------------------
-  // LIMPIEZA ABSOLUTA
+  // LIMPIEZA Y DESCONEXIÓN TOTAL
   // --------------------------------------------------------------------------
   public disconnect() {
     if (this.simulationInterval) clearInterval(this.simulationInterval);
@@ -308,7 +324,6 @@ class TelemetryManager {
     this.isConnected = false;
     this.deviceName = 'Sin Dispositivo Conectado';
 
-    // Apaga (Flatline) todos los valores
     this.currentPacket = {
       reactionTimeMs: 0,
       handGripPressureKg: 0,
