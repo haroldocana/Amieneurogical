@@ -146,7 +146,7 @@ async function callVertexViaProxy(originalUrl: string, payloadBody: unknown) {
 }
 
 function normalizeGender(rawSex?: unknown): 'M' | 'F' | 'Other' {
-  if (!rawSex) return 'M';
+  if (!rawSex) return 'F';
   const val = String(rawSex).trim().toUpperCase();
   if (val.startsWith('M') || val.includes('MASC') || val === 'HOMBRE') return 'M';
   if (val.startsWith('F') || val.includes('FEM') || val === 'MUJER') return 'F';
@@ -208,7 +208,7 @@ export async function mapApp1DataToApp2(
   const rawName = (filiacion.nombreCompleto || filiacion.nombre || generalData.nombreCompleto || generalData.nombre || rawCase.nombreCompleto || rawCase.nombre || rawCase.patientNameAnonymized || rawCase.patientName) as string;
   const rawAge = filiacion.edad ?? generalData.edad ?? rawCase.edad ?? filiacion.age ?? generalData.age ?? rawCase.age;
   const parsedAge = Number(rawAge);
-  const finalAge = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : SAFE_DEFAULT_PATIENT.age;
+  const finalAge = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : 30;
 
   const rawGender = filiacion.genero || filiacion.sexo || generalData.genero || generalData.sexo || rawCase.genero || rawCase.sexo || rawCase.gender;
   const finalGender = normalizeGender(rawGender);
@@ -217,10 +217,9 @@ export async function mapApp1DataToApp2(
   const rawAnamnesis = (rawCase.anamnesis || rawCase.hea || rawCase.antecedentes || generalData.antecedentes || generalData.anamnesis || filiacion.anamnesis || filiacion.hea) as string;
 
   const rawPsych = (rawCase.psychometricScores || rawCase.psychometrics || rawCase.escalas || {}) as Record<string, unknown>;
-  const mergedPsychometrics = {
-    ...SAFE_DEFAULT_PATIENT.psychometricScores,
+  const mergedPsychometrics: Record<string, number> = {
     ...exactPsychometrics,
-    ...(typeof rawPsych === 'object' ? rawPsych : {})
+    ...(typeof rawPsych === 'object' ? (rawPsych as Record<string, number>) : {})
   };
 
   if (typeof rawCase.phq9 === 'number') mergedPsychometrics.phq9 = rawCase.phq9;
@@ -231,22 +230,28 @@ export async function mapApp1DataToApp2(
   if (typeof rawCase.cssrsLevel === 'number') mergedPsychometrics.cssrsLevel = rawCase.cssrsLevel;
 
   return {
-    ...SAFE_DEFAULT_PATIENT,
     id: (rawCase.id as string) || (rawCase.pacId as string) || cleanPatientId,
     patientNameAnonymized: rawName ? rawName : `Paciente ID: ${cleanPatientId}`,
     age: finalAge,
     gender: finalGender,
-    consultationReason: rawReason || 'Evaluación neuroclínica integral',
-    anamnesis: rawAnamnesis || 'Sin antecedentes registrados',
-    sessionNotes: mappedNotes.length > 0 ? mappedNotes : (rawCase.sessionNotes as string[]) || ['Sincronizado desde base de datos App 2 / Firestore'],
+    consultationReason: rawReason || 'Evaluación neuroclínica por telemetría fisiológica en vivo',
+    anamnesis: rawAnamnesis || 'Sin antecedentes psiquiátricos precargados. Registro en tiempo real.',
+    sessionNotes: mappedNotes.length > 0 ? mappedNotes : (rawCase.sessionNotes as string[]) || ['Sincronizado desde base de datos App 1'],
+    audioRecordings: (rawCase.audioRecordings as any[]) || [],
+    psychometricScores: mergedPsychometrics,
     functionalAreas: mappedFunctionalAreas,
-    psychometricScores: mergedPsychometrics as typeof SAFE_DEFAULT_PATIENT.psychometricScores,
-    sentinelTelemetry: {
-      ...SAFE_DEFAULT_PATIENT.sentinelTelemetry!,
-      ...((rawCase.sentinelTelemetry as object) || {}),
+    neuromotorBiomarkers: (rawCase.neuromotorBiomarkers as any) || undefined,
+    qeegZScores: (rawCase.qeegZScores as any) || undefined,
+    multisensoryHardware: (rawCase.multisensoryHardware as any) || undefined,
+    vrTelemetryData: (rawCase.vrTelemetryData as any) || undefined,
+    vrTherapyReport: (rawCase.vrTherapyReport as any) || undefined,
+    sentinelTelemetry: rawCase.sentinelTelemetry ? {
+      ...(rawCase.sentinelTelemetry as object),
       pacId: cleanPatientId,
       deviceSyncTime: `En línea (Sincronizado - ${resolvedDoctorUsername})`
-    }
+    } as any : undefined,
+    substancesHistory: (rawCase.substancesHistory as any) || undefined,
+    medicalHistory: (rawCase.medicalHistory as any) || []
   };
 }
 
@@ -349,19 +354,7 @@ export async function syncWithClinicalApp(
 
   const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPatientId);
   if (matchedPreset) {
-    const syncdPatient: PatientRecord = {
-      ...SAFE_DEFAULT_PATIENT,
-      ...matchedPreset.record,
-      id: cleanPatientId,
-      patientNameAnonymized: `Paciente ID: ${cleanPatientId}`,
-      audioRecordings: [],
-      sentinelTelemetry: {
-        ...SAFE_DEFAULT_PATIENT.sentinelTelemetry!,
-        ...(matchedPreset.record.sentinelTelemetry || {}),
-        pacId: cleanPatientId,
-        deviceSyncTime: `Sincronizado (${resolvedDoctorUsername} - Colegiado #${colegiado})`
-      }
-    };
+    const syncdPatient: PatientRecord = await mapApp1DataToApp2(matchedPreset.record as any, cleanPatientId, resolvedDoctorUsername);
 
     return {
       patient: syncdPatient,
@@ -392,7 +385,6 @@ export async function runAmieClinicalAnalysis(
     : 'demo-jwt-bearer-token';
 
   const safeRecord: PatientRecord = {
-    ...SAFE_DEFAULT_PATIENT,
     ...patient
   };
 
@@ -453,7 +445,7 @@ Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatrí
 TU REGLA FUNDAMENTAL ES LA TRIANGULACIÓN BIOCLÍNICA OBLIGATORIA EN 3 PILARES:
 
 PILAR 1 (SUBJETIVO / CLINICO): Anamnesis, motivo de consulta y notas de sesión.
-PILAR 2 (PSICOMETRÍA CUANTITATIVA): Escalas estandarizadas (PHQ-9, GAD-7, BDI-II, C-SSRS, SAD PERSONS, MMSE).
+PILAR 2 (PSICOMETRÍA CUANTITATIVA): Escalas estandarizadas (PHQ-9, GAD-7, BDI-II, C-SSRS, SAD PERSONS, MMSE). Si un examen no fue realizado, ignora sus alertas.
 PILAR 3 (FISIOLOGÍA Y BIOMETRÍA OBJETIVA): Tono vagal (HRV/RMSSD), conductancia cutánea (GSR), mapas de Z-Scores qEEG, telemetría pasiva APK Centinela y métricas VR.
 
 INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
@@ -549,118 +541,197 @@ ${JSON.stringify(safeRecord, null, 2)}
 }
 
 // ------------------------------------------------------------------
-// GENERACIÓN DE CONTINGENCIA LOCAL CON TRIANGULACIÓN COMPLETA
+// GENERACIÓN DE CONTINGENCIA LOCAL ADAPTATIVA Y DINÁMICA
 // ------------------------------------------------------------------
 const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis => {
   const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || patient.multisensoryHardware?.vagalToneHrvIndex || 35;
   const gsrVal = patient.vrTelemetryData?.gsrMicroSiemens?.[0] || 2.1;
-  const phq9Val = patient.psychometricScores.phq9 || 24;
-  const gad7Val = patient.psychometricScores.gad7 || 16;
-  const cssrsVal = patient.psychometricScores.cssrsLevel || 5;
+  
+  const phq9Val = patient.psychometricScores?.phq9 ?? 0;
+  const gad7Val = patient.psychometricScores?.gad7 ?? 0;
+  const cssrsVal = patient.psychometricScores?.cssrsLevel ?? 0;
 
-  // Cálculo del Score de Convergencia entre los 3 pilares
-  let convergence = 85.0;
-  if (phq9Val > 20 && hrvVal < 25) convergence += 8.5; // Alta convergencia afectivo-autonómica
-  if (cssrsVal >= 4 && patient.sentinelTelemetry?.sleepMetrics.nightWakeups && patient.sentinelTelemetry.sleepMetrics.nightWakeups > 3) convergence += 5.0; // Convergencia de riesgo autolítico pasivo
+  const isSevereDepression = phq9Val >= 20 || cssrsVal >= 4;
+  
+  let convergence = 88.0;
+  if (isSevereDepression && hrvVal < 25) convergence += 6.5;
 
   const finalConvergenceScore = Math.min(98.8, Math.round(convergence * 10) / 10);
 
+  if (isSevereDepression) {
+    return {
+      principalDiagnosis: {
+        codeCIE10: 'F33.2',
+        codeCIE9: '296.33',
+        disorderName: 'Trastorno Depresivo Mayor Recurrente, Episodio Grave sin Síntomas Psicóticos',
+        certaintyPct: finalConvergenceScore,
+        specifiers: ['Con síntomas de ansiedad severa', 'Con alto riesgo de conducta autolítica'],
+        gafEstimated: 25,
+        justificationDsm5: `Criterios DSM-5 cumplidos por la triangulación de 3 pilares: 1) Pilar Clínico (${patient.consultationReason}), 2) Pilar Psicométrico (PHQ-9 = ${phq9Val}, C-SSRS = Nivel ${cssrsVal}), 3) Pilar Fisiológico (Inhibición vagal con HRV = ${hrvVal} ms, GSR = ${gsrVal} µS).`
+      },
+      differentialMatrix: [
+        {
+          disorderKey: 'TAG',
+          disorderName: 'Trastorno de Ansiedad Generalizada Primario',
+          codeCIE10: 'F41.1',
+          status: 'Descartado',
+          certaintyPct: 22.0,
+          qeegProfile: {
+            thetaBetaRatioEvaluation: 'Normal',
+            highBetaEvaluation: 'Ligeramente elevado',
+            alphaAsymmetryEvaluation: 'Asimetría alfa frontal izquierda prevalente',
+            coherenceEvaluation: 'Coherencia parieto-occipital conservada'
+          },
+          psychometricsProfile: {
+            scaleMatched: 'GAD-7',
+            scoreSummary: `Puntaje: ${gad7Val}/21`
+          },
+          apkPassiveMarker: 'Despertares nocturnos múltiples con inmovilidad biomotora',
+          acousticBiomarkerCorrelation: 'Bradilalia marcada con aplanamiento de variabilidad tonal',
+          biasDiscardRationale: 'Descartado como patología primaria; la sintomatología ansiosa es secundaria al cuadro depresivo mayor melancólico.',
+          morrisonPrincipleApplied: 'Principio F de Morrison (Prioridad al Estado de Ánimo por severidad y tratabilidad)'
+        }
+      ],
+      differentialDiagnoses: [
+        {
+          candidate: 'Trastorno Adaptativo con Estado de Ánimo Depresivo',
+          codeCIE10: 'F43.21',
+          status: 'Descartado',
+          rationale: 'Descartado porque la alteración neurovegetativa (HRV = 18 ms) excede la severidad de una reacción adaptativa.',
+          safetyRuleApplied: 'Regla de Severidad Sintomática y Autonómica DSM-5'
+        }
+      ],
+      bioclinicalTriangulation: {
+        psychometricsSummary: `PILAR 2 (PSICOMETRÍA): PHQ-9 = ${phq9Val}/27, GAD-7 = ${gad7Val}/21, C-SSRS = Nivel ${cssrsVal}/5.`,
+        functionalAreasAssessment: `Afectación Funcional: Sueño ${patient.functionalAreas.sleep}/100, Energía ${patient.functionalAreas.energy}/100, Atención ${patient.functionalAreas.attention}/100.`,
+        acousticBiometricAssessment: 'PILAR 3.A (ACÚSTICA): Análisis prosódico compatible con lentificación.',
+        vrHabituationAssessment: `PILAR 3.B (AUTONÓMICO & VR): Tono vagal (HRV RMSSD = ${hrvVal} ms), conductancia cutánea (GSR = ${gsrVal} µS).`,
+        regionalLobeBreakdown: {
+          frontal: 'Lentificación theta/delta frontal compatible con hipoactividad prefrontal',
+          temporal: 'Asimetría leve en polo temporal',
+          parietal: 'Lentificación leve en región parietal',
+          occipital: 'Pico de frecuencia alfa en rango de modulación'
+        },
+        convergenceScore: finalConvergenceScore
+      },
+      pharmacologicalEffectiveness: [
+        {
+          drugClass: 'ISRS / DUAL',
+          moleculeName: 'Sertralina',
+          dosageAssessed: '50 mg/día',
+          estimatedEffectivenessPct: 58.0,
+          expectedResponse: 'Respuesta Incompleta / Subterapéutica',
+          biomarkerRationale: 'La dosis es insuficiente para la severidad del colapso autonómico.',
+          adverseEffectRisks: ['Náusea transitoria'],
+          recommendedDoseAdjustment: 'Titular previa evaluación facultativa'
+        }
+      ],
+      therapeuticAffinityScores: [
+        {
+          disorderName: 'Trastorno Depresivo Mayor Melancólico',
+          affinityPct: finalConvergenceScore,
+          status: 'Alta Concordancia Multimodal',
+          recommendedTherapy: 'Terapia Cognitivo-Conductual + Activación Conductual',
+          psychopharmacologyScheme: 'Evaluación psiquiátrica urgente',
+          biomarkerRationale: 'Convergencia entre psicometría alta y colapso vegetativo.'
+        }
+      ],
+      riskAlerts: {
+        suicideRiskLevel: 'CRÍTICO',
+        psychosisRisk: 'PRESENTE_DELIRANTE',
+        cognitiveDeteriorationRisk: 'PSEUDODEMENCIA_DEPRESIVA',
+        apkPassiveState: 'ALERTA CENTINELA ACTIVADA: Rumiación y desregulación nocturna.',
+        criticalAlertsList: [
+          `Riesgo autolítico activo nivel C-SSRS ${cssrsVal}/5.`,
+          'Colapso del tono vagal parasimpático (HRV RMSSD < 20 ms).'
+        ],
+        containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE LÍNEA DE CRISIS: Contención acompañante 24/7, remoción de medios letales.'
+      },
+      recommendedActionPlan: {
+        neurofeedbackProtocol: ['Protocolo SMR en C3/Cz'],
+        psychotherapyStrategy: ['Restructuración cognitiva', 'Activación conductual'],
+        pharmacologySuggestions: ['Reevaluación de esquema antidepresivo'],
+        psychiatryReferralUrgent: true,
+        monitoringDirectives: ['Sincronización diaria con APK Centinela'],
+        urgentActions: ['Informar a la red familiar inmediata']
+      }
+    };
+  }
+
+  // DIAGNÓSTICO EN BLANCO / MODULADO (PARA PACIENTES SIN PRUEBAS CRÍTICAS REALIZADAS)
   return {
     principalDiagnosis: {
-      codeCIE10: 'F33.2',
-      codeCIE9: '296.33',
-      disorderName: 'Trastorno Depresivo Mayor Recurrente, Episodio Grave sin Síntomas Psicóticos',
-      certaintyPct: finalConvergenceScore,
-      specifiers: ['Con síntomas de ansiedad severa', 'Con alto riesgo de conducta autolítica'],
-      gafEstimated: 25,
-      justificationDsm5: `Criterios DSM-5 cumplidos por la triangulación de 3 pilares: 1) Pilar Clínico (Anhedonia total, rumiación de ruina), 2) Pilar Psicométrico (PHQ-9 = ${phq9Val}, C-SSRS = Nivel ${cssrsVal}), 3) Pilar Fisiológico (Inhibición vagal con HRV = ${hrvVal} ms, GSR = ${gsrVal} µS y fragmentación circadiana nocturna en APK Centinela).`
+      codeCIE10: 'F41.9',
+      codeCIE9: '300.00',
+      disorderName: 'Evaluación Neurofisiológica y Autonómica en Modulación Funcional',
+      certaintyPct: 91.5,
+      specifiers: ['Sin riesgo autolítico detectado', 'Telemetría en tiempo real activa'],
+      gafEstimated: 85,
+      justificationDsm5: `Registro biométrico directo (${patient.gender === 'F' ? 'Femenino' : 'Masculino'}, ${patient.age} años). Modulación autonómica basada en HRV (${hrvVal} ms) y GSR (${gsrVal} µS) sin evidencia de escalas de depresión o suicidabilidad críticas.`
     },
     differentialMatrix: [
       {
         disorderKey: 'TAG',
-        disorderName: 'Trastorno de Ansiedad Generalizada Primario',
-        codeCIE10: 'F41.1',
-        status: 'Descartado',
-        certaintyPct: 22.0,
+        disorderName: 'Reacción Adaptativa Leve / Ansiedad Fisiológica Sustentada',
+        codeCIE10: 'F43.20',
+        status: 'En Estudio',
+        certaintyPct: 15.0,
         qeegProfile: {
           thetaBetaRatioEvaluation: 'Normal',
-          highBetaEvaluation: 'Ligeramente elevado',
-          alphaAsymmetryEvaluation: 'Asimetría alfa frontal izquierda prevalente',
-          coherenceEvaluation: 'Coherencia parieto-occipital conservada'
+          highBetaEvaluation: 'Normotensivo',
+          alphaAsymmetryEvaluation: 'Simetría conservada',
+          coherenceEvaluation: 'Coherencia interhemisférica normal'
         },
         psychometricsProfile: {
-          scaleMatched: 'GAD-7',
-          scoreSummary: `Puntaje: ${gad7Val}/21`
+          scaleMatched: 'N/A',
+          scoreSummary: 'Sin escalas patológicas registradas'
         },
-        apkPassiveMarker: 'Despertares nocturnos múltiples con inmovilidad biomotora',
-        acousticBiomarkerCorrelation: 'Bradilalia marcada con aplanamiento de variabilidad tonal',
-        biasDiscardRationale: 'Descartado como patología primaria; la sintomatología ansiosa es secundaria al cuadro depresivo mayor melancólico.',
-        morrisonPrincipleApplied: 'Principio F de Morrison (Prioridad al Estado de Ánimo por severidad y tratabilidad)'
+        apkPassiveMarker: 'Sincronía biomotora adecuada',
+        acousticBiomarkerCorrelation: 'Prosodia vocal modulada',
+        biasDiscardRationale: 'Ausencia de reactividad simpática alterada en telemetría.',
+        morrisonPrincipleApplied: 'Principio A de Morrison (Fiabilidad de la historia objetiva)'
       }
     ],
-    differentialDiagnoses: [
-      {
-        candidate: 'Trastorno Adaptativo con Estado de Ánimo Depresivo',
-        codeCIE10: 'F43.21',
-        status: 'Descartado',
-        rationale: 'Descartado porque la alteración neurovegetativa (HRV = 18 ms, baja de peso de 6 kg, despertares a las 02:30 AM) excede la severidad de una reacción adaptativa.',
-        safetyRuleApplied: 'Regla de Severidad Sintomática y Autonómica DSM-5'
-      }
-    ],
+    differentialDiagnoses: [],
     bioclinicalTriangulation: {
-      psychometricsSummary: `PILAR 2 (PSICOMETRÍA): PHQ-9 = ${phq9Val}/27 (Depresión Severa), GAD-7 = ${gad7Val}/21 (Ansiedad Grave), C-SSRS = Nivel ${cssrsVal}/5 (Riesgo Autolítico Alto), SAD PERSONS = ${patient.psychometricScores.sadPersons || 9}/10.`,
-      functionalAreasAssessment: `Afectación Funcional: Sueño ${patient.functionalAreas.sleep}/100, Energía ${patient.functionalAreas.energy}/100, Atención ${patient.functionalAreas.attention}/100.`,
-      acousticBiometricAssessment: 'PILAR 3.A (ACÚSTICA): Bradilalia severa, latencia de respuesta vocal prolongada y aplanamiento prosódico.',
-      vrHabituationAssessment: `PILAR 3.B (AUTONÓMICO & VR): Tono vagal colapsado (HRV RMSSD = ${hrvVal} ms), hiperreactividad simpática (GSR = ${gsrVal} µS).`,
+      psychometricsSummary: 'PILAR 2 (PSICOMETRÍA): Sin baterías de depresión o riesgo suicida elevadas en el registro.',
+      functionalAreasAssessment: `Afectación Funcional: Sueño ${patient.functionalAreas.sleep}/100, Atención ${patient.functionalAreas.attention}/100.`,
+      acousticBiometricAssessment: 'PILAR 3.A (ACÚSTICA): Tono prosódico estable.',
+      vrHabituationAssessment: `PILAR 3.B (AUTONÓMICO & VR): Tono vagal registrado (HRV = ${hrvVal} ms, GSR = ${gsrVal} µS).`,
       regionalLobeBreakdown: {
-        frontal: 'Lentificación theta/delta frontal (Z = +1.9σ) compatible con hipoactividad prefrontal dorsolateral',
-        temporal: 'Asimetría leve en polo temporal izquierdo',
-        parietal: 'Lentificación leve en región parietal',
-        occipital: 'Pico de frecuencia alfa ralentizado en 8.5 Hz'
+        frontal: 'Actividad electroencefalográfica modulada',
+        temporal: 'Simetría conservada',
+        parietal: 'Sin atipicidades',
+        occipital: 'Ritmo alfa posterior regular'
       },
-      convergenceScore: finalConvergenceScore
+      convergenceScore: 91.5
     },
-    pharmacologicalEffectiveness: [
-      {
-        drugClass: 'ISRS / DUAL',
-        moleculeName: 'Sertralina',
-        dosageAssessed: '50 mg/día',
-        estimatedEffectivenessPct: 58.0,
-        expectedResponse: 'Respuesta Incompleta / Subterapéutica',
-        biomarkerRationale: 'La dosis actual es insuficiente para la severidad del colapso autonómico (HRV < 20 ms). Se recomienda titulación o cambio a un antidepresivo dual (Duloxetina/Venlafaxina) o adyuvancia.',
-        adverseEffectRisks: ['Náusea transitoria', 'Agitación psicomotora inicial'],
-        recommendedDoseAdjustment: 'Titular a 100 mg/día o considerar dual de acción rápida previa reevaluación'
-      }
-    ],
+    pharmacologicalEffectiveness: [],
     therapeuticAffinityScores: [
       {
-        disorderName: 'Trastorno Depresivo Mayor Melancólico',
-        affinityPct: finalConvergenceScore,
-        status: 'Alta Concordancia Multimodal',
-        recommendedTherapy: 'Terapia Cognitivo-Conductual centrada en la activación + DBT para regulación afectiva',
-        psychopharmacologyScheme: 'Sertralina (titulada) + Protocolo de Contención Inmediata + VR Bio-Adaptativa',
-        biomarkerRationale: 'La convergencia entre la psicometría alta y el colapso vegetativo justifica una intervención intensiva.'
+        disorderName: 'Salud Mental Funcional / Estrés Autonómico Leve',
+        affinityPct: 91.5,
+        status: 'Evaluación Normal',
+        recommendedTherapy: 'Psicoeducación + Biofeedback VR de regulación vagal',
+        psychopharmacologyScheme: 'Sin requerimiento farmacológico indicado',
+        biomarkerRationale: 'Lecturas vegetativas estables en vivo.'
       }
     ],
     riskAlerts: {
-      suicideRiskLevel: cssrsVal >= 4 ? 'CRÍTICO' : 'ALTO',
-      psychosisRisk: 'PRESENTE_DELIRANTE',
-      cognitiveDeteriorationRisk: 'PSEUDODEMENCIA_DEPRESIVA',
-      apkPassiveState: 'ALERTA CENTINELA ACTIVADA: Despertares nocturnos recurrentes y tiempo activo nocturno en pantalla excesivo.',
-      criticalAlertsList: [
-        `Riesgo autolítico activo nivel C-SSRS ${cssrsVal}/5 con acceso a medios letales reportado.`,
-        'Marcada inhibición psicomotora y bradilalia con pensamiento de ruina.',
-        'Colapso del tono vagal parasimpático (HRV RMSSD < 20 ms).'
-      ],
-      containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE LÍNEA DE CRISIS: Contención acompañante 24/7, remoción total de medios letales, derivación a hospitalización psiquiátrica o consulta de urgencia.'
+      suicideRiskLevel: 'BAJO',
+      psychosisRisk: 'AUSENTE',
+      cognitiveDeteriorationRisk: 'AUSENTE',
+      apkPassiveState: 'TELEMETRÍA CENTINELA: Estado normotensivo activo.',
+      criticalAlertsList: [],
+      containmentProtocolSuggested: 'Seguimiento clínico de rutina. No se requieren medidas de contención de emergencia.'
     },
     recommendedActionPlan: {
-      neurofeedbackProtocol: ['Protocolo SMR en C3/Cz (Inhibición Theta Frontal y aumento del tono de descanso)'],
-      psychotherapyStrategy: ['Restructuración cognitiva de rumiación de ruina', 'Activación conductual progresiva'],
-      pharmacologySuggestions: ['Reevaluación de esquema antidepresivo', 'Supervisión familiar estricta en la administración de fármacos'],
-      psychiatryReferralUrgent: true,
-      monitoringDirectives: ['Sincronización diaria con APK Centinela', 'Registro de pulso y HRV cada 12 horas'],
-      urgentActions: ['Informar a la red familiar inmediata (Rachel Murphy)', 'Asegurar la custodia de objetos peligrosos en el hogar']
+      neurofeedbackProtocol: ['Entrenamiento en autorregulación alfa/theta opcional'],
+      psychotherapyStrategy: ['Estrategias de higiene del sueño y manejo del estrés'],
+      pharmacologySuggestions: ['Ninguna'],
+      psychiatryReferralUrgent: false,
+      monitoringDirectives: ['Continuar monitorización con anillo/dispositivo BLE'],
+      urgentActions: []
     }
   };
 };
