@@ -221,18 +221,17 @@ export async function syncWithClinicalApp(
   
   if (!cleanPacId) throw new Error("Debe ingresar un código PAC válido (ej. PAC-2964).");
 
-  // Configuración de Firestore REST API
-  const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'base-psicologiagt-usuario2';
+  // Configuración oficial sincronizada con App 1 (amie-clinical-copilot)
+  const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'amie-clinical-copilot';
   const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'expedientes';
-  const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+  const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDorrRPma3q_a-D-OuRh_K4F71yHGgBW1w';
 
   // Formato exacto del ID del documento en App 1 (ej. COL-DEFAULT_PAC-2964)
   const colegiadoPrefix = typeof colegiado === 'number' ? `COL-${colegiado}` : String(colegiado).trim();
   const documentId = `${colegiadoPrefix}_${cleanPacId}`;
 
-  // Se adjunta la API Key para evitar el Error HTTP 403 (Forbidden)
-  const apiKeyParam = FIREBASE_API_KEY ? `?key=${FIREBASE_API_KEY}` : '';
-  const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${documentId}${apiKeyParam}`;
+  // Solicitud REST autenticada con API Key de App 1
+  const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${documentId}?key=${FIREBASE_API_KEY}`;
 
   try {
     const response = await fetch(firestoreEndpoint, {
@@ -244,25 +243,25 @@ export async function syncWithClinicalApp(
       const docData = await response.json();
       const rawData = unwrapFirestoreDocument(docData.fields || {});
 
-      // Extracción limpia de datos sin heredar falsas alertas
+      // Extracción limpia de datos
       const mappedPatient = await mapApp1DataToApp2(rawData, cleanPacId, resolvedDoctorUsername);
 
       return {
         patient: mappedPatient,
-        analysis: null, // Limpia el dictamen para recalcular dinámicamente
+        analysis: null, // Limpia el dictamen para recalcular en vivo
         message: `¡Expediente de ${mappedPatient.patientNameAnonymized} (${cleanPacId}) recuperado con éxito desde Firestore!`
       };
     } else if (response.status === 403) {
-      throw new Error(`Acceso denegado (403): Las reglas de seguridad de Firestore requieren autenticación. Revisa VITE_FIREBASE_API_KEY en Render.`);
+      throw new Error(`Acceso denegado (403) en '${FIREBASE_PROJECT_ID}'. Verifique las Reglas de Seguridad (Rules) de Firestore en Firebase Console para permitir lectura de '${COLLECTION_NAME}'.`);
     } else if (response.status === 404) {
-      throw new Error(`El expediente '${documentId}' no existe en la colección '${COLLECTION_NAME}'.`);
+      throw new Error(`El expediente '${documentId}' no existe en la colección '${COLLECTION_NAME}' del proyecto '${FIREBASE_PROJECT_ID}'.`);
     } else {
       throw new Error(`Error de comunicación con Firestore. Código HTTP: ${response.status}`);
     }
   } catch (err: unknown) {
     console.warn('Fallo al obtener documento desde Firestore REST API:', err);
 
-    // Fallback a presets de prueba si la red/permisos fallan
+    // Fallback a presets de prueba si falla la consulta
     const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
     if (matchedPreset) {
       const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
@@ -445,7 +444,6 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
   const gad7Val = patient.psychometricScores?.gad7 ?? 0;
   const cssrsVal = patient.psychometricScores?.cssrsLevel ?? 0;
 
-  // Lógica dinámica antisesgo: Solo declara depresión si las escalas y métricas son anormales.
   const isSevereDepression = phq9Val >= 20 || cssrsVal >= 4;
   let convergence = 88.0;
   if (isSevereDepression && hrvVal < 25) convergence += 6.5;
@@ -510,7 +508,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
     };
   }
 
-  // SI EL PACIENTE ES SALUDABLE O NO TIENE ESCALAS PRECARGADAS:
+  // PACIENTE SALUDABLE O SIN PRUEBAS PATOLÓGICAS:
   return {
     principalDiagnosis: {
       codeCIE10: 'Z13.3',
