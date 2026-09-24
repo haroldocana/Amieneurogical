@@ -12,112 +12,33 @@ const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onre
 const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
 
 const CLOUD_RUN_API_URL = import.meta.env.VITE_CLOUD_RUN_URL || 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
-const CLOUD_FUNCTION_SYNC_URL = import.meta.env.VITE_CLOUD_FUNCTION_SYNC_URL || 'https://sync-patient-expedient-367911373284.us-central1.run.app';
 
 // ------------------------------------------------------------------
-// EXPEDIENTE POR DEFECTO ROBUSTO (SAFE DEFAULT)
+// EXPEDIENTE BASE (SAFE DEFAULT)
 // ------------------------------------------------------------------
 export const SAFE_DEFAULT_PATIENT: PatientRecord = {
-  id: 'PAC-8104',
-  patientNameAnonymized: 'Paciente ID: PAC-8104',
-  age: 55,
-  gender: 'M',
-  consultationReason: 'Ideación suicida estructurada tras colapso sociofuncional, insomnio de despertar precoz y rumiación de ruina.',
-  anamnesis: 'Hombre de 55 años, previamente activo en labores agrícolas y comerciales. Desde hace 3 meses presenta anhedonia total, despertar a las 02:30 AM con llanto e hiperalerta, baja de peso de 6 kg, convicción de ruina económica inminente ("debemos vender la granja") y verbalización de que "su familia estaría mejor sin él". Niega historia de manía/hipomanía.',
-  sessionNotes: [
-    'Sesión 1: Facies profundamente abatida, enlentecimiento psicomotor notable. Expresa sensación de vacío insoportable y culpa delirante de bancarrota familiar.',
-    'Sesión 2: Acompañado por cónyuge quien reporta que el paciente pasa horas mirando al vacío y revisando un arma en el ático. Se interviene para decomiso de medios.'
-  ],
+  id: 'PAC-0000',
+  patientNameAnonymized: 'Paciente No Identificado',
+  age: 30,
+  gender: 'F',
+  consultationReason: 'Evaluación neuroclínica integral',
+  anamnesis: 'Sin antecedentes registrados. Esperando sincronización...',
+  sessionNotes: [],
   audioRecordings: [],
-  psychometricScores: {
-    phq9: 24,
-    gad7: 16,
-    bdi2: 42,
-    bai: 18,
-    mmse: 29,
-    asrs: 6,
-    aq10: 2,
-    catq: 12,
-    cssrsLevel: 5,
-    sadPersons: 9,
-    whodas2: 4.2,
-    gafEstimated: 25
-  },
+  psychometricScores: {},
   functionalAreas: {
-    sleep: 15,
-    appetite: 20,
-    energy: 15,
-    social: 10,
-    attention: 35
+    sleep: 50,
+    appetite: 50,
+    energy: 50,
+    social: 50,
+    attention: 50
   },
-  neuromotorBiomarkers: {
-    reactionTimeMs: 485,
-    omissionErrors: 8,
-    commissionErrors: 2,
-    motorStabilityScore: 42
-  },
-  qeegZScores: {
-    frontalThetaBetaRatio: 1.8,
-    temporalAsymmetry: 0.4,
-    alphaPeakFrequencyHz: 8.5,
-    deltaSlowActivityZ: 1.9
-  },
-  multisensoryHardware: {
-    vagalToneHrvIndex: 18,
-    handGripPressureKg: 21.4,
-    camouflagingIndexPct: 12,
-    ocularFixationDurationMs: 4200,
-    touchTapLatencyCompensatedMs: 485,
-    microExpressionState: 'Aplanamiento Motor'
-  },
-  sentinelTelemetry: {
-    pacId: 'PAC-8104',
-    deviceSyncTime: 'En línea (Sincronizado)',
-    sleepMetrics: {
-      nightWakeups: 5,
-      hoursInDarkness: 7.2,
-      avgSleepDurationHours: 3.4,
-      sleepEfficiencyPct: 41
-    },
-    behavioralBiometrics: {
-      typingLatencyMs: 485,
-      screenActiveTimeMinutes: 140,
-      biomotorLatencyMs: 485,
-      activityRestlessnessIndex: 82
-    },
-    safetyStatus: {
-      riskLevel: 'CRÍTICO',
-      activeContentionTriggered: true,
-      passiveRiskRationale: 'Despertares nocturnos múltiples (>3x/noche) y latencia biomotora ralentizada (485 ms) con rumiación autolítica.',
-      emergencyContact: {
-        name: 'Rachel Murphy',
-        relationship: 'Cónyuge / Red Primaria',
-        phone: '+52 (55) 4192-8831'
-      }
-    },
-    nightWakeups: 5,
-    avgSleepDurationHours: 3.4,
-    sleepEfficiencyPct: 41,
-    biomotorLatencyMs: 485,
-    screenOnNightTimeMinutes: 140,
-    activityRestlessnessIndex: 82,
-    crisisDistressTriggered: true,
-    passiveRiskScore: 'CRÍTICO',
-    passiveRiskRationale: 'Despertares nocturnos múltiples (>3x/noche) y latencia biomotora ralentizada (485 ms) con rumiación autolítica.',
-    emergencyContact: {
-      name: 'Rachel Murphy',
-      relationship: 'Cónyuge / Red Primaria',
-      phone: '+52 (55) 4192-8831'
-    }
-  },
-  substancesHistory: {
-    alcohol: 'Consumo ocasional previo, nulo en último mes',
-    tobacco: 'Fumador leve (5 cig/día)',
-    cannabis: 'Negativo',
-    stimulants: 'Negativo',
-    medicationsCurrent: ['Sertralina 50 mg/día']
-  },
-  medicalHistory: ['Úlcera péptica previa', 'Dislipidemia leve']
+  neuromotorBiomarkers: undefined,
+  qeegZScores: undefined,
+  multisensoryHardware: undefined,
+  sentinelTelemetry: undefined,
+  substancesHistory: undefined,
+  medicalHistory: []
 };
 
 // ------------------------------------------------------------------
@@ -157,16 +78,13 @@ function normalizeFunctionalAreas(rawAreas: unknown) {
   if (!rawAreas || typeof rawAreas !== 'object') {
     return { sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50 };
   }
-
   const areasObj = rawAreas as Record<string, unknown>;
-
   const parseScore = (val: unknown) => {
     const num = Number(val);
     if (!Number.isFinite(num)) return 50;
     if (num <= 10) return num * 10;
     return Math.min(100, Math.max(0, num));
   };
-
   return {
     sleep: parseScore(areasObj.sleep),
     appetite: parseScore(areasObj.appetite),
@@ -174,6 +92,34 @@ function normalizeFunctionalAreas(rawAreas: unknown) {
     social: parseScore(areasObj.social),
     attention: parseScore(areasObj.attention ?? areasObj.concentration ?? areasObj.concentracion)
   };
+}
+
+// ------------------------------------------------------------------
+// AUXILIAR: DECODIFICADOR DE CAMPOS DE FIRESTORE REST API
+// ------------------------------------------------------------------
+function unwrapFirestoreDocument(fields: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  if (!fields) return result;
+
+  for (const [key, valObj] of Object.entries(fields)) {
+    if (!valObj || typeof valObj !== 'object') continue;
+
+    if ('stringValue' in valObj) result[key] = valObj.stringValue;
+    else if ('integerValue' in valObj) result[key] = Number(valObj.integerValue);
+    else if ('doubleValue' in valObj) result[key] = Number(valObj.doubleValue);
+    else if ('booleanValue' in valObj) result[key] = valObj.booleanValue;
+    else if ('mapValue' in valObj) result[key] = unwrapFirestoreDocument(valObj.mapValue?.fields || {});
+    else if ('arrayValue' in valObj) {
+      result[key] = (valObj.arrayValue?.values || []).map((v: any) => {
+        if ('stringValue' in v) return v.stringValue;
+        if ('integerValue' in v) return Number(v.integerValue);
+        if ('doubleValue' in v) return Number(v.doubleValue);
+        if ('mapValue' in v) return unwrapFirestoreDocument(v.mapValue?.fields || {});
+        return v;
+      });
+    }
+  }
+  return result;
 }
 
 export async function mapApp1DataToApp2(
@@ -226,7 +172,6 @@ export async function mapApp1DataToApp2(
   if (typeof rawCase.gad7 === 'number') mergedPsychometrics.gad7 = rawCase.gad7;
   if (typeof rawCase.bdi2 === 'number') mergedPsychometrics.bdi2 = rawCase.bdi2;
   if (typeof rawCase.sadPersons === 'number') mergedPsychometrics.sadPersons = rawCase.sadPersons;
-  if (typeof rawCase.mmse === 'number') mergedPsychometrics.mmse = rawCase.mmse;
   if (typeof rawCase.cssrsLevel === 'number') mergedPsychometrics.cssrsLevel = rawCase.cssrsLevel;
 
   return {
@@ -234,7 +179,7 @@ export async function mapApp1DataToApp2(
     patientNameAnonymized: rawName ? rawName : `Paciente ID: ${cleanPatientId}`,
     age: finalAge,
     gender: finalGender,
-    consultationReason: rawReason || 'Evaluación neuroclínica por telemetría fisiológica en vivo',
+    consultationReason: rawReason || 'Evaluación neuroclínica y telemetría fisiológica en vivo',
     anamnesis: rawAnamnesis || 'Sin antecedentes psiquiátricos precargados. Registro en tiempo real.',
     sessionNotes: mappedNotes.length > 0 ? mappedNotes : (rawCase.sessionNotes as string[]) || ['Sincronizado desde base de datos App 1'],
     audioRecordings: (rawCase.audioRecordings as any[]) || [],
@@ -256,114 +201,75 @@ export async function mapApp1DataToApp2(
 }
 
 // ------------------------------------------------------------------
-// SINCRONIZACIÓN DE EXPEDIENTES
+// SINCRONIZACIÓN DE EXPEDIENTES CON FIREBASE FIRESTORE (APP 1)
 // ------------------------------------------------------------------
 export async function syncWithClinicalApp(
   patientId: string,
-  colegiado: number,
+  colegiado: number | string = 'COL-DEFAULT',
   doctorUsername?: string
 ): Promise<{ patient: PatientRecord; analysis?: AmieClinicalAnalysis | null; message: string }> {
+
   const storedUsername = typeof window !== 'undefined'
     ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username')
     : null;
 
-  const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold01').trim().toLowerCase();
-  const cleanPatientId = (patientId || 'PAC-8104').trim().toUpperCase();
+  const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold_ocana').trim().toLowerCase();
+  const cleanPacId = (patientId || '').trim().toUpperCase();
+  
+  if (!cleanPacId) throw new Error("Debe ingresar un código PAC válido (ej. PAC-2964).");
+
+  // Endpoint hacia la colección de Firestore
+  const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'base-psicologiagt-usuario2';
+  const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'expedientes'; // <- Ajusta al nombre de colección de tu App 1
+  
+  // App 1 guarda con formato: COL-DEFAULT_PAC-2964
+  const colegiadoPrefix = typeof colegiado === 'number' ? `COL-${colegiado}` : String(colegiado).trim();
+  const documentId = `${colegiadoPrefix}_${cleanPacId}`;
+
+  const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${documentId}`;
 
   try {
-    const cloudUrl = `https://storage.googleapis.com/base-psicologiagt-usuario2/clinica/${resolvedDoctorUsername}/cases.json?t=${Date.now()}`;
-    const response = await fetch(cloudUrl);
-
-    if (response.ok) {
-      const clinicalDatabase = await response.json();
-      const rawCase = clinicalDatabase[cleanPatientId];
-
-      if (rawCase) {
-        const caseColegiado = Number(rawCase.colegiadoOwner || rawCase.generalData?.colegiadoTratante || colegiado);
-        if (caseColegiado !== Number(colegiado)) {
-          throw new Error(`Acceso Denegado: El expediente ${cleanPatientId} pertenece al Colegiado #${caseColegiado}, no al #${colegiado}.`);
-        }
-
-        const mappedPatient = await mapApp1DataToApp2(rawCase, cleanPatientId, resolvedDoctorUsername);
-        let amieAnalysis: AmieClinicalAnalysis | null = null;
-
-        try {
-          amieAnalysis = await runAmieClinicalAnalysis(mappedPatient);
-        } catch (aErr) {
-          console.warn('Error al auto-ejecutar análisis AMIE:', aErr);
-        }
-
-        return {
-          patient: mappedPatient,
-          analysis: amieAnalysis,
-          message: `Expediente ${cleanPatientId} autenticado y extraído para el Colegiado #${colegiado}.`
-        };
-      }
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes('Acceso Denegado')) throw err;
-    console.warn('Fallo en Cloud Storage directo, buscando en microservicio protegido:', err);
-  }
-
-  const token = typeof window !== 'undefined'
-    ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token'
-    : 'demo-jwt-bearer-token';
-
-  const postBody = {
-    patientId: cleanPatientId,
-    doctorUsername: resolvedDoctorUsername,
-    colegiado: Number(colegiado),
-    requestTimestamp: new Date().toISOString(),
-    sourceApp: 'AMIE-Clinical-Analyzer'
-  };
-
-  try {
-    const response = await fetch(CLOUD_FUNCTION_SYNC_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(postBody)
+    const response = await fetch(firestoreEndpoint, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
 
-    if (response.status === 403) {
-      throw new Error(`Acceso denegado: El profesional con Colegiado #${colegiado} no es el médico tratante del expediente ${cleanPatientId}.`);
-    }
-
-    if (response.status === 404) {
-      throw new Error(`El expediente ${cleanPatientId} no existe en la base de datos de ${resolvedDoctorUsername}.`);
-    }
-
     if (response.ok) {
-      const data = await response.json();
-      const mappedPatient = await mapApp1DataToApp2(data.patientRecord || data, cleanPatientId, resolvedDoctorUsername);
+      const docData = await response.json();
+      
+      // Decodificamos el JSON anidado de la REST API de Firestore a un objeto JS plano
+      const rawData = unwrapFirestoreDocument(docData.fields || {});
+
+      // Mapeamos los datos de la App 1 a la App 2
+      const mappedPatient = await mapApp1DataToApp2(rawData, cleanPacId, resolvedDoctorUsername);
 
       return {
         patient: mappedPatient,
-        analysis: data.preliminaryAnalysis || data.analysis || null,
-        message: data.message || `Expediente ${cleanPatientId} sincronizado exitosamente.`
+        analysis: null, // Forzamos a recalcular en App 2 para evitar arrastrar dictámenes viejos
+        message: `¡Expediente de ${mappedPatient.patientNameAnonymized} recuperado desde Firestore con éxito!`
       };
+    } else if (response.status === 404) {
+      throw new Error(`El expediente '${documentId}' no existe en Firestore. Compruebe el PAC o el Colegiado.`);
+    } else {
+      throw new Error(`Error de comunicación con Firestore. Código HTTP: ${response.status}`);
     }
   } catch (err: unknown) {
-    if (err instanceof Error && (err.message.includes('Acceso denegado') || err.message.includes('no existe'))) {
-      throw err;
+    console.warn('Fallo al obtener documento desde Firestore REST API:', err);
+
+    // Búsqueda de contingencia en el repositorio estático
+    const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
+    if (matchedPreset) {
+      const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
+      return {
+        patient: syncdPatient,
+        analysis: null,
+        message: `Expediente ${cleanPacId} cargado desde presets locales.`
+      };
     }
-    console.warn('Fallo en Cloud Function, verificando repositorio local:', err);
+
+    const errorMsg = err instanceof Error ? err.message : 'Error desconocido de red.';
+    throw new Error(errorMsg);
   }
-
-  const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPatientId);
-  if (matchedPreset) {
-    const syncdPatient: PatientRecord = await mapApp1DataToApp2(matchedPreset.record as any, cleanPatientId, resolvedDoctorUsername);
-
-    return {
-      patient: syncdPatient,
-      analysis: null,
-      message: `Expediente ${cleanPatientId} cargado desde el repositorio clínico local.`
-    };
-  }
-
-  throw new Error(`El expediente ${cleanPatientId} no existe o no se tiene autorización de lectura.`);
 }
 
 // ------------------------------------------------------------------
@@ -384,21 +290,17 @@ export async function runAmieClinicalAnalysis(
     ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token'
     : 'demo-jwt-bearer-token';
 
-  const safeRecord: PatientRecord = {
-    ...patient
-  };
-
-  const activeImage = qEegImageBase64 || safeRecord.qeegBiomarkers?.heatmapBase64 || null;
+  const activeImage = qEegImageBase64 || patient.qeegBiomarkers?.heatmapBase64 || null;
 
   try {
     const apiPayload = {
-      patientRecord: safeRecord,
+      patientRecord: patient,
       qEegImageBase64: activeImage,
-      sentinelTelemetry: safeRecord.sentinelTelemetry || null,
-      qeegBiomarkers: safeRecord.qeegBiomarkers || null,
-      multisensoryHardware: safeRecord.multisensoryHardware || null,
-      vrTelemetryData: safeRecord.vrTelemetryData || null,
-      vrTherapyReport: safeRecord.vrTherapyReport || null,
+      sentinelTelemetry: patient.sentinelTelemetry || null,
+      qeegBiomarkers: patient.qeegBiomarkers || null,
+      multisensoryHardware: patient.multisensoryHardware || null,
+      vrTelemetryData: patient.vrTelemetryData || null,
+      vrTherapyReport: patient.vrTherapyReport || null,
       timestamp: new Date().toISOString(),
       source: 'AMIE-Clinical-Analyzer-Web'
     };
@@ -423,21 +325,21 @@ export async function runAmieClinicalAnalysis(
   }
 
   // ESTRUCTURACIÓN DEL PROMPT DE TRIANGULACIÓN MULTIMODAL
-  const vrSection = safeRecord.vrTelemetryData ? `
+  const vrSection = patient.vrTelemetryData ? `
 --- PILAR 3.A: TELEMETRÍA VR INMERSIVA (PICO NEO 3 / QUEST 3S) ---
-- Session GUID: ${safeRecord.vrTelemetryData.sessionId}
-- Conductancia Cutánea (GSR Pico): ${Math.max(...(safeRecord.vrTelemetryData.gsrMicroSiemens || [0]))} µS
-- Tono Vagal (HRV RMSSD Última Lectura): ${safeRecord.vrTelemetryData.hrvRmssdMs?.slice(-1)[0] || 'N/A'} ms
-- Índice de Habituación Terapéutica (H): ${safeRecord.vrTelemetryData.habituationIndexH}
-- Picos de Excitación Simpática: ${safeRecord.vrTelemetryData.stressPeaksCount}
+- Session GUID: ${patient.vrTelemetryData.sessionId}
+- Conductancia Cutánea (GSR Pico): ${Math.max(...(patient.vrTelemetryData.gsrMicroSiemens || [0]))} µS
+- Tono Vagal (HRV RMSSD Última Lectura): ${patient.vrTelemetryData.hrvRmssdMs?.slice(-1)[0] || 'N/A'} ms
+- Índice de Habituación Terapéutica (H): ${patient.vrTelemetryData.habituationIndexH}
+- Picos de Excitación Simpática: ${patient.vrTelemetryData.stressPeaksCount}
 ` : '--- PILAR 3.A: TELEMETRÍA VR: No realizada ---';
 
-  const multisensorySection = safeRecord.multisensoryHardware ? `
+  const multisensorySection = patient.multisensoryHardware ? `
 --- PILAR 3.B: BIOMETRÍA MULTISENSORIAL BLE EN VIVO ---
-- Tono Vagal / HRV Index: ${safeRecord.multisensoryHardware.vagalToneHrvIndex}/100
-- Presión Prensión Manual: ${safeRecord.multisensoryHardware.handGripPressureKg} kg
-- Camouflaging Index (CAT-Q): ${safeRecord.multisensoryHardware.camouflagingIndexPct}%
-- Duración Fijación Ocular: ${safeRecord.multisensoryHardware.ocularFixationDurationMs} ms
+- Tono Vagal / HRV Index: ${patient.multisensoryHardware.vagalToneHrvIndex}/100
+- Presión Prensión Manual: ${patient.multisensoryHardware.handGripPressureKg} kg
+- Camouflaging Index (CAT-Q): ${patient.multisensoryHardware.camouflagingIndexPct}%
+- Duración Fijación Ocular: ${patient.multisensoryHardware.ocularFixationDurationMs} ms
 ` : '';
 
   const systemInstructionText = `
@@ -445,26 +347,24 @@ Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatrí
 TU REGLA FUNDAMENTAL ES LA TRIANGULACIÓN BIOCLÍNICA OBLIGATORIA EN 3 PILARES:
 
 PILAR 1 (SUBJETIVO / CLINICO): Anamnesis, motivo de consulta y notas de sesión.
-PILAR 2 (PSICOMETRÍA CUANTITATIVA): Escalas estandarizadas (PHQ-9, GAD-7, BDI-II, C-SSRS, SAD PERSONS, MMSE). Si un examen no fue realizado, ignora sus alertas.
-PILAR 3 (FISIOLOGÍA Y BIOMETRÍA OBJETIVA): Tono vagal (HRV/RMSSD), conductancia cutánea (GSR), mapas de Z-Scores qEEG, telemetría pasiva APK Centinela y métricas VR.
+PILAR 2 (PSICOMETRÍA CUANTITATIVA): Escalas estandarizadas. Si un examen no fue realizado o tiene valor cero, IGNORA sus alertas para evitar falsos positivos.
+PILAR 3 (FISIOLOGÍA Y BIOMETRÍA OBJETIVA): Tono vagal (HRV/RMSSD), conductancia cutánea (GSR), mapas de Z-Scores qEEG y métricas VR.
 
 INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
-1. Compara la congruencia entre lo que el paciente reporta (Pilar 1) y sus marcadores fisiológicos objetivos (Pilar 3).
-2. Si detectas discordancia (ej. negación verbal pero HRV < 20 ms o GSR > 4 µS, o viceversa), identifícala como sesgo, simulación o enmascaramiento (Camouflaging).
-3. Devuelve EXCLUSIVAMENTE un objeto JSON estructurado con el análisis cruzado en los campos 'bioclinicalTriangulation', 'principalDiagnosis', 'differentialMatrix', 'riskAlerts' y 'pharmacologicalEffectiveness'.
+1. Compara la congruencia entre lo que el paciente reporta y sus marcadores fisiológicos objetivos.
+2. Devuelve EXCLUSIVAMENTE un objeto JSON estructurado con el análisis cruzado en los campos 'bioclinicalTriangulation', 'principalDiagnosis', 'differentialMatrix', 'riskAlerts' y 'pharmacologicalEffectiveness'.
 `;
 
   if (GEMINI_API_KEY) {
     try {
       const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
       const directPayload = {
         contents: [
           {
             role: 'user',
             parts: [
               { text: systemInstructionText },
-              { text: `EXPEDIENTE PARA TRIANGULACIÓN BIOCLÍNICA:\n${JSON.stringify(safeRecord, null, 2)}` }
+              { text: `EXPEDIENTE PARA TRIANGULACIÓN BIOCLÍNICA:\n${JSON.stringify(patient, null, 2)}` }
             ]
           }
         ],
@@ -488,43 +388,31 @@ INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
         }
       }
     } catch (directErr) {
-      console.warn('Fallo en llamada directa a Gemini API, intentando vía Proxy Express:', directErr);
+      console.warn('Fallo en llamada directa a Gemini API:', directErr);
     }
   }
 
   const promptText = `
 ${systemInstructionText}
-
 ${vrSection}
 ${multisensorySection}
-
 EXPEDIENTE PACIENTE (JSON):
-${JSON.stringify(safeRecord, null, 2)}
+${JSON.stringify(patient, null, 2)}
 `;
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [{ text: promptText }];
-
   if (activeImage && activeImage.startsWith('data:image')) {
     const matches = activeImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
     if (matches) {
-      parts.unshift({
-        inlineData: {
-          mimeType: matches[1],
-          data: matches[2]
-        }
-      });
+      parts.unshift({ inlineData: { mimeType: matches[1], data: matches[2] } });
     }
   }
 
   const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
-
   const proxyPayload = {
     contents: [{ role: 'user', parts: parts }],
     systemInstruction: { parts: [{ text: systemInstructionText }] },
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.15
-    }
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
   };
 
   try {
@@ -534,25 +422,25 @@ ${JSON.stringify(safeRecord, null, 2)}
       return JSON.parse(responseText) as AmieClinicalAnalysis;
     }
   } catch (proxyError) {
-    console.warn('Proxy Express no disponible, generando respuesta de contingencia local triangulada:', proxyError);
+    console.warn('Proxy Express no disponible, generando respuesta de contingencia local:', proxyError);
   }
 
-  return generateFallbackAnalysis(safeRecord);
+  return generateFallbackAnalysis(patient);
 }
 
 // ------------------------------------------------------------------
-// GENERACIÓN DE CONTINGENCIA LOCAL ADAPTATIVA Y DINÁMICA
+// GENERACIÓN DE CONTINGENCIA LOCAL DINÁMICA
 // ------------------------------------------------------------------
 const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis => {
-  const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || patient.multisensoryHardware?.vagalToneHrvIndex || 35;
+  const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || patient.multisensoryHardware?.vagalToneHrvIndex || 40;
   const gsrVal = patient.vrTelemetryData?.gsrMicroSiemens?.[0] || 2.1;
   
   const phq9Val = patient.psychometricScores?.phq9 ?? 0;
   const gad7Val = patient.psychometricScores?.gad7 ?? 0;
   const cssrsVal = patient.psychometricScores?.cssrsLevel ?? 0;
 
+  // Lógica dinámica antisesgo: Solo declara depresión si las escalas y métricas son anormales.
   const isSevereDepression = phq9Val >= 20 || cssrsVal >= 4;
-  
   let convergence = 88.0;
   if (isSevereDepression && hrvVal < 25) convergence += 6.5;
 
@@ -567,171 +455,109 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
         certaintyPct: finalConvergenceScore,
         specifiers: ['Con síntomas de ansiedad severa', 'Con alto riesgo de conducta autolítica'],
         gafEstimated: 25,
-        justificationDsm5: `Criterios DSM-5 cumplidos por la triangulación de 3 pilares: 1) Pilar Clínico (${patient.consultationReason}), 2) Pilar Psicométrico (PHQ-9 = ${phq9Val}, C-SSRS = Nivel ${cssrsVal}), 3) Pilar Fisiológico (Inhibición vagal con HRV = ${hrvVal} ms, GSR = ${gsrVal} µS).`
+        justificationDsm5: `Criterios DSM-5 cumplidos por la triangulación de 3 pilares: 1) Pilar Clínico, 2) Pilar Psicométrico (PHQ-9 = ${phq9Val}, C-SSRS = Nivel ${cssrsVal}), 3) Pilar Fisiológico (HRV = ${hrvVal} ms, GSR = ${gsrVal} µS).`
       },
       differentialMatrix: [
         {
           disorderKey: 'TAG',
-          disorderName: 'Trastorno de Ansiedad Generalizada Primario',
+          disorderName: 'Trastorno de Ansiedad Generalizada',
           codeCIE10: 'F41.1',
           status: 'Descartado',
           certaintyPct: 22.0,
-          qeegProfile: {
-            thetaBetaRatioEvaluation: 'Normal',
-            highBetaEvaluation: 'Ligeramente elevado',
-            alphaAsymmetryEvaluation: 'Asimetría alfa frontal izquierda prevalente',
-            coherenceEvaluation: 'Coherencia parieto-occipital conservada'
-          },
-          psychometricsProfile: {
-            scaleMatched: 'GAD-7',
-            scoreSummary: `Puntaje: ${gad7Val}/21`
-          },
-          apkPassiveMarker: 'Despertares nocturnos múltiples con inmovilidad biomotora',
-          acousticBiomarkerCorrelation: 'Bradilalia marcada con aplanamiento de variabilidad tonal',
-          biasDiscardRationale: 'Descartado como patología primaria; la sintomatología ansiosa es secundaria al cuadro depresivo mayor melancólico.',
-          morrisonPrincipleApplied: 'Principio F de Morrison (Prioridad al Estado de Ánimo por severidad y tratabilidad)'
+          qeegProfile: { thetaBetaRatioEvaluation: 'Normal', highBetaEvaluation: 'Elevado', alphaAsymmetryEvaluation: 'Asimetría alfa', coherenceEvaluation: 'Conservada' },
+          psychometricsProfile: { scaleMatched: 'GAD-7', scoreSummary: `Puntaje: ${gad7Val}/21` },
+          apkPassiveMarker: 'Despertares nocturnos múltiples',
+          acousticBiomarkerCorrelation: 'Bradilalia',
+          biasDiscardRationale: 'La ansiedad es secundaria al cuadro depresivo mayor.',
+          morrisonPrincipleApplied: 'Principio F de Morrison'
         }
       ],
-      differentialDiagnoses: [
-        {
-          candidate: 'Trastorno Adaptativo con Estado de Ánimo Depresivo',
-          codeCIE10: 'F43.21',
-          status: 'Descartado',
-          rationale: 'Descartado porque la alteración neurovegetativa (HRV = 18 ms) excede la severidad de una reacción adaptativa.',
-          safetyRuleApplied: 'Regla de Severidad Sintomática y Autonómica DSM-5'
-        }
-      ],
+      differentialDiagnoses: [],
       bioclinicalTriangulation: {
-        psychometricsSummary: `PILAR 2 (PSICOMETRÍA): PHQ-9 = ${phq9Val}/27, GAD-7 = ${gad7Val}/21, C-SSRS = Nivel ${cssrsVal}/5.`,
-        functionalAreasAssessment: `Afectación Funcional: Sueño ${patient.functionalAreas.sleep}/100, Energía ${patient.functionalAreas.energy}/100, Atención ${patient.functionalAreas.attention}/100.`,
-        acousticBiometricAssessment: 'PILAR 3.A (ACÚSTICA): Análisis prosódico compatible con lentificación.',
-        vrHabituationAssessment: `PILAR 3.B (AUTONÓMICO & VR): Tono vagal (HRV RMSSD = ${hrvVal} ms), conductancia cutánea (GSR = ${gsrVal} µS).`,
-        regionalLobeBreakdown: {
-          frontal: 'Lentificación theta/delta frontal compatible con hipoactividad prefrontal',
-          temporal: 'Asimetría leve en polo temporal',
-          parietal: 'Lentificación leve en región parietal',
-          occipital: 'Pico de frecuencia alfa en rango de modulación'
-        },
+        psychometricsSummary: `PILAR 2: PHQ-9 = ${phq9Val}, GAD-7 = ${gad7Val}, C-SSRS = ${cssrsVal}`,
+        functionalAreasAssessment: `Sueño ${patient.functionalAreas.sleep}, Atención ${patient.functionalAreas.attention}`,
+        acousticBiometricAssessment: 'PILAR 3.A: Bradilalia.',
+        vrHabituationAssessment: `PILAR 3.B: HRV = ${hrvVal} ms, GSR = ${gsrVal} µS.`,
+        regionalLobeBreakdown: { frontal: 'Lentificación', temporal: 'Simétrico', parietal: 'Normal', occipital: 'Normal' },
         convergenceScore: finalConvergenceScore
       },
-      pharmacologicalEffectiveness: [
-        {
-          drugClass: 'ISRS / DUAL',
-          moleculeName: 'Sertralina',
-          dosageAssessed: '50 mg/día',
-          estimatedEffectivenessPct: 58.0,
-          expectedResponse: 'Respuesta Incompleta / Subterapéutica',
-          biomarkerRationale: 'La dosis es insuficiente para la severidad del colapso autonómico.',
-          adverseEffectRisks: ['Náusea transitoria'],
-          recommendedDoseAdjustment: 'Titular previa evaluación facultativa'
-        }
-      ],
-      therapeuticAffinityScores: [
-        {
-          disorderName: 'Trastorno Depresivo Mayor Melancólico',
-          affinityPct: finalConvergenceScore,
-          status: 'Alta Concordancia Multimodal',
-          recommendedTherapy: 'Terapia Cognitivo-Conductual + Activación Conductual',
-          psychopharmacologyScheme: 'Evaluación psiquiátrica urgente',
-          biomarkerRationale: 'Convergencia entre psicometría alta y colapso vegetativo.'
-        }
-      ],
+      pharmacologicalEffectiveness: [],
+      therapeuticAffinityScores: [{
+        disorderName: 'Depresión Mayor',
+        affinityPct: finalConvergenceScore,
+        status: 'Alta Concordancia Multimodal',
+        recommendedTherapy: 'TCC + Activación',
+        psychopharmacologyScheme: 'Evaluación psiquiátrica urgente',
+        biomarkerRationale: 'Convergencia clara.'
+      }],
       riskAlerts: {
         suicideRiskLevel: 'CRÍTICO',
         psychosisRisk: 'PRESENTE_DELIRANTE',
         cognitiveDeteriorationRisk: 'PSEUDODEMENCIA_DEPRESIVA',
-        apkPassiveState: 'ALERTA CENTINELA ACTIVADA: Rumiación y desregulación nocturna.',
-        criticalAlertsList: [
-          `Riesgo autolítico activo nivel C-SSRS ${cssrsVal}/5.`,
-          'Colapso del tono vagal parasimpático (HRV RMSSD < 20 ms).'
-        ],
-        containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE LÍNEA DE CRISIS: Contención acompañante 24/7, remoción de medios letales.'
+        apkPassiveState: 'Riesgo inminente',
+        criticalAlertsList: ['Riesgo autolítico activo', `HRV bajo (${hrvVal} ms)`],
+        containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE LÍNEA DE CRISIS.'
       },
       recommendedActionPlan: {
-        neurofeedbackProtocol: ['Protocolo SMR en C3/Cz'],
-        psychotherapyStrategy: ['Restructuración cognitiva', 'Activación conductual'],
-        pharmacologySuggestions: ['Reevaluación de esquema antidepresivo'],
-        psychiatryReferralUrgent: true,
-        monitoringDirectives: ['Sincronización diaria con APK Centinela'],
-        urgentActions: ['Informar a la red familiar inmediata']
+        neurofeedbackProtocol: [], psychotherapyStrategy: [], pharmacologySuggestions: [], psychiatryReferralUrgent: true, monitoringDirectives: [], urgentActions: []
       }
     };
   }
 
-  // DIAGNÓSTICO EN BLANCO / MODULADO (PARA PACIENTES SIN PRUEBAS CRÍTICAS REALIZADAS)
+  // SI EL PACIENTE ES SALUDABLE O NO TIENE ESCALAS PRECARGADAS:
   return {
     principalDiagnosis: {
-      codeCIE10: 'F41.9',
-      codeCIE9: '300.00',
-      disorderName: 'Evaluación Neurofisiológica y Autonómica en Modulación Funcional',
-      certaintyPct: 91.5,
-      specifiers: ['Sin riesgo autolítico detectado', 'Telemetría en tiempo real activa'],
+      codeCIE10: 'Z13.3',
+      codeCIE9: 'V79.0',
+      disorderName: 'Evaluación Neurofisiológica y Autonómica en Modulación Normal',
+      certaintyPct: 92.5,
+      specifiers: ['Sin riesgo detectado', 'Lectura Biométrica Activa'],
       gafEstimated: 85,
-      justificationDsm5: `Registro biométrico directo (${patient.gender === 'F' ? 'Femenino' : 'Masculino'}, ${patient.age} años). Modulación autonómica basada en HRV (${hrvVal} ms) y GSR (${gsrVal} µS) sin evidencia de escalas de depresión o suicidabilidad críticas.`
+      justificationDsm5: `Paciente ${patient.gender === 'F' ? 'Femenino' : 'Masculino'}, ${patient.age} años. Modulación autonómica estable según telemetría (HRV = ${hrvVal} ms, GSR = ${gsrVal} µS) sin baterías psicométricas en rango de riesgo.`
     },
     differentialMatrix: [
       {
-        disorderKey: 'TAG',
-        disorderName: 'Reacción Adaptativa Leve / Ansiedad Fisiológica Sustentada',
-        codeCIE10: 'F43.20',
-        status: 'En Estudio',
-        certaintyPct: 15.0,
-        qeegProfile: {
-          thetaBetaRatioEvaluation: 'Normal',
-          highBetaEvaluation: 'Normotensivo',
-          alphaAsymmetryEvaluation: 'Simetría conservada',
-          coherenceEvaluation: 'Coherencia interhemisférica normal'
-        },
-        psychometricsProfile: {
-          scaleMatched: 'N/A',
-          scoreSummary: 'Sin escalas patológicas registradas'
-        },
+        disorderKey: 'STRESS',
+        disorderName: 'Reacción de Estrés Leve Subclínica',
+        codeCIE10: 'F43.9',
+        status: 'Descartado',
+        certaintyPct: 10.0,
+        qeegProfile: { thetaBetaRatioEvaluation: 'Normal', highBetaEvaluation: 'Normotensivo', alphaAsymmetryEvaluation: 'Simetría conservada', coherenceEvaluation: 'Normal' },
+        psychometricsProfile: { scaleMatched: 'N/A', scoreSummary: 'Sin puntajes de riesgo' },
         apkPassiveMarker: 'Sincronía biomotora adecuada',
-        acousticBiomarkerCorrelation: 'Prosodia vocal modulada',
-        biasDiscardRationale: 'Ausencia de reactividad simpática alterada en telemetría.',
-        morrisonPrincipleApplied: 'Principio A de Morrison (Fiabilidad de la historia objetiva)'
+        acousticBiomarkerCorrelation: 'Prosodia normal',
+        biasDiscardRationale: 'Valores basales dentro de rango de salud (Normotonia).',
+        morrisonPrincipleApplied: 'Principio A de Morrison'
       }
     ],
     differentialDiagnoses: [],
     bioclinicalTriangulation: {
-      psychometricsSummary: 'PILAR 2 (PSICOMETRÍA): Sin baterías de depresión o riesgo suicida elevadas en el registro.',
-      functionalAreasAssessment: `Afectación Funcional: Sueño ${patient.functionalAreas.sleep}/100, Atención ${patient.functionalAreas.attention}/100.`,
-      acousticBiometricAssessment: 'PILAR 3.A (ACÚSTICA): Tono prosódico estable.',
-      vrHabituationAssessment: `PILAR 3.B (AUTONÓMICO & VR): Tono vagal registrado (HRV = ${hrvVal} ms, GSR = ${gsrVal} µS).`,
-      regionalLobeBreakdown: {
-        frontal: 'Actividad electroencefalográfica modulada',
-        temporal: 'Simetría conservada',
-        parietal: 'Sin atipicidades',
-        occipital: 'Ritmo alfa posterior regular'
-      },
-      convergenceScore: 91.5
+      psychometricsSummary: 'PILAR 2: Ausencia de escalas psicométricas patológicas.',
+      functionalAreasAssessment: `Sueño: ${patient.functionalAreas.sleep}/100, Energía: ${patient.functionalAreas.energy}/100`,
+      acousticBiometricAssessment: 'PILAR 3.A: Modulación de voz en rango de eutimia.',
+      vrHabituationAssessment: `PILAR 3.B: HRV = ${hrvVal} ms, GSR = ${gsrVal} µS. Tono Vagal estable.`,
+      regionalLobeBreakdown: { frontal: 'Normal', temporal: 'Simétrico', parietal: 'Sin alteraciones', occipital: 'Ritmo posterior adecuado' },
+      convergenceScore: 92.5
     },
     pharmacologicalEffectiveness: [],
-    therapeuticAffinityScores: [
-      {
-        disorderName: 'Salud Mental Funcional / Estrés Autonómico Leve',
-        affinityPct: 91.5,
-        status: 'Evaluación Normal',
-        recommendedTherapy: 'Psicoeducación + Biofeedback VR de regulación vagal',
-        psychopharmacologyScheme: 'Sin requerimiento farmacológico indicado',
-        biomarkerRationale: 'Lecturas vegetativas estables en vivo.'
-      }
-    ],
+    therapeuticAffinityScores: [{
+      disorderName: 'Eutimia / Funcionamiento Normal',
+      affinityPct: 92.5,
+      status: 'Confirmado por Telemetría',
+      recommendedTherapy: 'Psicoeducación de mantenimiento',
+      psychopharmacologyScheme: 'Ninguno',
+      biomarkerRationale: 'Lecturas biológicas y cuestionarios (si aplica) en equilibrio.'
+    }],
     riskAlerts: {
       suicideRiskLevel: 'BAJO',
       psychosisRisk: 'AUSENTE',
       cognitiveDeteriorationRisk: 'AUSENTE',
-      apkPassiveState: 'TELEMETRÍA CENTINELA: Estado normotensivo activo.',
+      apkPassiveState: 'Tono basal estable',
       criticalAlertsList: [],
-      containmentProtocolSuggested: 'Seguimiento clínico de rutina. No se requieren medidas de contención de emergencia.'
+      containmentProtocolSuggested: 'Atención primaria rutinaria. No requiere medidas de emergencia.'
     },
     recommendedActionPlan: {
-      neurofeedbackProtocol: ['Entrenamiento en autorregulación alfa/theta opcional'],
-      psychotherapyStrategy: ['Estrategias de higiene del sueño y manejo del estrés'],
-      pharmacologySuggestions: ['Ninguna'],
-      psychiatryReferralUrgent: false,
-      monitoringDirectives: ['Continuar monitorización con anillo/dispositivo BLE'],
-      urgentActions: []
+      neurofeedbackProtocol: ['Autorregulación opcional SMR'], psychotherapyStrategy: ['Psicoeducación'], pharmacologySuggestions: ['Ninguna'], psychiatryReferralUrgent: false, monitoringDirectives: ['Mantenimiento telemetría pasiva'], urgentActions: []
     }
   };
 };
@@ -751,18 +577,12 @@ export async function askAmieAssistant(
   consumeAiCredit(activeUsername);
 
   const systemContext = `
-Eres AMIE (Articulate Medical Intelligence Explorer), Copiloto Clínico Psiquiátrico y Neurológico operando con Gemini 3.8 Flash.
-Tus respuestas deben basarse en la TRIANGULACIÓN BIOCLÍNICA MULTIMODAL de los 3 pilares del paciente:
-- Pilar 1: Anamnesis y notas clínicas.
-- Pilar 2: Escalas psicométricas cuantitativas.
-- Pilar 3: Biometría en vivo, tono vagal (HRV), conductancia cutánea (GSR), qEEG y APK Centinela.
-
-Paciente actual en análisis:
+Eres AMIE, Copiloto Clínico Psiquiátrico operando con Gemini 3.8 Flash.
+Usa TRIANGULACIÓN BIOCLÍNICA MULTIMODAL.
+Paciente actual:
 ${JSON.stringify(currentPatient, null, 2)}
-
-${analysisData ? `Análisis diagnóstico emitido previamente:\n${JSON.stringify(analysisData, null, 2)}` : ''}
-
-Responde al médico tratante con el máximo rigor científico, concisión y enfoque antisesgo (DSM-5-TR, Stahl, Morrison).
+${analysisData ? `Análisis previo:\n${JSON.stringify(analysisData, null, 2)}` : ''}
+Responde al médico tratante de manera ultra-concisa y científica.
 `;
 
   const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
@@ -780,10 +600,9 @@ Responde al médico tratante con el máximo rigor científico, concisión y enfo
 
   try {
     const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
-    return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor clínico Gemini 3.8 Flash.';
+    return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor Gemini.';
   } catch (err: unknown) {
     console.error('Error en askAmieAssistant:', err);
-    const msg = err instanceof Error ? err.message : 'Fallo de red';
-    return 'Error al conectar con el servidor proxy de AMIE: ' + msg;
+    return 'Error al conectar con la API de IA.';
   }
 }
