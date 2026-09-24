@@ -14,7 +14,7 @@ const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_20
 const CLOUD_RUN_API_URL = import.meta.env.VITE_CLOUD_RUN_URL || 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
 
 // ------------------------------------------------------------------
-// EXPEDIENTE BASE (SAFE DEFAULT)
+// EXPEDIENTE BASE (SAFE DEFAULT) - LIMPIO PARA EVITAR FALSOS POSITIVOS
 // ------------------------------------------------------------------
 export const SAFE_DEFAULT_PATIENT: PatientRecord = {
   id: 'PAC-0000',
@@ -122,6 +122,9 @@ function unwrapFirestoreDocument(fields: Record<string, any>): Record<string, an
   return result;
 }
 
+// ------------------------------------------------------------------
+// MAPEO DE DATOS DE APP 1 A ESTRUCTURA DE APP 2
+// ------------------------------------------------------------------
 export async function mapApp1DataToApp2(
   rawCase: Record<string, unknown>,
   cleanPatientId: string,
@@ -218,15 +221,18 @@ export async function syncWithClinicalApp(
   
   if (!cleanPacId) throw new Error("Debe ingresar un código PAC válido (ej. PAC-2964).");
 
-  // Endpoint hacia la colección de Firestore
+  // Configuración de Firestore REST API
   const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'base-psicologiagt-usuario2';
-  const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'expedientes'; // <- Ajusta al nombre de colección de tu App 1
-  
-  // App 1 guarda con formato: COL-DEFAULT_PAC-2964
+  const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'expedientes';
+  const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+
+  // Formato exacto del ID del documento en App 1 (ej. COL-DEFAULT_PAC-2964)
   const colegiadoPrefix = typeof colegiado === 'number' ? `COL-${colegiado}` : String(colegiado).trim();
   const documentId = `${colegiadoPrefix}_${cleanPacId}`;
 
-  const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${documentId}`;
+  // Se adjunta la API Key para evitar el Error HTTP 403 (Forbidden)
+  const apiKeyParam = FIREBASE_API_KEY ? `?key=${FIREBASE_API_KEY}` : '';
+  const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${documentId}${apiKeyParam}`;
 
   try {
     const response = await fetch(firestoreEndpoint, {
@@ -236,27 +242,27 @@ export async function syncWithClinicalApp(
 
     if (response.ok) {
       const docData = await response.json();
-      
-      // Decodificamos el JSON anidado de la REST API de Firestore a un objeto JS plano
       const rawData = unwrapFirestoreDocument(docData.fields || {});
 
-      // Mapeamos los datos de la App 1 a la App 2
+      // Extracción limpia de datos sin heredar falsas alertas
       const mappedPatient = await mapApp1DataToApp2(rawData, cleanPacId, resolvedDoctorUsername);
 
       return {
         patient: mappedPatient,
-        analysis: null, // Forzamos a recalcular en App 2 para evitar arrastrar dictámenes viejos
-        message: `¡Expediente de ${mappedPatient.patientNameAnonymized} recuperado desde Firestore con éxito!`
+        analysis: null, // Limpia el dictamen para recalcular dinámicamente
+        message: `¡Expediente de ${mappedPatient.patientNameAnonymized} (${cleanPacId}) recuperado con éxito desde Firestore!`
       };
+    } else if (response.status === 403) {
+      throw new Error(`Acceso denegado (403): Las reglas de seguridad de Firestore requieren autenticación. Revisa VITE_FIREBASE_API_KEY en Render.`);
     } else if (response.status === 404) {
-      throw new Error(`El expediente '${documentId}' no existe en Firestore. Compruebe el PAC o el Colegiado.`);
+      throw new Error(`El expediente '${documentId}' no existe en la colección '${COLLECTION_NAME}'.`);
     } else {
       throw new Error(`Error de comunicación con Firestore. Código HTTP: ${response.status}`);
     }
   } catch (err: unknown) {
     console.warn('Fallo al obtener documento desde Firestore REST API:', err);
 
-    // Búsqueda de contingencia en el repositorio estático
+    // Fallback a presets de prueba si la red/permisos fallan
     const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
     if (matchedPreset) {
       const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
