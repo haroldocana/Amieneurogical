@@ -11,7 +11,7 @@ export interface PrecisionTelemetryPacket {
   heartRateBpm: number;
   hrvRmssdMs: number;
   gsrMicroSiemens: number;
-  rrIntervalMs: number; // Intervalo R-R instantáneo para osciloscopio y tacograma
+  rrIntervalMs: number;
   timestamp: number;
 }
 
@@ -35,7 +35,6 @@ class TelemetryManager {
   
   private simulationInterval: any = null;
 
-  // Buffer de cálculo clínico de VFC / HRV
   private gripZeroOffsetKg: number = 0;
   private rrHistoryMs: number[] = [];
 
@@ -74,7 +73,7 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // 1. RECEPTOR BLUETOOTH UNIVERSAL (GEOID HS500 / POLAR / COLMI RING)
+  // 1. ENLACE BLUETOOTH ULTRA-RESILIENTE (GEOID / POLAR / COLMI RING)
   // --------------------------------------------------------------------------
   public async connectBluetooth(): Promise<boolean> {
     if (typeof window === 'undefined' || !('bluetooth' in navigator)) {
@@ -85,41 +84,91 @@ class TelemetryManager {
     try {
       this.disconnect();
       
+      // Lista expandida de servicios permitidos por Chrome
       const bleDevice = await (navigator as any).bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: ['heart_rate', 0x180D] // Estándar GATT Frecuencia Cardíaca
+        optionalServices: [
+          'heart_rate',
+          0x180D,
+          '0000180d-0000-1000-8000-00805f9b34fb',
+          'device_information',
+          0x180A,
+          'battery_service',
+          0x180F
+        ]
       });
 
       this.bleServer = await bleDevice.gatt.connect();
       this.bleDevice = bleDevice;
       this.activeProtocol = 'BLUETOOTH';
       this.isConnected = true;
-      this.deviceName = bleDevice.name || 'Sensor BLE (Geoid / Polar / Ring)';
+      this.deviceName = bleDevice.name || 'Sensor BLE Biométrico';
       this.notifyStatus();
 
-      const service = await this.bleServer.getPrimaryService('heart_rate');
-      const characteristic = await service.getCharacteristic('heart_rate_measurement');
-      
+      // Búsqueda en cascada del servicio de pulso
+      let service: any = null;
+      try {
+        service = await this.bleServer.getPrimaryService('heart_rate');
+      } catch (e1) {
+        try {
+          service = await this.bleServer.getPrimaryService(0x180D);
+        } catch (e2) {
+          try {
+            service = await this.bleServer.getPrimaryService('0000180d-0000-1000-8000-00805f9b34fb');
+          } catch (e3) {
+            // Escaneo dinámico de servicios
+            const allServices = await this.bleServer.getPrimaryServices();
+            for (const s of allServices) {
+              if (s.uuid.toLowerCase().includes('180d')) {
+                service = s;
+                break;
+              }
+            }
+            if (!service && allServices.length > 0) {
+              service = allServices[0];
+            }
+          }
+        }
+      }
+
+      if (!service) {
+        throw new Error('No se encontró un servicio de Frecuencia Cardíaca activo en el dispositivo.');
+      }
+
+      // Búsqueda en cascada de la característica de medición
+      let characteristic: any = null;
+      try {
+        characteristic = await service.getCharacteristic('heart_rate_measurement');
+      } catch (cErr1) {
+        try {
+          characteristic = await service.getCharacteristic(0x2A37);
+        } catch (cErr2) {
+          const chars = await service.getCharacteristics();
+          characteristic = chars.find((c: any) => c.properties.notify || c.properties.indicate);
+        }
+      }
+
+      if (!characteristic) {
+        throw new Error('El dispositivo no expone una característica de pulso notificable.');
+      }
+
       await characteristic.startNotifications();
       characteristic.addEventListener('characteristicvaluechanged', (e: any) => {
         const dataView: DataView = e.target.value;
         if (!dataView || dataView.byteLength < 2) return;
 
         const flags = dataView.getUint8(0);
-        
-        // Estructura de Flags GATT (0x2A37):
-        const hrFormat16Bit = (flags & 0x01) !== 0;        // Bit 0: 0=Uint8, 1=Uint16
-        const sensorContact = (flags >> 1) & 0x03;          // Bit 1-2: 2=No Contacto (Off-Body)
-        const energyPresent = (flags >> 3) & 0x01;          // Bit 3: Energía consumida
-        const rrPresent = (flags >> 4) & 0x01;              // Bit 4: Intervalos R-R presentes
+        const hrFormat16Bit = (flags & 0x01) !== 0;
+        const sensorContact = (flags >> 1) & 0x03;
+        const energyPresent = (flags >> 3) & 0x01;
+        const rrPresent = (flags >> 4) & 0x01;
 
-        // 🛡️ Detección de contacto (Anillos ópticos y Cintas pectorales Geoid HS500 sin electrodos)
+        // Detección Off-Body (Sin contacto con piel)
         if (sensorContact === 2) {
           this.processRealHardwareData(0, [], this.currentPacket.gsrMicroSiemens);
           return;
         }
 
-        // Extracción de BPM
         let bpm = hrFormat16Bit ? dataView.getUint16(1, true) : dataView.getUint8(1);
         let offset = hrFormat16Bit ? 3 : 2;
 
@@ -127,12 +176,11 @@ class TelemetryManager {
           offset += 2;
         }
 
-        // Extracción de múltiples Intervalos R-R (Característica clave del Geoid HS500)
         const rrValues: number[] = [];
         if (rrPresent) {
           while (offset + 1 < dataView.byteLength) {
             const rr1024 = dataView.getUint16(offset, true);
-            const rrMs = Math.round((rr1024 / 1024) * 1000); // Conversión 1/1024s -> Millisegundos
+            const rrMs = Math.round((rr1024 / 1024) * 1000);
             if (rrMs >= 300 && rrMs <= 2000) {
               rrValues.push(rrMs);
             }
@@ -140,7 +188,6 @@ class TelemetryManager {
           }
         }
 
-        // Fallback matemático si el dispositivo no reporta trama R-R explícita
         if (rrValues.length === 0 && bpm > 0) {
           rrValues.push(Math.round(60000 / bpm));
         }
@@ -153,7 +200,7 @@ class TelemetryManager {
       });
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Fallo en enlace BLE:', err);
       this.disconnect();
       return false;
@@ -161,7 +208,7 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // 2. CONEXIÓN USB SERIAL (ESP32 / SENSORES CON CABLE)
+  // 2. CONEXIÓN USB SERIAL (ESP32)
   // --------------------------------------------------------------------------
   public async connectUsb(): Promise<boolean> {
     if (typeof window === 'undefined' || !('serial' in navigator)) {
@@ -262,10 +309,9 @@ class TelemetryManager {
   }
 
   // --------------------------------------------------------------------------
-  // MOTOR DE CÁLCULO CLINICO DE HRV / RMSSD (PROCESAMIENTO R-R ECG)
+  // MOTOR DE CÁLCULO CLINICO DE HRV / RMSSD
   // --------------------------------------------------------------------------
   private processRealHardwareData(bpm: number, rrMsInput: number | number[], gsrValue: number) {
-    // 🛡️ Filtro Fisiológico: Si los BPM están fuera del rango humano normal (30 - 220), mandar a cero (Flatline)
     if (bpm < 30 || bpm > 220) {
       this.rrHistoryMs = [];
       this.currentPacket = {
@@ -289,7 +335,6 @@ class TelemetryManager {
       }
     }
 
-    // Mantener ventana móvil de 40 latidos para cálculo instantáneo de RMSSD (VFC / Tono Vagal)
     while (this.rrHistoryMs.length > 40) {
       this.rrHistoryMs.shift();
     }
