@@ -24,7 +24,7 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
-// MÓDULOS HIPNO-VR & CLOSED-LOOP (SUITE COMPLETA 5/5)
+// MÓDULOS HIPNO-VR & CLOSED-LOOP (SUITE COMPLETA)
 import { VrPainManagementModule } from './components/VrPainManagementModule';
 import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
 import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
@@ -181,6 +181,7 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
+  // ⚡ EJECUCIÓN DEL ANÁLISIS Y REDIRECCIÓN AUTOMÁTICA AL WORKSTATION
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
     setIsAnalyzing(true);
@@ -188,6 +189,7 @@ export default function App() {
     try {
       const result = await runAmieClinicalAnalysis(currentPatient);
       setAnalysis(result);
+      setActiveTab('workstation'); // 👈 Redirige de inmediato para mostrar el dictamen generado
     } catch (err: unknown) {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
