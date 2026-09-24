@@ -123,7 +123,7 @@ function unwrapFirestoreDocument(fields: Record<string, any>): Record<string, an
 }
 
 // ------------------------------------------------------------------
-// MAPEO DE DATOS DE APP 1 A ESTRUCTURA DE APP 2
+// MAPEO DE DATOS DE FIRESTORE (APP 1) A ESTRUCTURA DE APP 2
 // ------------------------------------------------------------------
 export async function mapApp1DataToApp2(
   rawCase: Record<string, unknown>,
@@ -154,7 +154,15 @@ export async function mapApp1DataToApp2(
   const generalData = (rawCase.generalData as Record<string, unknown>) || {};
   const filiacion = (rawCase.filiacion as Record<string, unknown>) || {};
 
-  const rawName = (filiacion.nombreCompleto || filiacion.nombre || generalData.nombreCompleto || generalData.nombre || rawCase.nombreCompleto || rawCase.nombre || rawCase.patientNameAnonymized || rawCase.patientName) as string;
+  // Soporta tanto el esquema en español como el esquema plano en inglés (fullName, chiefComplaint)
+  const rawName = (
+    rawCase.fullName ||
+    filiacion.nombreCompleto || filiacion.nombre ||
+    generalData.nombreCompleto || generalData.nombre ||
+    rawCase.nombreCompleto || rawCase.nombre ||
+    rawCase.patientNameAnonymized || rawCase.patientName
+  ) as string;
+
   const rawAge = filiacion.edad ?? generalData.edad ?? rawCase.edad ?? filiacion.age ?? generalData.age ?? rawCase.age;
   const parsedAge = Number(rawAge);
   const finalAge = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : 30;
@@ -162,7 +170,14 @@ export async function mapApp1DataToApp2(
   const rawGender = filiacion.genero || filiacion.sexo || generalData.genero || generalData.sexo || rawCase.genero || rawCase.sexo || rawCase.gender;
   const finalGender = normalizeGender(rawGender);
 
-  const rawReason = (filiacion.motivoConsulta || generalData.motivoConsultaTextual || generalData.motivoConsulta || rawCase.motivoConsultaTextual || rawCase.motivoConsulta || rawCase.consultationReason || rawCase.motivo) as string;
+  const rawReason = (
+    rawCase.chiefComplaint ||
+    filiacion.motivoConsulta ||
+    generalData.motivoConsultaTextual || generalData.motivoConsulta ||
+    rawCase.motivoConsultaTextual || rawCase.motivoConsulta ||
+    rawCase.consultationReason || rawCase.motivo
+  ) as string;
+
   const rawAnamnesis = (rawCase.anamnesis || rawCase.hea || rawCase.antecedentes || generalData.antecedentes || generalData.anamnesis || filiacion.anamnesis || filiacion.hea) as string;
 
   const rawPsych = (rawCase.psychometricScores || rawCase.psychometrics || rawCase.escalas || {}) as Record<string, unknown>;
@@ -178,7 +193,7 @@ export async function mapApp1DataToApp2(
   if (typeof rawCase.cssrsLevel === 'number') mergedPsychometrics.cssrsLevel = rawCase.cssrsLevel;
 
   return {
-    id: (rawCase.id as string) || (rawCase.pacId as string) || cleanPatientId,
+    id: (rawCase.id as string) || (rawCase.displayId as string) || (rawCase.pacId as string) || cleanPatientId,
     patientNameAnonymized: rawName ? rawName : `Paciente ID: ${cleanPatientId}`,
     age: finalAge,
     gender: finalGender,
@@ -216,65 +231,112 @@ export async function syncWithClinicalApp(
     ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username')
     : null;
 
-  const resolvedDoctorUsername = (doctorUsername || storedUsername || 'harold_ocana').trim().toLowerCase();
+  const resolvedDoctorUsername = (doctorUsername || storedUsername || '2000').trim().toLowerCase();
   const cleanPacId = (patientId || '').trim().toUpperCase();
   
   if (!cleanPacId) throw new Error("Debe ingresar un código PAC válido (ej. PAC-2964).");
 
-  // Configuración oficial sincronizada con App 1 (amie-clinical-copilot)
+  // Configuración oficial alineada a la colección 'patients' del proyecto amie-clinical-copilot
   const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'amie-clinical-copilot';
-  const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'expedientes';
+  const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'patients';
   const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDorrRPma3q_a-D-OuRh_K4F71yHGgBW1w';
 
-  // Formato exacto del ID del documento en App 1 (ej. COL-DEFAULT_PAC-2964)
   const colegiadoPrefix = typeof colegiado === 'number' ? `COL-${colegiado}` : String(colegiado).trim();
-  const documentId = `${colegiadoPrefix}_${cleanPacId}`;
 
-  // Solicitud REST autenticada con API Key de App 1
-  const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${documentId}?key=${FIREBASE_API_KEY}`;
+  // Lista de posibles nombres con los que App 1 guarda el ID del documento
+  const candidateDocIds = [
+    cleanPacId,                                        // ej: PAC-2964
+    `${resolvedDoctorUsername}_${cleanPacId}`,         // ej: 2000_PAC-2878
+    `${colegiadoPrefix}_${cleanPacId}`,                // ej: COL-DEFAULT_PAC-6788
+    `COL-DEFAULT_${cleanPacId}`,                       // ej: COL-DEFAULT_PAC-2964
+    `harold_${cleanPacId}`,                             // ej: harold_PAC-6788
+    `harold_${colegiadoPrefix}_${cleanPacId}`           // ej: harold_COL-DEFAULT_PAC-2001
+  ];
 
-  try {
-    const response = await fetch(firestoreEndpoint, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+  let foundDocData: Record<string, any> | null = null;
+  let matchedDocId = '';
 
-    if (response.ok) {
-      const docData = await response.json();
-      const rawData = unwrapFirestoreDocument(docData.fields || {});
+  for (const docId of candidateDocIds) {
+    const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${docId}?key=${FIREBASE_API_KEY}`;
+    
+    try {
+      const response = await fetch(firestoreEndpoint, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-      // Extracción limpia de datos
-      const mappedPatient = await mapApp1DataToApp2(rawData, cleanPacId, resolvedDoctorUsername);
-
-      return {
-        patient: mappedPatient,
-        analysis: null, // Limpia el dictamen para recalcular en vivo
-        message: `¡Expediente de ${mappedPatient.patientNameAnonymized} (${cleanPacId}) recuperado con éxito desde Firestore!`
-      };
-    } else if (response.status === 403) {
-      throw new Error(`Acceso denegado (403) en '${FIREBASE_PROJECT_ID}'. Verifique las Reglas de Seguridad (Rules) de Firestore en Firebase Console para permitir lectura de '${COLLECTION_NAME}'.`);
-    } else if (response.status === 404) {
-      throw new Error(`El expediente '${documentId}' no existe en la colección '${COLLECTION_NAME}' del proyecto '${FIREBASE_PROJECT_ID}'.`);
-    } else {
-      throw new Error(`Error de comunicación con Firestore. Código HTTP: ${response.status}`);
+      if (response.ok) {
+        const docData = await response.json();
+        if (docData && docData.fields) {
+          foundDocData = docData.fields;
+          matchedDocId = docId;
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn(`Intento fallido para documento ${docId}:`, e);
     }
-  } catch (err: unknown) {
-    console.warn('Fallo al obtener documento desde Firestore REST API:', err);
-
-    // Fallback a presets de prueba si falla la consulta
-    const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
-    if (matchedPreset) {
-      const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
-      return {
-        patient: syncdPatient,
-        analysis: null,
-        message: `Expediente ${cleanPacId} cargado desde presets locales.`
-      };
-    }
-
-    const errorMsg = err instanceof Error ? err.message : 'Error desconocido de red.';
-    throw new Error(errorMsg);
   }
+
+  // Si no se encuentra por ID directo, realiza consulta estructurada por el campo displayId o id
+  if (!foundDocData) {
+    try {
+      const queryEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`;
+      const queryBody = {
+        structuredQuery: {
+          from: [{ collectionId: COLLECTION_NAME }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'id' },
+              op: 'EQUAL',
+              value: { stringValue: cleanPacId }
+            }
+          }
+        }
+      };
+
+      const queryResp = await fetch(queryEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(queryBody)
+      });
+
+      if (queryResp.ok) {
+        const queryResults = await queryResp.json();
+        const firstMatch = queryResults.find((r: any) => r.document && r.document.fields);
+        if (firstMatch) {
+          foundDocData = firstMatch.document.fields;
+          matchedDocId = firstMatch.document.name.split('/').pop() || cleanPacId;
+        }
+      }
+    } catch (queryErr) {
+      console.warn('Consulta estructurada fallida:', queryErr);
+    }
+  }
+
+  if (foundDocData) {
+    const rawData = unwrapFirestoreDocument(foundDocData);
+    const mappedPatient = await mapApp1DataToApp2(rawData, cleanPacId, resolvedDoctorUsername);
+
+    return {
+      patient: mappedPatient,
+      analysis: null,
+      message: `¡Expediente '${mappedPatient.patientNameAnonymized}' (${cleanPacId}) recuperado exitosamente desde Firestore (${matchedDocId})!`
+    };
+  }
+
+  // Fallback a presets locales si no existe en la base de datos
+  const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
+  if (matchedPreset) {
+    const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
+    return {
+      patient: syncdPatient,
+      analysis: null,
+      message: `Expediente ${cleanPacId} cargado desde presets locales.`
+    };
+  }
+
+  throw new Error(`El expediente '${cleanPacId}' no se encontró en la colección 'patients' de Firestore.`);
 }
 
 // ------------------------------------------------------------------
@@ -329,7 +391,6 @@ export async function runAmieClinicalAnalysis(
     console.warn('Cloud Run API no disponible, ejecutando Gemini 3.8 Flash vía Proxy:', backendError);
   }
 
-  // ESTRUCTURACIÓN DEL PROMPT DE TRIANGULACIÓN MULTIMODAL
   const vrSection = patient.vrTelemetryData ? `
 --- PILAR 3.A: TELEMETRÍA VR INMERSIVA (PICO NEO 3 / QUEST 3S) ---
 - Session GUID: ${patient.vrTelemetryData.sessionId}
@@ -508,7 +569,6 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
     };
   }
 
-  // PACIENTE SALUDABLE O SIN PRUEBAS PATOLÓGICAS:
   return {
     principalDiagnosis: {
       codeCIE10: 'Z13.3',
