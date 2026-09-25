@@ -24,7 +24,7 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
-// MÓDULOS HIPNO-VR & CLOSED-LOOP (SUITE COMPLETA)
+// MÓDULOS HIPNO-VR & CLOSED-LOOP
 import { VrPainManagementModule } from './components/VrPainManagementModule';
 import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
 import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
@@ -74,9 +74,9 @@ type AppTab =
 
 export default function App() {
   // Estado de Autenticación
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [doctorName, setDoctorName] = useState('Dr. Alejandro Morales Rivera');
-  const [doctorUsername, setDoctorUsername] = useState('harold01');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
+  const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
   // Navegación por Pestañas
@@ -88,30 +88,30 @@ export default function App() {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
   });
   const [analysis, setAnalysis] = useState<AmieClinicalAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
   const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Control estricto de modales flotantes (Todos inician cerrados en false)
-  const [isDsmModalOpen, setIsDsmModalOpen] = useState(false);
+  // Modales Guía DSM y Consolas Fullscreen
+  const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
-  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState(false);
-  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState(false);
-  const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState(false);
+  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
+  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
+  const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState<boolean>(false);
   
-  // Modales Hipno-VR
-  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState(false);
-  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState(false);
-  const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState(false);
-  const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState(false);
-  const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState(false);
+  // Modales Especializados Hipno-VR
+  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState<boolean>(false);
+  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState<boolean>(false);
+  const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState<boolean>(false);
+  const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState<boolean>(false);
+  const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState<boolean>(false);
 
   // Estado Hardware USB
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
-  // Cierre de modales abiertos al inicio
+  // Cierre Unificado de Modales Pantalla Completa
   const closeAllModals = () => {
     setIsDsmModalOpen(false);
     setIsFullscreenConsoleOpen(false);
@@ -124,7 +124,7 @@ export default function App() {
     setIsFullscreenGammaOpen(false);
   };
 
-  // Recuperación automática de sesión activa
+  // Recuperación de Sesión del Usuario
   useEffect(() => {
     try {
       const savedToken = localStorage.getItem('amie_auth_token');
@@ -140,19 +140,19 @@ export default function App() {
         closeAllModals();
       }
     } catch (e) {
-      console.warn('No se pudo acceder a localStorage:', e);
+      console.warn('Acceso a localStorage restringido o no disponible:', e);
     }
   }, []);
 
-  // Suscripción a eventos USB (Hot-Plugging)
+  // Suscripción a Eventos de Hardware USB Hot-Plugging
   useEffect(() => {
     const unsubscribe = subscribeUsbDeviceEvents(
-      (deviceName) => {
+      (deviceName: string) => {
         setUsbDeviceName(deviceName);
-        setSyncSuccessMsg(`Hardware conectado: ${deviceName}`);
+        setSyncSuccessMsg(`Hardware detectado: ${deviceName}`);
         setTimeout(() => setSyncSuccessMsg(null), 4000);
       },
-      (deviceName) => {
+      (deviceName: string) => {
         setUsbDeviceName(null);
         setErrorMsg(`Hardware desconectado: ${deviceName}`);
         setTimeout(() => setErrorMsg(null), 4000);
@@ -175,13 +175,13 @@ export default function App() {
       localStorage.clear();
       sessionStorage.clear();
     } catch (e) {
-      console.warn('Error al limpiar almacenamiento local:', e);
+      console.warn('Error durante el cierre de sesión:', e);
     }
     closeAllModals();
     setIsAuthenticated(false);
   };
 
-  // ⚡ EJECUCIÓN DEL ANÁLISIS Y REDIRECCIÓN AUTOMÁTICA AL WORKSTATION
+  // Ejecución de Análisis Clínico Multimodal con Gemini 3.8 Flash
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
     setIsAnalyzing(true);
@@ -189,7 +189,7 @@ export default function App() {
     try {
       const result = await runAmieClinicalAnalysis(currentPatient);
       setAnalysis(result);
-      setActiveTab('workstation'); // 👈 Redirige de inmediato para mostrar el dictamen generado
+      setActiveTab('workstation');
     } catch (err: unknown) {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
@@ -220,7 +220,7 @@ export default function App() {
       if (msg.includes('no existe o no tiene datos cargados') || msg.includes('Acceso denegado')) {
         setSyncNotFoundAlert(msg);
       } else {
-        setErrorMsg('Error de comunicación con servidor: ' + msg);
+        setErrorMsg('Error de comunicación con el servidor: ' + msg);
       }
     } finally {
       setIsSyncing(false);
@@ -242,7 +242,7 @@ export default function App() {
       vrTelemetryData: telemetry,
       vrTherapyReport: report
     }));
-    setSyncSuccessMsg('Métricas de VR transferidas exitosamente a la Triangulación Global.');
+    setSyncSuccessMsg('Métricas VR transferidas exitosamente a la Triangulación Global.');
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
@@ -319,7 +319,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Estado de hardware USB */}
+      {/* Indicador de Hardware USB Activo */}
       {usbDeviceName && (
         <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
           <Usb className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
@@ -334,8 +334,8 @@ export default function App() {
             
             <HoverTooltip
               title="Workstation Clínico"
-              description="Núcleo de triaje y triangulación de riesgos, datos del expediente JSON, psicometría y dictamen AMIE en 5 bloques."
-              clinicalUtility="Generación del dictamen normativo DSM-5 con certezas >80%."
+              description="Núcleo de triaje y triangulación de riesgos, datos del expediente JSON, psicometría y dictamen AMIE."
+              clinicalUtility="Generación del dictamen normativo DSM-5-TR / CIE-11."
               badge="Módulo 1"
             >
               <button
@@ -447,7 +447,7 @@ export default function App() {
             </HoverTooltip>
 
             <HoverTooltip
-              title="Módulo Terapéutico VR (Pico Neo 3 / Quest 3S)"
+              title="Módulo Terapéutico VR (Meta Quest 3S / Pico)"
               description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV)."
               clinicalUtility="Cálculo del índice de habituación H."
               badge="Biometría VR"
@@ -486,7 +486,7 @@ export default function App() {
 
             <HoverTooltip
               title="Perfil de Licencia & Control IA"
-              description="Monitoreo de vigencia de licencia y consumo del bolsón de IA."
+              description="Monitoreo de vigencia de licencia y consumo del bolsón de IA en MongoDB."
               clinicalUtility="Perfil de usuario e indicadores."
               badge="Perfil"
             >
@@ -578,7 +578,7 @@ export default function App() {
                       Motor Clínico AMIE Listo para Análisis Multimodal
                     </h3>
                     <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haga clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado en 5 bloques.
+                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini 3.8 Flash.
                     </p>
 
                     <button
@@ -596,6 +596,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Tab 2: Evaluador Científico */}
         {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
         
         {/* Tab 3: Diferenciador & Sesgos */}
@@ -606,6 +607,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Tab 4: Capacitación */}
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         
         {/* Tab 5: Neurotopografía 3D */}
@@ -733,6 +735,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Tab 8: Referencia */}
         {activeTab === 'referral' && (
           <PsychiatryReferralView
             patient={safePatient}
@@ -741,12 +744,14 @@ export default function App() {
             colegiadoNumber={colegiadoNumber}
           />
         )}
+
+        {/* Tab 9: Panel SaaS & Licencias */}
         {activeTab === 'saas' && <AdminSaaSPanel />}
       </main>
 
       <FloatingAmieAssistant
         currentPatientId={safePatientId}
-        onNavigateTab={(targetTab) => setActiveTab(targetTab as AppTab)}
+        onNavigateTab={(targetTab: string) => setActiveTab(targetTab as AppTab)}
         activeTab={activeTab}
       />
 
@@ -756,7 +761,7 @@ export default function App() {
         defaultView={dsmModalView}
       />
 
-      {/* Modales Fullscreen */}
+      {/* Modales Pantalla Completa */}
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
           patient={safePatient}
