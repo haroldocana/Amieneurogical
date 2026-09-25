@@ -8,7 +8,7 @@ const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
 const aiClient = new GoogleGenAI({ apiKey });
 
 /**
- * Controlador de análisis clínico multimodal e integración con Gemini 3.8 Flash
+ * Controlador de análisis clínico multimodal e integración estricta con Gemini 3.8 Flash
  */
 export const analyzePatientData = async (req: AuthRequest, res: Response): Promise<Response> => {
   try {
@@ -70,7 +70,7 @@ export const analyzePatientData = async (req: AuthRequest, res: Response): Promi
 
     const prompt = `Analiza clínicamente este expediente:\n${JSON.stringify(patientRecord, null, 2)}`;
 
-    // Ejecución de la llamada a Gemini 3.8 Flash
+    // Ejecución de la llamada explícita a Gemini 3.8 Flash
     const response = await aiClient.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
