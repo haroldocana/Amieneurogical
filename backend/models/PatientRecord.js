@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const PatientRecordSchema = new mongoose.Schema({
   metadata: {
@@ -11,8 +11,8 @@ const PatientRecordSchema = new mongoose.Schema({
   demographicProfile: {
     age: { type: Number, default: 0 },
     biologicalSex: { type: String, enum: ['M', 'F', 'Other'], default: 'M' },
-    genderIdentity: String,
-    dailyDigitalExpositionHours: Number,
+    genderIdentity: { type: String, default: 'M' },
+    dailyDigitalExpositionHours: { type: Number, default: 0 },
     primaryMediaPlatforms: [String],
     socialContagionRiskIndex: { type: Number, min: 0, max: 100, default: 0 }
   },
@@ -45,11 +45,11 @@ const PatientRecordSchema = new mongoose.Schema({
   },
   diagnosticEngineOutput: {
     primaryDiagnostic: {
-      icd11Code: String,
-      dsm5Code: String,
-      title: String,
-      probabilityPercent: Number,
-      severityLevel: String
+      icd11Code: { type: String, default: '6A02' },
+      dsm5Code: { type: String, default: 'F32.9' },
+      title: { type: String, default: 'Sin Diagnóstico Especificado' },
+      probabilityPercent: { type: Number, default: 0 },
+      severityLevel: { type: String, default: 'Moderado' }
     },
     secondaryComorbidities: [mongoose.Schema.Types.Mixed]
   },
@@ -60,25 +60,25 @@ const PatientRecordSchema = new mongoose.Schema({
     currentProgressionLevel: String,
     sessionParameters: mongoose.Schema.Types.Mixed,
     realtimeTelemetrySummary: {
-      baselineGSR_uS: Number,
-      peakGSR_uS: Number,
-      postExposureGSR_uS: Number,
-      lfHfRatio: Number,
-      habituationIndexH: Number,
-      sudsInitial: Number,
-      sudsFinal: Number
+      baselineGSR_uS: { type: Number, default: 0 },
+      peakGSR_uS: { type: Number, default: 0 },
+      postExposureGSR_uS: { type: Number, default: 0 },
+      lfHfRatio: { type: Number, default: 1.0 },
+      habituationIndexH: { type: Number, default: 0 },
+      sudsInitial: { type: Number, default: 0 },
+      sudsFinal: { type: Number, default: 0 }
     }
   },
   longitudinalProgressiveLevels: mongoose.Schema.Types.Mixed,
   federatedResearchContribution: {
     anonymizedDataExportReady: { type: Boolean, default: true },
     globalCohortContributionId: String,
-    p_ValueContribution: Number,
-    calculatedHedgesG: Number
+    p_ValueContribution: { type: Number, default: 0.05 },
+    calculatedHedgesG: { type: Number, default: 0.0 }
   }
 }, { timestamps: true });
 
-// Índice compuesto para acelerar búsquedas por colegiado/médico y paciente
 PatientRecordSchema.index({ 'metadata.operatorId': 1, 'metadata.patientId': 1 });
 
-module.exports = mongoose.model('PatientRecord', PatientRecordSchema);
+const PatientRecord = mongoose.model('PatientRecord', PatientRecordSchema);
+export default PatientRecord;
