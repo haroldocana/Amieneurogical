@@ -24,6 +24,9 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
+// MÓDULO NUEVO: NEUROHIPNOSIS CLOSED-LOOP
+import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
+
 // MÓDULOS HIPNO-VR & CLOSED-LOOP
 import { VrPainManagementModule } from './components/VrPainManagementModule';
 import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
@@ -181,7 +184,7 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
-  // Ejecución de Análisis Clínico Multimodal con Gemini 3.8 Flash
+  // Ejecución de Análisis Clínico Multimodal con Gemini
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
     setIsAnalyzing(true);
@@ -578,7 +581,7 @@ export default function App() {
                       Motor Clínico AMIE Listo para Análisis Multimodal
                     </h3>
                     <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini 3.8 Flash.
+                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini.
                     </p>
 
                     <button
@@ -708,7 +711,7 @@ export default function App() {
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
               >
                 <Sparkles className="w-4 h-4 text-purple-200" />
-                <span>Consola Hipnosis & Trauma</span>
+                <span>Consola Neurohipnosis Closed-Loop</span>
               </button>
 
               <button
@@ -778,11 +781,14 @@ export default function App() {
         />
       )}
 
+      {/* Consola de Neurohipnosis de Bucle Cerrado (Closed-Loop) */}
       {isFullscreenHypnosisOpen && (
-        <VrDevelopmentalTraumaFullscreenMonitor
-          patient={safePatient}
-          onClose={() => setIsFullscreenHypnosisOpen(false)}
-        />
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <VrClosedLoopHypnosisModule
+            patient={safePatient}
+            onClose={() => setIsFullscreenHypnosisOpen(false)}
+          />
+        </div>
       )}
 
       {isFullscreenPainOpen && (
