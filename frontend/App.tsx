@@ -37,6 +37,9 @@ import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidat
 import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
 import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 
+// MÓDULO TRADUCCIÓN POR CORRIENTES APA & RCI
+import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
+
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
@@ -65,13 +68,15 @@ import {
   RotateCcw,
   Target,
   Lightbulb,
-  Smartphone
+  Smartphone,
+  BookOpen
 } from 'lucide-react';
 
 type AppTab = 
   | 'workstation' 
   | 'scientific_evaluator' 
   | 'differential_bias' 
+  | 'apa_framework'
   | 'academy' 
   | 'neuro_3d' 
   | 'neurosensometry' 
@@ -203,7 +208,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } fontally {
+    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -395,6 +400,25 @@ export default function App() {
               >
                 <GitCompare className="w-3.5 h-3.5 text-cyan-300" />
                 <span>Diferenciador & Sesgos</span>
+              </button>
+            </HoverTooltip>
+
+            <HoverTooltip
+              title="Traducción APA & RCI"
+              description="Interpretación de biometría por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
+              clinicalUtility="Evaluación de cambio confiable (Jacobson & Truax) y alianza terapéutica."
+              badge="Marco APA"
+            >
+              <button
+                onClick={() => setActiveTab('apa_framework')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                  activeTab === 'apa_framework'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Corrientes APA & RCI</span>
               </button>
             </HoverTooltip>
 
@@ -593,7 +617,7 @@ export default function App() {
                     <button
                       onClick={handleRunAnalysis}
                       disabled={isAnalyzing}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-lg shadow-sky-500/20 active:scale-95 transition"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-lg shadow-sky-500/20 active:scale-95 transition cursor-pointer"
                     >
                       <Activity className="w-4 h-4" />
                       <span>Procesar Expediente Ahora</span>
@@ -614,6 +638,11 @@ export default function App() {
             <DifferentialBiasResolver patient={safePatient} />
             <DiagnosticTriangulationView patient={safePatient} analysis={analysis} />
           </div>
+        )}
+
+        {/* Tab APA: Corrientes APA & RCI */}
+        {activeTab === 'apa_framework' && (
+          <ApaTherapeuticModule patient={safePatient} />
         )}
 
         {/* Tab 4: Capacitación */}
@@ -674,7 +703,7 @@ export default function App() {
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
               <button
                 onClick={() => setIsFullscreenPhenotypeOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition cursor-pointer"
               >
                 <Smartphone className="w-4 h-4 text-teal-100" />
                 <span>Fenotipado Digital & Recaídas</span>
@@ -682,7 +711,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenGammaOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
               >
                 <Lightbulb className="w-4 h-4 text-amber-100" />
                 <span>Consola Gamma 40Hz (TOC / TEA)</span>
@@ -690,7 +719,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenExecOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition cursor-pointer"
               >
                 <Target className="w-4 h-4 text-sky-200" />
                 <span>Consola TDAH (Executive Control)</span>
@@ -698,7 +727,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenMemoryOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4 text-rose-200" />
                 <span>Consola Memoria & Fobias</span>
@@ -706,7 +735,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenFndOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
               >
                 <UserCheck className="w-4 h-4 text-indigo-200" />
                 <span>Consola Mirror VR (FND)</span>
@@ -714,7 +743,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenPainOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
               >
                 <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
                 <span>Consola Analgesia VR</span>
@@ -722,7 +751,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenHypnosisOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer"
               >
                 <Sparkles className="w-4 h-4 text-purple-200" />
                 <span>Consola Neurohipnosis Closed-Loop</span>
@@ -730,7 +759,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenDiagnosticOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
               >
                 <Brain className="w-4 h-4" />
                 <span>Consola Diagnóstico 3D</span>
@@ -738,7 +767,7 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenConsoleOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition"
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
               >
                 <Glasses className="w-4 h-4" />
                 <span>Consola Tratamiento</span>
