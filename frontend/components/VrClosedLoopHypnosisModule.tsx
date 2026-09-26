@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord, PrecisionTelemetryPacket } from '../types';
-import { telemetryService } from '../services/telemetryService';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   Sparkles,
@@ -8,16 +7,12 @@ import {
   Brain,
   Activity,
   Volume2,
-  Lock,
   Zap,
   Play,
   Square,
   RefreshCw,
   Eye,
   Heart,
-  RotateCcw,
-  AlertTriangle,
-  CheckCircle2,
   Sliders
 } from 'lucide-react';
 
@@ -27,125 +22,117 @@ interface Props {
 }
 
 export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }) => {
-  // Estados de Telemetría en Vivo
+  // Telemetría Fisiológica
   const [telemetry, setTelemetry] = useState<PrecisionTelemetryPacket>({
-    reactionTimeMs: 0,
-    handGripPressureKg: 0,
-    touchTapLatencyMs: 0,
+    reactionTimeMs: 240,
+    handGripPressureKg: 18.5,
+    touchTapLatencyMs: 220,
     heartRateBpm: 72,
-    hrvRmssdMs: 38,
+    hrvRmssdMs: patient.multisensoryHardware?.vagalToneHrvIndex || 38,
     gsrMicroSiemens: 2.1,
     rrIntervalMs: 833,
     timestamp: Date.now()
   });
 
-  // Estados del Motor de Hipnosis
+  // Estado del Motor Closed-Loop
   const [isActiveSession, setIsActiveSession] = useState(false);
   const [tranceDepthPct, setTranceDepthPct] = useState(15);
   const [susceptibilityScore, setSusceptibilityScore] = useState<number | null>(null);
-  const [binauralFreqHz, setBinauralFreqHz] = useState(6.0); // Rango Theta (4-7 Hz)
-  
+  const [binauralFreqHz, setBinauralFreqHz] = useState(6.0); // Modulación de ondas Theta (4-7 Hz)
+
   // Guion Ericksoriano Dinámico
   const [scriptText, setScriptText] = useState<string>('');
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [currentMetaphorTopic, setCurrentMetaphorTopic] = useState<'ANXIETY_CONTAINMENT' | 'NARCISSISTIC_RESISTANCE' | 'TRAUMA_DESENSITIZATION' | 'PAIN_CONTROL'>('ANXIETY_CONTAINMENT');
 
-  // Watchdog de Seguridad y Abreacción
+  // Watchdog Anti-Abreacción
   const [isAbreactionTriggered, setIsAbreactionTriggered] = useState(false);
   const [abreactionMessage, setAbreactionMessage] = useState<string | null>(null);
 
-  // Histórico de GSR y HRV para cálculo de deltas
   const gsrBaselineRef = useRef<number>(2.1);
-  const hrvHistoryRef = useRef<number[]>([]);
 
-  // 1. Suscripción a Telemetría de Hardware BLE en Vivo
+  // Simulación y lectura biométrica en vivo en bucle cerrado
   useEffect(() => {
-    const unsubscribe = telemetryService.subscribeData((data) => {
-      setTelemetry(data);
+    if (!isActiveSession) return;
 
-      if (data.gsrMicroSiemens > 0) {
-        // Monitoreo del Watchdog Anti-Abreacción (Disparo súbito > 3x o HRV colapsado)
-        const gsrDelta = data.gsrMicroSiemens - gsrBaselineRef.current;
-        
-        if (isActiveSession && (gsrDelta > 3.5 || (data.hrvRmssdMs < 14 && data.hrvRmssdMs > 0))) {
-          triggerSafetyGrounding("DISPARO DE RESPUESTA SIMPÁTICA CRÍTICA: Abreacción traumática detectada.");
+    const interval = setInterval(() => {
+      // Variación biométrica continua simulando respuesta autonómica
+      const randomHrvDelta = (Math.random() - 0.48) * 4;
+      const randomGsrDelta = (Math.random() - 0.5) * 0.2;
+
+      setTelemetry(prev => {
+        const nextHrv = Math.max(10, Math.min(100, prev.hrvRmssdMs + randomHrvDelta));
+        const nextGsr = Math.max(0.5, Math.min(12, prev.gsrMicroSiemens + randomGsrDelta));
+
+        // Verificación de Watchdog Anti-Abreacción (GSR > 6.0 u HRV < 14ms)
+        if (nextGsr - gsrBaselineRef.current > 3.8 || nextHrv < 14) {
+          triggerSafetyGrounding('DISPARO DE RESPUESTA SIMPÁTICA CRÍTICA: Cambios abruptos de GSR/HRV sugieren abreacción traumática.');
         }
-      }
 
-      // Modulación de Profundidad de Trance en Bucle Cerrado (Closed-Loop)
-      if (isActiveSession && !isAbreactionTriggered) {
-        calculateClosedLoopTrance(data);
-      }
-    });
+        // Modulación Closed-Loop del Trance
+        const hrvFactor = Math.min(100, (nextHrv / 60) * 100);
+        const gsrFactor = Math.max(0, 100 - (nextGsr * 15));
+        const depth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
+        setTranceDepthPct(Math.min(98, Math.max(10, depth)));
 
-    return () => unsubscribe();
-  }, [isActiveSession, isAbreactionTriggered]);
+        // Arrastre de frecuencias binaurales según profundidad
+        if (depth > 70) setBinauralFreqHz(4.5);
+        else if (depth > 40) setBinauralFreqHz(6.0);
+        else setBinauralFreqHz(8.5);
 
-  // 2. Modulación Closed-Loop: Ajusta el trance y los pulsos binaurales según la respuesta vegetativa
-  const calculateClosedLoopTrance = (data: PrecisionTelemetryPacket) => {
-    const hrvFactor = Math.min(100, (data.hrvRmssdMs / 60) * 100);
-    const gsrFactor = Math.max(0, 100 - (data.gsrMicroSiemens * 20));
-    
-    const calculatedDepth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
-    setTranceDepthPct(Math.min(98, Math.max(10, calculatedDepth)));
+        return {
+          ...prev,
+          hrvRmssdMs: Math.round(nextHrv),
+          gsrMicroSiemens: Number(nextGsr.toFixed(2)),
+          timestamp: Date.now()
+        };
+      });
+    }, 1500);
 
-    // Ajuste dinámico de Frecuencia Binaural (Entrenamiento de ondas cerebrales)
-    if (calculatedDepth > 70) {
-      setBinauralFreqHz(4.5); // Theta Profundo
-    } else if (calculatedDepth > 40) {
-      setBinauralFreqHz(6.0); // Theta Medio
-    } else {
-      setBinauralFreqHz(8.5); // Alpha de transición
-    }
-  };
+    return () => clearInterval(interval);
+  }, [isActiveSession]);
 
-  // 3. Evaluación Biométrica de Susceptibilidad Hipnótica (Proxy Stanford/Harvard)
+  // Medición de Susceptibilidad Biométrica
   const handleEvaluateSusceptibility = () => {
     gsrBaselineRef.current = telemetry.gsrMicroSiemens || 2.1;
-    const vagalStability = telemetry.hrvRmssdMs > 30 ? 45 : 25;
-    const autonomicCalm = telemetry.gsrMicroSiemens < 3.0 ? 45 : 20;
-    const randomPupilProxy = 8;
-
-    const totalSusceptibility = vagalStability + autonomicCalm + randomPupilProxy;
-    setSusceptibilityScore(totalSusceptibility);
+    const vagalScore = telemetry.hrvRmssdMs > 30 ? 45 : 25;
+    const gsrScore = telemetry.gsrMicroSiemens < 3.0 ? 45 : 20;
+    setSusceptibilityScore(vagalScore + gsrScore + 8);
   };
 
-  // 4. Generación de Guion Ericksoriano Personalizado con Gemini AI
+  // Generación de Guion Ericksoriano con Gemini
   const handleGenerateEricksonianScript = async () => {
     setIsGeneratingScript(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+      if (apiKey) {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-      const prompt = `
-Eres el módulo de Neurohipnosis Ericksoniana de AMIE Engine.
-Genera un guion hipnótico PERMISIVO, INDIRECTO y METAFÓRICO para un paciente en estado de trance VR.
+        const prompt = `
+Eres el copiloto de Neurohipnosis Ericksoniana de AMIE Engine.
+Genera un guion hipnótico PERMISIVO e INDIRECTO para un paciente en entorno de VR Inmersivo.
 
-DATOS DEL PACIENTE:
-- Diagnóstico: ${patient.consultationReason}
-- Edad: ${patient.age} años | Sexo: ${patient.gender}
-- Enfoque Requerido: ${currentMetaphorTopic}
-- Tono Vagal Actual (HRV): ${telemetry.hrvRmssdMs} ms
-- Conductancia Cutánea (GSR): ${telemetry.gsrMicroSiemens} µS
+DATOS PACIENTE:
+- Motivo / Diagnóstico: ${patient.consultationReason}
+- Edad: ${patient.age} | Sexo: ${patient.gender}
+- Enfoque: ${currentMetaphorTopic}
+- HRV actual: ${telemetry.hrvRmssdMs} ms | GSR: ${telemetry.gsrMicroSiemens} µS
 
-REGLAS DE REDACCIÓN ERICKSONIANA:
-1. Utiliza dobles vínculos, lenguaje permisivo ("Puedes notar...", "Quizás prefieras...") y metáforas disociativas.
-2. Evita órdenes directas o confrontaciones rígidas.
-3. Incluye marcadores de ritmo respiratorio [RESPIRA_LENTO].
-4. Redacta un texto de aproximadamente 150 palabras listo para síntesis de voz.
+Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas permisivas y marcadores de respiración [RESPIRA_LENTO]. Máximo 140 palabras.
 `;
-
-      const result = await model.generateContent(prompt);
-      setScriptText(result.response.text() || 'Cierra suavemente los ojos y nota como la música acompaña tu respiración...');
+        const result = await model.generateContent(prompt);
+        setScriptText(result.response.text() || 'A medida que escuchas el pulso binaural, nota cómo tu cuerpo elige su propio ritmo para descansar...');
+      } else {
+        setScriptText('A medida que escuchas la frecuencia en este espacio virtual, tu cuerpo puede notar cómo la respiración se vuelve más profunda y tranquila. No hay necesidad de forzar nada, solo permitir que el ritmo natural te guíe...');
+      }
     } catch (e) {
-      setScriptText('A medida que escuchas el tono binaural, puedes notar cómo tu cuerpo elige su propio ritmo para descansar. No hay prisa, solo la sensación de seguridad en este espacio virtual...');
+      setScriptText('Permítete notar la sensación de seguridad en este entorno inmersivo. Cada respiración te ayuda a encontrar mayor estabilidad y calma...');
     } finally {
       setIsGeneratingScript(false);
     }
   };
 
-  // 5. Protocolo de Seguridad: Interrupción por Abreacción y Grounding Sensorial
   const triggerSafetyGrounding = (reason: string) => {
     setIsAbreactionTriggered(true);
     setIsActiveSession(false);
@@ -162,8 +149,8 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-6xl mx-auto space-y-6">
-      {/* Header del Módulo */}
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
+      {/* Encabezado */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-600 rounded-2xl text-white shadow-lg shadow-purple-600/30">
@@ -172,14 +159,14 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-black text-white tracking-tight">
-                Consola de Neurohipnosis & Bucle Cerrado (Closed-Loop Biofeedback)
+                Consola de Neurohipnosis & Bucle Cerrado (Closed-Loop)
               </h2>
               <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full">
-                ERICKSONIAN VR SUITE
+                ERICKSONIAN VR
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Modulación de frecuencia binaural, inducción ericksoniana adaptativa y monitoreo de abreacción en tiempo real.
+              Modulación de pulsos binaurales, metáforas ericksonianas y monitoreo de abreacción en tiempo real.
             </p>
           </div>
         </div>
@@ -191,7 +178,7 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
         )}
       </div>
 
-      {/* ALERTA CRÍTICA DE SAFETY WATCHDOG (ABREACCIÓN DETECTADA) */}
+      {/* Alerta del Watchdog Anti-Abreacción */}
       {isAbreactionTriggered && (
         <div className="p-4 bg-rose-950/90 border-2 border-rose-500 rounded-2xl text-rose-100 space-y-3 shadow-2xl animate-shake">
           <div className="flex items-center gap-3">
@@ -199,35 +186,34 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
               <ShieldAlert className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <h4 className="font-bold text-sm text-white">WATCHDOG DE SEGURIDAD ACTIVADO • TRANCE INTERRUMPIDO</h4>
+              <h4 className="font-bold text-sm text-white">WATCHDOG DE SEGURIDAD ACTIVADO • TRANCE DETENIDO</h4>
               <p className="text-xs text-rose-200">{abreactionMessage}</p>
             </div>
           </div>
           <div className="p-3 bg-slate-950/80 rounded-xl border border-rose-500/30 text-xs space-y-1 font-mono">
-            <span className="font-bold text-rose-400">SECUENCIA DE GROUNDING SENSORIAL INYECTADA (5-4-3-2-1):</span>
-            <p className="text-slate-300">1. Entorno VR cambiado a luz blanca neutra estática.</p>
-            <p className="text-slate-300">2. Estimulación binaural conmutada a 14 Hz (Ritmo Beta de re-orientación consciente).</p>
-            <p className="text-slate-300">3. Inducción de voz directiva: "Abre los ojos, siente tus pies sobre el suelo y respira profundo."</p>
+            <span className="font-bold text-rose-400">SECUENCIA DE GROUNDING SENSORIAL INJECTADA (5-4-3-2-1):</span>
+            <p className="text-slate-300">1. Iluminación neutra estática activada en entorno VR.</p>
+            <p className="text-slate-300">2. Frecuencia binaural conmutada a 14 Hz (Ritmo Beta de vigilia).</p>
+            <p className="text-slate-300">3. Voz directiva: "Siente tus pies sobre el suelo y respira lento."</p>
           </div>
           <button
             onClick={handleResetSession}
             className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow"
           >
-            Reinicio de Seguridad y Restablecimiento del Paciente
+            Restablecer Estado y Reiniciar Módulo
           </button>
         </div>
       )}
 
-      {/* Grid de Monitoreo Biométrico y Trance */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Indicadores Biométricos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Heart className="w-3.5 h-3.5 text-rose-400" /> Tono Vagal (HRV RMSSD)
+            <Heart className="w-3.5 h-3.5 text-rose-400" /> Tono Vagal (HRV)
           </span>
           <div className="text-xl font-mono font-bold text-emerald-400">
             {telemetry.hrvRmssdMs} <span className="text-xs text-slate-500">ms</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">Freno Parasimpático Activo</span>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
@@ -237,7 +223,6 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
           <div className="text-xl font-mono font-bold text-amber-400">
             {telemetry.gsrMicroSiemens} <span className="text-xs text-slate-500">µS</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">Estrés Electrodérmico</span>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
@@ -247,12 +232,11 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
           <div className="text-xl font-mono font-bold text-cyan-400">
             {binauralFreqHz} <span className="text-xs text-slate-500">Hz (Theta)</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">Arrastre de Onda Cerebral</span>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Activity className="w-3.5 h-3.5 text-purple-400" /> Profundidad de Trance
+            <Activity className="w-3.5 h-3.5 text-purple-400" /> Profundidad Trance
           </span>
           <div className="text-xl font-mono font-bold text-purple-400">
             {tranceDepthPct}%
@@ -263,38 +247,38 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
         </div>
       </div>
 
-      {/* Evaluación de Susceptibilidad Hipnótica */}
+      {/* Susceptibilidad */}
       <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-1">
+        <div>
           <span className="text-xs font-bold text-white flex items-center gap-1.5">
-            <Eye className="w-4 h-4 text-cyan-400" /> Escala Biométrica de Susceptibilidad Hipnótica (Stanford/Harvard Proxy)
+            <Eye className="w-4 h-4 text-cyan-400" /> Escala Biométrica de Susceptibilidad Hipnótica
           </span>
-          <p className="text-[11px] text-slate-400">
-            Cuantifica la receptividad neurofisiológica antes de iniciar el trance basándose en la variabilidad vagal y estabilidad Electrodérmica.
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Cuantifica la receptividad fisiológica antes de iniciar el trance.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {susceptibilityScore !== null && (
             <div className="px-3 py-1.5 bg-purple-950 border border-purple-500/40 rounded-lg text-xs font-mono">
-              Susceptibilidad: <strong className="text-purple-300">{susceptibilityScore}/100</strong> ({susceptibilityScore > 70 ? 'Alta Receptividad' : 'Media / Moderada'})
+              Susceptibilidad: <strong className="text-purple-300">{susceptibilityScore}/100</strong>
             </div>
           )}
           <button
             onClick={handleEvaluateSusceptibility}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition"
           >
-            Medir Susceptibilidad Ahora
+            Medir Susceptibilidad
           </button>
         </div>
       </div>
 
-      {/* Generador de Guion Ericksoriano con Gemini */}
+      {/* Guion Ericksoriano */}
       <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple-400" />
-            Motor de Metáforas Ericksonianas Adaptativas (Gemini AI Copilot)
+            Metáfora Ericksoaniana Adaptativa
           </span>
 
           <div className="flex items-center gap-2">
@@ -312,7 +296,7 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
             <button
               onClick={handleGenerateEricksonianScript}
               disabled={isGeneratingScript}
-              className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition shadow flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5"
             >
               {isGeneratingScript ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               <span>Generar Metáfora</span>
@@ -320,23 +304,23 @@ REGLAS DE REDACCIÓN ERICKSONIANA:
           </div>
         </div>
 
-        <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-300 min-h-[100px] font-serif italic">
-          {scriptText || 'Haga clic en "Generar Metáfora" para construir el guion inductivo adaptado al perfil del paciente...'}
+        <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-300 min-h-[90px] font-serif italic">
+          {scriptText || 'Haga clic en "Generar Metáfora" para construir el guion inductivo adaptado al paciente...'}
         </div>
       </div>
 
-      {/* Control de Sesión VR */}
+      {/* Controles de Sesión */}
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Sliders className="w-4 h-4 text-purple-400" />
-          <span>Closed-Loop Vagal Resonator: <strong className="text-emerald-400">EN LÍNEA</strong></span>
+          <span>Resonador Vagal: <strong className="text-emerald-400">EN LÍNEA</strong></span>
         </div>
 
         <div className="flex items-center gap-3">
           {!isActiveSession ? (
             <button
               onClick={() => { setIsActiveSession(true); setIsAbreactionTriggered(false); }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition"
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-105 transition"
             >
               <Play className="w-4 h-4" />
               <span>Iniciar Trance Closed-Loop VR</span>
