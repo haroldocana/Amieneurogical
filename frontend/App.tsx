@@ -24,8 +24,11 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
-// MÓDULO NUEVO: NEUROHIPNOSIS CLOSED-LOOP
+// MÓDULO NEUROHIPNOSIS CLOSED-LOOP
 import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
+
+// MÓDULO FENOTIPADO DIGITAL & PREVENCIÓN DE RECAÍDAS
+import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
 
 // MÓDULOS HIPNO-VR & CLOSED-LOOP
 import { VrPainManagementModule } from './components/VrPainManagementModule';
@@ -61,7 +64,8 @@ import {
   UserCheck,
   RotateCcw,
   Target,
-  Lightbulb
+  Lightbulb,
+  Smartphone
 } from 'lucide-react';
 
 type AppTab = 
@@ -103,6 +107,7 @@ export default function App() {
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState<boolean>(false);
+  const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
   
   // Modales Especializados Hipno-VR
   const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState<boolean>(false);
@@ -120,6 +125,7 @@ export default function App() {
     setIsFullscreenConsoleOpen(false);
     setIsFullscreenDiagnosticOpen(false);
     setIsFullscreenHypnosisOpen(false);
+    setIsFullscreenPhenotypeOpen(false);
     setIsFullscreenPainOpen(false);
     setIsFullscreenFndOpen(false);
     setIsFullscreenMemoryOpen(false);
@@ -197,7 +203,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } finally {
+    } fontally {
       setIsAnalyzing(false);
     }
   };
@@ -667,6 +673,14 @@ export default function App() {
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
               <button
+                onClick={() => setIsFullscreenPhenotypeOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition"
+              >
+                <Smartphone className="w-4 h-4 text-teal-100" />
+                <span>Fenotipado Digital & Recaídas</span>
+              </button>
+
+              <button
                 onClick={() => setIsFullscreenGammaOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition"
               >
@@ -787,6 +801,16 @@ export default function App() {
           <VrClosedLoopHypnosisModule
             patient={safePatient}
             onClose={() => setIsFullscreenHypnosisOpen(false)}
+          />
+        </div>
+      )}
+
+      {/* Consola de Fenotipado Digital & Prevención de Recaídas */}
+      {isFullscreenPhenotypeOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <DigitalPhenotypeModule
+            patient={safePatient}
+            onClose={() => setIsFullscreenPhenotypeOpen(false)}
           />
         </div>
       )}
