@@ -10,7 +10,7 @@ import {
 import { SimulatedPatientAvatar } from './SimulatedPatientAvatar';
 import { ClinicalExecutionGuidePanel } from './ClinicalExecutionGuidePanel';
 import { AcademyScoringReport } from './AcademyScoringReport';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   GraduationCap,
   Sparkles,
@@ -183,7 +183,13 @@ export const AmieClinicalAcademy: React.FC = () => {
   const handleGenerateBlackSwan = async () => {
     setIsGeneratingBlackSwan(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.8 }
+      });
+
       const prompt = `
 Genera un caso clínico psiquiátrico "Cisne Negro" (de extrema rareza, comorbilidad atípica o diagnóstico diferencial desafiante) para entrenamiento en AMIE Clinical Academy.
 Elige una etapa del ciclo vital al azar (Infancia, Adolescencia, Adultez, Adultez Mayor).
@@ -195,10 +201,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
   "title": "Título llamativo del caso (ej. 'Cisne Negro: Síndrome de Charles Bonnet vs Psicosis Tardía')",
   "patientName": "Nombre y edad (ej. 'Arturo Beltrán (68 años)')",
   "age": 68,
-  "gender": "M" o "F",
-  "stage": "INFANCIA" | "ADOLESCENCIA" | "ADULTEZ" | "ADULTEZ_MAYOR",
+  "gender": "M",
+  "stage": "ADULTEZ_MAYOR",
   "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80",
-  "initialEmotion": "Ansioso" | "Defensivo" | "Afligido" | "Neutral",
+  "initialEmotion": "Ansioso",
   "consultationReason": "Motivo de consulta cardinal que genera confusión",
   "clinicalBackstory": "Historia clínica detallada con trampa diagnóstica",
   "normativeDevelopmentVsPathologyClues": "Puntos clave para no caer en el sesgo diagnóstico",
@@ -206,19 +212,16 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
   "qeegSummary": "Resumen electrofisiológico (Z-scores)",
   "goldStandardDiagnosis": "Diagnóstico estricto DSM-5",
   "goldStandardCIE10": "Código CIE-10",
-  "goldStandardFramework": "TCC" | "DBT" | "ACT" | "EMDR",
-  "goldStandardPharmacology": "ISRS" | "ISRN" | "ANTIPSICOTICOS_ATIPICOS" | "ESTABILIZADORES_ANIMO" | "ESTIMULANTES",
+  "goldStandardFramework": "TCC",
+  "goldStandardPharmacology": "ISRS",
   "simulatedPersonaPrompt": "Instrucciones en primera persona para que la IA actúe como este paciente"
 }
 `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { responseMimeType: 'application/json', temperature: 0.8 }
-      });
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
+      const newSwanCase: SimulatedCase = JSON.parse(responseText || '{}');
 
-      const newSwanCase: SimulatedCase = JSON.parse(response.text || '{}');
       if (newSwanCase.title) {
         const updatedList = [newSwanCase, ...casesList];
         setCasesList(updatedList);
@@ -252,7 +255,12 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
     setIsBotTyping(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: { temperature: 0.7 }
+      });
 
       const promptContext = `
 Eres un paciente simulado para la capacitación de psicólogos y psiquiatras en el sistema AMIE Clinical Academy.
@@ -271,26 +279,18 @@ INSTRUCCIONES DE ACTUACIÓN:
 4. Mantén las respuestas conversacionales y verosímiles.
 `;
 
-      const contents = [
-        { role: 'user', parts: [{ text: `${promptContext}\n\nMensajes previos:\n${JSON.stringify(newHistory)}\n\nMédico: ${userText}` }] }
-      ];
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: contents,
-        config: { temperature: 0.7 }
-      });
-
-      const replyText = response.text || '...';
+      const fullPrompt = `${promptContext}\n\nMensajes previos:\n${JSON.stringify(newHistory)}\n\nMédico: ${userText}`;
+      const result = await model.generateContent(fullPrompt);
+      const replyText = result.response.text() || '...';
       
       let parsedEmotion: AvatarEmotionState = currentEmotion;
-      const emotionMatch = replyText.match(/\[EMOTION:\s*(Neutral|Defensivo|Ansioso|Afligido|Aliviado)\]/i);
+      const emotionMatch = replyText.match(/\[EMOTION:\s*(Neutral\vert{}Defensivo\vert{}Ansioso\vert{}Afligido\vert{}Aliviado)\]/i);
       if (emotionMatch && emotionMatch[1]) {
         parsedEmotion = emotionMatch[1] as AvatarEmotionState;
         setCurrentEmotion(parsedEmotion);
       }
 
-      const cleanReply = replyText.replace(/\[EMOTION:\s*(Neutral|Defensivo|Ansioso|Afligido|Aliviado)\]/gi, '').trim();
+      const cleanReply = replyText.replace(/\[EMOTION:\s*(Neutral\vert{}Defensivo\vert{}Ansioso\vert{}Afligido\vert{}Aliviado)\]/gi, '').trim();
 
       if (parsedEmotion === 'Aliviado') setEmpathyMeter(prev => Math.min(100, prev + 15));
       if (parsedEmotion === 'Defensivo') setEmpathyMeter(prev => Math.max(10, prev - 15));
@@ -310,7 +310,15 @@ INSTRUCCIONES DE ACTUACIÓN:
   const handleFinishAndGrade = async () => {
     setIsEvaluatingScore(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.2
+        }
+      });
 
       const gradingPrompt = `
 Eres el Supervisor Clínico Pedagógico del marco AMIE (basado en James Morrison y criterios DSM-5-TR).
@@ -342,20 +350,13 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
   "axisTechnicalAdherence": 22,
   "pedagogicalFeedback": "Análisis pedagógico detallado de aciertos y puntos de mejora.",
   "morrisonSupervisorNote": "Consejo clínico formal del Dr. James Morrison sobre las reglas diagnósticas aplicadas en este caso.",
-  "competencyLevel": "Experto Clínico" | "Avanzado" | "Competente" | "En Desarrollo"
+  "competencyLevel": "Experto Clínico"
 }
 `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: gradingPrompt }] }],
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2
-        }
-      });
-
-      const parsedScore: AcademyScoringResult = JSON.parse(response.text || '{}');
+      const result = await model.generateContent(gradingPrompt);
+      const responseText = result.response.text();
+      const parsedScore: AcademyScoringResult = JSON.parse(responseText || '{}');
       setScoringResult(parsedScore);
     } catch (e) {
       setScoringResult({
