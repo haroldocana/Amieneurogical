@@ -154,7 +154,6 @@ export async function mapApp1DataToApp2(
   const generalData = (rawCase.generalData as Record<string, unknown>) || {};
   const filiacion = (rawCase.filiacion as Record<string, unknown>) || {};
 
-  // Soporta tanto el esquema en español como el esquema plano en inglés (fullName, chiefComplaint)
   const rawName = (
     rawCase.fullName ||
     filiacion.nombreCompleto || filiacion.nombre ||
@@ -236,21 +235,19 @@ export async function syncWithClinicalApp(
   
   if (!cleanPacId) throw new Error("Debe ingresar un código PAC válido (ej. PAC-2964).");
 
-  // Configuración oficial alineada a la colección 'patients' del proyecto amie-clinical-copilot
   const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'amie-clinical-copilot';
   const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'patients';
   const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDorrRPma3q_a-D-OuRh_K4F71yHGgBW1w';
 
   const colegiadoPrefix = typeof colegiado === 'number' ? `COL-${colegiado}` : String(colegiado).trim();
 
-  // Lista de posibles nombres con los que App 1 guarda el ID del documento
   const candidateDocIds = [
-    cleanPacId,                                        // ej: PAC-2964
-    `${resolvedDoctorUsername}_${cleanPacId}`,         // ej: 2000_PAC-2878
-    `${colegiadoPrefix}_${cleanPacId}`,                // ej: COL-DEFAULT_PAC-6788
-    `COL-DEFAULT_${cleanPacId}`,                       // ej: COL-DEFAULT_PAC-2964
-    `harold_${cleanPacId}`,                             // ej: harold_PAC-6788
-    `harold_${colegiadoPrefix}_${cleanPacId}`           // ej: harold_COL-DEFAULT_PAC-2001
+    cleanPacId,
+    `${resolvedDoctorUsername}_${cleanPacId}`,
+    `${colegiadoPrefix}_${cleanPacId}`,
+    `COL-DEFAULT_${cleanPacId}`,
+    `harold_${cleanPacId}`,
+    `harold_${colegiadoPrefix}_${cleanPacId}`
   ];
 
   let foundDocData: Record<string, any> | null = null;
@@ -278,7 +275,6 @@ export async function syncWithClinicalApp(
     }
   }
 
-  // Si no se encuentra por ID directo, realiza consulta estructurada por el campo displayId o id
   if (!foundDocData) {
     try {
       const queryEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`;
@@ -325,7 +321,6 @@ export async function syncWithClinicalApp(
     };
   }
 
-  // Fallback a presets locales si no existe en la base de datos
   const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
   if (matchedPreset) {
     const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
@@ -600,7 +595,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
       functionalAreasAssessment: `Sueño: ${patient.functionalAreas.sleep}/100, Energía: ${patient.functionalAreas.energy}/100`,
       acousticBiometricAssessment: 'PILAR 3.A: Modulación de voz en rango de eutimia.',
       vrHabituationAssessment: `PILAR 3.B: HRV = ${hrvVal} ms, GSR = ${gsrVal} µS. Tono Vagal estable.`,
-      regionalLobeBreakdown: { frontal: 'Normal', temporal: 'Simétrico', parietal: 'Sin alteraciones', occipital: 'Ritmo posterior adecuado' },
+      regionalLobeBreakdown: { frontal: 'Normal', temporal: 'Simétrico', parietal: 'Sin alterations', occipital: 'Ritmo posterior adecuado' },
       convergenceScore: 92.5
     },
     pharmacologicalEffectiveness: [],
@@ -649,8 +644,41 @@ ${analysisData ? `Análisis previo:\n${JSON.stringify(analysisData, null, 2)}` :
 Responde al médico tratante de manera ultra-concisa y científica.
 `;
 
-  const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
+  // Intento 1: Llamada directa vía API KEY si existe en variables de entorno
+  if (GEMINI_API_KEY) {
+    try {
+      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+      const contents = conversation.map(msg => ({
+        role: msg.role === 'model' ? 'model' : 'user',
+        parts: [{ text: msg.text }]
+      }));
 
+      const directPayload = {
+        contents: [
+          { role: 'user', parts: [{ text: systemContext }] },
+          ...contents
+        ],
+        generationConfig: { temperature: 0.25 }
+      };
+
+      const directResp = await fetch(directUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(directPayload)
+      });
+
+      if (directResp.ok) {
+        const directData = await directResp.json();
+        const rawText = directData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) return rawText;
+      }
+    } catch (directErr) {
+      console.warn('Fallo en llamada directa a Gemini API en asistente:', directErr);
+    }
+  }
+
+  // Intento 2: Proxy Express / Vertex AI
+  const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
   const contents = conversation.map(msg => ({
     role: msg.role === 'model' ? 'model' : 'user',
     parts: [{ text: msg.text }]
@@ -667,6 +695,6 @@ Responde al médico tratante de manera ultra-concisa y científica.
     return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor Gemini.';
   } catch (err: unknown) {
     console.error('Error en askAmieAssistant:', err);
-    return 'Error al conectar con la API de IA.';
+    return 'Error al conectar con la API de IA. Verifique su conexión o clave de API.';
   }
 }
