@@ -24,7 +24,7 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
-// MÓDULO FENOTIPADO TRÍADA OSCURA (NARCISISMO & PSICOPATÍA)
+// MÓDULO PERFILADO CLUSTER B
 import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
 
 // MÓDULO NEUROHIPNOSIS CLOSED-LOOP
@@ -73,7 +73,8 @@ import {
   Lightbulb,
   Smartphone,
   BookOpen,
-  UserX
+  UserX,
+  Info
 } from 'lucide-react';
 
 type AppTab = 
@@ -81,7 +82,7 @@ type AppTab =
   | 'scientific_evaluator' 
   | 'differential_bias' 
   | 'apa_framework'
-  | 'dark_triad'
+  | 'cluster_b'
   | 'academy' 
   | 'neuro_3d' 
   | 'neurosensometry' 
@@ -90,17 +91,14 @@ type AppTab =
   | 'saas';
 
 export default function App() {
-  // Estado de Autenticación
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
   const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
-  // Navegación por Pestañas
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
   const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
 
-  // Estado del Expediente del Paciente
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
   });
@@ -111,7 +109,6 @@ export default function App() {
   const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Modales Guía DSM y Consolas Fullscreen
   const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
@@ -119,17 +116,14 @@ export default function App() {
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState<boolean>(false);
   const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
   
-  // Modales Especializados Hipno-VR
   const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState<boolean>(false);
   const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState<boolean>(false);
   const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState<boolean>(false);
   const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState<boolean>(false);
   const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState<boolean>(false);
 
-  // Estado Hardware USB
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
-  // Cierre Unificado de Modales Pantalla Completa
   const closeAllModals = () => {
     setIsDsmModalOpen(false);
     setIsFullscreenConsoleOpen(false);
@@ -143,7 +137,6 @@ export default function App() {
     setIsFullscreenGammaOpen(false);
   };
 
-  // Recuperación de Sesión del Usuario
   useEffect(() => {
     try {
       const savedToken = localStorage.getItem('amie_auth_token');
@@ -163,7 +156,6 @@ export default function App() {
     }
   }, []);
 
-  // Suscripción a Eventos de Hardware USB Hot-Plugging
   useEffect(() => {
     const unsubscribe = subscribeUsbDeviceEvents(
       (deviceName: string) => {
@@ -200,7 +192,6 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
-  // Ejecución de Análisis Clínico Multimodal con Gemini
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
     setIsAnalyzing(true);
@@ -213,7 +204,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } fontally {
+    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -338,6 +329,16 @@ export default function App() {
         onLogout={handleLogout}
       />
 
+      {/* LEYENDA REGULATORIA SAMD (SISTEMA DE SOPORTE A LA DECISIÓN CLÍNICA) */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-1 flex items-center justify-between text-[11px] text-slate-400">
+        <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+          <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span>
+            <strong className="text-slate-200">Aviso Regulador (CDSS):</strong> AMIE Neurological provee soporte diagnóstico probabilístico. Los biomarcadores e índices deben ser validados por el profesional de la salud mental a cargo.
+          </span>
+        </div>
+      </div>
+
       {/* Indicador de Hardware USB Activo */}
       {usbDeviceName && (
         <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
@@ -372,7 +373,7 @@ export default function App() {
 
             <HoverTooltip
               title="Evaluador Científico & Multisensor"
-              description="Scoring de afinidad terapéutica (0-100%) para Depresión, TLP, Esquizofrenia y TEA."
+              description="Scoring de afinidad bioclínica (0-100) para Depresión, TLP, Esquizofrenia y TEA."
               clinicalUtility="Mapeo de respuesta a psicofármacos y neuromodulación."
               badge="Módulo 2"
             >
@@ -391,8 +392,8 @@ export default function App() {
 
             <HoverTooltip
               title="Diferenciador Bioclínico & Antisesgo"
-              description="Cruce de 4 ejes (qEEG + Voz + Psicometría + APK) y decodificador NLP."
-              clinicalUtility="Eliminación de sesgos de confirmación y género."
+              description="Cruce multiaxial y neutralización de sesgos mediante la Distancia de Mahalanobis."
+              clinicalUtility="Eliminación de sesgos de confirmación y deseabilidad social."
               badge="Módulo 3"
             >
               <button
@@ -410,7 +411,7 @@ export default function App() {
 
             <HoverTooltip
               title="Traducción APA & RCI"
-              description="Interpretación de biometría por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
+              description="Interpretación por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
               clinicalUtility="Evaluación de cambio confiable (Jacobson & Truax) y alianza terapéutica."
               badge="Marco APA"
             >
@@ -427,23 +428,23 @@ export default function App() {
               </button>
             </HoverTooltip>
 
-            {/* PESTAÑA: FENOTIPADO TRÍADA OSCURA */}
+            {/* PESTAÑA: CLUSTER B & PERFILADO BIOCOMPORTAMENTAL */}
             <HoverTooltip
-              title="Tríada Oscura & Cluster B"
-              description="Caracterización neuroautonómica diferenciada entre Narcisismo (Overt/Covert) y Psicopatía (Factor 1/Factor 2)."
-              clinicalUtility="Análisis pericial forense y provocación inmersiva en VR."
-              badge="Tríada Oscura"
+              title="Cluster B & Perfilado Biocomportamental"
+              description="Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y disociales (Factor 1/2)."
+              clinicalUtility="Análisis pericial forense y provocación inmersiva con consentimiento."
+              badge="Cluster B"
             >
               <button
-                onClick={() => setActiveTab('dark_triad')}
+                onClick={() => setActiveTab('cluster_b')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'dark_triad'
+                  activeTab === 'cluster_b'
                     ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md shadow-purple-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                <UserX className="w-3.5 h-3.5 text-rose-300" />
-                <span>Tríada Oscura</span>
+                <UserX className="w-3.5 h-3.5 text-purple-300" />
+                <span>Cluster B & Perfilado</span>
               </button>
             </HoverTooltip>
 
@@ -636,7 +637,7 @@ export default function App() {
                       Motor Clínico AMIE Listo para Análisis Multimodal
                     </h3>
                     <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini.
+                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini 3.8 Flash.
                     </p>
 
                     <button
@@ -670,8 +671,8 @@ export default function App() {
           <ApaTherapeuticModule patient={safePatient} />
         )}
 
-        {/* Tab Fenotipado Tríada Oscura */}
-        {activeTab === 'dark_triad' && (
+        {/* Tab Cluster B & Perfilado Biocomportamental */}
+        {activeTab === 'cluster_b' && (
           <PsychopathyNarcissismModule 
             patient={safePatient}
             onUpdatePatientVrData={handleUpdatePatientVrData}
@@ -857,7 +858,6 @@ export default function App() {
         />
       )}
 
-      {/* Consola de Neurohipnosis de Bucle Cerrado (Closed-Loop) */}
       {isFullscreenHypnosisOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <VrClosedLoopHypnosisModule
@@ -867,7 +867,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Consola de Fenotipado Digital & Prevención de Recaídas */}
       {isFullscreenPhenotypeOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <DigitalPhenotypeModule
