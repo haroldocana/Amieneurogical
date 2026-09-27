@@ -347,220 +347,241 @@ export default function App() {
         </div>
       )}
 
-      {/* Barra de Navegación Principal */}
+      {/* BARRA DE NAVEGACIÓN PRINCIPAL — CORREGIDA PARA EVITAR OVERLAP */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
             
-            <HoverTooltip
-              title="Workstation Clínico"
-              description="Núcleo de triaje y triangulación de riesgos, datos del expediente JSON, psicometría y dictamen AMIE."
-              clinicalUtility="Generación del dictamen normativo DSM-5-TR / CIE-11."
-              badge="Módulo 1"
-            >
-              <button
-                onClick={() => setActiveTab('workstation')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'workstation'
-                    ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Workstation Clínico"
+                description="Núcleo de triaje y triangulación de riesgos, datos del expediente JSON, psicometría y dictamen AMIE."
+                clinicalUtility="Generación del dictamen normativo DSM-5-TR / CIE-11."
+                badge="Módulo 1"
               >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                <span>Workstation</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('workstation')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'workstation'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>Workstation</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Evaluador Científico & Multisensor"
-              description="Scoring de afinidad bioclínica (0-100) para Depresión, TLP, Esquizofrenia y TEA."
-              clinicalUtility="Mapeo de respuesta a psicofármacos y neuromodulación."
-              badge="Módulo 2"
-            >
-              <button
-                onClick={() => setActiveTab('scientific_evaluator')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'scientific_evaluator'
-                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Evaluador Científico & Multisensor"
+                description="Scoring de afinidad bioclínica (0-100) para Depresión, TLP, Esquizofrenia y TEA."
+                clinicalUtility="Mapeo de respuesta a psicofármacos y neuromodulación."
+                badge="Módulo 2"
               >
-                <Microscope className="w-3.5 h-3.5 text-teal-300" />
-                <span>Evaluador Científico</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('scientific_evaluator')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'scientific_evaluator'
+                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Microscope className="w-3.5 h-3.5 text-teal-300" />
+                  <span>Evaluador Científico</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Diferenciador Bioclínico & Antisesgo"
-              description="Cruce multiaxial y neutralización de sesgos mediante la Distancia de Mahalanobis."
-              clinicalUtility="Eliminación de sesgos de confirmación y deseabilidad social."
-              badge="Módulo 3"
-            >
-              <button
-                onClick={() => setActiveTab('differential_bias')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'differential_bias'
-                    ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Diferenciador Bioclínico & Antisesgo"
+                description="Cruce multiaxial y neutralización de sesgos mediante la Distancia de Mahalanobis."
+                clinicalUtility="Eliminación de sesgos de confirmación y deseabilidad social."
+                badge="Módulo 3"
               >
-                <GitCompare className="w-3.5 h-3.5 text-cyan-300" />
-                <span>Diferenciador & Sesgos</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('differential_bias')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'differential_bias'
+                      ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <GitCompare className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>Diferenciador & Sesgos</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Traducción APA & RCI"
-              description="Interpretación por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
-              clinicalUtility="Evaluación de cambio confiable (Jacobson & Truax) y alianza terapéutica."
-              badge="Marco APA"
-            >
-              <button
-                onClick={() => setActiveTab('apa_framework')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'apa_framework'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Traducción APA & RCI"
+                description="Interpretación por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
+                clinicalUtility="Evaluación de cambio confiable (Jacobson & Truax) y alianza terapéutica."
+                badge="Marco APA"
               >
-                <BookOpen className="w-3.5 h-3.5 text-emerald-300" />
-                <span>Corrientes APA & RCI</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('apa_framework')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'apa_framework'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Corrientes APA & RCI</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            {/* PESTAÑA: CLUSTER B & PERFILADO BIOCOMPORTAMENTAL */}
-            <HoverTooltip
-              title="Cluster B & Perfilado Biocomportamental"
-              description="Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y disociales (Factor 1/2)."
-              clinicalUtility="Análisis pericial forense y provocación inmersiva con consentimiento."
-              badge="Cluster B"
-            >
-              <button
-                onClick={() => setActiveTab('cluster_b')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'cluster_b'
-                    ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md shadow-purple-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Cluster B & Perfilado Biocomportamental"
+                description="Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y disociales (Factor 1/2)."
+                clinicalUtility="Análisis pericial forense y provocación inmersiva con consentimiento."
+                badge="Cluster B"
               >
-                <UserX className="w-3.5 h-3.5 text-purple-300" />
-                <span>Cluster B & Perfilado</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('cluster_b')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'cluster_b'
+                      ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md shadow-purple-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <UserX className="w-3.5 h-3.5 text-purple-300" />
+                  <span>Cluster B & Perfilado</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Capacitación AMIE & Simulador IA"
-              description="Pacientes virtuales fotorrealistas y casos por ciclo evolutivo."
-              clinicalUtility="Entrenamiento inmersivo acreditado bajo DSM-5-TR."
-              badge="Módulo 4"
-            >
-              <button
-                onClick={() => setActiveTab('academy')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'academy'
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Capacitación AMIE & Simulador IA"
+                description="Pacientes virtuales fotorrealistas y casos por ciclo evolutivo."
+                clinicalUtility="Entrenamiento inmersivo acreditado bajo DSM-5-TR."
+                badge="Módulo 4"
               >
-                <GraduationCap className="w-3.5 h-3.5 text-purple-300" />
-                <span>Capacitación AMIE</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('academy')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'academy'
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5 text-purple-300" />
+                  <span>Capacitación AMIE</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Neurotopografía 3D Holográfica"
-              description="Mapeador de potencia relativa continua por bandas (Delta, Theta, Alpha, Beta)."
-              clinicalUtility="Contraste de neurobiomarcadores con benchmarks."
-              badge="Módulo 5"
-            >
-              <button
-                onClick={() => setActiveTab('neuro_3d')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'neuro_3d'
-                    ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Neurotopografía 3D Holográfica"
+                description="Mapeador de potencia relativa continua por bandas (Delta, Theta, Alpha, Beta)."
+                clinicalUtility="Contraste de neurobiomarcadores con benchmarks."
+                badge="Módulo 5"
               >
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Neurotopografía 3D</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('neuro_3d')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'neuro_3d'
+                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Neurotopografía 3D</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="qEEG & Carga de Archivos"
-              description="Carga de archivos nativos de electroencefalografía (.EDF/.BDF/.EEG/.CSV)."
-              clinicalUtility="Inspección de ondas crudas y potencias por canal."
-              badge="Señales Crudas"
-            >
-              <button
-                onClick={() => setActiveTab('neurosensometry')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'neurosensometry'
-                    ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="qEEG & Carga de Archivos"
+                description="Carga de archivos nativos de electroencefalografía (.EDF/.BDF/.EEG/.CSV)."
+                clinicalUtility="Inspección de ondas crudas y potencias por canal."
+                badge="Señales Crudas"
               >
-                <Brain className="w-3.5 h-3.5" />
-                <span>qEEG & Carga</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('neurosensometry')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'neurosensometry'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>qEEG & Carga</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Módulo Terapéutico VR (Meta Quest 3S / Pico)"
-              description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV)."
-              clinicalUtility="Cálculo del índice de habituación H."
-              badge="Biometría VR"
-            >
-              <button
-                onClick={() => setActiveTab('vr_therapy')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'vr_therapy'
-                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Módulo Terapéutico VR (Meta Quest 3S / Pico)"
+                description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV)."
+                clinicalUtility="Cálculo del índice de habituación H."
+                badge="Biometría VR"
               >
-                <Glasses className="w-3.5 h-3.5 text-cyan-300" />
-                <span>VR Inmersivo</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('vr_therapy')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'vr_therapy'
+                      ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Glasses className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>VR Inmersivo</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Referencia a Psiquiatría"
-              description="Generación estructurada de hoja de derivación oficial e interconsulta."
-              clinicalUtility="Gestión de crisis y derivación urgente."
-              badge="Interconsulta"
-            >
-              <button
-                onClick={() => setActiveTab('referral')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'referral'
-                    ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Referencia a Psiquiatría"
+                description="Generación estructurada de hoja de derivación oficial e interconsulta."
+                clinicalUtility="Gestión de crisis y derivación urgente."
+                badge="Interconsulta"
               >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span>Referencia</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('referral')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'referral'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Referencia</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <HoverTooltip
-              title="Perfil de Licencia & Control IA"
-              description="Monitoreo de vigencia de licencia y consumo del bolsón de IA en MongoDB."
-              clinicalUtility="Perfil de usuario e indicadores."
-              badge="Perfil"
-            >
-              <button
-                onClick={() => setActiveTab('saas')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
-                  activeTab === 'saas'
-                    ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Perfil de Licencia & Control IA"
+                description="Monitoreo de vigencia de licencia y consumo del bolsón de IA en MongoDB."
+                clinicalUtility="Perfil de usuario e indicadores."
+                badge="Perfil"
               >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>SaaS</span>
-              </button>
-            </HoverTooltip>
+                <button
+                  onClick={() => setActiveTab('saas')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'saas'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>SaaS</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
           </div>
         </div>
