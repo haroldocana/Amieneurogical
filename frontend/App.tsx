@@ -24,6 +24,9 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
+// MÓDULO FENOTIPADO TRÍADA OSCURA (NARCISISMO & PSICOPATÍA)
+import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
+
 // MÓDULO NEUROHIPNOSIS CLOSED-LOOP
 import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
 
@@ -69,7 +72,8 @@ import {
   Target,
   Lightbulb,
   Smartphone,
-  BookOpen
+  BookOpen,
+  UserX
 } from 'lucide-react';
 
 type AppTab = 
@@ -77,6 +81,7 @@ type AppTab =
   | 'scientific_evaluator' 
   | 'differential_bias' 
   | 'apa_framework'
+  | 'dark_triad'
   | 'academy' 
   | 'neuro_3d' 
   | 'neurosensometry' 
@@ -208,7 +213,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } finally {
+    } fontally {
       setIsAnalyzing(false);
     }
   };
@@ -354,7 +359,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('workstation')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'workstation'
                     ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -373,7 +378,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('scientific_evaluator')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'scientific_evaluator'
                     ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -392,7 +397,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('differential_bias')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'differential_bias'
                     ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -411,7 +416,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('apa_framework')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'apa_framework'
                     ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -419,6 +424,26 @@ export default function App() {
               >
                 <BookOpen className="w-3.5 h-3.5 text-emerald-300" />
                 <span>Corrientes APA & RCI</span>
+              </button>
+            </HoverTooltip>
+
+            {/* PESTAÑA: FENOTIPADO TRÍADA OSCURA */}
+            <HoverTooltip
+              title="Tríada Oscura & Cluster B"
+              description="Caracterización neuroautonómica diferenciada entre Narcisismo (Overt/Covert) y Psicopatía (Factor 1/Factor 2)."
+              clinicalUtility="Análisis pericial forense y provocación inmersiva en VR."
+              badge="Tríada Oscura"
+            >
+              <button
+                onClick={() => setActiveTab('dark_triad')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
+                  activeTab === 'dark_triad'
+                    ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md shadow-purple-600/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <UserX className="w-3.5 h-3.5 text-rose-300" />
+                <span>Tríada Oscura</span>
               </button>
             </HoverTooltip>
 
@@ -430,7 +455,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('academy')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'academy'
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -449,7 +474,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('neuro_3d')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'neuro_3d'
                     ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -468,7 +493,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('neurosensometry')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'neurosensometry'
                     ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -487,7 +512,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('vr_therapy')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'vr_therapy'
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -506,7 +531,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('referral')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'referral'
                     ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -525,7 +550,7 @@ export default function App() {
             >
               <button
                 onClick={() => setActiveTab('saas')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 cursor-pointer ${
                   activeTab === 'saas'
                     ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -555,7 +580,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setSyncNotFoundAlert(null)}
-              className="px-3 py-1 bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shrink-0"
+              className="px-3 py-1 bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shrink-0 cursor-pointer"
             >
               Entendido
             </button>
@@ -645,6 +670,14 @@ export default function App() {
           <ApaTherapeuticModule patient={safePatient} />
         )}
 
+        {/* Tab Fenotipado Tríada Oscura */}
+        {activeTab === 'dark_triad' && (
+          <PsychopathyNarcissismModule 
+            patient={safePatient}
+            onUpdatePatientVrData={handleUpdatePatientVrData}
+          />
+        )}
+
         {/* Tab 4: Capacitación */}
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         
@@ -659,7 +692,7 @@ export default function App() {
               <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
                 <button
                   onClick={() => setNeuroViewerMode('classic')}
-                  className={`px-3 py-1 rounded-md font-semibold transition ${
+                  className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
                     neuroViewerMode === 'classic'
                       ? 'bg-sky-600 text-white shadow'
                       : 'text-slate-400 hover:text-slate-200'
@@ -669,7 +702,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setNeuroViewerMode('holographic')}
-                  className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 ${
+                  className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 cursor-pointer ${
                     neuroViewerMode === 'holographic'
                       ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow'
                       : 'text-slate-400 hover:text-slate-200'
