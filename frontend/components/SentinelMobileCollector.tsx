@@ -1,0 +1,273 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Smartphone, Zap, MapPin, Moon, Send, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+
+interface TelemetryPayload {
+  pacId: string;
+  doctorUsername: string;
+  typingLatencyMs: number;
+  touchTapLatencyMs: number;
+  sleepHoursLastNight: number;
+  nightAwakenings: number;
+  isOutsideSafeZone: boolean;
+  latitude?: number;
+  longitude?: number;
+  restingHeartRate: number;
+  timestamp: string;
+}
+
+export const SentinelMobileCollector: React.FC = () => {
+  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
+
+  const [pacId, setPacId] = useState('PAC-2964');
+  const [doctorUsername, setDoctorUsername] = useState('2000');
+  
+  const [typingLatency, setTypingLatency] = useState<number>(140);
+  const [tapLatency, setTapLatency] = useState<number>(180);
+  const [sleepHours, setSleepHours] = useState<number>(6.5);
+  const [nightAwakenings, setNightAwakenings] = useState<number>(2);
+  const [restingHr, setRestingHr] = useState<number>(72);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isOutsideSafeZone, setIsOutsideSafeZone] = useState<boolean>(false);
+
+  const [typingTestText, setTypingTestText] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [serverResponse, setServerResponse] = useState<any>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const lastKeyTimeRef = useRef<number | null>(null);
+  const keyIntervalsRef = useRef<number[]>([]);
+
+  const handleTypingInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const now = performance.now();
+    const value = e.target.value;
+    setTypingTestText(value);
+
+    if (lastKeyTimeRef.current !== null) {
+      const interval = now - lastKeyTimeRef.current;
+      if (interval < 2000) {
+        keyIntervalsRef.current.push(interval);
+        const avg = Math.round(
+          keyIntervalsRef.current.reduce((a, b) => a + b, 0) / keyIntervalsRef.current.length
+        );
+        setTypingLatency(avg);
+      }
+    }
+    lastKeyTimeRef.current = now;
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setErrorMsg('Geolocalización no soportada en este navegador.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLocation({ lat, lng });
+
+        const homeLat = 14.634915;
+        const homeLng = -90.506882;
+        const dist = Math.sqrt(Math.pow(lat - homeLat, 2) + Math.pow(lng - homeLng, 2));
+        setIsOutsideSafeZone(dist > 0.05);
+      },
+      (err) => {
+        setErrorMsg(`Error GPS: ${err.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleSendTelemetry = async () => {
+    setIsSending(true);
+    setServerResponse(null);
+    setErrorMsg(null);
+
+    const payload: TelemetryPayload = {
+      pacId: pacId.trim().toUpperCase(),
+      doctorUsername: doctorUsername.trim().toLowerCase(),
+      typingLatencyMs: typingLatency,
+      touchTapLatencyMs: tapLatency,
+      sleepHoursLastNight: sleepHours,
+      nightAwakenings: nightAwakenings,
+      isOutsideSafeZone: isOutsideSafeZone,
+      latitude: location?.lat,
+      longitude: location?.lng,
+      restingHeartRate: restingHr,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/sentinel/process-telemetry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-proxy': 'AMIE_SECRET_HEADER_2025'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || `Error servidor (${response.status})`);
+      }
+
+      setServerResponse(responseData);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error de conexión con el backend Render.');
+    } fontally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="max-w-xl mx-auto p-4 sm:p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-slate-100 space-y-6 font-sans">
+      <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+        <div className="p-3 bg-cyan-600 rounded-2xl text-white shadow-lg shadow-cyan-600/30">
+          <Smartphone className="w-6 h-6" />
+        </div>
+        <div>
+          <h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+            Capturador Móvil Centinela 24/7
+            <span className="px-2 py-0.5 text-[9px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded-full">
+              LIVE TESTER
+            </span>
+          </h2>
+          <p className="text-xs text-slate-400">
+            Prueba de envío de telemetría pasiva móvil directamente al servidor Render.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <label className="block text-slate-400 font-bold mb-1">Código PAC del Paciente:</label>
+          <input
+            type="text"
+            value={pacId}
+            onChange={(e) => setPacId(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-cyan-300 font-mono font-bold focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+        <div>
+          <label className="block text-slate-400 font-bold mb-1">Usuario Médico:</label>
+          <input
+            type="text"
+            value={doctorUsername}
+            onChange={(e) => setDoctorUsername(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+      </div>
+
+      <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-amber-400" /> Latencia de Tecleo en Móvil
+          </span>
+          <span className="text-xs font-mono font-bold text-amber-400">{typingLatency} ms</span>
+        </div>
+        <input
+          type="text"
+          placeholder="Escriba aquí desde su teléfono para medir latencia..."
+          value={typingTestText}
+          onChange={handleTypingInputChange}
+          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+          <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+            <Moon className="w-3.5 h-3.5 text-indigo-400" /> Horas Sueño
+          </label>
+          <input
+            type="number"
+            step="0.5"
+            value={sleepHours}
+            onChange={(e) => setSleepHours(Number(e.target.value))}
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-indigo-300 font-mono font-bold focus:outline-none"
+          />
+        </div>
+
+        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+          <label className="text-[11px] font-bold text-slate-400">Despertares</label>
+          <input
+            type="number"
+            value={nightAwakenings}
+            onChange={(e) => setNightAwakenings(Number(e.target.value))}
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-rose-400 font-mono font-bold focus:outline-none"
+          />
+        </div>
+
+        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1 col-span-2 sm:col-span-1">
+          <label className="text-[11px] font-bold text-slate-400">FC Reposo (BPM)</label>
+          <input
+            type="number"
+            value={restingHr}
+            onChange={(e) => setRestingHr(Number(e.target.value))}
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-emerald-400 font-mono font-bold focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <MapPin className="w-4 h-4 text-rose-400" /> GPS & Zona Habitual
+          </span>
+          <p className="text-[10px] text-slate-400">
+            {location ? `Lat: ${location.lat.toFixed(4)}, Lng: ${location.lng.toFixed(4)}` : 'GPS no capturado'}
+          </p>
+        </div>
+        <button
+          onClick={handleGetLocation}
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition"
+        >
+          Capturar GPS
+        </button>
+      </div>
+
+      <button
+        onClick={handleSendTelemetry}
+        disabled={isSending}
+        className="w-full py-3.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-black text-xs rounded-2xl shadow-xl shadow-cyan-600/25 transition active:scale-98 flex items-center justify-center gap-2"
+      >
+        {isSending ? (
+          <>
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span>Procesando en Servidor Render...</span>
+          </>
+        ) : (
+          <>
+            <Send className="w-4 h-4" />
+            <span>Enviar Telemetría Móvil en Vivo</span>
+          </>
+        )}
+      </button>
+
+      {errorMsg && (
+        <div className="p-3.5 bg-rose-950/80 border border-rose-500/40 rounded-xl text-rose-200 text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {serverResponse && (
+        <div className="p-4 bg-slate-950 border border-cyan-500/40 rounded-2xl space-y-2 text-xs font-mono">
+          <div className="flex items-center justify-between text-cyan-400 font-bold border-b border-slate-800 pb-2">
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> RESPUESTA CENTINELA RECIBIDA
+            </span>
+            <span>Riesgo Evaluado: {serverResponse.evaluatedRiskScore ?? 'OK'}%</span>
+          </div>
+          <pre className="text-[10px] text-slate-300 overflow-x-auto p-2 bg-slate-900 rounded-lg">
+            {JSON.stringify(serverResponse, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+};
