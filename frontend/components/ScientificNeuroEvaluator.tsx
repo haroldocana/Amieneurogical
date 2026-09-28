@@ -42,10 +42,13 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // FILTRO DE DETECCIÓN DE CONTACTO (OFF-BODY DETECTION)
+  // ESTADOS Y REFERENCIAS PARA DETECCIÓN OFF-BODY (WATCHDOG + DETECTOR DE CONGELAMIENTO)
   const [isOffBody, setIsOffBody] = useState<boolean>(false);
   const [offBodyGuardEnabled, setOffBodyGuardEnabled] = useState<boolean>(true);
-  const ppgAmplitudeBufferRef = useRef<number[]>([]);
+  
+  const lastPacketTimestampRef = useRef<number>(Date.now());
+  const lastBpmValueRef = useRef<number>(0);
+  const consecutiveSameBpmCountRef = useRef<number>(0);
 
   // Canvas y Renderizado Fisiológico UCI
   const ppgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -69,33 +72,37 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     peakFrequencyHz: 0.0
   });
 
-  // 1. RECEPCIÓN DE TELEMETRÍA DE ALTA RESOLUCIÓN Y EVALUACIÓN OFF-BODY
+  // 1. RECEPCIÓN DE TELEMETRÍA CON WATCHDOG Y DETECTOR DE SEÑAL CONGELADA
   useEffect(() => {
     const unsubData = telemetryService.subscribeData((packet) => {
-      // EVALUACIÓN DE CONTACTO REAL CON LA PIEL (OFF-BODY FILTER)
-      if (offBodyGuardEnabled && connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED') {
-        const rawGsr = packet.gsrMicroSiemens || 0;
-        
-        // Registro de ventana de pulso para evaluar la amplitud fisiológica
-        ppgAmplitudeBufferRef.current.push(packet.heartRateBpm);
-        if (ppgAmplitudeBufferRef.current.length > 20) ppgAmplitudeBufferRef.current.shift();
+      // Registrar estampa de tiempo del último paquete Bluetooth recibido
+      lastPacketTimestampRef.current = Date.now();
 
-        // Criterio Off-Body: GSR extremadamente plano (<0.05 uS) o inestabilidad parásita
-        const isGsrOff = rawGsr < 0.08 && rawGsr >= 0;
+      if (offBodyGuardEnabled && connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED') {
         
-        if (isGsrOff) {
+        // DETECTOR 1: Frecuencia de pulso nula o inválida
+        if (packet.heartRateBpm <= 0 || packet.heartRateBpm > 220) {
           setIsOffBody(true);
-          latestTelemetryRef.current = {
-            ...packet,
-            heartRateBpm: 0,
-            hrvRmssdMs: 0,
-            gsrMicroSiemens: 0,
-            rrIntervalMs: 0
-          };
+          latestTelemetryRef.current = { ...packet, heartRateBpm: 0, hrvRmssdMs: 0, rrIntervalMs: 0 };
           return;
-        } else {
-          setIsOffBody(false);
         }
+
+        // DETECTOR 2: Detección de BPM congelado (el anillo envía repetidamente el mismo número al quitarlo)
+        if (packet.heartRateBpm === lastBpmValueRef.current && packet.heartRateBpm > 0) {
+          consecutiveSameBpmCountRef.current += 1;
+        } else {
+          lastBpmValueRef.current = packet.heartRateBpm;
+          consecutiveSameBpmCountRef.current = 0;
+        }
+
+        // Si el valor de BPM es 100% idéntico durante más de 12 paquetes seguidos (sin la micro-variación natural humana)
+        if (consecutiveSameBpmCountRef.current > 12) {
+          setIsOffBody(true);
+          latestTelemetryRef.current = { ...packet, heartRateBpm: 0, hrvRmssdMs: 0, rrIntervalMs: 0 };
+          return;
+        }
+
+        setIsOffBody(false);
       } else {
         setIsOffBody(false);
       }
@@ -105,8 +112,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       if (packet.heartRateBpm > 30 && packet.rrIntervalMs > 0 && connectionStatus.connected) {
         rrHistoryRef.current.push(packet.rrIntervalMs);
         if (rrHistoryRef.current.length > 50) rrHistoryRef.current.shift();
-      } else if (packet.heartRateBpm === 0) {
-        rrHistoryRef.current = [];
       }
     });
 
@@ -118,9 +123,28 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       }
     });
 
+    // PERRO GUARDIÁN (WATCHDOG TIMER): Verifica cada 400ms si el flujo Bluetooth se detuvo (>1.2s sin datos)
+    const watchdogInterval = setInterval(() => {
+      const timeSinceLastPacket = Date.now() - lastPacketTimestampRef.current;
+      
+      if (offBodyGuardEnabled && connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED') {
+        if (timeSinceLastPacket > 1200) {
+          setIsOffBody(true);
+          latestTelemetryRef.current = {
+            ...latestTelemetryRef.current,
+            heartRateBpm: 0,
+            hrvRmssdMs: 0,
+            rrIntervalMs: 0
+          };
+          rrHistoryRef.current = [];
+        }
+      }
+    }, 400);
+
     return () => {
       unsubData();
       unsubStatus();
+      clearInterval(watchdogInterval);
     };
   }, [connectionStatus.connected, connectionStatus.protocol, offBodyGuardEnabled]);
 
@@ -178,7 +202,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     return () => clearInterval(spectralInterval);
   }, [connectionStatus.connected, isOffBody]);
 
-  // 3. MOTOR DE DIBUJO LIMPIO SIN ARTEFACTOS
+  // 3. MOTOR DE DIBUJO CANVA CON FLATLINE EN OFF-BODY
   useEffect(() => {
     const ppgCanvas = ppgCanvasRef.current;
     const tachoCanvas = tachoCanvasRef.current;
@@ -208,7 +232,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
       // A) RENDER PPG OSCILOSCOPIO
       if (!hasPulse) {
-        // MODO STANDBY / OFF-BODY: Limpieza total sin lecturas fantasma
+        // MODO STANDBY / OFF-BODY: Limpieza total sin ondas fantasma
         ctxPpg.fillStyle = '#020617';
         ctxPpg.fillRect(0, 0, widthPpg, heightPpg);
 
@@ -238,8 +262,8 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
         if (isOffBody) {
           ctxPpg.fillStyle = '#f87171';
-          ctxPpg.font = '10px monospace';
-          ctxPpg.fillText('DETECCION OFF-BODY: ANILLO / BANDA SIN CONTACTO CUTANEO', widthPpg / 2 - 180, heightPpg / 2 - 12);
+          ctxPpg.font = 'bold 11px monospace';
+          ctxPpg.fillText('[DETECCION OFF-BODY: ANILLO SIN CONTACTO O PAQUETE CONGELADO]', widthPpg / 2 - 210, heightPpg / 2 - 12);
         }
       } else {
         // MODO BARRIDO EN VIVO (Sweep 25 mm/s)
@@ -361,7 +385,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     };
   }, [connectionStatus.connected, isOffBody]);
 
-  // HANDLERS DE CONEXIÓN
+  // HANDLERS
   const handleConnectUsb = async () => {
     const success = await telemetryService.connectUsb();
     setNotificationMsg(success ? 'Hardware USB Serial enlazado.' : 'No se seleccionó dispositivo USB.');
@@ -463,7 +487,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
                   {hasActivePulse 
                     ? `HARDWARE BLE EN VIVO (${connectionStatus.protocol})` 
                     : isOffBody
-                      ? 'ANILLO / BANDA RETIRADA (OFF-BODY DETECTADO)'
+                      ? 'ANILLO RETIRADO / SIN PULSO (OFF-BODY)'
                       : connectionStatus.connected 
                         ? 'CONECTADO - ESPERANDO CONTACTO' 
                         : 'SIN DISPOSITIVO CONECTADO'}
@@ -477,10 +501,10 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* BOTÓN ACTIVAR / DESACTIVAR FILTRO OFF-BODY */}
+            {/* INTERRUPTOR DEL FILTRO OFF-BODY */}
             <button
               onClick={() => setOffBodyGuardEnabled(!offBodyGuardEnabled)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
                 offBodyGuardEnabled 
                   ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40' 
                   : 'bg-slate-800 text-slate-400 border-slate-700'
@@ -493,7 +517,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             <button
               onClick={handleZeroTareCalibration}
               disabled={isCalibrating || !connectionStatus.connected}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
             >
               <Sliders className="w-3.5 h-3.5 text-amber-400" />
               <span>{isCalibrating ? 'Calibrando...' : 'Calibrar Cero'}</span>
@@ -502,7 +526,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             <button
               onClick={handleTransferToGlobalRecord}
               disabled={!connectionStatus.connected || isOffBody}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 transition"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Transferir a Triangulación Global</span>
@@ -519,14 +543,14 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleConnectUsb}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-bold transition cursor-pointer"
             >
               <Usb className="w-3.5 h-3.5" /> Conectar USB (ESP32)
             </button>
 
             <button
               onClick={handleConnectBluetooth}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 rounded-lg text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 rounded-lg text-xs font-bold transition cursor-pointer"
             >
               <Bluetooth className="w-3.5 h-3.5" /> Vincular BLE (GEOID / COLMI / Polar)
             </button>
@@ -540,7 +564,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               />
               <button
                 onClick={handleConnectWifi}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
               >
                 <Wifi className="w-3 h-3 text-emerald-400" /> Wi-Fi
               </button>
@@ -548,7 +572,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
             <button
               onClick={() => telemetryService.enableSimulation()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition cursor-pointer"
             >
               <Radio className="w-3.5 h-3.5" /> Simulación
             </button>
