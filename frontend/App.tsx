@@ -22,7 +22,6 @@ import { LoginModal } from './components/LoginModal';
 import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
-import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 
 // MÓDULOS ESPECIALIZADOS
 import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
@@ -34,6 +33,7 @@ import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidat
 import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
 import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
+import { SentinelMobileCollector } from './components/SentinelMobileCollector'; // NUEVO IMPORT
 
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
@@ -67,7 +67,8 @@ import {
   BookOpen,
   UserX,
   Info,
-  Printer
+  Printer,
+  Wifi // ICONO WIFI PARA EL TESTER
 } from 'lucide-react';
 
 type AppTab = 
@@ -80,6 +81,7 @@ type AppTab =
   | 'neuro_3d' 
   | 'neurosensometry' 
   | 'vr_therapy' 
+  | 'sentinel_tester' // NUEVO TAB
   | 'referral' 
   | 'saas';
 
@@ -453,7 +455,7 @@ export default function App() {
         </div>
       )}
 
-      {/* BARRA DE NAVEGACIÓN PRINCIPAL — CORREGIDA SIN SUPERPOSICIONES */}
+      {/* BARRA DE NAVEGACIÓN PRINCIPAL */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
@@ -643,6 +645,28 @@ export default function App() {
                 >
                   <Glasses className="w-3.5 h-3.5 text-cyan-300" />
                   <span>VR Inmersivo</span>
+                </button>
+              </HoverTooltip>
+            </div>
+
+            {/* NUEVO BOTÓN: TESTER CENTINELA */}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Capturador Móvil Centinela 24/7"
+                description="Prueba en vivo de ingesta de datos móviles (tecleo, sueño, GPS) para predecir brotes."
+                clinicalUtility="Fenotipado Digital"
+                badge="Tester Móvil"
+              >
+                <button
+                  onClick={() => setActiveTab('sentinel_tester')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'sentinel_tester'
+                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Wifi className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Tester Móvil JITAI</span>
                 </button>
               </HoverTooltip>
             </div>
@@ -939,6 +963,13 @@ export default function App() {
               patient={safePatient}
               onUpdatePatientVrData={handleUpdatePatientVrData}
             />
+          </div>
+        )}
+
+        {/* NUEVO TAB: TESTER CENTINELA MÓVIL */}
+        {activeTab === 'sentinel_tester' && (
+          <div className="py-2">
+            <SentinelMobileCollector />
           </div>
         )}
 
