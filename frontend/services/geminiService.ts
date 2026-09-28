@@ -7,7 +7,13 @@ import { consumeAiCredit } from './userService';
 // ------------------------------------------------------------------
 export const GEMINI_MODEL = 'gemini-3.8-flash';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+// Detección multi-variable de la API Key de Google
+const GEMINI_API_KEY = 
+  import.meta.env.VITE_GEMINI_API_KEY || 
+  import.meta.env.GEMINI_API_KEY || 
+  import.meta.env.VITE_API_KEY || 
+  '';
+
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
 const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
 
