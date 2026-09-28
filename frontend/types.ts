@@ -71,6 +71,35 @@ export interface PatientSentinelData {
   };
 }
 
+// --- TELEMETRÍA JITAI 24/7 Y PREVENCIÓN DE CRISIS (JUST-IN-TIME ADAPTIVE INTERVENTION) ---
+export interface JitaiTelemetryPacket {
+  timestamp: string;
+  wearableDevice: string;
+  sleepHours48h: number;
+  restingHeartRateBpm: number;
+  hrvRmssdMs: number;
+  skinTemperatureCelsius: number;
+  keystrokeAnomaliesPct: number;
+  speechTaquilaliaIndexPct: number;
+  isOutsideSafeGeofence: boolean;
+  geofenceCoordinates?: { lat: number; lng: number; locationName: string };
+  calculatedAcuteDecompensationRisk: number;
+  riskLevel: 'NORMO-BASAL' | 'ALERTA_LEVE' | 'RIESGO_MODERADO' | 'CRÍTICO_JITAI';
+}
+
+export interface JitaiConsentRecord {
+  patientSigned: boolean;
+  patientSignatureDate?: string;
+  legalTutorSigned: boolean;
+  legalTutorName?: string;
+  legalTutorPhone?: string;
+  legalTutorRelationship?: string;
+  gpsTrackingAuthorized: boolean;
+  keystrokeTelemetryAuthorized: boolean;
+  emergencySmsAuthorized: boolean;
+  attendingPsychiatristId: string;
+}
+
 // --- BIOMARCADORES CEREBRALES (qEEG) ---
 export interface QeegBandPowers {
   delta: number;
@@ -214,6 +243,8 @@ export interface PatientRecord {
   sessionNotes: string[];
   audioRecordings?: SessionAudioRecording[];
   sentinelTelemetry?: PatientSentinelData;
+  jitaiTelemetry?: JitaiTelemetryPacket;
+  jitaiConsent?: JitaiConsentRecord;
   qeegBiomarkers?: QeegBiomarkers;
   multisensoryHardware?: MultisensoryHardwareTelemetry;
   vrTelemetryData?: VrTelemetryData;
