@@ -16,8 +16,9 @@ import {
   BarChart3,
   TrendingUp,
   Zap,
-  ShieldOff,
-  RadioTower
+  Power,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 
 interface ScientificNeuroEvaluatorProps {
@@ -38,17 +39,13 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     deviceName: 'Sin Dispositivo Conectado'
   });
 
+  // ESTADO DE CONTROL DE PACIENTE (SWITCH MANUAL + FILTRO DE INCOHERENCIA)
+  const [isSensorOnPatient, setIsSensorOnPatient] = useState<boolean>(true);
+  const [isPhysiologicalNoise, setIsPhysiologicalNoise] = useState<boolean>(false);
+
   const [wifiIp, setWifiIp] = useState('192.168.1.105');
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
-
-  // ESTADOS Y REFERENCIAS PARA DETECCIÓN OFF-BODY (WATCHDOG + DETECTOR DE CONGELAMIENTO)
-  const [isOffBody, setIsOffBody] = useState<boolean>(false);
-  const [offBodyGuardEnabled, setOffBodyGuardEnabled] = useState<boolean>(true);
-  
-  const lastPacketTimestampRef = useRef<number>(Date.now());
-  const lastBpmValueRef = useRef<number>(0);
-  const consecutiveSameBpmCountRef = useRef<number>(0);
 
   // Canvas y Renderizado Fisiológico UCI
   const ppgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -72,44 +69,34 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     peakFrequencyHz: 0.0
   });
 
-  // 1. RECEPCIÓN DE TELEMETRÍA CON WATCHDOG Y DETECTOR DE SEÑAL CONGELADA
+  // 1. RECEPCIÓN DE TELEMETRÍA Y FILTRADO DE INCOHERENCIA DE LUZ AMBIENTAL
   useEffect(() => {
     const unsubData = telemetryService.subscribeData((packet) => {
-      // Registrar estampa de tiempo del último paquete Bluetooth recibido
-      lastPacketTimestampRef.current = Date.now();
+      
+      // FILTRO DE INCOHERENCIA DE RUIDO ÓPTICO EN AIRE:
+      // Cuando el anillo lee aire, el BPM reportado no coincide con el intervalo R-R real
+      const expectedRrFromBpm = packet.heartRateBpm > 0 ? (60000 / packet.heartRateBpm) : 0;
+      const rrDiff = Math.abs(expectedRrFromBpm - packet.rrIntervalMs);
+      
+      // Si el RMSSD es absurdo (>220ms) o la diferencia entre BPM y R-R es gigante, es ruido de aire
+      const isNoise = (packet.hrvRmssdMs > 220) || (packet.rrIntervalMs > 0 && rrDiff > 350);
 
-      if (offBodyGuardEnabled && connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED') {
-        
-        // DETECTOR 1: Frecuencia de pulso nula o inválida
-        if (packet.heartRateBpm <= 0 || packet.heartRateBpm > 220) {
-          setIsOffBody(true);
-          latestTelemetryRef.current = { ...packet, heartRateBpm: 0, hrvRmssdMs: 0, rrIntervalMs: 0 };
-          return;
-        }
-
-        // DETECTOR 2: Detección de BPM congelado (el anillo envía repetidamente el mismo número al quitarlo)
-        if (packet.heartRateBpm === lastBpmValueRef.current && packet.heartRateBpm > 0) {
-          consecutiveSameBpmCountRef.current += 1;
-        } else {
-          lastBpmValueRef.current = packet.heartRateBpm;
-          consecutiveSameBpmCountRef.current = 0;
-        }
-
-        // Si el valor de BPM es 100% idéntico durante más de 12 paquetes seguidos (sin la micro-variación natural humana)
-        if (consecutiveSameBpmCountRef.current > 12) {
-          setIsOffBody(true);
-          latestTelemetryRef.current = { ...packet, heartRateBpm: 0, hrvRmssdMs: 0, rrIntervalMs: 0 };
-          return;
-        }
-
-        setIsOffBody(false);
-      } else {
-        setIsOffBody(false);
+      if (isNoise && connectionStatus.protocol !== 'SIMULATED') {
+        setIsPhysiologicalNoise(true);
+        latestTelemetryRef.current = {
+          ...packet,
+          heartRateBpm: 0,
+          hrvRmssdMs: 0,
+          gsrMicroSiemens: 0,
+          rrIntervalMs: 0
+        };
+        return;
       }
 
+      setIsPhysiologicalNoise(false);
       latestTelemetryRef.current = packet;
 
-      if (packet.heartRateBpm > 30 && packet.rrIntervalMs > 0 && connectionStatus.connected) {
+      if (packet.heartRateBpm > 30 && packet.rrIntervalMs > 0 && connectionStatus.connected && isSensorOnPatient) {
         rrHistoryRef.current.push(packet.rrIntervalMs);
         if (rrHistoryRef.current.length > 50) rrHistoryRef.current.shift();
       }
@@ -119,41 +106,23 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
       setConnectionStatus(status);
       if (!status.connected) {
         rrHistoryRef.current = [];
-        setIsOffBody(false);
       }
     });
-
-    // PERRO GUARDIÁN (WATCHDOG TIMER): Verifica cada 400ms si el flujo Bluetooth se detuvo (>1.2s sin datos)
-    const watchdogInterval = setInterval(() => {
-      const timeSinceLastPacket = Date.now() - lastPacketTimestampRef.current;
-      
-      if (offBodyGuardEnabled && connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED') {
-        if (timeSinceLastPacket > 1200) {
-          setIsOffBody(true);
-          latestTelemetryRef.current = {
-            ...latestTelemetryRef.current,
-            heartRateBpm: 0,
-            hrvRmssdMs: 0,
-            rrIntervalMs: 0
-          };
-          rrHistoryRef.current = [];
-        }
-      }
-    }, 400);
 
     return () => {
       unsubData();
       unsubStatus();
-      clearInterval(watchdogInterval);
     };
-  }, [connectionStatus.connected, connectionStatus.protocol, offBodyGuardEnabled]);
+  }, [connectionStatus.connected, connectionStatus.protocol, isSensorOnPatient]);
 
   // 2. MOTOR ESPECTRAL DINÁMICO & TACOGRAMA
   useEffect(() => {
     const spectralInterval = setInterval(() => {
       const packet = latestTelemetryRef.current;
+      const isSimulated = connectionStatus.protocol === 'SIMULATED';
 
-      if (!connectionStatus.connected || packet.heartRateBpm <= 30 || isOffBody) {
+      // SI EL SENSOR NO ESTÁ EN EL PACIENTE O HAY RUIDO ÓPTICO DE AIRE, FORZAR TODO A CERO
+      if (!connectionStatus.connected || !isSensorOnPatient || (isPhysiologicalNoise && !isSimulated) || packet.heartRateBpm <= 30) {
         setDisplayTelemetry({
           ...packet,
           heartRateBpm: 0,
@@ -200,9 +169,9 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     }, 350);
 
     return () => clearInterval(spectralInterval);
-  }, [connectionStatus.connected, isOffBody]);
+  }, [connectionStatus.connected, isSensorOnPatient, isPhysiologicalNoise]);
 
-  // 3. MOTOR DE DIBUJO CANVA CON FLATLINE EN OFF-BODY
+  // 3. MOTOR DE DIBUJO DENTRO DE CANVAS
   useEffect(() => {
     const ppgCanvas = ppgCanvasRef.current;
     const tachoCanvas = tachoCanvasRef.current;
@@ -227,16 +196,17 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
       const packet = latestTelemetryRef.current;
       const isConnected = connectionStatus.connected;
-      const bpm = isConnected && !isOffBody ? packet.heartRateBpm : 0;
-      const hasPulse = isConnected && bpm > 30 && !isOffBody;
+      const isSimulated = connectionStatus.protocol === 'SIMULATED';
+
+      const isActive = isConnected && isSensorOnPatient && (!isPhysiologicalNoise || isSimulated);
+      const bpm = isActive ? packet.heartRateBpm : 0;
+      const hasPulse = isActive && bpm > 30;
 
       // A) RENDER PPG OSCILOSCOPIO
       if (!hasPulse) {
-        // MODO STANDBY / OFF-BODY: Limpieza total sin ondas fantasma
         ctxPpg.fillStyle = '#020617';
         ctxPpg.fillRect(0, 0, widthPpg, heightPpg);
 
-        // Rejilla Médica
         ctxPpg.strokeStyle = '#0f172a';
         ctxPpg.lineWidth = 0.5;
         for (let y = 0; y < heightPpg; y += 15) {
@@ -245,28 +215,24 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           ctxPpg.lineTo(widthPpg, y);
           ctxPpg.stroke();
         }
-        for (let x = 0; x < widthPpg; x += 30) {
-          ctxPpg.beginPath();
-          ctxPpg.moveTo(x, 0);
-          ctxPpg.lineTo(x, heightPpg);
-          ctxPpg.stroke();
-        }
 
-        // Flatline Central (Roja si hay desprendimiento, Gris en Standby)
-        ctxPpg.strokeStyle = isOffBody ? '#ef4444' : '#334155';
+        ctxPpg.strokeStyle = !isSensorOnPatient || isPhysiologicalNoise ? '#ef4444' : '#334155';
         ctxPpg.lineWidth = 1.5;
         ctxPpg.beginPath();
         ctxPpg.moveTo(0, heightPpg / 2);
         ctxPpg.lineTo(widthPpg, heightPpg / 2);
         ctxPpg.stroke();
 
-        if (isOffBody) {
+        if (!isSensorOnPatient) {
           ctxPpg.fillStyle = '#f87171';
           ctxPpg.font = 'bold 11px monospace';
-          ctxPpg.fillText('[DETECCION OFF-BODY: ANILLO SIN CONTACTO O PAQUETE CONGELADO]', widthPpg / 2 - 210, heightPpg / 2 - 12);
+          ctxPpg.fillText('[MEDICION EN PAUSA / SENSOR RETIRADO POR EL MEDICO]', widthPpg / 2 - 180, heightPpg / 2 - 12);
+        } else if (isPhysiologicalNoise) {
+          ctxPpg.fillStyle = '#f87171';
+          ctxPpg.font = 'bold 11px monospace';
+          ctxPpg.fillText('[RUIDO DE LUZ AMBIENTAL DETECTADO: ANILLO RETIRADO]', widthPpg / 2 - 190, heightPpg / 2 - 12);
         }
       } else {
-        // MODO BARRIDO EN VIVO (Sweep 25 mm/s)
         const speedPxPerSec = 140; 
         sweepXRef.current = (sweepXRef.current + speedPxPerSec * deltaSec) % widthPpg;
         const currentX = sweepXRef.current;
@@ -295,7 +261,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
         const yVal = (heightPpg * 0.72) - (normalizedPulse * (heightPpg * 0.48)) + baselineDrift;
 
-        // Limpieza de bloque frontal
         const eraseWidth = 20;
         ctxPpg.fillStyle = '#020617';
         ctxPpg.fillRect(currentX, 0, eraseWidth, heightPpg);
@@ -326,7 +291,6 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           ctxPpg.restore();
         }
 
-        // Puntero de barrido
         ctxPpg.fillStyle = '#67e8f9';
         ctxPpg.beginPath();
         ctxPpg.arc(currentX, yVal, 3, 0, Math.PI * 2);
@@ -383,7 +347,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     return () => {
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
     };
-  }, [connectionStatus.connected, isOffBody]);
+  }, [connectionStatus.connected, isSensorOnPatient, isPhysiologicalNoise]);
 
   // HANDLERS
   const handleConnectUsb = async () => {
@@ -416,24 +380,24 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
   const handleTransferToGlobalRecord = () => {
     if (onUpdatePatientData && patient) {
-      const hrvVal = (connectionStatus.connected && !isOffBody && displayTelemetry.heartRateBpm > 30) ? displayTelemetry.hrvRmssdMs : 0;
+      const hrvVal = (connectionStatus.connected && isSensorOnPatient && !isPhysiologicalNoise && displayTelemetry.heartRateBpm > 30) ? displayTelemetry.hrvRmssdMs : 0;
       onUpdatePatientData({
         multisensoryHardware: {
           ...patient.multisensoryHardware,
           vagalToneHrvIndex: hrvVal,
-          handGripPressureKg: (connectionStatus.connected && !isOffBody) ? displayTelemetry.handGripPressureKg : 0,
+          handGripPressureKg: (connectionStatus.connected && isSensorOnPatient) ? displayTelemetry.handGripPressureKg : 0,
           camouflagingIndexPct: patient.multisensoryHardware?.camouflagingIndexPct || 25,
           ocularFixationDurationMs: patient.multisensoryHardware?.ocularFixationDurationMs || 350,
-          touchTapLatencyCompensatedMs: (connectionStatus.connected && !isOffBody) ? displayTelemetry.touchTapLatencyMs : 0,
+          touchTapLatencyCompensatedMs: (connectionStatus.connected && isSensorOnPatient) ? displayTelemetry.touchTapLatencyMs : 0,
           microExpressionState: hrvVal < 25 && hrvVal > 0 
             ? 'Inhibición Vagal / Estrés Agudo' 
             : hrvVal > 0 ? 'Regulación Parasimpática Óptima' : 'Sin Registro'
         },
         neuromotorBiomarkers: {
-          reactionTimeMs: (connectionStatus.connected && !isOffBody) ? displayTelemetry.reactionTimeMs : 0,
+          reactionTimeMs: (connectionStatus.connected && isSensorOnPatient) ? displayTelemetry.reactionTimeMs : 0,
           omissionErrors: patient.neuromotorBiomarkers?.omissionErrors || 0,
           commissionErrors: patient.neuromotorBiomarkers?.commissionErrors || 0,
-          motorStabilityScore: (connectionStatus.connected && !isOffBody) ? Math.min(100, Math.max(0, 100 - Math.round(displayTelemetry.handGripPressureKg))) : 0
+          motorStabilityScore: (connectionStatus.connected && isSensorOnPatient) ? Math.min(100, Math.max(0, 100 - Math.round(displayTelemetry.handGripPressureKg))) : 0
         }
       });
     }
@@ -441,7 +405,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  const hasActivePulse = connectionStatus.connected && displayTelemetry.heartRateBpm > 30 && !isOffBody;
+  const hasActivePulse = connectionStatus.connected && displayTelemetry.heartRateBpm > 30 && isSensorOnPatient && !isPhysiologicalNoise;
 
   return (
     <div className="space-y-6 font-sans">
@@ -453,8 +417,8 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
             <div className={`p-3 rounded-xl text-white shadow-lg ${
               hasActivePulse 
                 ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/20' 
-                : isOffBody
-                  ? 'bg-gradient-to-tr from-rose-600 to-red-700 shadow-rose-600/20 animate-pulse'
+                : !isSensorOnPatient || isPhysiologicalNoise
+                  ? 'bg-gradient-to-tr from-rose-600 to-red-700 shadow-rose-600/20'
                   : connectionStatus.connected 
                     ? 'bg-gradient-to-tr from-amber-600 to-orange-600 shadow-amber-500/20'
                     : 'bg-slate-800 shadow-none'
@@ -465,11 +429,11 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white">ScientificNeuroEvaluator • Monitor Clínico VFC</h2>
                 
-                {/* ESTADO DE CONEXIÓN Y DETECCIÓN OFF-BODY */}
+                {/* ESTADO DE CONEXIÓN */}
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
                   hasActivePulse
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
-                    : isOffBody
+                    : !isSensorOnPatient || isPhysiologicalNoise
                       ? 'bg-rose-950 text-rose-300 border-rose-500/50'
                       : connectionStatus.connected
                         ? 'bg-amber-950 text-amber-300 border-amber-500/40'
@@ -478,19 +442,21 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
                   <span className={`w-2 h-2 rounded-full ${
                     hasActivePulse 
                       ? 'bg-emerald-400 animate-ping' 
-                      : isOffBody
-                        ? 'bg-rose-500 animate-pulse'
+                      : !isSensorOnPatient || isPhysiologicalNoise
+                        ? 'bg-rose-500'
                         : connectionStatus.connected 
                           ? 'bg-amber-400' 
                           : 'bg-slate-600'
                   }`} />
                   {hasActivePulse 
                     ? `HARDWARE BLE EN VIVO (${connectionStatus.protocol})` 
-                    : isOffBody
-                      ? 'ANILLO RETIRADO / SIN PULSO (OFF-BODY)'
-                      : connectionStatus.connected 
-                        ? 'CONECTADO - ESPERANDO CONTACTO' 
-                        : 'SIN DISPOSITIVO CONECTADO'}
+                    : !isSensorOnPatient
+                      ? 'MEDICION PAUSADA (SENSOR DESCONECTADO DEL PACIENTE)'
+                      : isPhysiologicalNoise
+                        ? 'RUIDO DE LUZ DETECTADO (ANILLO FORA DE LA PIEL)'
+                        : connectionStatus.connected 
+                          ? 'CONECTADO - ESPERANDO CONTACTO' 
+                          : 'SIN DISPOSITIVO CONECTADO'}
                 </span>
               </div>
               
@@ -501,17 +467,17 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* INTERRUPTOR DEL FILTRO OFF-BODY */}
+            {/* BOTÓN MANUAL DE CONTROL DE SENSOR EN PACIENTE */}
             <button
-              onClick={() => setOffBodyGuardEnabled(!offBodyGuardEnabled)}
+              onClick={() => setIsSensorOnPatient(!isSensorOnPatient)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
-                offBodyGuardEnabled 
-                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40' 
-                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                isSensorOnPatient 
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50' 
+                  : 'bg-rose-950/80 text-rose-300 border-rose-500/50'
               }`}
             >
-              {offBodyGuardEnabled ? <ShieldOff className="w-3.5 h-3.5 text-emerald-400" /> : <RadioTower className="w-3.5 h-3.5 text-slate-400" />}
-              <span>{offBodyGuardEnabled ? 'Filtro Off-Body: ACTIVO' : 'Filtro Off-Body: OFF'}</span>
+              {isSensorOnPatient ? <UserCheck className="w-3.5 h-3.5 text-emerald-400" /> : <UserX className="w-3.5 h-3.5 text-rose-400" />}
+              <span>{isSensorOnPatient ? 'Anillo Colocado: SÍ' : 'Anillo Colocado: NO (Pausado)'}</span>
             </button>
 
             <button
@@ -525,7 +491,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
             <button
               onClick={handleTransferToGlobalRecord}
-              disabled={!connectionStatus.connected || isOffBody}
+              disabled={!connectionStatus.connected || !isSensorOnPatient}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
