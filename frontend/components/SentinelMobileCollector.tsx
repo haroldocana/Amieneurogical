@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Smartphone, Zap, MapPin, Moon, Send, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Smartphone, Zap, MapPin, Moon, Send, CheckCircle2, AlertTriangle, RefreshCw, ArrowUpRight } from 'lucide-react';
 
 interface TelemetryPayload {
-  pacId: string;
+  patientId: string;
   doctorUsername: string;
   typingLatencyMs: number;
   touchTapLatencyMs: number;
@@ -16,7 +16,6 @@ interface TelemetryPayload {
 }
 
 export const SentinelMobileCollector: React.FC = () => {
-  // Sanitización de URL para evitar errores de formato en iOS Safari
   const getBackendUrl = (): string => {
     let url = (import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com').trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -38,6 +37,7 @@ export const SentinelMobileCollector: React.FC = () => {
 
   const [typingTestText, setTypingTestText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [lastSentPayload, setLastSentPayload] = useState<any>(null);
   const [serverResponse, setServerResponse] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -63,8 +63,9 @@ export const SentinelMobileCollector: React.FC = () => {
   };
 
   const handleGetLocation = () => {
+    setErrorMsg(null);
     if (!navigator.geolocation) {
-      setErrorMsg('Geolocalización no soportada en este navegador.');
+      setErrorMsg('Geolocalización no soportada en este navegador (GPS omitido).');
       return;
     }
 
@@ -80,9 +81,9 @@ export const SentinelMobileCollector: React.FC = () => {
         setIsOutsideSafeZone(dist > 0.05);
       },
       (err) => {
-        setErrorMsg(`Error GPS: ${err.message}`);
+        setErrorMsg(`GPS Omitido: ${err.message}. Aún puedes enviar la telemetría.`);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 5000 }
     );
   };
 
@@ -92,7 +93,7 @@ export const SentinelMobileCollector: React.FC = () => {
     setErrorMsg(null);
 
     const payload: TelemetryPayload = {
-      pacId: pacId.trim().toUpperCase(),
+      patientId: pacId.trim().toUpperCase(),
       doctorUsername: doctorUsername.trim().toLowerCase(),
       typingLatencyMs: typingLatency,
       touchTapLatencyMs: tapLatency,
@@ -105,15 +106,18 @@ export const SentinelMobileCollector: React.FC = () => {
       timestamp: new Date().toISOString()
     };
 
+    setLastSentPayload(payload);
+
     try {
       const baseUrl = getBackendUrl();
-      const endpoint = `${baseUrl}/api/sentinel/process-telemetry`;
+      // Usar ruta unificada con backend server.js
+      const endpoint = `${baseUrl}/api/sentinel/telemetry`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-app-proxy': 'AMIE_SECRET_HEADER_2025'
+          'x-app-proxy': 'AMIE_SECRET_HEADER_2026'
         },
         body: JSON.stringify(payload)
       });
@@ -121,10 +125,13 @@ export const SentinelMobileCollector: React.FC = () => {
       const responseData = await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.error || `Error servidor (${response.status})`);
+        throw new Error(responseData.error || `Error servidor HTTP ${response.status}`);
       }
 
-      setServerResponse(responseData);
+      setServerResponse({
+        httpStatus: response.status,
+        data: responseData
+      });
     } catch (err: any) {
       setErrorMsg(err.message || 'Error de conexión con el backend Render.');
     } finally {
@@ -133,7 +140,7 @@ export const SentinelMobileCollector: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto p-4 sm:p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-slate-100 space-y-6 font-sans">
+    <div className="max-w-xl mx-auto p-4 sm:p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-slate-100 space-y-5 font-sans">
       <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
         <div className="p-3 bg-cyan-600 rounded-2xl text-white shadow-lg shadow-cyan-600/30">
           <Smartphone className="w-6 h-6" />
@@ -146,7 +153,7 @@ export const SentinelMobileCollector: React.FC = () => {
             </span>
           </h2>
           <p className="text-xs text-slate-400">
-            Prueba de envío de telemetría pasiva móvil directamente al servidor Render.
+            Envío de bioseñales pasivas móviles directo a Render.
           </p>
         </div>
       </div>
@@ -175,80 +182,80 @@ export const SentinelMobileCollector: React.FC = () => {
       <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-amber-400" /> Latencia de Tecleo en Móvil
+            <Zap className="w-4 h-4 text-amber-400" /> Latencia de Tecleo
           </span>
           <span className="text-xs font-mono font-bold text-amber-400">{typingLatency} ms</span>
         </div>
         <input
           type="text"
-          placeholder="Escriba aquí desde su teléfono para medir latencia..."
+          placeholder="Toca y escribe aquí para medir milisegundos..."
           value={typingTestText}
           onChange={handleTypingInputChange}
           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
         />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+      <div className="grid grid-cols-3 gap-2.5 text-xs">
         <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
-          <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-            <Moon className="w-3.5 h-3.5 text-indigo-400" /> Horas Sueño
+          <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+            <Moon className="w-3 h-3 text-indigo-400" /> Sueño (Hrs)
           </label>
           <input
             type="number"
             step="0.5"
             value={sleepHours}
             onChange={(e) => setSleepHours(Number(e.target.value))}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-indigo-300 font-mono font-bold focus:outline-none"
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-indigo-300 font-mono font-bold focus:outline-none"
           />
         </div>
 
         <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
-          <label className="text-[11px] font-bold text-slate-400">Despertares</label>
+          <label className="text-[10px] font-bold text-slate-400">Despertares</label>
           <input
             type="number"
             value={nightAwakenings}
             onChange={(e) => setNightAwakenings(Number(e.target.value))}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-rose-400 font-mono font-bold focus:outline-none"
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-rose-400 font-mono font-bold focus:outline-none"
           />
         </div>
 
-        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1 col-span-2 sm:col-span-1">
-          <label className="text-[11px] font-bold text-slate-400">FC Reposo (BPM)</label>
+        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+          <label className="text-[10px] font-bold text-slate-400">FC Reposo</label>
           <input
             type="number"
             value={restingHr}
             onChange={(e) => setRestingHr(Number(e.target.value))}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-emerald-400 font-mono font-bold focus:outline-none"
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-emerald-400 font-mono font-bold focus:outline-none"
           />
         </div>
       </div>
 
-      <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-            <MapPin className="w-4 h-4 text-rose-400" /> GPS & Zona Habitual
+      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs">
+        <div>
+          <span className="font-bold text-slate-200 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-rose-400" /> GPS (Opcional)
           </span>
-          <p className="text-[10px] text-slate-400">
-            {location ? `Lat: ${location.lat.toFixed(4)}, Lng: ${location.lng.toFixed(4)}` : 'GPS no capturado'}
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            {location ? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}` : 'Sin GPS (se enviará igual)'}
           </p>
         </div>
         <button
           onClick={handleGetLocation}
-          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition"
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold rounded-lg border border-slate-700 transition"
         >
-          Capturar GPS
+          Probar GPS
         </button>
       </div>
 
       <button
         onClick={handleSendTelemetry}
         disabled={isSending}
-        className="w-full py-3.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-black text-xs rounded-2xl shadow-xl shadow-cyan-600/25 transition active:scale-98 flex items-center justify-center gap-2"
+        className="w-full py-3.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-black text-xs rounded-2xl shadow-xl shadow-cyan-600/25 transition active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
       >
         {isSending ? (
           <>
             <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>Procesando en Servidor Render...</span>
+            <span>Transmitiendo a Render...</span>
           </>
         ) : (
           <>
@@ -259,23 +266,38 @@ export const SentinelMobileCollector: React.FC = () => {
       </button>
 
       {errorMsg && (
-        <div className="p-3.5 bg-rose-950/80 border border-rose-500/40 rounded-xl text-rose-200 text-xs flex items-center gap-2">
+        <div className="p-3 bg-rose-950/80 border border-rose-500/40 rounded-xl text-rose-200 text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
           <span>{errorMsg}</span>
         </div>
       )}
 
+      {/* CONFIRMACIÓN VISUAL EN PANTALLA */}
       {serverResponse && (
-        <div className="p-4 bg-slate-950 border border-cyan-500/40 rounded-2xl space-y-2 text-xs font-mono">
-          <div className="flex items-center justify-between text-cyan-400 font-bold border-b border-slate-800 pb-2">
+        <div className="p-4 bg-slate-950 border border-emerald-500/50 rounded-2xl space-y-3 text-xs animate-fade-in">
+          <div className="flex items-center justify-between text-emerald-400 font-bold border-b border-slate-800 pb-2">
             <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> RESPUESTA CENTINELA RECIBIDA
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> ¡TELEMETRÍA ENVIADA CON ÉXITO!
             </span>
-            <span>Riesgo Evaluado: {serverResponse.evaluatedRiskScore ?? 'OK'}%</span>
+            <span className="bg-emerald-950 px-2 py-0.5 rounded text-[10px] font-mono border border-emerald-800">
+              HTTP {serverResponse.httpStatus} OK
+            </span>
           </div>
-          <pre className="text-[10px] text-slate-300 overflow-x-auto p-2 bg-slate-900 rounded-lg">
-            {JSON.stringify(serverResponse, null, 2)}
-          </pre>
+
+          <div className="space-y-1 text-slate-300">
+            <p>• <strong>Paciente Monitoreado:</strong> <span className="text-cyan-300 font-mono">{serverResponse.data.patientId}</span></p>
+            <p>• <strong>Riesgo Evaluado por Render:</strong> <span className="text-amber-400 font-mono font-bold">{serverResponse.data.evaluatedRiskScore}%</span></p>
+            <p>• <strong>Estatus de Servidor:</strong> <span className="text-emerald-300 font-mono">{serverResponse.data.status}</span></p>
+          </div>
+
+          <div className="pt-2 border-t border-slate-900 text-[10px] font-mono text-slate-500">
+            <span className="block font-bold text-slate-400 mb-1 flex items-center gap-1">
+              <ArrowUpRight className="w-3 h-3 text-cyan-400" /> Payload JSON enviado desde tu teléfono:
+            </span>
+            <pre className="p-2 bg-slate-900 rounded-lg overflow-x-auto text-slate-400">
+              {JSON.stringify(lastSentPayload, null, 2)}
+            </pre>
+          </div>
         </div>
       )}
     </div>
