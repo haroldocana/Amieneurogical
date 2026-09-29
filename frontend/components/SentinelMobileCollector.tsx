@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Smartphone, Zap, MapPin, Moon, Send, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface TelemetryPayload {
@@ -117,7 +117,7 @@ export const SentinelMobileCollector: React.FC = () => {
       setServerResponse(responseData);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error de conexión con el backend Render.');
-    } fontally {
+    } finally {
       setIsSending(false);
     }
   };
