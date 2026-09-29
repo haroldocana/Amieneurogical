@@ -16,9 +16,16 @@ interface TelemetryPayload {
 }
 
 export const SentinelMobileCollector: React.FC = () => {
-  const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
+  // Sanitización de URL para evitar errores de formato en iOS Safari
+  const getBackendUrl = (): string => {
+    let url = (import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com').trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+    return url.replace(/\/+$/, '');
+  };
 
-  const [pacId, setPacId] = useState('PAC-2964');
+  const [pacId, setPacId] = useState('PAC-8104');
   const [doctorUsername, setDoctorUsername] = useState('2000');
   
   const [typingLatency, setTypingLatency] = useState<number>(140);
@@ -99,7 +106,10 @@ export const SentinelMobileCollector: React.FC = () => {
     };
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/sentinel/process-telemetry`, {
+      const baseUrl = getBackendUrl();
+      const endpoint = `${baseUrl}/api/sentinel/process-telemetry`;
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
