@@ -4,7 +4,6 @@ import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import crypto from 'crypto';
 
 dotenv.config();
 
@@ -15,10 +14,13 @@ const server = http.createServer(app);
 // 1. CONFIGURACIÓN DE MIDDLEWARES & SEGURIDAD CORS
 // -----------------------------------------------------------------------
 app.use(cors({
-  origin: '*', // En producción puedes restringir a tu dominio de Render / Vercel
+  origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-user-id', 'Accept']
 }));
+
+// Habilitar preflight automático para todas las rutas
+app.options('*', cors());
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -68,7 +70,6 @@ const User = mongoose.model('User', userSchema);
 // 3. RUTAS API: PERFIL SAAS & CONSUMO DE TOKENS IA
 // -----------------------------------------------------------------------
 
-// GET /api/saas/profile - Consultar estado de cuenta
 app.get('/api/saas/profile', async (req, res) => {
   try {
     const userId = req.query.userId || req.headers['x-user-id'] || 'harold01';
@@ -99,7 +100,6 @@ app.get('/api/saas/profile', async (req, res) => {
   }
 });
 
-// POST /api/saas/consume-tokens - Deducción atómica por consulta diagnóstica
 app.post('/api/saas/consume-tokens', async (req, res) => {
   try {
     const { userId, tokens } = req.body;
@@ -228,7 +228,6 @@ app.post('/api/sentinel/telemetry', async (req, res) => {
 
     if (isCritical) {
       console.log(`🚨 [ALERTA CRÍTICA JITAI] Riesgo de brote en Paciente ${patientId || 'PAC-8104'}: ${riskScore}%`);
-      // Reenviar alerta por WebSocket a los médicos conectados
       broadcastToClients({
         type: 'CRITICAL_SENTINEL_ALERT',
         patientId: patientId || 'PAC-8104',
@@ -267,11 +266,8 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message.toString());
-      // Difundir telemetría biométrica del Quest 3S a las consolas web escuchando
       broadcastToClients(data, ws);
-    } catch (e) {
-      // Si el visor envía texto plano o binario
-    }
+    } catch (e) {}
   });
 
   ws.on('close', () => {
