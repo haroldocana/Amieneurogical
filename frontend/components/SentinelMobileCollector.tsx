@@ -81,6 +81,39 @@ export const SentinelMobileCollector: React.FC = () => {
     );
   };
 
+  // Envió mediante XMLHttpRequest blindado contra fallos de Safari/WebKit
+  const sendTelemetryXHR = (url: string, payload: TelemetryPayload): Promise<{ status: number; data: any }> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve({ status: xhr.status, data });
+          } catch (e) {
+            reject(new Error('La respuesta del servidor no es un JSON válido.'));
+          }
+        } else {
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            reject(new Error(errData.error || `Error servidor HTTP ${xhr.status}`));
+          } catch (e) {
+            reject(new Error(`Error servidor HTTP ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = function () {
+        reject(new Error('Error de red al conectar con Render (verifique conexión o adblockers).'));
+      };
+
+      xhr.send(JSON.stringify(payload));
+    });
+  };
+
   const handleSendTelemetry = async () => {
     setIsSending(true);
     setServerResponse(null);
@@ -103,27 +136,13 @@ export const SentinelMobileCollector: React.FC = () => {
     setLastSentPayload(payload);
 
     try {
-      const response = await fetch(TARGET_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-proxy': 'AMIE_SECRET_HEADER_2026'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.error || `Error HTTP ${response.status}`);
-      }
-
+      const result = await sendTelemetryXHR(TARGET_URL, payload);
       setServerResponse({
-        httpStatus: response.status,
-        data: responseData
+        httpStatus: result.status,
+        data: result.data
       });
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error de conexión con el servidor.');
+      setErrorMsg(err.message || 'Error al conectar con el servidor.');
     } finally {
       setIsSending(false);
     }
@@ -178,7 +197,7 @@ export const SentinelMobileCollector: React.FC = () => {
         </div>
         <input
           type="text"
-          placeholder="Escribe aquí para medir velocidad..."
+          placeholder="Escribe aquí en tu iPhone para medir velocidad..."
           value={typingTestText}
           onChange={handleTypingInputChange}
           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
