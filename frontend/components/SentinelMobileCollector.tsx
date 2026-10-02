@@ -16,13 +16,7 @@ interface TelemetryPayload {
 }
 
 export const SentinelMobileCollector: React.FC = () => {
-  const getBackendUrl = (): string => {
-    let url = (import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com').trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = `https://${url}`;
-    }
-    return url.replace(/\/+$/, '');
-  };
+  const TARGET_URL = 'https://amieneurogical.onrender.com/api/sentinel/telemetry';
 
   const [pacId, setPacId] = useState('PAC-8104');
   const [doctorUsername, setDoctorUsername] = useState('2000');
@@ -65,7 +59,7 @@ export const SentinelMobileCollector: React.FC = () => {
   const handleGetLocation = () => {
     setErrorMsg(null);
     if (!navigator.geolocation) {
-      setErrorMsg('Geolocalización no soportada en este navegador (GPS omitido).');
+      setErrorMsg('Geolocalización no disponible.');
       return;
     }
 
@@ -81,9 +75,9 @@ export const SentinelMobileCollector: React.FC = () => {
         setIsOutsideSafeZone(dist > 0.05);
       },
       (err) => {
-        setErrorMsg(`GPS Omitido: ${err.message}. Aún puedes enviar la telemetría.`);
+        setErrorMsg(`GPS Omitido (${err.message}). Se enviará sin coordenadas.`);
       },
-      { enableHighAccuracy: false, timeout: 5000 }
+      { enableHighAccuracy: false, timeout: 4000 }
     );
   };
 
@@ -109,11 +103,7 @@ export const SentinelMobileCollector: React.FC = () => {
     setLastSentPayload(payload);
 
     try {
-      const baseUrl = getBackendUrl();
-      // Usar ruta unificada con backend server.js
-      const endpoint = `${baseUrl}/api/sentinel/telemetry`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(TARGET_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +115,7 @@ export const SentinelMobileCollector: React.FC = () => {
       const responseData = await response.json();
 
       if (!response.ok) {
-        throw new Error(responseData.error || `Error servidor HTTP ${response.status}`);
+        throw new Error(responseData.error || `Error HTTP ${response.status}`);
       }
 
       setServerResponse({
@@ -133,7 +123,7 @@ export const SentinelMobileCollector: React.FC = () => {
         data: responseData
       });
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error de conexión con el backend Render.');
+      setErrorMsg(err.message || 'Error de conexión con el servidor.');
     } finally {
       setIsSending(false);
     }
@@ -188,7 +178,7 @@ export const SentinelMobileCollector: React.FC = () => {
         </div>
         <input
           type="text"
-          placeholder="Toca y escribe aquí para medir milisegundos..."
+          placeholder="Escribe aquí para medir velocidad..."
           value={typingTestText}
           onChange={handleTypingInputChange}
           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
@@ -236,7 +226,7 @@ export const SentinelMobileCollector: React.FC = () => {
             <MapPin className="w-3.5 h-3.5 text-rose-400" /> GPS (Opcional)
           </span>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            {location ? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}` : 'Sin GPS (se enviará igual)'}
+            {location ? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}` : 'Sin GPS'}
           </p>
         </div>
         <button
@@ -272,12 +262,11 @@ export const SentinelMobileCollector: React.FC = () => {
         </div>
       )}
 
-      {/* CONFIRMACIÓN VISUAL EN PANTALLA */}
       {serverResponse && (
         <div className="p-4 bg-slate-950 border border-emerald-500/50 rounded-2xl space-y-3 text-xs animate-fade-in">
           <div className="flex items-center justify-between text-emerald-400 font-bold border-b border-slate-800 pb-2">
             <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> ¡TELEMETRÍA ENVIADA CON ÉXITO!
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> TELEMETRÍA RECIBIDA
             </span>
             <span className="bg-emerald-950 px-2 py-0.5 rounded text-[10px] font-mono border border-emerald-800">
               HTTP {serverResponse.httpStatus} OK
@@ -285,14 +274,14 @@ export const SentinelMobileCollector: React.FC = () => {
           </div>
 
           <div className="space-y-1 text-slate-300">
-            <p>• <strong>Paciente Monitoreado:</strong> <span className="text-cyan-300 font-mono">{serverResponse.data.patientId}</span></p>
-            <p>• <strong>Riesgo Evaluado por Render:</strong> <span className="text-amber-400 font-mono font-bold">{serverResponse.data.evaluatedRiskScore}%</span></p>
-            <p>• <strong>Estatus de Servidor:</strong> <span className="text-emerald-300 font-mono">{serverResponse.data.status}</span></p>
+            <p>• <strong>Paciente:</strong> <span className="text-cyan-300 font-mono">{serverResponse.data.patientId}</span></p>
+            <p>• <strong>Riesgo Evaluado:</strong> <span className="text-amber-400 font-mono font-bold">{serverResponse.data.evaluatedRiskScore}%</span></p>
+            <p>• <strong>Respuesta Backend:</strong> <span className="text-emerald-300 font-mono">{serverResponse.data.status}</span></p>
           </div>
 
           <div className="pt-2 border-t border-slate-900 text-[10px] font-mono text-slate-500">
             <span className="block font-bold text-slate-400 mb-1 flex items-center gap-1">
-              <ArrowUpRight className="w-3 h-3 text-cyan-400" /> Payload JSON enviado desde tu teléfono:
+              <ArrowUpRight className="w-3 h-3 text-cyan-400" /> JSON transmitido:
             </span>
             <pre className="p-2 bg-slate-900 rounded-lg overflow-x-auto text-slate-400">
               {JSON.stringify(lastSentPayload, null, 2)}
