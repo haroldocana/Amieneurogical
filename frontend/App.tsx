@@ -219,7 +219,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } font-sans finally {
+    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -299,7 +299,7 @@ export default function App() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Reporte Objetico Individual — ${safePatientId}</title>
+        <title>Reporte Objetivo Individual — ${safePatientId}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 30px; color: #0f172a; line-height: 1.5; }
           h1 { color: #0284c7; font-size: 18px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
