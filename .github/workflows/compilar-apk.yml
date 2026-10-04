@@ -18,11 +18,15 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Preparar Java 17
+      - name: Preparar Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
+
+      - name: Aceptar Licencias de Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Construir Frontend React
         run: |
@@ -165,7 +169,7 @@ jobs:
         run: |
           cd frontend/android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Guardar APK
         uses: actions/upload-artifact@v4
