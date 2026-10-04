@@ -33,7 +33,7 @@ import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidat
 import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
 import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
-import { SentinelMobileCollector } from './components/SentinelMobileCollector'; // NUEVO IMPORT
+import { SentinelMobileCollector } from './components/SentinelMobileCollector';
 
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
@@ -68,7 +68,7 @@ import {
   UserX,
   Info,
   Printer,
-  Wifi // ICONO WIFI PARA EL TESTER
+  Wifi
 } from 'lucide-react';
 
 type AppTab = 
@@ -81,11 +81,19 @@ type AppTab =
   | 'neuro_3d' 
   | 'neurosensometry' 
   | 'vr_therapy' 
-  | 'sentinel_tester' // NUEVO TAB
+  | 'sentinel_tester'
   | 'referral' 
   | 'saas';
 
 export default function App() {
+  // -----------------------------------------------------------------------
+  // DETECCIÓN DE VISTA EXCLUSIVA PARA PACIENTE (PWA / APK TARGET)
+  // -----------------------------------------------------------------------
+  const isPatientMode = 
+    window.location.pathname === '/paciente' || 
+    window.location.search.includes('mode=paciente') ||
+    window.location.search.includes('paciente=true');
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
   const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
@@ -168,6 +176,17 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // -----------------------------------------------------------------------
+  // RENDERING MÓDULO PACIENTE (SIN REQUERIR AUTENTICACIÓN MÉDICA)
+  // -----------------------------------------------------------------------
+  if (isPatientMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-3 sm:p-6 font-sans">
+        <SentinelMobileCollector />
+      </div>
+    );
+  }
+
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -200,7 +219,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } finally {
+    } font-sans finally {
       setIsAnalyzing(false);
     }
   };
@@ -272,7 +291,6 @@ export default function App() {
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
-  // IMPRESIÓN Y EXPORTACIÓN DEL REPORTE OBJETIVO INDIVIDUAL (ROI)
   const handlePrintIndividualReport = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -649,7 +667,7 @@ export default function App() {
               </HoverTooltip>
             </div>
 
-            {/* NUEVO BOTÓN: TESTER CENTINELA */}
+            {/* BOTÓN TESTER CENTINELA */}
             <div className="shrink-0 inline-flex">
               <HoverTooltip
                 title="Capturador Móvil Centinela 24/7"
@@ -966,7 +984,7 @@ export default function App() {
           </div>
         )}
 
-        {/* NUEVO TAB: TESTER CENTINELA MÓVIL */}
+        {/* TAB: TESTER CENTINELA MÓVIL */}
         {activeTab === 'sentinel_tester' && (
           <div className="py-2">
             <SentinelMobileCollector />
