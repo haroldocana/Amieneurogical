@@ -19,9 +19,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-user-id', 'Accept']
 }));
 
-// Habilitar preflight automático para todas las rutas
-app.options('*', cors());
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -191,7 +188,7 @@ app.post('/api/admin/manual-grant', async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Operación manual (${grantType}) aplicada exitosamente.`,
+      message: `Operación manual (${grantType}) applied exitosamente.`,
       data: user
     });
   } catch (err) {
