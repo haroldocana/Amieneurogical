@@ -18,11 +18,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Preparar Java 21
+      - name: Preparar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '21'
+          java-version: '17'
 
       - name: Aceptar Licencias de Android SDK
         run: |
@@ -34,10 +34,10 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Generar Capa Nativa Android Limpia
+      - name: Generar Capa Nativa Android (Capacitor 6)
         run: |
           cd frontend
-          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
+          npm install @capacitor/core@^6.0.0 @capacitor/cli@^6.0.0 @capacitor/android@^6.0.0 --legacy-peer-deps
           rm -rf android capacitor.config.json capacitor.config.ts
           npx cap init "Centinela" "com.amie.centinela" --web-dir "dist"
           npx cap add android
@@ -130,10 +130,12 @@ jobs:
 
           cat << 'EOF' > AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.amie.centinela">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -141,15 +143,20 @@ jobs:
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/AppTheme">
+
                   <activity
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
                       android:name=".MainActivity"
-                      android:exported="true"
-                      android:theme="@style/AppTheme">
+                      android:label="@string/title_activity_main"
+                      android:theme="@style/AppTheme.NoActionBarLaunch"
+                      android:launchMode="singleTask"
+                      android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
+
                   <service
                       android:name=".SentinelAccessibilityService"
                       android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -161,6 +168,7 @@ jobs:
                           android:name="android.accessibilityservice"
                           android:resource="@xml/accessibility_service_config" />
                   </service>
+
               </application>
           </manifest>
           EOF
