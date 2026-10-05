@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Video, Brain, X, 
-  Zap, Target, Sparkles, Crosshair, Focus, Cpu
+  Zap, Target, Sparkles, Crosshair, Focus, Cpu,
+  Activity, RotateCcw, CheckCircle2, ShieldCheck,
+  Maximize2, Minimize2, Printer, FileText
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -14,15 +16,26 @@ interface Props {
 type ExecutiveTask = 'RESPONSE_INHIBITION' | 'SUSTAINED_ATTENTION' | 'WORKING_MEMORY_NBACK';
 type TrialState = 'WAITING' | 'STIMULUS_PRESENTED' | 'RESPONSE_WINDOW' | 'INTER_TRIAL_INTERVAL';
 
+interface TelemetryPoint {
+  timeLabel: string;
+  primaryVal: number;   // Tiempo de Reacción TR (ms)
+  secondaryVal: number; // Compromiso Prefrontal (%)
+}
+
 export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose }) => {
   // Configuración Clínica
   const [executiveTask, setExecutiveTask] = useState<ExecutiveTask>('RESPONSE_INHIBITION');
   const [sessionActive, setSessionActive] = useState(false);
   const [aiAutoPilot, setAiAutoPilot] = useState(true);
 
+  // Estados para Pantalla de Resultados
+  const [showResults, setShowResults] = useState(false);
+  const [isFullscreenResults, setIsFullscreenResults] = useState(false);
+  const [sessionDuration, setSessionDuration] = useState(0);
+
   // Parámetros de la Tarea y Biofeedback
   const [binauralBetaHz, setBinauralBetaHz] = useState<number>(15.0); // Rango Beta para foco atencional
-  const [taskDifficultyMs, setTaskDifficultyMs] = useState<number>(800); // Latencia de respuesta requerida (ms)
+  const [taskDifficultyMs, setTaskDifficultyMs] = useState<number>(800); // Latencia requerida (ms)
   
   // Estado Dinámico de la Tarea Simulada
   const [trialState, setTrialState] = useState<TrialState>('WAITING');
@@ -35,15 +48,18 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
   const [avgReactionTimeMs, setAvgReactionTimeMs] = useState<number>(0);
   const [frontalEngagementPct, setFrontalEngagementPct] = useState<number>(10); // Reclutamiento prefrontal
   
+  // Historial dinámico para graficar curvas biométricas
+  const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPoint[]>([]);
+
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
 
   // -------------------------------------------------------------------------
-  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE / RECEPTOR TELEMETRÍA)
   // -------------------------------------------------------------------------
   const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'ExecutiveControl');
 
-  // Transmisión en tiempo real al servidor en cada actualización de métricas
+  // Transmisión en tiempo real al servidor
   useEffect(() => {
     if (sessionActive && !safetyTriggered) {
       transmit({
@@ -65,14 +81,25 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       // Ciclo base de actualización biométrica y ajuste IA (cada segundo)
       interval = setInterval(() => {
         const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
+        setSessionDuration(prev => prev + 1);
         
         // Simulación de reclutamiento cortical
-        setFrontalEngagementPct(prev => Math.min(98, prev + (correctHits * 0.5) - (omissionErrors * 0.2)));
+        const currentFrontal = Math.min(98, Math.max(5, frontalEngagementPct + (correctHits * 0.5) - (omissionErrors * 0.2)));
+        setFrontalEngagementPct(currentFrontal);
+
+        // Registrar punto en la gráfica biométrica
+        setTelemetryHistory(prev => [
+          ...prev,
+          {
+            timeLabel: timeStr.substring(3, 8),
+            primaryVal: Math.floor(avgReactionTimeMs || 250),
+            secondaryVal: Math.floor(currentFrontal)
+          }
+        ]);
 
         // Adaptación automática (Closed-Loop)
         if (aiAutoPilot) {
            if (correctHits > 5 && (correctHits % 5 === 0)) {
-               // Si le va muy bien, la IA sube la dificultad (menor tiempo) y la frecuencia Beta
                setTaskDifficultyMs(prev => Math.max(300, prev - 50));
                setBinauralBetaHz(prev => Math.min(25.0, prev + 0.5));
                
@@ -84,7 +111,6 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
                }
            }
            if (commissionErrors > 3 && (commissionErrors % 3 === 0)) {
-               // Si hay mucha impulsividad, relaja el ritmo
                setTaskDifficultyMs(prev => Math.min(1200, prev + 100));
                setBinauralBetaHz(prev => Math.max(12.0, prev - 0.5));
                if (Math.random() > 0.5) {
@@ -105,17 +131,14 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
          const iti = Math.random() * 1500 + 500; // Inter-trial interval (500-2000ms)
 
          trialTimeout = setTimeout(() => {
-             // Presentar Estímulo
-             const isGoTarget = Math.random() > 0.3; // 70% GO, 30% NO-GO (Provoca impulsividad)
+             const isGoTarget = Math.random() > 0.3; // 70% GO, 30% NO-GO
              setTargetType(isGoTarget ? 'GO' : 'NO_GO');
              setTrialState('STIMULUS_PRESENTED');
 
-             // Ventana de Respuesta (El paciente debe reaccionar aquí)
              trialTimeout = setTimeout(() => {
                 setTrialState('RESPONSE_WINDOW');
                 
-                // Simulación de respuesta del paciente (basado en latencia VR)
-                const patientReacts = Math.random() > 0.2; // 80% de las veces reacciona
+                const patientReacts = Math.random() > 0.2;
                 const reactTime = Math.floor(Math.random() * 400 + 200);
 
                 if (isGoTarget) {
@@ -123,15 +146,14 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
                         setCorrectHits(c => c + 1);
                         setAvgReactionTimeMs(prev => prev === 0 ? reactTime : (prev + reactTime) / 2);
                     } else {
-                        setOmissionErrors(e => e + 1); // No reaccionó a tiempo (Inatención)
+                        setOmissionErrors(e => e + 1);
                     }
                 } else {
                     if (patientReacts) {
-                        setCommissionErrors(e => e + 1); // Reaccionó cuando no debía (Impulsividad)
+                        setCommissionErrors(e => e + 1);
                     }
                 }
                 
-                // Limpiar y lanzar siguiente trial
                 trialTimeout = setTimeout(() => {
                     setTargetType(null);
                     if (sessionActive && !safetyTriggered) runTrialSequence();
@@ -142,18 +164,22 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
          }, iti);
       };
 
-      runTrialSequence(); // Iniciar secuencia
+      runTrialSequence();
     }
 
     return () => {
       if (interval) clearInterval(interval);
       if (trialTimeout) clearTimeout(trialTimeout);
     };
-  }, [sessionActive, aiAutoPilot, taskDifficultyMs, binauralBetaHz, correctHits, omissionErrors, commissionErrors, safetyTriggered]);
+  }, [sessionActive, aiAutoPilot, taskDifficultyMs, binauralBetaHz, correctHits, omissionErrors, commissionErrors, safetyTriggered, avgReactionTimeMs, frontalEngagementPct]);
 
   const handleStartSession = () => {
     setSafetyTriggered(false);
     setSessionActive(true);
+    setShowResults(false);
+    setIsFullscreenResults(false);
+    setSessionDuration(0);
+    setTelemetryHistory([]);
     setOmissionErrors(0);
     setCommissionErrors(0);
     setCorrectHits(0);
@@ -161,7 +187,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     setFrontalEngagementPct(10);
     setTaskDifficultyMs(800);
     setBinauralBetaHz(15.0);
-    setAiLogs([`[SISTEMA] Iniciando Entrenamiento Neurocognitivo. Paradigma: ${executiveTask}.`]);
+    setAiLogs([`[SISTEMA] Iniciando Entrenamiento Neurocognitivo. Paradigma: ${getTaskTitle(executiveTask)}.`]);
   };
 
   const handleEmergencyEgress = () => {
@@ -172,9 +198,6 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad. Abortando estimulación cognitiva.`, ...prev]);
   };
 
-  // -------------------------------------------------------------------------
-  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
-  // -------------------------------------------------------------------------
   const handleEndSession = async () => {
     setSessionActive(false);
     setTrialState('WAITING');
@@ -185,7 +208,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       patientId: patient?.id || 'PAC-8104',
       sessionData: {
         taskName: executiveTask,
-        durationSeconds: 300,
+        durationSeconds: sessionDuration || 300,
         metrics: {
           avgReactionTimeMs: Math.floor(avgReactionTimeMs),
           omissions: omissionErrors,
@@ -204,12 +227,13 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionReport)
       });
-      console.log(`Reporte VR Control Ejecutivo guardado para ${patient?.id || 'PAC-8104'}.`);
-
-      if (onClose) onClose();
+      console.log(`Reporte VR Control Ejecutivo guardado en MongoDB.`);
     } catch (error) {
       console.error("Error al guardar reporte VR:", error);
     }
+
+    // Desplegar la pantalla de resultados e informe del módulo
+    setShowResults(true);
   };
 
   const getTaskTitle = (task: ExecutiveTask) => {
@@ -223,6 +247,279 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
 
   const safePatientName = patient.patientNameAnonymized || patient.id || 'PAC-8104';
 
+  const formatTime = (sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const remainder = sec % 60;
+    return `${mins}m ${remainder < 10 ? '0' : ''}${remainder}s`;
+  };
+
+  const handlePrintIndividualReport = () => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) return;
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Reporte Individual VR — Función Ejecutiva</title>
+        <style>
+          body { font-family: system-ui, sans-serif; padding: 25px; color: #0f172a; line-height: 1.5; }
+          .header { border-bottom: 3px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px; }
+          .title { font-size: 20px; font-weight: bold; color: #0369a1; }
+          .subtitle { font-size: 12px; color: #64748b; }
+          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+          .card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; text-align: center; }
+          .card-value { font-size: 18px; font-weight: bold; color: #0f172a; }
+          .card-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+          .verdict { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 8px; font-size: 12px; color: #166534; margin-top: 15px; }
+          .logs { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; font-mono; font-size: 10px; margin-top: 15px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">Entrenamiento de Función Ejecutiva (Executive Control VR)</div>
+          <div class="subtitle">Evaluación Inmersiva Individual • Paciente: ${safePatientName} | Dispositivo: Meta Quest 3S / Pico Neo 3</div>
+          <div class="subtitle">Tarea: ${getTaskTitle(executiveTask)} | Duración: ${formatTime(sessionDuration)}</div>
+        </div>
+
+        <h3>1. MÉTRICAS EJECUTIVAS Y DE ATENCIÓN</h3>
+        <div class="grid">
+          <div class="card">
+            <div class="card-label">Aciertos (Foco)</div>
+            <div class="card-value">${correctHits}</div>
+            <div style="font-size: 9px; color: #64748b;">Respuestas Válidas</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Omisiones (Inatención)</div>
+            <div class="card-value">${omissionErrors}</div>
+            <div style="font-size: 9px; color: #64748b;">Fallos de Atención</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Comisiones (Impulsividad)</div>
+            <div class="card-value">${commissionErrors}</div>
+            <div style="font-size: 9px; color: #64748b;">Freno Motor Incompleto</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Tiempo Reacción TR</div>
+            <div class="card-value">${Math.floor(avgReactionTimeMs)} ms</div>
+            <div style="font-size: 9px; color: #64748b;">Latencia Promedio</div>
+          </div>
+        </div>
+
+        <h3>2. DICTAMEN CLÍNICO DE LA IA</h3>
+        <div class="verdict">
+          <strong>Conclusión Biométrica:</strong> Compromiso Prefrontal alcanzado: ${Math.floor(frontalEngagementPct)}%. Respuesta de inhibición motora evaluada con una latencia promedio de ${Math.floor(avgReactionTimeMs)} ms y ${commissionErrors} errores de impulsividad (comisiones).
+        </div>
+
+        <h3>3. BITÁCORA CLOSED-LOOP DE AUDITORÍA</h3>
+        <div class="logs">
+          ${aiLogs.map(l => `<div>${l}</div>`).join('')}
+        </div>
+
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  // -------------------------------------------------------------------------
+  // VISTA 1: PANTALLA DE RESULTADOS INDIVIDUALES (DESPUÉS DE CONCLUIR)
+  // -------------------------------------------------------------------------
+  if (showResults) {
+    const maxPrimary = Math.max(...telemetryHistory.map(p => p.primaryVal), 1000);
+    const maxSecondary = Math.max(...telemetryHistory.map(p => p.secondaryVal), 100);
+    const width = 800;
+    const height = 220;
+    const padding = 20;
+
+    const pointsPrimary = telemetryHistory.map((p, idx) => {
+      const x = padding + (idx / Math.max(telemetryHistory.length - 1, 1)) * (width - padding * 2);
+      const y = height - padding - (p.primaryVal / maxPrimary) * (height - padding * 2);
+      return `${x},${y}`;
+    }).join(' ');
+
+    const pointsSecondary = telemetryHistory.map((p, idx) => {
+      const x = padding + (idx / Math.max(telemetryHistory.length - 1, 1)) * (width - padding * 2);
+      const y = height - padding - (p.secondaryVal / maxSecondary) * (height - padding * 2);
+      return `${x},${y}`;
+    }).join(' ');
+
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+        <div 
+          className={`bg-slate-950 border border-slate-800 text-white space-y-6 transition-all duration-300 shadow-2xl font-sans ${
+            isFullscreenResults 
+              ? 'fixed inset-0 z-[100] w-screen h-screen p-6 overflow-y-auto rounded-none border-none' 
+              : 'max-w-5xl w-full mx-auto p-6 rounded-2xl'
+          }`}
+        >
+          {/* Header de Resultados */}
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-gradient-to-tr from-sky-600 to-blue-600 rounded-2xl text-white shadow-lg shadow-sky-600/30">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-black tracking-tight text-white">
+                    Entrenamiento de Función Ejecutiva (Executive Control VR)
+                  </h2>
+                  <span className="px-2.5 py-0.5 text-[10px] font-bold font-mono bg-sky-950 text-sky-300 border border-sky-500/40 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-sky-400" /> RESULTADOS INDIVIDUALES
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Paciente: <strong className="text-slate-200">{safePatientName}</strong> | Tarea: <span className="text-cyan-300 font-mono">{getTaskTitle(executiveTask)}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsFullscreenResults(!isFullscreenResults)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 transition hover:bg-slate-700 cursor-pointer"
+                title={isFullscreenResults ? "Restaurar Tamaño" : "Ver en Pantalla Completa"}
+              >
+                {isFullscreenResults ? <Minimize2 className="w-5 h-5 text-cyan-300" /> : <Maximize2 className="w-5 h-5 text-cyan-300" />}
+              </button>
+
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 transition hover:bg-rose-900/50 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Tarjetas de Métricas Clave */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-1 shadow-inner">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Aciertos (Foco)</span>
+              <div className="text-2xl font-black font-mono text-emerald-400">{correctHits}</div>
+              <p className="text-[10px] text-slate-400 font-mono">Respuestas Válidas</p>
+            </div>
+
+            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-1 shadow-inner">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Omisiones (Inatención)</span>
+              <div className="text-2xl font-black font-mono text-amber-400">{omissionErrors}</div>
+              <p className="text-[10px] text-slate-400 font-mono">Fallos de Atención</p>
+            </div>
+
+            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-1 shadow-inner">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Comisiones (Impulsividad)</span>
+              <div className="text-2xl font-black font-mono text-rose-400">{commissionErrors}</div>
+              <p className="text-[10px] text-slate-400 font-mono">Freno Motor Incompleto</p>
+            </div>
+
+            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-xl space-y-1 shadow-inner">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tiempo Reacción TR</span>
+              <div className="text-2xl font-black font-mono text-cyan-300">{Math.floor(avgReactionTimeMs)} <span className="text-xs font-normal text-slate-400">ms</span></div>
+              <p className="text-[10px] text-slate-400 font-mono">Latencia Promedio</p>
+            </div>
+          </div>
+
+          {/* Curvas Biométricas SVG */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between text-xs border-b border-slate-800/80 pb-2">
+              <span className="font-bold text-slate-200 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                Curvas de Latencia Motora y Compromiso Prefrontal Dinámico
+              </span>
+
+              <div className="flex items-center gap-4 text-[11px] font-mono">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-cyan-400" />
+                  <span className="text-slate-300">Tiempo de Reacción (ms)</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-emerald-400" />
+                  <span className="text-slate-300">Compromiso Prefrontal (%)</span>
+                </span>
+              </div>
+            </div>
+
+            <div className={`relative w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 p-2 flex items-center justify-center ${isFullscreenResults ? 'aspect-[16/4]' : 'aspect-[16/5]'}`}>
+              {telemetryHistory.length > 1 ? (
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                  <line x1="20" y1="40" x2="780" y2="40" stroke="#1e293b" strokeDasharray="3,3" />
+                  <line x1="20" y1="110" x2="780" y2="110" stroke="#1e293b" strokeDasharray="3,3" />
+                  <line x1="20" y1="180" x2="780" y2="180" stroke="#1e293b" strokeDasharray="3,3" />
+
+                  {/* Compromiso Frontal % */}
+                  <polyline
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={pointsSecondary}
+                  />
+
+                  {/* Tiempo Reacción ms */}
+                  <polyline
+                    fill="none"
+                    stroke="#22d3ee"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={pointsPrimary}
+                  />
+                </svg>
+              ) : (
+                <div className="text-slate-600 text-xs italic font-mono">
+                  Registrando curva biométrica de sesión...
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Dictamen Clínico de la IA */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-6 bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-400" /> Dictamen Específico del Módulo
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                Compromiso Prefrontal alcanzado: {Math.floor(frontalEngagementPct)}%. Respuesta de inhibición motora evaluada con una latencia promedio de {Math.floor(avgReactionTimeMs)} ms y {commissionErrors} errores de impulsividad (comisiones).
+              </p>
+            </div>
+
+            <div className="lg:col-span-6 bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 flex flex-col justify-between">
+              <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-cyan-400" /> Auditoría de Eventos Closed-Loop
+              </span>
+              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 max-h-24 overflow-y-auto font-mono text-[10px] space-y-1 text-slate-400">
+                {aiLogs.map((log, i) => (
+                  <div key={i} className="truncate">• {log}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Botones de Acción */}
+          <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+            <button
+              onClick={handleStartSession}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4 text-cyan-400" /> Re-Iniciar Prueba
+            </button>
+
+            <button
+              onClick={handlePrintIndividualReport}
+              className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition active:scale-95 cursor-pointer"
+            >
+              <Printer className="w-4 h-4" /> Exportar Reporte Individual (PDF/Print)
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // VISTA 2: CONSOLA EN VIVO DEL MÓDULO (DURANTE LA PRUEBA)
+  // -------------------------------------------------------------------------
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col font-sans overflow-hidden">
       
@@ -347,7 +644,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
                           <div className="w-24 h-24 bg-rose-600 rotate-45 shadow-[0_0_40px_rgba(225,29,72,0.6)] animate-pulse" />
                        )
                    ) : (
-                       <div className="text-slate-600 font-bold text-2xl">+</div> // Fixation cross
+                       <div className="text-slate-600 font-bold text-2xl">+</div>
                    )}
                 </div>
                 
@@ -442,7 +739,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
                   disabled={aiAutoPilot || !sessionActive}
                   onChange={(e) => setTaskDifficultyMs(parseInt(e.target.value))}
                   className="w-full accent-purple-500 cursor-pointer disabled:opacity-30 flex-row-reverse"
-                  style={{ direction: 'rtl' }} // Invertido: Menos MS = Más Dificultad
+                  style={{ direction: 'rtl' }}
                 />
               </div>
 
@@ -467,15 +764,15 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             {!sessionActive ? (
               <button
                 onClick={handleStartSession}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-sky-600/20 transition active:scale-95"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-sky-600/20 transition active:scale-95 cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-current" />
                 Iniciar Tarea Cognitiva
               </button>
             ) : (
               <button
-                onClick={handleEndSession} // <-- Actualizado para guardar el reporte en MongoDB y cerrar
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
+                onClick={handleEndSession}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer"
               >
                 <Square className="w-4 h-4 fill-current" />
                 Concluir Sesión VR
