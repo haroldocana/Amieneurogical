@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
 import { BiomarkerDashboard } from './components/BiomarkerDashboard';
@@ -87,9 +88,11 @@ type AppTab =
 
 export default function App() {
   // -----------------------------------------------------------------------
-  // DETECCIÓN DE VISTA EXCLUSIVA PARA PACIENTE (PWA / APK TARGET)
+  // DETECCIÓN AUTOMÁTICA DE ENTORNO PACIENTE (APK NATIVA / URL TARGET)
   // -----------------------------------------------------------------------
+  const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
   const isPatientMode = 
+    isNative || 
     window.location.pathname === '/paciente' || 
     window.location.search.includes('mode=paciente') ||
     window.location.search.includes('paciente=true');
@@ -177,7 +180,7 @@ export default function App() {
   }, []);
 
   // -----------------------------------------------------------------------
-  // RENDERING MÓDULO PACIENTE (SIN REQUERIR AUTENTICACIÓN MÉDICA)
+  // VISTA EXCLUSIVA PARA PACIENTE (PWA / APK NATIVA EN DISPOSITIVO MÓVIL)
   // -----------------------------------------------------------------------
   if (isPatientMode) {
     return (
