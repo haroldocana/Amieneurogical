@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Brain, X, 
-  Zap, Target, Sparkles, Crosshair, Cpu,
-  Activity, RotateCcw, CheckCircle2, ShieldCheck,
-  Maximize2, Minimize2, Printer, Clock, Wifi, WifiOff
+  Zap, Target, Crosshair, Cpu, Activity, 
+  RotateCcw, CheckCircle2, ShieldCheck, Maximize2, 
+  Minimize2, Printer, Clock, Wifi, WifiOff
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -17,8 +17,8 @@ type ExecutiveTask = 'RESPONSE_INHIBITION' | 'SUSTAINED_ATTENTION' | 'WORKING_ME
 
 interface TelemetryPoint {
   timeLabel: string;
-  primaryVal: number;   // Latencia TR (ms)
-  secondaryVal: number; // Compromiso Prefrontal (%)
+  primaryVal: number;   // TR real (ms)
+  secondaryVal: number; // Reclutamiento Frontal real (%)
 }
 
 export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose }) => {
@@ -26,15 +26,16 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
   const [sessionActive, setSessionActive] = useState(false);
   const [aiAutoPilot, setAiAutoPilot] = useState(true);
 
+  // Estados de Interfaz
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
 
-  // Controles enviados al VR
+  // Parámetros de Control (Enviados al Visor)
   const [binauralBetaHz, setBinauralBetaHz] = useState<number>(15.0); 
   const [taskDifficultyMs, setTaskDifficultyMs] = useState<number>(800); 
   
-  // Datos reales recibidos del VR
+  // METRICAS 100% REALES (Solo se actualizan al recibir paquetes del casco)
   const [omissionErrors, setOmissionErrors] = useState<number>(0); 
   const [commissionErrors, setCommissionErrors] = useState<number>(0); 
   const [correctHits, setCorrectHits] = useState<number>(0);
@@ -45,63 +46,64 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
   const [aiLogs, setAiLogs] = useState<string[]>([]);
 
   // -------------------------------------------------------------------------
-  // CONEXIÓN TELEMETRÍA VR (MODO RECEPTOR REAL)
+  // RECEPTOR DE TELEMETRÍA VR REAL
   // -------------------------------------------------------------------------
-  // isConnected nos dice si el Meta Quest está enviando señal.
-  // lastPacket contiene los datos reales de lo que hace el paciente en el juego.
-  const { isConnected, lastPacket } = useVrTelemetryBridge('receiver', patient?.id || 'PAC-8104', 'ExecutiveControl');
+  const patientId = patient?.id || 'PAC-8104';
+  const { isConnected, lastPacket, transmit } = useVrTelemetryBridge('receiver', patientId, 'ExecutiveControl');
 
-  // ACTUALIZACIÓN DE MÉTRICAS DESDE EL VISOR VR
+  // Lectura estricta de paquetes reales provenientes del casco VR
   useEffect(() => {
     if (sessionActive && lastPacket) {
-      // Cuando el visor envía un paquete nuevo, actualizamos la pantalla del médico
+      const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
+
+      // Actualizar variables únicamente con los datos enviados por la app en Unity/Unreal/WebXR
       if (lastPacket.reactionTimeMs !== undefined) setAvgReactionTimeMs(lastPacket.reactionTimeMs);
       if (lastPacket.omissions !== undefined) setOmissionErrors(lastPacket.omissions);
       if (lastPacket.commissions !== undefined) setCommissionErrors(lastPacket.commissions);
       if (lastPacket.habituationIndex !== undefined) setFrontalEngagementPct(lastPacket.habituationIndex);
-      
-      // Si el VR manda "hits" directamente (dependiendo de tu código de Unity/Unreal):
-      if (lastPacket.hits !== undefined) {
-        setCorrectHits(lastPacket.hits);
-      }
+      if (lastPacket.hits !== undefined) setCorrectHits(lastPacket.hits);
+
+      // Agregar punto REAL a la curva neurofisiológica
+      setTelemetryHistory(prev => [
+        ...prev,
+        {
+          timeLabel: timeStr.substring(3, 8),
+          primaryVal: lastPacket.reactionTimeMs || 0,
+          secondaryVal: lastPacket.habituationIndex || 0
+        }
+      ]);
+
+      // Feedback del motor de auditoría clínica
+      setAiLogs(prev => [
+        `[${timeStr}] TELEMETRÍA RECIBIDA: TR=${lastPacket.reactionTimeMs || 0}ms | Engagement=${lastPacket.habituationIndex || 0}%`,
+        ...prev.slice(0, 8)
+      ]);
     }
   }, [lastPacket, sessionActive]);
 
-  // MOTOR DE GRAFICADO EN TIEMPO REAL
+  // Cronómetro de sesión
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-
+    let timer: ReturnType<typeof setInterval> | null = null;
     if (sessionActive) {
-      // Cada segundo, leemos los valores ACTUALES y pintamos un punto en la gráfica
-      interval = setInterval(() => {
-        const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
+      timer = setInterval(() => {
         setSessionDuration(prev => prev + 1);
-
-        setTelemetryHistory(prev => [
-          ...prev,
-          {
-            timeLabel: timeStr.substring(3, 8),
-            primaryVal: avgReactionTimeMs,
-            secondaryVal: frontalEngagementPct
-          }
-        ]);
-
-        // Ajustes AI (opcionales) en base a datos reales del VR
-        if (aiAutoPilot) {
-           if (commissionErrors > 3) {
-               setTaskDifficultyMs(prev => Math.min(1200, prev + 50));
-               if (Math.random() > 0.8) {
-                   setAiLogs(prev => [`[${timeStr}] ⚠️ IA: Impulsividad alta detectada. Relajando tiempo de reacción exigido a ${taskDifficultyMs}ms.`, ...prev.slice(0, 8)]);
-               }
-           }
-        }
       }, 1000);
     }
-
     return () => {
-      if (interval) clearInterval(interval);
+      if (timer) clearInterval(timer);
     };
-  }, [sessionActive, avgReactionTimeMs, frontalEngagementPct, aiAutoPilot, commissionErrors, taskDifficultyMs]);
+  }, [sessionActive]);
+
+  // Transmitir ajustes de dificultad del médico hacia el casco VR
+  useEffect(() => {
+    if (sessionActive && isConnected) {
+      transmit({
+        targetDifficultyMs: taskDifficultyMs,
+        binauralBetaHz: binauralBetaHz,
+        autoPilot: aiAutoPilot
+      });
+    }
+  }, [taskDifficultyMs, binauralBetaHz, aiAutoPilot, sessionActive, isConnected]);
 
   const handleStartSession = () => {
     setSessionActive(true);
@@ -114,15 +116,14 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     setCommissionErrors(0);
     setAvgReactionTimeMs(0);
     setFrontalEngagementPct(0);
-    setAiLogs([`[PROFESIONAL] Escuchando telemetría del visor VR. Esperando acciones del paciente...`]);
+    setAiLogs([`[SISTEMA] Escuchando puerto de telemetría VR para el paciente ${patientId}...`]);
   };
 
   const handleEndSession = async () => {
     setSessionActive(false);
-    setAiLogs(prev => [`[SISTEMA] Sesión completada. Guardando reporte en expediente...`, ...prev]);
 
     const sessionReport = {
-      patientId: patient?.id || 'PAC-8104',
+      patientId: patientId,
       sessionData: {
         taskName: executiveTask,
         durationSeconds: sessionDuration,
@@ -145,7 +146,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         body: JSON.stringify(sessionReport)
       });
     } catch (error) {
-      console.error("Error al guardar:", error);
+      console.error("Error guardando reporte:", error);
     }
     
     setShowResults(true);
@@ -173,7 +174,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Reporte VR — ${getTaskTitle(executiveTask)}</title>
+        <title>Reporte Real VR — ${getTaskTitle(executiveTask)}</title>
         <style>
           body { font-family: system-ui, sans-serif; padding: 25px; color: #0f172a; line-height: 1.5; }
           .header { border-bottom: 3px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px; }
@@ -189,21 +190,21 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       </head>
       <body>
         <div class="header">
-          <div class="title">Entrenamiento de Función Ejecutiva VR</div>
-          <div class="subtitle">Paciente: ${patient.id || 'PAC-8104'} | Duración: ${formatTime(sessionDuration)}</div>
+          <div class="title">Entrenamiento de Función Ejecutiva VR (Datos Biométricos Reales)</div>
+          <div class="subtitle">Paciente: ${patientId} | Duración de Exposición: ${formatTime(sessionDuration)}</div>
         </div>
-        <h3>1. MÉTRICAS EJECUTIVAS Y DE ATENCIÓN</h3>
+        <h3>1. MÉTRICAS CLÍNICAS REGISTRADAS</h3>
         <div class="grid">
           <div class="card"><div class="card-label">Aciertos (Foco)</div><div class="card-value">${correctHits}</div></div>
           <div class="card"><div class="card-label">Omisiones (Inatención)</div><div class="card-value">${omissionErrors}</div></div>
           <div class="card"><div class="card-label">Comisiones (Impulsividad)</div><div class="card-value">${commissionErrors}</div></div>
           <div class="card"><div class="card-label">Tiempo Reacción TR</div><div class="card-value">${Math.floor(avgReactionTimeMs)} ms</div></div>
         </div>
-        <h3>2. DICTAMEN CLÍNICO DE LA IA</h3>
+        <h3>2. DICTAMEN CLÍNICO DEDUCIDO</h3>
         <div class="verdict">
-          <strong>Conclusión:</strong> Compromiso Prefrontal: ${Math.floor(frontalEngagementPct)}%. TR Promedio: ${Math.floor(avgReactionTimeMs)} ms.
+          <strong>Evaluación:</strong> Reclutamiento Prefrontal: ${Math.floor(frontalEngagementPct)}%. Latencia de respuesta media: ${Math.floor(avgReactionTimeMs)} ms.
         </div>
-        <h3>3. BITÁCORA CLOSED-LOOP DE AUDITORÍA</h3>
+        <h3>3. LOGS DE AUDITORÍA CLOSED-LOOP</h3>
         <div class="logs">${aiLogs.map(l => `<div>${l}</div>`).join('')}</div>
         <script>window.onload = function() { window.print(); }</script>
       </body>
@@ -212,11 +213,11 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     printWin.document.close();
   };
 
-  const maxPrimary = 1000;
-  const maxSecondary = 100;
   const width = 800;
   const height = 180;
   const padding = 20;
+  const maxPrimary = 1000;
+  const maxSecondary = 100;
 
   const pointsPrimary = telemetryHistory.map((p, idx) => {
     const x = padding + (idx / Math.max(telemetryHistory.length - 1, 1)) * (width - padding * 2);
@@ -230,7 +231,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     return `${x},${y}`;
   }).join(' ');
 
-  // VISTA 1: RESULTADOS INDIVIDUALES (DESPUÉS DE CONCLUIR)
+  // VISTA 1: DASHBOARD DE RESULTADOS INDIVIDUALES
   if (showResults) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
@@ -239,48 +240,28 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             <div className="flex items-center gap-3">
               <div className="p-3 bg-gradient-to-tr from-sky-600 to-blue-600 rounded-2xl text-white shadow-lg"><ShieldCheck className="w-6 h-6" /></div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-black tracking-tight text-white">Función Ejecutiva VR</h2>
-                  <span className="px-2.5 py-0.5 text-[10px] font-bold font-mono bg-sky-950 text-sky-300 rounded-full border border-sky-500/40"><CheckCircle2 className="w-3 h-3 inline mr-1" />RESULTADOS INDIVIDUALES</span>
-                </div>
-                <p className="text-xs text-slate-400">Paciente: <strong className="text-slate-200">{patient.id || 'PAC-8104'}</strong></p>
+                <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">Función Ejecutiva VR <span className="px-2.5 py-0.5 text-[10px] font-mono bg-sky-950 text-sky-300 rounded-full border border-sky-500/40">DATOS REALES</span></h2>
+                <p className="text-xs text-slate-400">Paciente: <strong className="text-slate-200">{patientId}</strong></p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 transition">{isFullscreen ? <Minimize2 className="w-5 h-5 text-cyan-300" /> : <Maximize2 className="w-5 h-5 text-cyan-300" />}</button>
-              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 transition"><X className="w-5 h-5" /></button>
+            <div className="flex gap-2">
+              <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800"><Maximize2 className="w-5 h-5 text-cyan-300" /></button>
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800"><X className="w-5 h-5" /></button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Aciertos (Foco)</span>
-              <div className="text-2xl font-black font-mono text-emerald-400">{correctHits}</div>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Omisiones</span>
-              <div className="text-2xl font-black font-mono text-amber-400">{omissionErrors}</div>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Comisiones</span>
-              <div className="text-2xl font-black font-mono text-rose-400">{commissionErrors}</div>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Tiempo Reacción TR</span>
-              <div className="text-2xl font-black font-mono text-cyan-300">{Math.floor(avgReactionTimeMs)} <span className="text-xs text-slate-400">ms</span></div>
-            </div>
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Aciertos</span><div className="text-2xl font-black text-emerald-400">{correctHits}</div></div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Omisiones</span><div className="text-2xl font-black text-amber-400">{omissionErrors}</div></div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Comisiones</span><div className="text-2xl font-black text-rose-400">{commissionErrors}</div></div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Tiempo Reacción TR</span><div className="text-2xl font-black text-cyan-300">{Math.floor(avgReactionTimeMs)} ms</div></div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-             <div className="flex items-center justify-between text-xs border-b border-slate-800/80 pb-2">
-              <span className="font-bold text-slate-200"><Activity className="w-4 h-4 inline mr-2 text-cyan-400" />Curvas SVG Reales</span>
-              <div className="flex gap-4 font-mono"><span className="text-cyan-300"><span className="text-cyan-400">■</span> TR (ms)</span><span className="text-emerald-400"><span className="text-emerald-400">■</span> Frontal (%)</span></div>
-            </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div className={`w-full bg-slate-950 rounded-xl border border-slate-800 p-2 ${isFullscreen ? 'h-64' : 'h-48'}`}>
-              <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+              <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
                 <line x1="20" y1="30" x2="780" y2="30" stroke="#1e293b" strokeDasharray="3,3" />
                 <line x1="20" y1="90" x2="780" y2="90" stroke="#1e293b" strokeDasharray="3,3" />
-                <line x1="20" y1="150" x2="780" y2="150" stroke="#1e293b" strokeDasharray="3,3" />
                 <polyline fill="none" stroke="#10b981" strokeWidth="2.5" points={pointsSecondary} />
                 <polyline fill="none" stroke="#22d3ee" strokeWidth="3" points={pointsPrimary} />
               </svg>
@@ -288,36 +269,40 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           </div>
 
           <div className="flex justify-between border-t border-slate-800 pt-4">
-            <button onClick={handleStartSession} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition"><RotateCcw className="w-4 h-4 text-cyan-400"/> Nueva Sesión</button>
-            <button onClick={handlePrintIndividualReport} className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg transition"><Printer className="w-4 h-4"/> Exportar PDF</button>
+            <button onClick={handleStartSession} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold"><RotateCcw className="w-4 h-4 text-cyan-400"/> Nueva Sesión</button>
+            <button onClick={handlePrintIndividualReport} className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg"><Printer className="w-4 h-4"/> Exportar Reporte PDF</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // VISTA 2: CONSOLA DEL PROFESIONAL EN VIVO
+  // VISTA 2: CONSOLA EN VIVO DEL PROFESIONAL
   return (
     <div className={`fixed inset-0 z-50 bg-slate-950 text-white flex flex-col font-sans overflow-hidden ${isFullscreen ? 'p-2' : 'p-4 lg:p-6'}`}>
       
       {/* HEADER */}
       <div className="h-16 border-b border-sky-900/50 bg-slate-900 flex items-center justify-between px-6 rounded-2xl shadow-xl shrink-0">
         <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-xl shadow-lg"><Cpu className="w-5 h-5 text-white" /></div>
+          <div className="p-2.5 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-xl"><Cpu className="w-5 h-5 text-white" /></div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100">Consola del Profesional • Función Ejecutiva</h1>
-            <p className="text-[10px] text-sky-300 font-mono">Paciente: {patient.id || 'PAC-8104'}</p>
+            <p className="text-[10px] text-sky-300 font-mono">Paciente: {patientId}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-amber-950/80 border-amber-500/50 text-amber-300'}`}>
-            {isConnected ? <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> : <WifiOff className="w-3.5 h-3.5 text-amber-400" />}
-            <span>{isConnected ? 'VR Conectado' : 'Sin Señal VR'}</span>
+          {/* ESTADO DE CONEXIÓN REAL DEL VISOR */}
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 ${
+            isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+          }`}>
+            {isConnected ? <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> : <WifiOff className="w-3.5 h-3.5 text-rose-400" />}
+            <span>{isConnected ? 'VR Conectado (En Vivo)' : 'Sin Señal VR'}</span>
           </div>
-          <button onClick={handlePrintIndividualReport} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-lg transition"><Printer className="w-4 h-4" /> Reporte</button>
-          <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-300 bg-slate-800 rounded-xl hover:bg-slate-700">{isFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-300"/> : <Maximize2 className="w-4 h-4 text-cyan-300"/>}</button>
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300"><X className="w-5 h-5" /></button>
+
+          <button onClick={handlePrintIndividualReport} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-bold"><Printer className="w-4 h-4" /> Reporte</button>
+          <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-300 bg-slate-800 rounded-xl hover:bg-slate-700">{isFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-300"/> : <Maximize2 className="w-4 h-4 text-cyan-300"/></button>
+          <button onClick={onClose} className="p-2 bg-slate-800 rounded-xl"><X className="w-5 h-5" /></button>
         </div>
       </div>
 
@@ -331,21 +316,22 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             <select disabled={sessionActive} value={executiveTask} onChange={(e) => setExecutiveTask(e.target.value as ExecutiveTask)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white">
               <option value="RESPONSE_INHIBITION">Inhibición de Respuesta (Go/No-Go)</option>
               <option value="SUSTAINED_ATTENTION">Atención Sostenida (Vigilancia)</option>
+              <option value="WORKING_MEMORY_NBACK">Memoria de Trabajo Espacial</option>
             </select>
 
             <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-3 mt-4">
               <div className="flex justify-between text-[10px] font-bold"><span className="text-slate-400">Compromiso Frontal:</span><span className="text-sky-300">{Math.floor(frontalEngagementPct)}%</span></div>
               <div className="h-2 w-full bg-slate-900 rounded-full"><div style={{ width: `${frontalEngagementPct}%` }} className="h-full bg-sky-500 transition-all"/></div>
-              <div className="flex justify-between text-[10px] font-bold mt-2"><span className="text-slate-400">Latencia Exigida VR:</span><span className="text-purple-400">{taskDifficultyMs} ms</span></div>
+              <div className="flex justify-between text-[10px] font-bold mt-2"><span className="text-slate-400">Dificultad Objetivo:</span><span className="text-purple-400">{taskDifficultyMs} ms</span></div>
             </div>
           </div>
         </div>
 
-        {/* CENTRO (GRÁFICAS EN VIVO) */}
-        <div className="col-span-12 lg:col-span-6 bg-[#020617] rounded-2xl border-2 border-slate-800 flex flex-col justify-between p-4 shadow-2xl">
+        {/* CENTRO (GRÁFICAS Y TELEMETRÍA EN VIVO) */}
+        <div className="col-span-12 lg:col-span-6 bg-[#020617] rounded-2xl border-2 border-slate-800 flex flex-col justify-between p-4">
           <div className="flex justify-between border-b border-slate-800 pb-2">
-            <div className="bg-black/70 px-3 py-1.5 rounded-full border border-sky-500/30 text-xs font-mono text-sky-100"><Activity className={`w-3.5 h-3.5 inline mr-2 ${sessionActive ? 'animate-pulse text-sky-400' : ''}`}/> Señal VR en Vivo</div>
-            <div className="text-xs font-mono text-slate-400 bg-slate-900 px-3 py-1 rounded-lg"><Clock className="w-3.5 h-3.5 inline mr-1 text-sky-400"/> {formatTime(sessionDuration)}</div>
+            <div className="bg-black/70 px-3 py-1.5 rounded-full border border-sky-500/30 text-xs font-mono text-sky-100"><Activity className={`w-3.5 h-3.5 inline mr-2 ${sessionActive ? 'animate-pulse text-sky-400' : ''}`}/> Telemetría Biométrica Reanimada</div>
+            <div className="text-xs font-mono text-slate-400"><Clock className="w-3.5 h-3.5 inline text-sky-400"/> {formatTime(sessionDuration)}</div>
           </div>
 
           <div className="w-full my-auto space-y-3">
@@ -354,7 +340,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
               <span className="text-emerald-400"><span className="text-emerald-400">■</span> Frontal Real: {Math.floor(frontalEngagementPct)}%</span>
             </div>
             <div className="w-full h-56 bg-slate-950 rounded-xl border border-slate-800 p-3">
-              {telemetryHistory.length > 1 ? (
+              {telemetryHistory.length > 0 ? (
                 <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
                   <line x1="20" y1="30" x2="780" y2="30" stroke="#1e293b" strokeDasharray="3,3" />
                   <line x1="20" y1="90" x2="780" y2="90" stroke="#1e293b" strokeDasharray="3,3" />
@@ -362,16 +348,18 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
                   <polyline fill="none" stroke="#22d3ee" strokeWidth="3" points={pointsPrimary} />
                 </svg>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-600 text-xs font-mono italic">Presione 'Iniciar Grabación' y juegue en el VR...</div>
+                <div className="h-full flex items-center justify-center text-slate-600 text-xs font-mono italic">
+                  A la espera de los primeros paquetes enviados desde el visor VR...
+                </div>
               )}
             </div>
           </div>
 
           <div className="bg-slate-950/80 border border-sky-900/50 rounded-xl p-3 grid grid-cols-4 gap-2 text-center font-mono">
-            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase font-bold text-slate-400 block">Aciertos (Foco)</span><div className="text-xl font-bold text-emerald-400">{correctHits}</div></div>
-            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase font-bold text-slate-400 block">Omisiones</span><div className="text-xl font-bold text-amber-400">{omissionErrors}</div></div>
-            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase font-bold text-slate-400 block">Comisiones</span><div className="text-xl font-bold text-rose-400">{commissionErrors}</div></div>
-            <div><span className="text-[8.5px] uppercase font-bold text-slate-400 block">TR Promedio</span><div className="text-xl font-bold text-cyan-300">{Math.floor(avgReactionTimeMs)}<span className="text-[10px] text-slate-500">ms</span></div></div>
+            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase text-slate-400 block">Aciertos</span><div className="text-xl font-bold text-emerald-400">{correctHits}</div></div>
+            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase text-slate-400 block">Omisiones</span><div className="text-xl font-bold text-amber-400">{omissionErrors}</div></div>
+            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase text-slate-400 block">Comisiones</span><div className="text-xl font-bold text-rose-400">{commissionErrors}</div></div>
+            <div><span className="text-[8.5px] uppercase text-slate-400 block">TR Promedio</span><div className="text-xl font-bold text-cyan-300">{Math.floor(avgReactionTimeMs)}ms</div></div>
           </div>
         </div>
 
@@ -380,15 +368,15 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           <div className="space-y-4 flex-1 flex flex-col">
             <h2 className="text-xs font-bold text-slate-400 uppercase border-b border-slate-800 pb-2"><Zap className="w-4 h-4 inline mr-2 text-sky-400"/> AI Coach</h2>
             <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] overflow-y-auto max-h-[300px] space-y-2">
-              {aiLogs.length > 0 ? aiLogs.map((log, i) => <div key={i} className={`p-2 rounded border ${i===0 ? 'text-sky-300 border-sky-900/50' : 'text-slate-400 border-slate-800/60'}`}>{log}</div>) : <div className="text-slate-600 text-center mt-4">Esperando datos reales del casco...</div>}
+              {aiLogs.length > 0 ? aiLogs.map((log, i) => <div key={i} className={`p-2 rounded border ${i===0 ? 'text-sky-300 border-sky-900/50' : 'text-slate-400 border-slate-800/60'}`}>{log}</div>) : <div className="text-slate-600 text-center mt-4">Sin registro de eventos.</div>}
             </div>
           </div>
 
           <div className="pt-4 space-y-2">
             {!sessionActive ? (
-              <button onClick={handleStartSession} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 text-white font-bold py-3 rounded-xl shadow-lg transition"><Play className="w-4 h-4 fill-current"/> Iniciar Grabación Médica</button>
+              <button onClick={handleStartSession} className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-xl transition"><Play className="w-4 h-4 inline mr-2"/> Iniciar Monitoreo Real</button>
             ) : (
-              <button onClick={handleEndSession} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition"><Square className="w-4 h-4 fill-current"/> Concluir Sesión VR</button>
+              <button onClick={handleEndSession} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition"><Square className="w-4 h-4 inline mr-2"/> Concluir Sesión VR</button>
             )}
           </div>
         </div>
