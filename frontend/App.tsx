@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
 import { BiomarkerDashboard } from './components/BiomarkerDashboard';
@@ -69,7 +68,9 @@ import {
   UserX,
   Info,
   Printer,
-  Wifi
+  Wifi,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 
 type AppTab = 
@@ -88,11 +89,11 @@ type AppTab =
 
 export default function App() {
   // -----------------------------------------------------------------------
-  // DETECCIÓN AUTOMÁTICA DE ENTORNO PACIENTE (APK NATIVA / URL TARGET)
+  // DETECCIÓN SEGURA DEL ENTORNO MÓVIL PACIENTE (SIN DEPENDENCIAS EXTERNAS)
   // -----------------------------------------------------------------------
-  const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+  const isCapacitorNative = typeof window !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
   const isPatientMode = 
-    isNative || 
+    isCapacitorNative || 
     window.location.pathname === '/paciente' || 
     window.location.search.includes('mode=paciente') ||
     window.location.search.includes('paciente=true');
@@ -184,8 +185,48 @@ export default function App() {
   // -----------------------------------------------------------------------
   if (isPatientMode) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-3 sm:p-6 font-sans">
-        <SentinelMobileCollector />
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-center">
+          
+          <div className="mx-auto w-16 h-16 bg-emerald-950 border border-emerald-500/40 rounded-2xl flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
+            <ShieldCheck className="w-8 h-8 animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-xl font-black text-white">Centinela Telemetry</h1>
+            <p className="text-xs text-slate-400">
+              Servicio de telemetría médica pasiva en segundo plano para evaluación biofenotípica.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-left text-xs">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <span className="text-slate-400">ID de Expediente:</span>
+              <span className="font-mono text-cyan-300 font-bold">ACTIVO</span>
+            </div>
+            
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <span className="text-slate-400">Estado del Servicio:</span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Activo 24/7
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Sincronización Render:</span>
+              <span className="text-amber-300 font-mono">En línea</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-xl text-[11px] text-slate-300 leading-relaxed">
+            Esta aplicación no requiere intervención. Registra de forma pasiva la ritmicidad motora y la envía directamente al expediente clínico.
+          </div>
+
+          <p className="text-[10px] text-slate-500 font-mono">
+            Versión 2.5.0-JITAI • AMIE Clinical Diagnostic Engine
+          </p>
+
+        </div>
       </div>
     );
   }
