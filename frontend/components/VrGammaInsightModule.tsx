@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Video, Brain, X, 
-  Zap, Sparkles, Lightbulb, Workflow, Cpu, Layers
+  Zap, Sparkles, Lightbulb, Workflow, Layers
 } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -35,6 +36,24 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
 
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'GammaStimulation');
+
+  // Transmisión en vivo de resonancia Gamma, DMN e índice de Insight
+  useEffect(() => {
+    if (sessionActive && !safetyTriggered) {
+      transmit({
+        gsr: Number(gsr.toFixed(2)),
+        hrv: Math.floor(hrv),
+        stressLevel: Number(gammaPowerUv2.toFixed(1)), // Potencia espectral Gamma
+        habituationIndex: Math.floor(dmnDeactivationPct), // Inhibición DMN (%)
+        omissions: Math.floor(insightIndex) // Flexibilidad cognitiva Insight (%)
+      });
+    }
+  }, [gsr, hrv, gammaPowerUv2, dmnDeactivationPct, insightIndex, sessionActive, safetyTriggered]);
 
   // Motor Closed-Loop de Resonancia Gamma
   useEffect(() => {
@@ -102,10 +121,49 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
     setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad. Suspendiendo pulsos Gamma fóticos/acústicos.`, ...prev]);
   };
 
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setSessionActive(false);
+    setAiLogs(prev => [`[SISTEMA] Sesión completada. Consolidando reporte de desacoplamiento DMN e Insight...`, ...prev]);
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: 'GammaStimulation',
+        durationSeconds: 300,
+        metrics: {
+          avgHrv: Math.floor(hrv),
+          avgGsr: Number(gsr.toFixed(2)),
+          omissions: Math.floor(dmnDeactivationPct), // Inhibición DMN %
+          commissions: 0,
+          frontalEngagementPct: Math.floor(insightIndex), // Índice de Insight / Shifting %
+          binauralBetaHz: Number(gammaFlickerHz.toFixed(1))
+        },
+        aiLogs,
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR Gamma 40Hz guardado para ${patient?.id || 'PAC-8104'}. Insight Index: ${insightIndex.toFixed(0)}%`);
+      
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
+  };
+
   const getSubtypeTitle = (sub: RigiditySubtype) => {
     const map = {
       'OCD_RUMINATION': 'Bucle Obsesivo-Compulsivo (TOC / CIE-11: 6B20)',
-      'ASD_RIGID_PERSEVERATION': 'Perseveración Rigida (Trastorno del Espectro Autista / TEA)',
+      'ASD_RIGID_PERSEVERATION': 'Perseveración Rígida (Trastorno del Espectro Autista / TEA)',
       'ANOREXIA_SCHEMATIC_FIXATION': 'Fijación de Esquema Corporal (Anorexia Nerviosa / CIE-11: 6B80)',
       'RESISTANT_DEPRESSION_RUMINATION': 'Rumiación Autocrítica (Depresión Mayor Resistente / TDM)'
     };
@@ -376,7 +434,7 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
               </button>
             ) : (
               <button
-                onClick={() => setSessionActive(false)}
+                onClick={handleEndSession} // <-- Actualizado para enviar telemetría final a MongoDB
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
