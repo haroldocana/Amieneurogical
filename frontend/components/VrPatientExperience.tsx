@@ -10,10 +10,10 @@ interface Props {
 type StimulusType = 'NONE' | 'GO' | 'NOGO';
 
 export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', onClose }) => {
-  // EMISOR DE TELEMETRÍA DESDE EL VISOR
   const { isConnected, transmit } = useVrTelemetryBridge('sender', patientId, 'ExecutiveControl');
 
   const [sessionActive, setSessionActive] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [stimulus, setStimulus] = useState<StimulusType>('NONE');
   
   const stats = useRef({ hits: 0, omissions: 0, commissions: 0, lastReaction: 0 });
@@ -31,10 +31,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     setStimulus('NONE');
     clearActiveTimeout();
     
-    const delay = Math.random() * 2000 + 1000;
+    const delay = Math.random() * 1500 + 1000;
     
     timeoutRef.current = setTimeout(() => {
-      const isGo = Math.random() > 0.25; // 75% GO (Verde), 25% NO-GO (Rojo)
+      const isGo = Math.random() > 0.25;
       setStimulus(isGo ? 'GO' : 'NOGO');
       showTimeRef.current = Date.now();
 
@@ -52,7 +52,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     }, delay);
   };
 
-  const handleInteract = () => {
+  const handleInteract = (e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
     if (!sessionActive || stimulus === 'NONE') return;
 
     clearActiveTimeout();
@@ -80,42 +81,54 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     });
   };
 
-  const startGame = () => {
+  const startSequence = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     clearActiveTimeout();
+    
+    // Cuenta regresiva inmediata de 3 segundos
     setSessionActive(true);
-    stats.current = { hits: 0, omissions: 0, commissions: 0, lastReaction: 0 };
-    scheduleNextStimulus();
+    setCountdown(3);
+
+    let count = 3;
+    const interval = setInterval(() => {
+      count -= 1;
+      if (count > 0) {
+        setCountdown(count);
+      } else {
+        clearInterval(interval);
+        setCountdown(null);
+        stats.current = { hits: 0, omissions: 0, commissions: 0, lastReaction: 0 };
+        scheduleNextStimulus();
+      }
+    }, 1000);
   };
 
   useEffect(() => {
-    return () => {
-      clearActiveTimeout();
-    };
+    return () => clearActiveTimeout();
   }, []);
 
   return (
     <div 
-      className="fixed inset-0 z-[9999] bg-black text-white flex flex-col items-center justify-center select-none"
-      onClick={handleInteract}
+      className="fixed inset-0 z-[9999] bg-black text-white flex flex-col items-center justify-center select-none touch-none"
+      onPointerDown={handleInteract}
     >
       <button 
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }} 
-        className="absolute top-6 right-6 p-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-50 cursor-pointer"
+        onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        className="absolute top-6 right-6 p-4 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer"
       >
-        <X className="w-6 h-6" />
+        <X className="w-8 h-8" />
       </button>
 
       {!sessionActive ? (
-        <div className="text-center space-y-6 max-w-xl p-8 bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl">
+        <div className="text-center space-y-6 max-w-xl p-8 bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl z-[10000]">
           <div className="flex justify-center">
             <div className={`px-4 py-1.5 rounded-full border text-xs font-mono font-bold flex items-center gap-2 ${
               isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
             }`}>
               {isConnected ? <Wifi className="w-4 h-4 animate-pulse" /> : <WifiOff className="w-4 h-4" />}
-              <span>{isConnected ? 'Sincronizado con Consola Médica' : 'Buscando Consola / Enlace Local'}</span>
+              <span>{isConnected ? 'Sincronizado con Consola Médica' : 'Buscando Consola...'}</span>
             </div>
           </div>
 
@@ -128,26 +141,32 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
           </div>
 
           <button 
-            onClick={(e) => { 
-              e.stopPropagation(); 
-              startGame(); 
-            }}
-            className="w-full py-4 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white rounded-2xl text-lg font-bold flex items-center justify-center gap-3 transition cursor-pointer shadow-lg shadow-sky-600/30"
+            onPointerDown={startSequence}
+            onClick={startSequence}
+            className="w-full py-5 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white rounded-2xl text-xl font-black flex items-center justify-center gap-3 transition cursor-pointer shadow-xl shadow-sky-600/30"
           >
-            <Play className="w-5 h-5 fill-current" />
+            <Play className="w-6 h-6 fill-current" />
             Comenzar Prueba
           </button>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
-          {stimulus === 'GO' && (
-            <div className="w-72 h-72 bg-emerald-500 rounded-full shadow-[0_0_120px_rgba(16,185,129,0.8)] animate-in zoom-in-50 duration-150"></div>
+          {countdown !== null && (
+            <div className="text-8xl font-black text-sky-400 animate-ping">
+              {countdown}
+            </div>
           )}
-          {stimulus === 'NOGO' && (
-            <div className="w-72 h-72 bg-rose-600 rounded-full shadow-[0_0_120px_rgba(225,29,72,0.8)] animate-in zoom-in-50 duration-150"></div>
+
+          {countdown === null && stimulus === 'GO' && (
+            <div className="w-80 h-80 bg-emerald-500 rounded-full shadow-[0_0_150px_rgba(16,185,129,0.9)]"></div>
           )}
-          {stimulus === 'NONE' && (
-            <div className="w-6 h-6 bg-slate-700 rounded-full animate-pulse"></div>
+
+          {countdown === null && stimulus === 'NOGO' && (
+            <div className="w-80 h-80 bg-rose-600 rounded-full shadow-[0_0_150px_rgba(225,29,72,0.9)]"></div>
+          )}
+
+          {countdown === null && stimulus === 'NONE' && (
+            <div className="w-10 h-10 bg-slate-700 rounded-full animate-ping"></div>
           )}
         </div>
       )}
