@@ -20,8 +20,17 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   const showTimeRef = useRef<number>(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const clearActiveTimeout = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
   const scheduleNextStimulus = () => {
     setStimulus('NONE');
+    clearActiveTimeout();
+    
     const delay = Math.random() * 2000 + 1000;
     
     timeoutRef.current = setTimeout(() => {
@@ -46,7 +55,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   const handleInteract = () => {
     if (!sessionActive || stimulus === 'NONE') return;
 
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    clearActiveTimeout();
     const reactionTime = Date.now() - showTimeRef.current;
 
     if (stimulus === 'GO') {
@@ -72,6 +81,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   };
 
   const startGame = () => {
+    clearActiveTimeout();
     setSessionActive(true);
     stats.current = { hits: 0, omissions: 0, commissions: 0, lastReaction: 0 };
     scheduleNextStimulus();
@@ -79,7 +89,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      clearActiveTimeout();
     };
   }, []);
 
@@ -89,7 +99,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
       onClick={handleInteract}
     >
       <button 
-        onClick={onClose} 
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }} 
         className="absolute top-6 right-6 p-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-50 cursor-pointer"
       >
         <X className="w-6 h-6" />
@@ -102,7 +115,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
               isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
             }`}>
               {isConnected ? <Wifi className="w-4 h-4 animate-pulse" /> : <WifiOff className="w-4 h-4" />}
-              <span>{isConnected ? 'Sincronizado con Consola Médica' : 'Buscando Consola...'}</span>
+              <span>{isConnected ? 'Sincronizado con Consola Médica' : 'Buscando Consola / Enlace Local'}</span>
             </div>
           </div>
 
@@ -115,9 +128,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
           </div>
 
           <button 
-            onClick={(e) => { e.stopPropagation(); startGame(); }}
-            disabled={!isConnected}
-            className="w-full py-4 bg-sky-600 disabled:bg-slate-800 hover:bg-sky-500 text-white rounded-2xl text-lg font-bold flex items-center justify-center gap-3 transition cursor-pointer"
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              startGame(); 
+            }}
+            className="w-full py-4 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white rounded-2xl text-lg font-bold flex items-center justify-center gap-3 transition cursor-pointer shadow-lg shadow-sky-600/30"
           >
             <Play className="w-5 h-5 fill-current" />
             Comenzar Prueba
