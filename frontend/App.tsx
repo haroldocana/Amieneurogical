@@ -92,27 +92,33 @@ export default function App() {
   const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
 
   // -----------------------------------------------------------------------
-  // DETECCIÓN INFALIBLE DE ENTORNO PACIENTE (APK ANDROID / WEBVIEW / URL)
+  // DETECCIÓN DIRECTA E INFALIBLE PARA DISPOSITIVOS MÓVILES Y APK
   // -----------------------------------------------------------------------
   useEffect(() => {
     const checkIsPatientApp = () => {
-      const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
-      const isAndroidWebView = /Android.*(wv|\.0\.0\.0)/i.test(ua);
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.protocol === 'file:';
-      const hasCapacitor = typeof (window as any).Capacitor !== 'undefined';
+      const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
+      
+      // Detecta cualquier dispositivo Android (incluyendo el Honor 400 Lite),
+      // navegadores de dispositivos móviles, puentes de Capacitor o URLs directas
+      const isAndroidDevice = /android/i.test(ua);
+      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
+      const isLocalhostOrFile = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || window.location.protocol === 'capacitor:';
+      const hasCapacitor = typeof (window as any).Capacitor !== 'undefined' || Boolean((window as any).Capacitor?.isNativePlatform?.());
       const isPatientUrl = 
-        window.location.pathname === '/paciente' || 
+        window.location.pathname.includes('/paciente') || 
         window.location.search.includes('mode=paciente') || 
         window.location.search.includes('paciente=true');
 
-      if (isAndroidWebView || isLocalhost || hasCapacitor || isPatientUrl) {
+      if (isAndroidDevice || isMobileDevice || isLocalhostOrFile || hasCapacitor || isPatientUrl) {
         setIsPatientMode(true);
+      } else {
+        setIsPatientMode(false);
       }
       setIsCheckingPlatform(false);
     };
 
     checkIsPatientApp();
-    const timer = setTimeout(checkIsPatientApp, 300);
+    const timer = setTimeout(checkIsPatientApp, 200);
     return () => clearTimeout(timer);
   }, []);
 
@@ -199,7 +205,7 @@ export default function App() {
   }, []);
 
   // -----------------------------------------------------------------------
-  // VISTA EXCLUSIVA PARA EL PACIENTE (PANTALLA NEGRA DE ESTADO)
+  // VISTA EXCLUSIVA PARA EL PACIENTE (PANTALLA NEGRA DE ESTADO DE SERVICIO)
   // -----------------------------------------------------------------------
   if (isCheckingPlatform) {
     return <div className="min-h-screen bg-slate-950"></div>;
@@ -254,7 +260,7 @@ export default function App() {
   }
 
   // -----------------------------------------------------------------------
-  // VISTA WORKSTATION MÉDICA COMPLETA
+  // VISTA WORKSTATION MÉDICA COMPLETA (ORDENADORES DE ESCRITORIO / PC)
   // -----------------------------------------------------------------------
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
