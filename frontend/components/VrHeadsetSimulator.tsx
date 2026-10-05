@@ -1,20 +1,35 @@
 import React, { useEffect, useRef } from 'react';
-import { Glasses, Activity, Eye, Monitor } from 'lucide-react';
+import { Glasses, Monitor, Activity, Radio } from 'lucide-react';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
-  isActive: boolean;
-  protocolType: string;
-  binauralHz: number;
-  lightIntensity: number; // 0 - 100
+  patientId?: string;
+  isActive?: boolean;
+  protocolType?: string;
+  binauralHz?: number;
+  lightIntensity?: number; // 0 - 100
 }
 
 export const VrHeadsetSimulator: React.FC<Props> = ({
-  isActive,
-  protocolType,
-  binauralHz,
-  lightIntensity
+  patientId = 'PAC-8104',
+  isActive = false,
+  protocolType = 'EMDR_TRAUMA',
+  binauralHz = 4.5,
+  lightIntensity = 80
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (RECEPTOR EN LA PC DEL MÉDICO)
+  // -------------------------------------------------------------------------
+  const { liveData, isStreaming } = useVrTelemetryBridge('receiver', patientId, protocolType);
+
+  // Determinar parámetros activos (vienen del Visor real en vivo O de las props locales)
+  const activeStatus = isStreaming ? true : isActive;
+  const activeProtocol = liveData?.moduleName || protocolType;
+  const activeBinauralHz = liveData?.metrics?.reactionTimeMs 
+    ? (1000 / liveData.metrics.reactionTimeMs) // Mapeo dinámico si transmite latencia
+    : binauralHz;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,11 +50,11 @@ export const VrHeadsetSimulator: React.FC<Props> = ({
       ctx.fillStyle = `rgb(${bgBrightness}, ${bgBrightness}, ${bgBrightness + 10})`;
       ctx.fillRect(0, 0, width, height);
 
-      if (isActive) {
+      if (activeStatus) {
         // 2. Simulación Visual según el Protocolo Seleccionado
-        if (protocolType.includes('EMDR') || protocolType.includes('TRAUMA')) {
-          // Esfera de Barrido Bilateral 3D
-          const xPos = width / 2 + Math.sin(time * (binauralHz * 0.2)) * (width * 0.35);
+        if (activeProtocol.includes('EMDR') || activeProtocol.includes('TRAUMA') || activeProtocol.includes('PTSD')) {
+          // Esfera de Barrido Bilateral 3D (EMDR)
+          const xPos = width / 2 + Math.sin(time * (activeBinauralHz * 0.2)) * (width * 0.35);
           ctx.beginPath();
           ctx.arc(xPos, height / 2, 20, 0, Math.PI * 2);
           ctx.fillStyle = '#38bdf8'; // Cyan luminoso
@@ -47,9 +62,9 @@ export const VrHeadsetSimulator: React.FC<Props> = ({
           ctx.shadowColor = '#0284c7';
           ctx.fill();
           ctx.shadowBlur = 0;
-        } else if (protocolType.includes('GAMMA') || binauralHz >= 30) {
+        } else if (activeProtocol.includes('GAMMA') || activeBinauralHz >= 30) {
           // Pulso Fótico de Alta Frecuencia Gamma (40Hz)
-          const flicker = Math.sin(time * binauralHz) > 0 ? 0.8 : 0.1;
+          const flicker = Math.sin(time * activeBinauralHz) > 0 ? 0.8 : 0.1;
           ctx.fillStyle = `rgba(251, 191, 36, ${flicker})`; // Amarillo ámbar
           ctx.beginPath();
           ctx.arc(width / 2, height / 2, 60, 0, Math.PI * 2);
@@ -68,7 +83,7 @@ export const VrHeadsetSimulator: React.FC<Props> = ({
         ctx.fillStyle = '#64748b';
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('STANDBY - Visor Pico Neo 3 en Espera', width / 2, height / 2);
+        ctx.fillText('STANDBY - Esperando inicio de sesión VR en visor...', width / 2, height / 2);
       }
 
       animationFrameId = requestAnimationFrame(render);
@@ -79,22 +94,40 @@ export const VrHeadsetSimulator: React.FC<Props> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isActive, protocolType, binauralHz, lightIntensity]);
+  }, [activeStatus, activeProtocol, activeBinauralHz, lightIntensity]);
 
   return (
     <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
         <span className="font-bold text-slate-300 flex items-center gap-2">
           <Glasses className="w-4 h-4 text-cyan-400" />
-          Simulador Digital Twin (Pico Neo 3 POV)
+          Simulador Digital Twin (Pico Neo 3 / Meta Quest POV)
         </span>
-        <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-          <Monitor className="w-3 h-3" /> Renderizado WebGL 60 FPS
-        </span>
+        
+        <div className="flex items-center gap-2">
+          {isStreaming ? (
+            <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950 border border-emerald-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+              <Radio className="w-3 h-3 text-emerald-400" /> STREAMING VR EN VIVO
+            </span>
+          ) : (
+            <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+              <Monitor className="w-3 h-3" /> WebGL 60 FPS
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="relative aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-800">
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-800 shadow-inner">
         <canvas ref={canvasRef} width={480} height={270} className="w-full h-full object-cover" />
+        
+        {/* Overlay Teleférico de Métricas si está transmitiendo */}
+        {isStreaming && liveData?.metrics && (
+          <div className="absolute bottom-2 left-2 right-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 p-2 rounded-lg flex justify-between text-[10px] font-mono text-slate-300">
+            <span>Latencia: <strong className="text-cyan-300">{liveData.metrics.reactionTimeMs || 0} ms</strong></span>
+            <span>GSR: <strong className="text-purple-300">{liveData.metrics.gsr || 0} µS</strong></span>
+            <span>HRV: <strong className="text-emerald-300">{liveData.metrics.hrv || 0} ms</strong></span>
+          </div>
+        )}
       </div>
     </div>
   );
