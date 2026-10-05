@@ -288,7 +288,7 @@ export default function App() {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
       setErrorMsg(msg);
-    } font-sans finally {
+    } finally {
       setIsAnalyzing(false);
     }
   };
