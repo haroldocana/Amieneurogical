@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { 
   Glasses, Activity, HeartPulse, FileText, CheckCircle2, ShieldAlert, 
   Wifi, Settings, Edit3, Download, RefreshCw, BarChart2, Play, Pause, Layers, Brain, Target
@@ -213,10 +214,15 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
   const [isSessionRunning, setIsSessionRunning] = useState(false);
   const [sessionTimer, setSessionTimer] = useState(0);
 
-  const [connectionType, setConnectionType] = useState<'websocket' | 'render_proxy' | 'simulation'>('simulation');
+  const [connectionType, setConnectionType] = useState<'websocket' | 'render_proxy' | 'simulation'>('render_proxy');
   const [ipAddress, setIpAddress] = useState('192.168.1.105');
   const [isConnected, setIsConnected] = useState(true);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // PUENTE DE TELEMETRÍA VR RECEPTOR (ENLACE A RENDER BACKEND / WEBSOCKETS)
+  // -------------------------------------------------------------------------
+  const { liveData, isStreaming } = useVrTelemetryBridge('receiver', patient.id || 'PAC-8104', selectedProtocolKey);
 
   const [telemetry, setTelemetry] = useState<VrTelemetryData>({
     sessionId: `VR-QUEST3S-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -232,32 +238,41 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
 
-  // ESCUCHA WEBSOCKET EN TIEMPO REAL DESDE EL QUEST 3S CON PARSING BLINDADO
+  // Sincronizar estado local con datos en vivo desde el puente de Render si se están recibiendo
   useEffect(() => {
-    if (connectionType === 'simulation') return;
+    if (isStreaming && liveData?.metrics) {
+      setTelemetry(prev => ({
+        ...prev,
+        gsrMicroSiemens: liveData.metrics.gsr ? [liveData.metrics.gsr] : prev.gsrMicroSiemens,
+        hrvRmssdMs: liveData.metrics.hrv ? [liveData.metrics.hrv] : prev.hrvRmssdMs,
+        habituationIndexH: liveData.metrics.habituationIndex ?? prev.habituationIndexH
+      }));
+    }
+  }, [isStreaming, liveData]);
 
-    const socketUrl = connectionType === 'websocket'
-      ? `ws://${ipAddress}:8080`
-      : `wss://amieneurogical.onrender.com/ws/quest3s`;
+  // ESCUCHA WEBSOCKET DIRECTO (OPCIÓN SECUNDARIA LAN)
+  useEffect(() => {
+    if (connectionType !== 'websocket') return;
 
+    const socketUrl = `ws://${ipAddress}:8080`;
     const ws = new WebSocket(socketUrl);
 
     ws.onopen = () => {
       setIsConnected(true);
-      console.log(`Enlace WebSocket activo con Quest 3S en ${socketUrl}`);
+      console.log(`Enlace WebSocket directo activo en ${socketUrl}`);
     };
 
     ws.onmessage = (event) => {
       try {
-        const liveData = JSON.parse(event.data);
-        if (!liveData || typeof liveData !== 'object') return;
+        const liveDataWs = JSON.parse(event.data);
+        if (!liveDataWs || typeof liveDataWs !== 'object') return;
 
         setTelemetry(prev => ({
           ...prev,
-          gsrMicroSiemens: Array.isArray(liveData.gsrArray) && liveData.gsrArray.length > 0 ? liveData.gsrArray : prev.gsrMicroSiemens,
-          hrvRmssdMs: Array.isArray(liveData.hrvArray) && liveData.hrvArray.length > 0 ? liveData.hrvArray : prev.hrvRmssdMs,
-          habituationIndexH: typeof liveData.habituationH === 'number' ? liveData.habituationH : prev.habituationIndexH,
-          saccadicRateHz: typeof liveData.saccadicHz === 'number' ? liveData.saccadicHz : prev.saccadicRateHz
+          gsrMicroSiemens: Array.isArray(liveDataWs.gsrArray) && liveDataWs.gsrArray.length > 0 ? liveDataWs.gsrArray : prev.gsrMicroSiemens,
+          hrvRmssdMs: Array.isArray(liveDataWs.hrvArray) && liveDataWs.hrvArray.length > 0 ? liveDataWs.hrvArray : prev.hrvRmssdMs,
+          habituationIndexH: typeof liveDataWs.habituationH === 'number' ? liveDataWs.habituationH : prev.habituationIndexH,
+          saccadicRateHz: typeof liveDataWs.saccadicHz === 'number' ? liveDataWs.saccadicHz : prev.saccadicRateHz
         }));
       } catch (e) {
         console.warn('Payload no válido recibido del Quest 3S:', e);
@@ -326,7 +341,8 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     link.click();
   };
 
-  const handleTransferData = () => {
+  // TRANSFERIR Y CONSOLIDAR REPORTE CLINICO EN MONGODB Y TRIANGULACIÓN GLOBAL
+  const handleTransferData = async () => {
     const updatedReport: VrTherapyReport = {
       sessionGuid: telemetry.sessionId,
       exposureType: `Prueba Profesional VR (${activeProtocol.scenarioTitle})`,
@@ -335,7 +351,36 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
       habituationRate: 'Óptima',
       synthesizedClinicalSummary: reportText
     };
+
+    // 1. Guardar en estado global de la app
     onUpdatePatientVrData(telemetry, updatedReport);
+
+    // 2. Guardar permanentemente en la base de datos MongoDB del Backend
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: patient.id || 'PAC-8104',
+          sessionData: {
+            taskName: selectedProtocolKey,
+            durationSeconds: sessionTimer || activeProtocol.targetDurationSec,
+            metrics: {
+              avgReactionTimeMs: liveData?.metrics?.reactionTimeMs || 0,
+              omissions: liveData?.metrics?.omissions || 0,
+              commissions: liveData?.metrics?.commissions || 0,
+              frontalEngagementPct: liveData?.metrics?.habituationIndex || 0,
+              binauralBetaHz: 15.0
+            },
+            aiLogs: [`Sesión ${activeProtocol.scenarioTitle} transferida a Triangulación Global.`],
+            completedAt: new Date().toISOString()
+          }
+        })
+      });
+      alert('✅ Muestras transferidas e informe guardado exitosamente en el expediente.');
+    } catch (err) {
+      console.error('Error guardando reporte individual en servidor:', err);
+    }
   };
 
   return (
@@ -349,8 +394,12 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 Módulo Terapéutico VR Meta Quest 3S
-                <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] rounded-full font-semibold">
-                  MÉTRICAS ADAPTATIVAS EN TIEMPO REAL
+                <span className={`px-2.5 py-0.5 text-[10px] rounded-full font-semibold border ${
+                  isStreaming 
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50 animate-pulse' 
+                    : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                }`}>
+                  {isStreaming ? '● STREAMING VR EN VIVO' : 'MÉTRICAS ADAPTATIVAS EN TIEMPO REAL'}
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -391,13 +440,13 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
                   onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConnectionType(e.target.value as any)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg text-xs p-2 text-white focus:outline-none focus:border-cyan-500"
                 >
+                  <option value="render_proxy">Render Backend Server Proxy (Recomendado)</option>
                   <option value="websocket">Direct WebSocket (Local LAN Quest 3S)</option>
-                  <option value="render_proxy">Render Backend Server Proxy</option>
                   <option value="simulation">Simulación de Telemetría Bioclínica</option>
                 </select>
               </div>
 
-              {connectionType !== 'simulation' && (
+              {connectionType === 'websocket' && (
                 <div>
                   <label className="text-[10px] text-slate-400 block mb-1">Dirección IP Visor Quest 3S</label>
                   <input 
@@ -413,11 +462,11 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
                 <button 
                   onClick={() => setIsConnected(!isConnected)}
                   className={`w-full py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
-                    isConnected ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50' : 'bg-rose-950/80 text-rose-300 border border-rose-500/50'
+                    isStreaming || isConnected ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50' : 'bg-rose-950/80 text-rose-300 border border-rose-500/50'
                   }`}
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>{isConnected ? 'Estado: Visor Enlazado (60 FPS)' : 'Desconectado - Reconectar'}</span>
+                  <span>{isStreaming ? 'Streaming VR Activo (Render)' : isConnected ? 'Estado: Visor Enlazado' : 'Desconectado - Reconectar'}</span>
                 </button>
               </div>
             </div>
@@ -545,8 +594,8 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
                 <span className="text-[9px] text-slate-500 font-mono">t+{idx * 30}s</span>
 
                 <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 border border-slate-700 p-2 rounded text-[10px] text-white z-20 shadow-xl whitespace-nowrap">
-                  <span>Métrica 1: {val}</span>
-                  <span>Métrica 2: {hrvVal}</span>
+                  <span>Métrica GSR: {val} µS</span>
+                  <span>Métrica HRV: {hrvVal} ms</span>
                 </div>
               </div>
             );
