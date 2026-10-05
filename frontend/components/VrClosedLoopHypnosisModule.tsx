@@ -15,6 +15,7 @@ import {
   Heart,
   Sliders
 } from 'lucide-react';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -50,6 +51,24 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   const [abreactionMessage, setAbreactionMessage] = useState<string | null>(null);
 
   const gsrBaselineRef = useRef<number>(2.1);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'Neurohypnosis');
+
+  // Transmisión en vivo de fisiología y profundidad del trance
+  useEffect(() => {
+    if (isActiveSession && !isAbreactionTriggered) {
+      transmit({
+        hrv: telemetry.hrvRmssdMs,
+        gsr: telemetry.gsrMicroSiemens,
+        stressLevel: tranceDepthPct, // Transmitimos la profundidad del trance (%)
+        habituationIndex: Math.floor(binauralFreqHz * 10), // Frecuencia binaural codificada
+        omissions: susceptibilityScore || 0
+      });
+    }
+  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, susceptibilityScore, isActiveSession, isAbreactionTriggered]);
 
   // Simulación y lectura biométrica en vivo en bucle cerrado
   useEffect(() => {
@@ -148,6 +167,47 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
     setTranceDepthPct(15);
   };
 
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setIsActiveSession(false);
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: 'Neurohypnosis',
+        durationSeconds: 300,
+        metrics: {
+          avgHrv: telemetry.hrvRmssdMs,
+          avgGsr: telemetry.gsrMicroSiemens,
+          omissions: 0,
+          commissions: 0,
+          frontalEngagementPct: tranceDepthPct, // Profundidad de trance (%)
+          binauralBetaHz: binauralFreqHz
+        },
+        aiLogs: [
+          `Sesión de Neurohipnosis VR concluida. Profundidad del trance alcanzada: ${tranceDepthPct}%. Frecuencia Binaural final: ${binauralFreqHz} Hz.`,
+          scriptText ? `Guion Ericksoniano: "${scriptText.substring(0, 120)}..."` : 'Sin guion generado.'
+        ],
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR Neurohipnosis guardado para ${patient?.id || 'PAC-8104'}. Trance Depth: ${tranceDepthPct}%`);
+
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
       {/* Encabezado */}
@@ -191,7 +251,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
             </div>
           </div>
           <div className="p-3 bg-slate-950/80 rounded-xl border border-rose-500/30 text-xs space-y-1 font-mono">
-            <span className="font-bold text-rose-400">SECUENCIA DE GROUNDING SENSORIAL INJECTADA (5-4-3-2-1):</span>
+            <span className="font-bold text-rose-400">SECUENCIA DE GROUNDING SENSORIAL INYECTADA (5-4-3-2-1):</span>
             <p className="text-slate-300">1. Iluminación neutra estática activada en entorno VR.</p>
             <p className="text-slate-300">2. Frecuencia binaural conmutada a 14 Hz (Ritmo Beta de vigilia).</p>
             <p className="text-slate-300">3. Voz directiva: "Siente tus pies sobre el suelo y respira lento."</p>
@@ -327,7 +387,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
             </button>
           ) : (
             <button
-              onClick={() => setIsActiveSession(false)}
+              onClick={handleEndSession} // <-- Conecta guardado a MongoDB y cierre limpio
               className="flex items-center gap-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/20 transition"
             >
               <Square className="w-4 h-4" />
