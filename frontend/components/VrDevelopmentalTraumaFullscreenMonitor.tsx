@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { calculateAdaptedProgram, TraumaTypology, AdaptedProgramConfig } from '../services/developmentalTraumaEngine';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -45,6 +46,24 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
   // Log de Eventos de la IA (Closed-Loop Regulator)
   const [aiLogs, setAiLogs] = useState<string[]>([]);
 
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DevelopmentalTrauma');
+
+  // Transmisión en vivo de fisiología subcortical y niveles de trance/DMN
+  useEffect(() => {
+    if (sessionActive && !safetyTriggered) {
+      transmit({
+        hrv: Math.floor(hrv),
+        gsr: Number(gsr.toFixed(2)),
+        stressLevel: Math.floor(tranceDepth), // Profundidad de trance (%)
+        habituationIndex: Math.floor(dmnSuppressionPct), // Supresión DMN (%)
+        omissions: Math.floor(saccadicHz * 10)
+      });
+    }
+  }, [hrv, gsr, tranceDepth, dmnSuppressionPct, saccadicHz, sessionActive, safetyTriggered]);
+
   // Recalcular configuración si cambia la edad o la tipología
   useEffect(() => {
     const newConfig = calculateAdaptedProgram(patientAge, traumaType);
@@ -71,7 +90,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
         if (gsr > programConfig.gsrSafetyThresholduS) {
           setSafetyTriggered(true);
           setSessionActive(false);
-          const alertMsg = `⚠️ ALERTA DE SEGURIDAD: Disparo de GSR (${gsr.toFixed(2)} µS) superó el límite permitido para la etapa ${programConfig.stageNameEs} (${programConfig.gsrSafetyThresholduS} µS). Iniciando desconexión inmediata.`;
+          const alertMsg = `⚠️️ ALERTA DE SEGURIDAD: Disparo de GSR (${gsr.toFixed(2)} µS) superó el límite permitido para la etapa ${programConfig.stageNameEs} (${programConfig.gsrSafetyThresholduS} µS). Iniciando desconexión inmediata.`;
           setAiLogs(prev => [`[${timeStr}] ${alertMsg}`, ...prev.slice(0, 9)]);
           alert(alertMsg);
           return;
@@ -129,6 +148,47 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
     setTranceDepth(0);
     setDmnSuppressionPct(0);
     setAiLogs(prev => [`[EMERGENCIA] Interrupción manual por el clínico. Ancla de seguridad aplicada.`, ...prev]);
+  };
+
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setSessionActive(false);
+    setTranceDepth(0);
+    setDmnSuppressionPct(0);
+    setAiLogs(prev => [`[SISTEMA] Sesión completada. Consolidando reporte de trauma evolutivo e hipnosis...`, ...prev]);
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: 'DevelopmentalTrauma',
+        durationSeconds: 300,
+        metrics: {
+          avgHrv: Math.floor(hrv),
+          avgGsr: Number(gsr.toFixed(2)),
+          omissions: Math.floor(dmnSuppressionPct), // Supresión DMN %
+          commissions: Math.floor(tranceDepth), // Profundidad de trance %
+          frontalEngagementPct: Math.floor(etiologyScores.psychological),
+          binauralBetaHz: Number(binauralHz.toFixed(1))
+        },
+        aiLogs,
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR Trauma Evolutivo guardado para ${patient?.id || 'PAC-8104'}.`);
+
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
   };
 
   const safePatientName = patient.patientNameAnonymized || patient.id || 'PAC-8104';
@@ -412,7 +472,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
               </button>
             ) : (
               <button
-                onClick={() => setSessionActive(false)}
+                onClick={handleEndSession} // <-- Actualizado para enviar el reporte a MongoDB y cerrar
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
