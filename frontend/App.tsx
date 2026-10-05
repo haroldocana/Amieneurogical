@@ -30,7 +30,8 @@ import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
 import { VrPainManagementModule } from './components/VrPainManagementModule';
 import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
 import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
-import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
+// IMPORTACIÓN ACTUALIZADA: Usamos el Router en lugar del módulo directo
+import { VrModuleRouter } from './components/VrModuleRouter';
 import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
@@ -1156,8 +1157,9 @@ export default function App() {
         />
       )}
 
+      {/* AQUÍ ESTÁ LA MAGIA: EL COMPONENTE DE TDAH AHORA ABRE EL ENRUTADOR */}
       {isFullscreenExecOpen && (
-        <VrExecutiveFunctionModule
+        <VrModuleRouter
           patient={safePatient}
           onClose={() => setIsFullscreenExecOpen(false)}
         />
