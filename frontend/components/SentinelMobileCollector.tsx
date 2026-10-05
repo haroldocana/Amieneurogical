@@ -9,13 +9,8 @@ import {
   AlertTriangle, 
   RefreshCw, 
   ArrowUpRight,
-  Wifi,
   Radio,
-  BrainCircuit,
-  Activity,
-  Heart,
-  Keyboard,
-  BarChart3
+  BrainCircuit
 } from 'lucide-react';
 
 interface TelemetryPayload {
@@ -39,7 +34,7 @@ export const SentinelMobileCollector: React.FC = () => {
   const [doctorUsername, setDoctorUsername] = useState('2000');
   
   const [typingLatency, setTypingLatency] = useState<number>(140);
-  const [tapLatency, setTapLatency] = useState<number>(180);
+  const [tapLatency] = useState<number>(180);
   const [sleepHours, setSleepHours] = useState<number>(6.5);
   const [nightAwakenings, setNightAwakenings] = useState<number>(2);
   const [restingHr, setRestingHr] = useState<number>(72);
@@ -52,7 +47,7 @@ export const SentinelMobileCollector: React.FC = () => {
   const [serverResponse, setServerResponse] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ESTADOS DE TRAZABILIDAD Y LINK DE HARDWARE
+  // ESTADOS DE TRAZABILIDAD
   const [pingMs, setPingMs] = useState<number>(24);
   const [lastSyncTime, setLastSyncTime] = useState<string>(new Date().toLocaleTimeString('es-ES'));
   const [packetsCount, setPacketsCount] = useState<number>(18);
@@ -60,7 +55,6 @@ export const SentinelMobileCollector: React.FC = () => {
   const lastKeyTimeRef = useRef<number | null>(null);
   const keyIntervalsRef = useRef<number[]>([]);
 
-  // Monitor continuo de trazabilidad (simulación de enlace activo con APK)
   useEffect(() => {
     const interval = setInterval(() => {
       setPingMs(Math.floor(20 + Math.random() * 15));
@@ -112,7 +106,6 @@ export const SentinelMobileCollector: React.FC = () => {
     );
   };
 
-  // Envió mediante XMLHttpRequest
   const sendTelemetryXHR = (url: string, payload: TelemetryPayload): Promise<{ status: number; data: any }> => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -175,12 +168,11 @@ export const SentinelMobileCollector: React.FC = () => {
       setPacketsCount(prev => prev + 1);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al conectar con el servidor.');
-    } font-sans finally {
+    } finally {
       setIsSending(false);
     }
   };
 
-  // CÁLCULO DE DEDUCCIÓN CLÍNICA DERIVADO A TRASTORNOS
   const depressionRisk = Math.min(Math.max((typingLatency > 180 ? 45 : 10) + (sleepHours < 5 || sleepHours > 9 ? 25 : 0) + (nightAwakenings >= 3 ? 15 : 0), 5), 98);
   const maniaRisk = Math.min(Math.max((typingLatency < 120 ? 50 : 10) + (sleepHours < 5 ? 35 : 0), 5), 98);
   const anxietyRisk = Math.min(Math.max((restingHr > 78 ? 40 : 15) + (nightAwakenings >= 3 ? 30 : 0), 5), 98);
@@ -188,7 +180,7 @@ export const SentinelMobileCollector: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-slate-100 space-y-6 font-sans">
       
-      {/* 1. SECCIÓN DE TRAZABILIDAD DE COMUNICACIÓN CON EL DISPOSITIVO */}
+      {/* 1. SECCIÓN DE TRAZABILIDAD */}
       <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
@@ -234,7 +226,7 @@ export const SentinelMobileCollector: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. FORMULARIO DE CAPTURA DE TELEMETRÍA */}
+      {/* 2. CAPTURA DE TELEMETRÍA */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div>
@@ -344,7 +336,7 @@ export const SentinelMobileCollector: React.FC = () => {
         </button>
       </div>
 
-      {/* 3. SECCIÓN DE ANÁLISIS DE MÉTRICAS DERIVADO A TRASTORNOS */}
+      {/* 3. ANÁLISIS DE TRASTORNOS */}
       <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
         <div className="flex items-center justify-between border-b border-slate-800 pb-2">
           <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -355,7 +347,6 @@ export const SentinelMobileCollector: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          
           <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5">
             <div className="flex justify-between items-center">
               <span className="font-semibold text-slate-200">Depresión</span>
@@ -391,7 +382,6 @@ export const SentinelMobileCollector: React.FC = () => {
               <div className="bg-purple-500 h-full" style={{ width: `${anxietyRisk}%` }} />
             </div>
           </div>
-
         </div>
       </div>
 
