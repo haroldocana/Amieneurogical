@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Video, Activity, Brain, X, 
-  Zap, Target, Layers, Eye, RefreshCw, Sparkles, UserCheck, Move, CheckCircle2
+  Zap, Target, Move, Sparkles, UserCheck
 } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -31,6 +32,24 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
 
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'MirrorNeuromotor');
+
+  // Transmisión en vivo de métricas de neuronas espejo y coherencia premotora
+  useEffect(() => {
+    if (sessionActive && !safetyTriggered) {
+      transmit({
+        gsr: Number(gsr.toFixed(2)),
+        hrv: Math.floor(hrv),
+        stressLevel: Math.floor(premotorCoherence), // Coherencia premotora %
+        habituationIndex: Math.floor(mnsActivationPct), // Activación MNS %
+        omissions: Math.floor(motorAgencyScore) // Agencia motora %
+      });
+    }
+  }, [gsr, hrv, premotorCoherence, mnsActivationPct, motorAgencyScore, sessionActive, safetyTriggered]);
 
   // Motor Closed-Loop de Desbloqueo Motor (AI Motor Re-Learning Engine)
   useEffect(() => {
@@ -97,6 +116,45 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     setSafetyTriggered(true);
     setMnsActivationPct(0);
     setAiLogs(prev => [`[EMERGENCIA] Desconexión manual solicitada. Suspendiendo señal espejo de avatar.`, ...prev]);
+  };
+
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setSessionActive(false);
+    setAiLogs(prev => [`[SISTEMA] Sesión completada. Consolidando reporte de re-aprendizaje motor conversivo...`, ...prev]);
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: 'MirrorNeuromotor',
+        durationSeconds: 300,
+        metrics: {
+          avgHrv: Math.floor(hrv),
+          avgGsr: Number(gsr.toFixed(2)),
+          omissions: Math.floor(premotorCoherence), // Coherencia premotora %
+          commissions: 0,
+          frontalEngagementPct: Math.floor(motorAgencyScore), // Restauración de agencia motora %
+          binauralBetaHz: Number(binauralHz.toFixed(1))
+        },
+        aiLogs,
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR Mirror Neuromotor guardado para ${patient?.id || 'PAC-8104'}. Motor Agency Score: ${motorAgencyScore.toFixed(0)}%`);
+      
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
   };
 
   const getSubtypeTitle = (sub: FndSubtype) => {
@@ -374,7 +432,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
               </button>
             ) : (
               <button
-                onClick={() => setSessionActive(false)}
+                onClick={handleEndSession} // <-- Actualizado para enviar la sesión a MongoDB y cerrar
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
