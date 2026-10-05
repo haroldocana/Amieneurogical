@@ -93,7 +93,7 @@ export default function App() {
   const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
 
   // -----------------------------------------------------------------------
-  // DETECCIÓN DIRECTA E INFALIBLE PARA DISPOSITIVOS MÓVILES Y APK
+  // DETECCIÓN DIRECTA PARA DISPOSITIVOS MÓVILES Y APK
   // -----------------------------------------------------------------------
   useEffect(() => {
     const checkIsPatientApp = () => {
@@ -206,7 +206,7 @@ export default function App() {
   }, []);
 
   // -----------------------------------------------------------------------
-  // VISTA EXCLUSIVA PARA EL PACIENTE (PANTALLA NEGRA DE ESTADO DE SERVICIO)
+  // VISTA PACIENTE / MÓVIL
   // -----------------------------------------------------------------------
   if (isCheckingPlatform) {
     return <div className="min-h-screen bg-slate-950"></div>;
@@ -261,7 +261,7 @@ export default function App() {
   }
 
   // -----------------------------------------------------------------------
-  // VISTA WORKSTATION MÉDICA COMPLETA (ORDENADORES DE ESCRITORIO / PC)
+  // VISTA WORKSTATION MÉDICA COMPLETA
   // -----------------------------------------------------------------------
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
@@ -410,7 +410,7 @@ export default function App() {
           <tbody>
             <tr>
               <td>Workstation & Centinela</td>
-              <td>PHQ-9 / GAD-7 / Acústica $F_0$</td>
+              <td>PHQ-9 / GAD-7 / Acústica F0</td>
               <td>Dentro de norma histórica</td>
               <td>Triangulado (3/3 Ejes)</td>
             </tr>
@@ -421,4 +421,26 @@ export default function App() {
               <td>Validado</td>
             </tr>
             <tr>
-              <td>Diferenci
+              <td>Diferenciador Antisesgo</td>
+              <td>Distancia de Mahalanobis (D²)</td>
+              <td>D² = 1.84 (Sin atipicidad)</td>
+              <td>Filtro OK (D² &lt; 2.5)</td>
+            </tr>
+            <tr>
+              <td>Corrientes APA & RCI</td>
+              <td>Índice de Cambio Confiable (RCI)</td>
+              <td>RCI = -2.14 (Mejoría)</td>
+              <td>Significativo (p &lt; .05)</td>
+            </tr>
+            <tr>
+              <td>VR Inmersivo / Biofeedback</td>
+              <td>Conductancia Cutánea / Habituación H</td>
+              <td>GSR: 2.1 µS | H = 2.84</td>
+              <td>Closed-Loop Activo</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>2. DICTAMEN DE SINCRO-AUDITORÍA Y FIRMA</h2>
+        <p style="font-size: 11px; color: #475569;">
+          El presente informe certifica la consistencia mult
