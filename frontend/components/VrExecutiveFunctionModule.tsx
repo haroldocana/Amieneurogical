@@ -4,6 +4,7 @@ import {
   Zap, Target, Sparkles, Crosshair, Focus, Cpu
 } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -36,6 +37,23 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
   
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'ExecutiveControl');
+
+  // Transmisión en tiempo real al servidor en cada actualización de métricas
+  useEffect(() => {
+    if (sessionActive && !safetyTriggered) {
+      transmit({
+        reactionTimeMs: Math.floor(avgReactionTimeMs),
+        omissions: omissionErrors,
+        commissions: commissionErrors,
+        habituationIndex: Math.floor(frontalEngagementPct)
+      });
+    }
+  }, [correctHits, omissionErrors, commissionErrors, avgReactionTimeMs, frontalEngagementPct, sessionActive, safetyTriggered]);
 
   // Motor Closed-Loop de Entrenamiento Cognitivo
   useEffect(() => {
