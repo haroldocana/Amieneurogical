@@ -4,6 +4,7 @@ import {
   Zap, Target, Sparkles, RotateCcw, Lock, Unlock, Eye, HeartPulse
 } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -34,6 +35,24 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'PTSDExposure');
+
+  // Transmisión en vivo de biometría amigdalar y fase de reconsolidación
+  useEffect(() => {
+    if (sessionActive && !safetyTriggered) {
+      transmit({
+        gsr: Number(gsr.toFixed(2)),
+        hrv: Math.floor(hrv),
+        stressLevel: Number(gsr.toFixed(2)),
+        habituationIndex: Number(extinctionIndexH.toFixed(2)),
+        omissions: Math.floor(engramLabilityPct) // Labilidad del engrama (%)
+      });
+    }
+  }, [gsr, hrv, extinctionIndexH, engramLabilityPct, currentPhase, sessionActive, safetyTriggered]);
 
   // Motor Closed-Loop de Reconsolidación de Memoria
   useEffect(() => {
@@ -114,6 +133,45 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     setSessionActive(false);
     setCurrentPhase('IDLE');
     setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad. Abortando reconsolidación.`, ...prev]);
+  };
+
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setSessionActive(false);
+    setAiLogs(prev => [`[SISTEMA] Sesión completada. Guardando reporte de reconsolidación en el expediente...`, ...prev]);
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: 'PTSDExposure',
+        durationSeconds: 300,
+        metrics: {
+          avgHrv: Math.floor(hrv),
+          avgGsr: Number(gsr.toFixed(2)),
+          omissions: 0,
+          commissions: 0,
+          frontalEngagementPct: Math.floor((extinctionIndexH / 4) * 100), // Extinción en escala %
+          binauralBetaHz: Number(binauralThetaHz.toFixed(1))
+        },
+        aiLogs,
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR de Reconsolidación de Memoria guardado para ${patient?.id || 'PAC-8104'}. Índice H: ${extinctionIndexH.toFixed(2)}`);
+      
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
   };
 
   const getCategoryTitle = (cat: TraumaCategory) => {
@@ -398,7 +456,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
               </button>
             ) : (
               <button
-                onClick={() => setSessionActive(false)}
+                onClick={handleEndSession} // <-- Actualizado para enviar telemetría final y cerrar
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
