@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  ShieldAlert, Play, Square, Video, Brain, X, 
+  ShieldAlert, Play, Square, Brain, X, 
   Zap, Target, Sparkles, Crosshair, Cpu,
   Activity, RotateCcw, CheckCircle2, ShieldCheck,
-  Maximize2, Minimize2, Printer, FileText, Clock, Wifi
+  Maximize2, Minimize2, Printer, Clock, Wifi, WifiOff
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -22,128 +22,86 @@ interface TelemetryPoint {
 }
 
 export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose }) => {
-  // Configuración de la Tarea
   const [executiveTask, setExecutiveTask] = useState<ExecutiveTask>('RESPONSE_INHIBITION');
   const [sessionActive, setSessionActive] = useState(false);
   const [aiAutoPilot, setAiAutoPilot] = useState(true);
 
-  // Control de Interfaz
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
 
-  // Parámetros Neurocognitivos
+  // Controles enviados al VR
   const [binauralBetaHz, setBinauralBetaHz] = useState<number>(15.0); 
   const [taskDifficultyMs, setTaskDifficultyMs] = useState<number>(800); 
   
-  // Métricas de Desempeño en Tiempo Real
+  // Datos reales recibidos del VR
   const [omissionErrors, setOmissionErrors] = useState<number>(0); 
   const [commissionErrors, setCommissionErrors] = useState<number>(0); 
   const [correctHits, setCorrectHits] = useState<number>(0);
-  const [avgReactionTimeMs, setAvgReactionTimeMs] = useState<number>(260);
-  const [frontalEngagementPct, setFrontalEngagementPct] = useState<number>(25); 
+  const [avgReactionTimeMs, setAvgReactionTimeMs] = useState<number>(0);
+  const [frontalEngagementPct, setFrontalEngagementPct] = useState<number>(0); 
   
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPoint[]>([]);
   const [aiLogs, setAiLogs] = useState<string[]>([]);
 
-  // Referencia mutable para el Simulador de Paciente (Evita bugs de React)
-  const simRef = useRef({ hits: 0, omissions: 0, commissions: 0, tr: 260, frontal: 25 });
-
   // -------------------------------------------------------------------------
-  // CONEXIÓN TELEMETRÍA VR
+  // CONEXIÓN TELEMETRÍA VR (MODO RECEPTOR REAL)
   // -------------------------------------------------------------------------
-  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'ExecutiveControl');
+  // isConnected nos dice si el Meta Quest está enviando señal.
+  // lastPacket contiene los datos reales de lo que hace el paciente en el juego.
+  const { isConnected, lastPacket } = useVrTelemetryBridge('receiver', patient?.id || 'PAC-8104', 'ExecutiveControl');
 
-  // MOTOR DE SIMULACIÓN Y GRÁFICAS EN TIEMPO REAL
+  // ACTUALIZACIÓN DE MÉTRICAS DESDE EL VISOR VR
+  useEffect(() => {
+    if (sessionActive && lastPacket) {
+      // Cuando el visor envía un paquete nuevo, actualizamos la pantalla del médico
+      if (lastPacket.reactionTimeMs !== undefined) setAvgReactionTimeMs(lastPacket.reactionTimeMs);
+      if (lastPacket.omissions !== undefined) setOmissionErrors(lastPacket.omissions);
+      if (lastPacket.commissions !== undefined) setCommissionErrors(lastPacket.commissions);
+      if (lastPacket.habituationIndex !== undefined) setFrontalEngagementPct(lastPacket.habituationIndex);
+      
+      // Si el VR manda "hits" directamente (dependiendo de tu código de Unity/Unreal):
+      if (lastPacket.hits !== undefined) {
+        setCorrectHits(lastPacket.hits);
+      }
+    }
+  }, [lastPacket, sessionActive]);
+
+  // MOTOR DE GRAFICADO EN TIEMPO REAL
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
 
     if (sessionActive) {
+      // Cada segundo, leemos los valores ACTUALES y pintamos un punto en la gráfica
       interval = setInterval(() => {
         const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
         setSessionDuration(prev => prev + 1);
-        
-        const sim = simRef.current;
 
-        // 1. SIMULADOR DE PACIENTE: Generar reacciones aleatorias
-        if (Math.random() > 0.3) { // 70% probabilidad de evento por segundo
-           const isGo = Math.random() > 0.3; // 70% Estímulo GO
-           const reacts = Math.random() > 0.15; // 85% el paciente reacciona
-           const reactMs = Math.floor(Math.random() * 300 + 200); // TR entre 200 y 500ms
-
-           if (isGo) {
-               if (reacts && reactMs <= taskDifficultyMs) {
-                   sim.hits++;
-                   sim.tr = reactMs;
-                   sim.frontal = Math.min(98, sim.frontal + 2); // Sube compromiso
-               } else {
-                   sim.omissions++;
-                   sim.frontal = Math.max(10, sim.frontal - 1); // Baja por inatención
-               }
-           } else {
-               if (reacts) {
-                   sim.commissions++; // Falla por impulsividad
-                   sim.frontal = Math.max(10, sim.frontal - 2); 
-               }
-           }
-        }
-
-        // 2. SINCRONIZAR A LA UI
-        setCorrectHits(sim.hits);
-        setOmissionErrors(sim.omissions);
-        setCommissionErrors(sim.commissions);
-        setAvgReactionTimeMs(sim.tr);
-        setFrontalEngagementPct(sim.frontal);
-
-        // 3. ACTUALIZAR GRÁFICA SVG
         setTelemetryHistory(prev => [
           ...prev,
           {
             timeLabel: timeStr.substring(3, 8),
-            primaryVal: sim.tr,
-            secondaryVal: Math.floor(sim.frontal)
+            primaryVal: avgReactionTimeMs,
+            secondaryVal: frontalEngagementPct
           }
         ]);
 
-        // 4. INTELIGENCIA ARTIFICIAL AUTO-PILOT
+        // Ajustes AI (opcionales) en base a datos reales del VR
         if (aiAutoPilot) {
-           if (sim.hits > 0 && sim.hits % 6 === 0) {
-               setTaskDifficultyMs(prev => Math.max(300, prev - 40));
-               setBinauralBetaHz(prev => Math.min(25.0, prev + 0.4));
-               if (Math.random() > 0.5) {
-                   setAiLogs(prev => [
-                     `[${timeStr}] 🧠 NEUROPLASTICIDAD: Aumento de foco atencional. Latencia exigida: ${taskDifficultyMs}ms | Estimulación Beta: ${binauralBetaHz.toFixed(1)}Hz.`,
-                     ...prev.slice(0, 8)
-                   ]);
-               }
-           }
-           if (sim.commissions > 0 && sim.commissions % 3 === 0) {
-               setTaskDifficultyMs(prev => Math.min(1200, prev + 80));
-               setBinauralBetaHz(prev => Math.max(12.0, prev - 0.4));
-               if (Math.random() > 0.5) {
-                   setAiLogs(prev => [
-                     `[${timeStr}] ⚠️ IMPULSIVIDAD MOTOR: Adaptando tiempo de respuesta a ${taskDifficultyMs}ms para prevenir claudicación frontal.`,
-                     ...prev.slice(0, 8)
-                   ]);
+           if (commissionErrors > 3) {
+               setTaskDifficultyMs(prev => Math.min(1200, prev + 50));
+               if (Math.random() > 0.8) {
+                   setAiLogs(prev => [`[${timeStr}] ⚠️ IA: Impulsividad alta detectada. Relajando tiempo de reacción exigido a ${taskDifficultyMs}ms.`, ...prev.slice(0, 8)]);
                }
            }
         }
-
-        // 5. TRANSMITIR AL SERVIDOR
-        transmit({
-          reactionTimeMs: sim.tr,
-          omissions: sim.omissions,
-          commissions: sim.commissions,
-          habituationIndex: Math.floor(sim.frontal)
-        });
-
       }, 1000);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [sessionActive, aiAutoPilot, taskDifficultyMs, binauralBetaHz]);
+  }, [sessionActive, avgReactionTimeMs, frontalEngagementPct, aiAutoPilot, commissionErrors, taskDifficultyMs]);
 
   const handleStartSession = () => {
     setSessionActive(true);
@@ -151,17 +109,12 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     setShowResults(false);
     setIsFullscreen(false);
     setTelemetryHistory([]);
-    
-    // Resetear simulador
-    simRef.current = { hits: 0, omissions: 0, commissions: 0, tr: 260, frontal: 25 };
     setCorrectHits(0);
     setOmissionErrors(0);
     setCommissionErrors(0);
-    setAvgReactionTimeMs(260);
-    setFrontalEngagementPct(25);
-    setTaskDifficultyMs(800);
-    
-    setAiLogs([`[PROFESIONAL] Iniciando monitoreo clínico. Paradigma: ${getTaskTitle(executiveTask)}.`]);
+    setAvgReactionTimeMs(0);
+    setFrontalEngagementPct(0);
+    setAiLogs([`[PROFESIONAL] Escuchando telemetría del visor VR. Esperando acciones del paciente...`]);
   };
 
   const handleEndSession = async () => {
@@ -320,7 +273,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
              <div className="flex items-center justify-between text-xs border-b border-slate-800/80 pb-2">
-              <span className="font-bold text-slate-200"><Activity className="w-4 h-4 inline mr-2 text-cyan-400" />Curvas SVG</span>
+              <span className="font-bold text-slate-200"><Activity className="w-4 h-4 inline mr-2 text-cyan-400" />Curvas SVG Reales</span>
               <div className="flex gap-4 font-mono"><span className="text-cyan-300"><span className="text-cyan-400">■</span> TR (ms)</span><span className="text-emerald-400"><span className="text-emerald-400">■</span> Frontal (%)</span></div>
             </div>
             <div className={`w-full bg-slate-950 rounded-xl border border-slate-800 p-2 ${isFullscreen ? 'h-64' : 'h-48'}`}>
@@ -335,7 +288,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           </div>
 
           <div className="flex justify-between border-t border-slate-800 pt-4">
-            <button onClick={handleStartSession} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition"><RotateCcw className="w-4 h-4 text-cyan-400"/> Re-Iniciar</button>
+            <button onClick={handleStartSession} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition"><RotateCcw className="w-4 h-4 text-cyan-400"/> Nueva Sesión</button>
             <button onClick={handlePrintIndividualReport} className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg transition"><Printer className="w-4 h-4"/> Exportar PDF</button>
           </div>
         </div>
@@ -350,7 +303,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       {/* HEADER */}
       <div className="h-16 border-b border-sky-900/50 bg-slate-900 flex items-center justify-between px-6 rounded-2xl shadow-xl shrink-0">
         <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-xl shadow-lg"><Cpu className="w-5 h-5 animate-pulse text-white" /></div>
+          <div className="p-2.5 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-xl shadow-lg"><Cpu className="w-5 h-5 text-white" /></div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100">Consola del Profesional • Función Ejecutiva</h1>
             <p className="text-[10px] text-sky-300 font-mono">Paciente: {patient.id || 'PAC-8104'}</p>
@@ -358,7 +311,11 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={handlePrintIndividualReport} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-lg transition"><Printer className="w-4 h-4" /> Imprimir Reporte</button>
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-amber-950/80 border-amber-500/50 text-amber-300'}`}>
+            {isConnected ? <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> : <WifiOff className="w-3.5 h-3.5 text-amber-400" />}
+            <span>{isConnected ? 'VR Conectado' : 'Sin Señal VR'}</span>
+          </div>
+          <button onClick={handlePrintIndividualReport} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-lg transition"><Printer className="w-4 h-4" /> Reporte</button>
           <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-300 bg-slate-800 rounded-xl hover:bg-slate-700">{isFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-300"/> : <Maximize2 className="w-4 h-4 text-cyan-300"/>}</button>
           <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300"><X className="w-5 h-5" /></button>
         </div>
@@ -379,7 +336,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-3 mt-4">
               <div className="flex justify-between text-[10px] font-bold"><span className="text-slate-400">Compromiso Frontal:</span><span className="text-sky-300">{Math.floor(frontalEngagementPct)}%</span></div>
               <div className="h-2 w-full bg-slate-900 rounded-full"><div style={{ width: `${frontalEngagementPct}%` }} className="h-full bg-sky-500 transition-all"/></div>
-              <div className="flex justify-between text-[10px] font-bold mt-2"><span className="text-slate-400">Latencia Exigida:</span><span className="text-purple-400">{taskDifficultyMs} ms</span></div>
+              <div className="flex justify-between text-[10px] font-bold mt-2"><span className="text-slate-400">Latencia Exigida VR:</span><span className="text-purple-400">{taskDifficultyMs} ms</span></div>
             </div>
           </div>
         </div>
@@ -387,14 +344,14 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         {/* CENTRO (GRÁFICAS EN VIVO) */}
         <div className="col-span-12 lg:col-span-6 bg-[#020617] rounded-2xl border-2 border-slate-800 flex flex-col justify-between p-4 shadow-2xl">
           <div className="flex justify-between border-b border-slate-800 pb-2">
-            <div className="bg-black/70 px-3 py-1.5 rounded-full border border-sky-500/30 text-xs font-mono text-sky-100"><Activity className={`w-3.5 h-3.5 inline mr-2 ${sessionActive ? 'animate-pulse text-sky-400' : ''}`}/> Telemetría en Vivo</div>
+            <div className="bg-black/70 px-3 py-1.5 rounded-full border border-sky-500/30 text-xs font-mono text-sky-100"><Activity className={`w-3.5 h-3.5 inline mr-2 ${sessionActive ? 'animate-pulse text-sky-400' : ''}`}/> Señal VR en Vivo</div>
             <div className="text-xs font-mono text-slate-400 bg-slate-900 px-3 py-1 rounded-lg"><Clock className="w-3.5 h-3.5 inline mr-1 text-sky-400"/> {formatTime(sessionDuration)}</div>
           </div>
 
           <div className="w-full my-auto space-y-3">
             <div className="flex justify-between text-xs font-mono">
-              <span className="text-cyan-300"><span className="text-cyan-400">■</span> TR: {Math.floor(avgReactionTimeMs)} ms</span>
-              <span className="text-emerald-400"><span className="text-emerald-400">■</span> Frontal: {Math.floor(frontalEngagementPct)}%</span>
+              <span className="text-cyan-300"><span className="text-cyan-400">■</span> TR Real: {Math.floor(avgReactionTimeMs)} ms</span>
+              <span className="text-emerald-400"><span className="text-emerald-400">■</span> Frontal Real: {Math.floor(frontalEngagementPct)}%</span>
             </div>
             <div className="w-full h-56 bg-slate-950 rounded-xl border border-slate-800 p-3">
               {telemetryHistory.length > 1 ? (
@@ -405,7 +362,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
                   <polyline fill="none" stroke="#22d3ee" strokeWidth="3" points={pointsPrimary} />
                 </svg>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-600 text-xs font-mono italic">Presione 'Iniciar Monitoreo' para generar la gráfica...</div>
+                <div className="h-full flex items-center justify-center text-slate-600 text-xs font-mono italic">Presione 'Iniciar Grabación' y juegue en el VR...</div>
               )}
             </div>
           </div>
@@ -423,13 +380,13 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           <div className="space-y-4 flex-1 flex flex-col">
             <h2 className="text-xs font-bold text-slate-400 uppercase border-b border-slate-800 pb-2"><Zap className="w-4 h-4 inline mr-2 text-sky-400"/> AI Coach</h2>
             <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] overflow-y-auto max-h-[300px] space-y-2">
-              {aiLogs.length > 0 ? aiLogs.map((log, i) => <div key={i} className={`p-2 rounded border ${i===0 ? 'text-sky-300 border-sky-900/50' : 'text-slate-400 border-slate-800/60'}`}>{log}</div>) : <div className="text-slate-600 text-center mt-4">Esperando monitoreo...</div>}
+              {aiLogs.length > 0 ? aiLogs.map((log, i) => <div key={i} className={`p-2 rounded border ${i===0 ? 'text-sky-300 border-sky-900/50' : 'text-slate-400 border-slate-800/60'}`}>{log}</div>) : <div className="text-slate-600 text-center mt-4">Esperando datos reales del casco...</div>}
             </div>
           </div>
 
           <div className="pt-4 space-y-2">
             {!sessionActive ? (
-              <button onClick={handleStartSession} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 text-white font-bold py-3 rounded-xl shadow-lg transition"><Play className="w-4 h-4 fill-current"/> Iniciar Monitoreo Médico</button>
+              <button onClick={handleStartSession} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 text-white font-bold py-3 rounded-xl shadow-lg transition"><Play className="w-4 h-4 fill-current"/> Iniciar Grabación Médica</button>
             ) : (
               <button onClick={handleEndSession} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition"><Square className="w-4 h-4 fill-current"/> Concluir Sesión VR</button>
             )}
