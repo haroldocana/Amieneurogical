@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Video, Activity, Brain, X, 
   Snowflake, ThermometerSnowflake, Zap, Activity as HeartPulse, 
-  Target, Fingerprint, BatteryCharging, AudioWaveform
+  Target, AudioWaveform
 } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
@@ -33,6 +34,23 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
   
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // -------------------------------------------------------------------------
+  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'AnalgesiaVR');
+
+  // Transmisión en tiempo real al servidor en cada fluctuación fisiológica
+  useEffect(() => {
+    if (sessionActive && !safetyTriggered) {
+      transmit({
+        gsr: Number(gsr.toFixed(2)),
+        hrv: Math.floor(hrv),
+        stressLevel: Number(currentPainLevel.toFixed(1)), // Usamos stressLevel para enviar el dolor EVA
+        habituationIndex: Math.floor(immersionLoadPct)
+      });
+    }
+  }, [gsr, hrv, currentPainLevel, immersionLoadPct, sessionActive, safetyTriggered]);
 
   // Motor de Bloqueo Nociceptivo (AI Closed-Loop Regulator)
   useEffect(() => {
@@ -103,6 +121,52 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
     setSafetyTriggered(true);
     setImmersionLoadPct(0);
     setAiLogs(prev => [`[EMERGENCIA] Desconexión manual. Suspendiendo bloqueo nociceptivo visual.`, ...prev]);
+  };
+
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setSessionActive(false);
+    setImmersionLoadPct(0);
+    setAiLogs(prev => [`[SISTEMA] Sesión completada. Consolidando reporte de alivio del dolor...`, ...prev]);
+
+    // Cálculo del porcentaje de alivio clínico
+    const painReductionPct = baselinePain > 0 
+      ? Math.max(0, ((baselinePain - currentPainLevel) / baselinePain) * 100) 
+      : 0;
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: 'AnalgesiaVR',
+        durationSeconds: 300, // Puede parametrizarse
+        metrics: {
+          avgHrv: Math.floor(hrv),
+          avgGsr: Number(gsr.toFixed(2)),
+          omissions: 0,
+          commissions: 0,
+          frontalEngagementPct: Math.floor(painReductionPct), // Usado para guardar el % de alivio
+          binauralBetaHz: Number(deltaHz.toFixed(1)) // Frecuencia final de salida
+        },
+        aiLogs,
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR de Analgesia guardado. Reducción del dolor: ${painReductionPct.toFixed(1)}%`);
+      
+      // Cerrar la ventana del visor
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
   };
 
   const getConditionName = (cond: PainCondition) => {
@@ -382,7 +446,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
               </button>
             ) : (
               <button
-                onClick={() => setSessionActive(false)}
+                onClick={handleEndSession} // <-- Actualizado para guardar y enviar telemetría final
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
