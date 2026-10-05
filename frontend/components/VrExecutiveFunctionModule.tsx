@@ -1,9 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ShieldAlert, Play, Square, Brain, X, 
-  Zap, Target, Crosshair, Cpu, Activity, 
-  RotateCcw, CheckCircle2, ShieldCheck, Maximize2, 
-  Minimize2, Printer, Clock, Wifi, WifiOff
+  ShieldAlert, 
+  Play, 
+  Square, 
+  Brain, 
+  X, 
+  Zap, 
+  Target, 
+  Crosshair, 
+  Cpu, 
+  Activity, 
+  RotateCcw, 
+  CheckCircle2, 
+  ShieldCheck, 
+  Maximize2, 
+  Minimize2, 
+  Printer, 
+  Clock, 
+  Wifi, 
+  WifiOff 
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -56,7 +71,6 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     if (sessionActive && lastPacket) {
       const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
 
-      // Actualizar variables únicamente con los datos enviados por la app en Unity/Unreal/WebXR
       if (lastPacket.reactionTimeMs !== undefined) setAvgReactionTimeMs(lastPacket.reactionTimeMs);
       if (lastPacket.omissions !== undefined) setOmissionErrors(lastPacket.omissions);
       if (lastPacket.commissions !== undefined) setCommissionErrors(lastPacket.commissions);
@@ -238,23 +252,51 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         <div className={`bg-slate-950 border border-slate-800 text-white space-y-6 transition-all duration-300 shadow-2xl font-sans ${isFullscreen ? 'fixed inset-0 z-[100] w-screen h-screen p-6 rounded-none' : 'max-w-5xl w-full mx-auto p-6 rounded-2xl'}`}>
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-tr from-sky-600 to-blue-600 rounded-2xl text-white shadow-lg"><ShieldCheck className="w-6 h-6" /></div>
+              <div className="p-3 bg-gradient-to-tr from-sky-600 to-blue-600 rounded-2xl text-white shadow-lg">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
               <div>
-                <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">Función Ejecutiva VR <span className="px-2.5 py-0.5 text-[10px] font-mono bg-sky-950 text-sky-300 rounded-full border border-sky-500/40">DATOS REALES</span></h2>
+                <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">
+                  Función Ejecutiva VR 
+                  <span className="px-2.5 py-0.5 text-[10px] font-mono bg-sky-950 text-sky-300 rounded-full border border-sky-500/40">DATOS REALES</span>
+                </h2>
                 <p className="text-xs text-slate-400">Paciente: <strong className="text-slate-200">{patientId}</strong></p>
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800"><Maximize2 className="w-5 h-5 text-cyan-300" /></button>
-              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800"><X className="w-5 h-5" /></button>
+              <button 
+                onClick={() => setIsFullscreen(!isFullscreen)} 
+                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-5 h-5 text-cyan-300" />
+                ) : (
+                  <Maximize2 className="w-5 h-5 text-cyan-300" />
+                )}
+              </button>
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800">
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Aciertos</span><div className="text-2xl font-black text-emerald-400">{correctHits}</div></div>
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Omisiones</span><div className="text-2xl font-black text-amber-400">{omissionErrors}</div></div>
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Comisiones</span><div className="text-2xl font-black text-rose-400">{commissionErrors}</div></div>
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl"><span className="text-[10px] text-slate-400 uppercase">Tiempo Reacción TR</span><div className="text-2xl font-black text-cyan-300">{Math.floor(avgReactionTimeMs)} ms</div></div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <span className="text-[10px] text-slate-400 uppercase">Aciertos</span>
+              <div className="text-2xl font-black text-emerald-400">{correctHits}</div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <span className="text-[10px] text-slate-400 uppercase">Omisiones</span>
+              <div className="text-2xl font-black text-amber-400">{omissionErrors}</div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <span className="text-[10px] text-slate-400 uppercase">Comisiones</span>
+              <div className="text-2xl font-black text-rose-400">{commissionErrors}</div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <span className="text-[10px] text-slate-400 uppercase">Tiempo Reacción TR</span>
+              <div className="text-2xl font-black text-cyan-300">{Math.floor(avgReactionTimeMs)} ms</div>
+            </div>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -269,8 +311,18 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           </div>
 
           <div className="flex justify-between border-t border-slate-800 pt-4">
-            <button onClick={handleStartSession} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold"><RotateCcw className="w-4 h-4 text-cyan-400"/> Nueva Sesión</button>
-            <button onClick={handlePrintIndividualReport} className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg"><Printer className="w-4 h-4"/> Exportar Reporte PDF</button>
+            <button 
+              onClick={handleStartSession} 
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold"
+            >
+              <RotateCcw className="w-4 h-4 text-cyan-400"/> Nueva Sesión
+            </button>
+            <button 
+              onClick={handlePrintIndividualReport} 
+              className="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg"
+            >
+              <Printer className="w-4 h-4"/> Exportar Reporte PDF
+            </button>
           </div>
         </div>
       </div>
@@ -284,7 +336,9 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       {/* HEADER */}
       <div className="h-16 border-b border-sky-900/50 bg-slate-900 flex items-center justify-between px-6 rounded-2xl shadow-xl shrink-0">
         <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-xl"><Cpu className="w-5 h-5 text-white" /></div>
+          <div className="p-2.5 bg-gradient-to-tr from-sky-500 to-blue-700 rounded-xl">
+            <Cpu className="w-5 h-5 text-white" />
+          </div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100">Consola del Profesional • Función Ejecutiva</h1>
             <p className="text-[10px] text-sky-300 font-mono">Paciente: {patientId}</p>
@@ -296,13 +350,37 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 ${
             isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
           }`}>
-            {isConnected ? <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> : <WifiOff className="w-3.5 h-3.5 text-rose-400" />}
+            {isConnected ? (
+              <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            ) : (
+              <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+            )}
             <span>{isConnected ? 'VR Conectado (En Vivo)' : 'Sin Señal VR'}</span>
           </div>
 
-          <button onClick={handlePrintIndividualReport} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-bold"><Printer className="w-4 h-4" /> Reporte</button>
-          <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-300 bg-slate-800 rounded-xl hover:bg-slate-700">{isFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-300"/> : <Maximize2 className="w-4 h-4 text-cyan-300"/></button>
-          <button onClick={onClose} className="p-2 bg-slate-800 rounded-xl"><X className="w-5 h-5" /></button>
+          <button 
+            onClick={handlePrintIndividualReport} 
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-bold cursor-pointer"
+          >
+            <Printer className="w-4 h-4" /> 
+            <span>Reporte</span>
+          </button>
+          <button 
+            onClick={() => setIsFullscreen(!isFullscreen)} 
+            className="p-2 text-slate-300 bg-slate-800 rounded-xl hover:bg-slate-700 cursor-pointer"
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4 text-cyan-300" />
+            ) : (
+              <Maximize2 className="w-4 h-4 text-cyan-300" />
+            )}
+          </button>
+          <button 
+            onClick={onClose} 
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -312,17 +390,32 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         {/* IZQUIERDA */}
         <div className="col-span-12 lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
           <div className="space-y-4">
-            <h2 className="text-xs font-bold text-slate-400 uppercase border-b border-slate-800 pb-2"><Crosshair className="w-4 h-4 inline mr-2 text-sky-400"/> Tarea Ejecutiva</h2>
-            <select disabled={sessionActive} value={executiveTask} onChange={(e) => setExecutiveTask(e.target.value as ExecutiveTask)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white">
+            <h2 className="text-xs font-bold text-slate-400 uppercase border-b border-slate-800 pb-2">
+              <Crosshair className="w-4 h-4 inline mr-2 text-sky-400"/> Tarea Ejecutiva
+            </h2>
+            <select 
+              disabled={sessionActive} 
+              value={executiveTask} 
+              onChange={(e) => setExecutiveTask(e.target.value as ExecutiveTask)} 
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+            >
               <option value="RESPONSE_INHIBITION">Inhibición de Respuesta (Go/No-Go)</option>
               <option value="SUSTAINED_ATTENTION">Atención Sostenida (Vigilancia)</option>
               <option value="WORKING_MEMORY_NBACK">Memoria de Trabajo Espacial</option>
             </select>
 
             <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-3 mt-4">
-              <div className="flex justify-between text-[10px] font-bold"><span className="text-slate-400">Compromiso Frontal:</span><span className="text-sky-300">{Math.floor(frontalEngagementPct)}%</span></div>
-              <div className="h-2 w-full bg-slate-900 rounded-full"><div style={{ width: `${frontalEngagementPct}%` }} className="h-full bg-sky-500 transition-all"/></div>
-              <div className="flex justify-between text-[10px] font-bold mt-2"><span className="text-slate-400">Dificultad Objetivo:</span><span className="text-purple-400">{taskDifficultyMs} ms</span></div>
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-slate-400">Compromiso Frontal:</span>
+                <span className="text-sky-300">{Math.floor(frontalEngagementPct)}%</span>
+              </div>
+              <div className="h-2 w-full bg-slate-900 rounded-full">
+                <div style={{ width: `${frontalEngagementPct}%` }} className="h-full bg-sky-500 transition-all"/>
+              </div>
+              <div className="flex justify-between text-[10px] font-bold mt-2">
+                <span className="text-slate-400">Dificultad Objetivo:</span>
+                <span className="text-purple-400">{taskDifficultyMs} ms</span>
+              </div>
             </div>
           </div>
         </div>
@@ -330,8 +423,12 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         {/* CENTRO (GRÁFICAS Y TELEMETRÍA EN VIVO) */}
         <div className="col-span-12 lg:col-span-6 bg-[#020617] rounded-2xl border-2 border-slate-800 flex flex-col justify-between p-4">
           <div className="flex justify-between border-b border-slate-800 pb-2">
-            <div className="bg-black/70 px-3 py-1.5 rounded-full border border-sky-500/30 text-xs font-mono text-sky-100"><Activity className={`w-3.5 h-3.5 inline mr-2 ${sessionActive ? 'animate-pulse text-sky-400' : ''}`}/> Telemetría Biométrica Reanimada</div>
-            <div className="text-xs font-mono text-slate-400"><Clock className="w-3.5 h-3.5 inline text-sky-400"/> {formatTime(sessionDuration)}</div>
+            <div className="bg-black/70 px-3 py-1.5 rounded-full border border-sky-500/30 text-xs font-mono text-sky-100">
+              <Activity className={`w-3.5 h-3.5 inline mr-2 ${sessionActive ? 'animate-pulse text-sky-400' : ''}`}/> Telemetría Biométrica
+            </div>
+            <div className="text-xs font-mono text-slate-400">
+              <Clock className="w-3.5 h-3.5 inline text-sky-400"/> {formatTime(sessionDuration)}
+            </div>
           </div>
 
           <div className="w-full my-auto space-y-3">
@@ -356,27 +453,59 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           </div>
 
           <div className="bg-slate-950/80 border border-sky-900/50 rounded-xl p-3 grid grid-cols-4 gap-2 text-center font-mono">
-            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase text-slate-400 block">Aciertos</span><div className="text-xl font-bold text-emerald-400">{correctHits}</div></div>
-            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase text-slate-400 block">Omisiones</span><div className="text-xl font-bold text-amber-400">{omissionErrors}</div></div>
-            <div className="border-r border-slate-800"><span className="text-[8.5px] uppercase text-slate-400 block">Comisiones</span><div className="text-xl font-bold text-rose-400">{commissionErrors}</div></div>
-            <div><span className="text-[8.5px] uppercase text-slate-400 block">TR Promedio</span><div className="text-xl font-bold text-cyan-300">{Math.floor(avgReactionTimeMs)}ms</div></div>
+            <div className="border-r border-slate-800">
+              <span className="text-[8.5px] uppercase text-slate-400 block">Aciertos</span>
+              <div className="text-xl font-bold text-emerald-400">{correctHits}</div>
+            </div>
+            <div className="border-r border-slate-800">
+              <span className="text-[8.5px] uppercase text-slate-400 block">Omisiones</span>
+              <div className="text-xl font-bold text-amber-400">{omissionErrors}</div>
+            </div>
+            <div className="border-r border-slate-800">
+              <span className="text-[8.5px] uppercase text-slate-400 block">Comisiones</span>
+              <div className="text-xl font-bold text-rose-400">{commissionErrors}</div>
+            </div>
+            <div>
+              <span className="text-[8.5px] uppercase text-slate-400 block">TR Promedio</span>
+              <div className="text-xl font-bold text-cyan-300">{Math.floor(avgReactionTimeMs)}ms</div>
+            </div>
           </div>
         </div>
 
         {/* DERECHA */}
         <div className="col-span-12 lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
           <div className="space-y-4 flex-1 flex flex-col">
-            <h2 className="text-xs font-bold text-slate-400 uppercase border-b border-slate-800 pb-2"><Zap className="w-4 h-4 inline mr-2 text-sky-400"/> AI Coach</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase border-b border-slate-800 pb-2">
+              <Zap className="w-4 h-4 inline mr-2 text-sky-400"/> AI Coach
+            </h2>
             <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] overflow-y-auto max-h-[300px] space-y-2">
-              {aiLogs.length > 0 ? aiLogs.map((log, i) => <div key={i} className={`p-2 rounded border ${i===0 ? 'text-sky-300 border-sky-900/50' : 'text-slate-400 border-slate-800/60'}`}>{log}</div>) : <div className="text-slate-600 text-center mt-4">Sin registro de eventos.</div>}
+              {aiLogs.length > 0 ? (
+                aiLogs.map((log, i) => (
+                  <div key={i} className={`p-2 rounded border ${i === 0 ? 'text-sky-300 border-sky-900/50' : 'text-slate-400 border-slate-800/60'}`}>
+                    {log}
+                  </div>
+                ))
+              ) : (
+                <div className="text-slate-600 text-center mt-4">Sin registro de eventos.</div>
+              )}
             </div>
           </div>
 
           <div className="pt-4 space-y-2">
             {!sessionActive ? (
-              <button onClick={handleStartSession} className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-xl transition"><Play className="w-4 h-4 inline mr-2"/> Iniciar Monitoreo Real</button>
+              <button 
+                onClick={handleStartSession} 
+                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-xl transition cursor-pointer"
+              >
+                <Play className="w-4 h-4 inline mr-2"/> Iniciar Monitoreo Real
+              </button>
             ) : (
-              <button onClick={handleEndSession} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition"><Square className="w-4 h-4 inline mr-2"/> Concluir Sesión VR</button>
+              <button 
+                onClick={handleEndSession} 
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition cursor-pointer"
+              >
+                <Square className="w-4 h-4 inline mr-2"/> Concluir Sesión VR
+              </button>
             )}
           </div>
         </div>
