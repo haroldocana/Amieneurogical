@@ -172,6 +172,46 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad. Abortando estimulación cognitiva.`, ...prev]);
   };
 
+  // -------------------------------------------------------------------------
+  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
+  // -------------------------------------------------------------------------
+  const handleEndSession = async () => {
+    setSessionActive(false);
+    setTrialState('WAITING');
+    setTargetType(null);
+    setAiLogs(prev => [`[SISTEMA] Sesión completada. Consolidando reporte de función ejecutiva...`, ...prev]);
+
+    const sessionReport = {
+      patientId: patient?.id || 'PAC-8104',
+      sessionData: {
+        taskName: executiveTask,
+        durationSeconds: 300,
+        metrics: {
+          avgReactionTimeMs: Math.floor(avgReactionTimeMs),
+          omissions: omissionErrors,
+          commissions: commissionErrors,
+          frontalEngagementPct: Math.floor(frontalEngagementPct),
+          binauralBetaHz: Number(binauralBetaHz.toFixed(1))
+        },
+        aiLogs,
+        completedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      console.log(`Reporte VR Control Ejecutivo guardado para ${patient?.id || 'PAC-8104'}.`);
+
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error al guardar reporte VR:", error);
+    }
+  };
+
   const getTaskTitle = (task: ExecutiveTask) => {
     const map = {
       'RESPONSE_INHIBITION': 'Inhibición de Respuesta (TDAH / Impulsividad Motor)',
@@ -422,6 +462,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             </div>
           </div>
 
+          {/* Botones de Control de Sesión */}
           <div className="pt-3 border-t border-slate-800 space-y-2 shrink-0">
             {!sessionActive ? (
               <button
@@ -433,7 +474,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
               </button>
             ) : (
               <button
-                onClick={() => setSessionActive(false)}
+                onClick={handleEndSession} // <-- Actualizado para guardar el reporte en MongoDB y cerrar
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
