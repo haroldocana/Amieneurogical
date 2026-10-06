@@ -4,7 +4,8 @@ import { PatientRecord } from '../types';
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
 import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
 import { VrExposureTherapyModule } from './VrExposureTherapyModule';
-import { VrSocialCognitionModule } from './VrSocialCognitionModule'; // <-- NUEVA IMPORTACIÓN
+import { VrSocialCognitionModule } from './VrSocialCognitionModule';
+import { VrDepressionModule } from './VrDepressionModule'; // <-- NUEVA IMPORTACIÓN (TDM)
 
 interface Props {
   patient: PatientRecord;
@@ -30,7 +31,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Pupilometría, contacto visual y tolerancia a sobrecarga sensorial.',
       icon: <Eye className="w-6 h-6 text-indigo-400" />,
       color: 'border-indigo-500/30 bg-indigo-900/20 hover:bg-indigo-900/40',
-      ready: true // <-- ¡AHORA ESTÁ ACTIVO EL DE TEA!
+      ready: true
     },
     {
       id: 'NEURO_HYPNOSIS',
@@ -46,7 +47,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Latencia biomotora, aplanamiento afectivo y retardo psicomotor.',
       icon: <Activity className="w-6 h-6 text-slate-400" />,
       color: 'border-slate-500/30 bg-slate-900/20 hover:bg-slate-900/40',
-      ready: false
+      ready: true // <-- ¡AHORA ESTÁ ACTIVO EL DE DEPRESIÓN!
     },
     {
       id: 'TAG_ANXIETY',
@@ -54,7 +55,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Biofeedback GSR/HRV, reactividad amigdalina y exposición VRET.',
       icon: <HeartPulse className="w-6 h-6 text-rose-400" />,
       color: 'border-rose-500/30 bg-rose-900/20 hover:bg-rose-900/40',
-      ready: true
+      ready: true 
     },
     {
       id: 'NEURO_DEGEN',
@@ -72,7 +73,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
   }
 
   if (activeModule === 'TEA_SOCIAL') {
-    return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- ENRUTADOR AÑADIDO
+    return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />;
   }
 
   if (activeModule === 'NEURO_HYPNOSIS') {
@@ -81,6 +82,10 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
 
   if (activeModule === 'TAG_ANXIETY') {
     return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
+  }
+
+  if (activeModule === 'TDM_DEPRESSION') {
+    return <VrDepressionModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- ENRUTADOR AÑADIDO
   }
 
   // Placeholder para los módulos que construiremos después
