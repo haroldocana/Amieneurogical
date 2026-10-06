@@ -3,7 +3,7 @@ import { PatientRecord, VrTelemetryData } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { 
   ShieldAlert, Activity, Brain, Eye, HeartPulse, FileText, 
-  Download, Zap, UserCheck, AlertTriangle, Scale, Lock, Info, CheckCircle2, X
+  Download, Zap, UserCheck, AlertTriangle, Scale, Lock, Info, CheckCircle2, X, RefreshCw
 } from 'lucide-react';
 
 interface Props {
@@ -107,7 +107,7 @@ const CLUSTER_B_PHENOTYPES: PhenotypeProfile[] = [
   }
 ];
 
-export const VrClusterBModule: React.FC<Props> = ({ patient, onClose }) => {
+export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
   const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'CLUSTER_B_FORENSIC');
 
