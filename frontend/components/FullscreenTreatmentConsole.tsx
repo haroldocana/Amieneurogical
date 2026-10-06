@@ -1,117 +1,201 @@
 import React, { useState, useEffect } from 'react';
-import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
-import { X, Play, Pause, RotateCcw, Activity, Glasses } from 'lucide-react';
+import { PatientRecord } from '../types';
+import { X, Play, Square, Activity, Glasses, ArrowUpRight, ArrowDownRight, ShieldAlert } from 'lucide-react';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient?: PatientRecord;
   onClose: () => void;
-  onUpdatePatientVrData: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose, onUpdatePatientVrData }) => {
+export const VrExposureTherapyModule: React.FC<Props> = ({ patient, onClose }) => {
+  const patientId = patient?.id || 'PAC-8104';
+  
+  // Conexión real al visor VR
+  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'TAG_ANXIETY');
+
   const [isRunning, setIsRunning] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [exposureLevel, setExposureLevel] = useState(1); // Nivel de intensidad de la fobia (1 a 5)
 
-  // 🛡️ Fallbacks defensivos para datos de paciente
-  const safePatientId = patient?.id || 'PAC-8104';
-  const safePatientName = patient?.patientNameAnonymized || safePatientId;
+  // Telemetría en vivo desde el visor (o simulada por el Bridge si no hay hardware)
+  const hrv = liveData?.metrics?.hrvRmssdMs || 42;
+  const gsr = liveData?.metrics?.gsrMicroSiemens || 2.4;
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (isRunning) {
       interval = setInterval(() => setTimer(prev => prev + 1), 1000);
-    } else {
-      if (interval) clearInterval(interval);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [isRunning]);
 
-  const handleFinish = () => {
+  const handleStart = () => {
+    setIsRunning(true);
+    syncSession();
+    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'TAG_ANXIETY' });
+    transmit({ type: 'START_EXPOSURE', level: exposureLevel });
+  };
+
+  const handleLevelChange = (newLevel: number) => {
+    setExposureLevel(newLevel);
+    transmit({ type: 'UPDATE_EXPOSURE_LEVEL', level: newLevel });
+  };
+
+  const handleEmergencyStop = () => {
     setIsRunning(false);
-    const telemetry: VrTelemetryData = {
-      sessionId: `VR-TRT-${Math.floor(1000 + Math.random() * 9000)}`,
-      timestamp: new Date().toISOString(),
-      gsrMicroSiemens: [1.5, 3.2, 2.8, 1.9, 1.4],
-      hrvRmssdMs: [40, 32, 38, 45, 48],
-      habituationIndexH: 2.5,
-      exposureDurationSec: timer
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' }); // Saca al paciente de la fobia inmediatamente
+  };
+
+  const handleFinish = async () => {
+    setIsRunning(false);
+    transmit({ type: 'STOP_TEST' });
+
+    const sessionReport = {
+      patientId: patientId,
+      sessionData: {
+        taskName: 'ExposureTherapy_TAG',
+        durationSeconds: timer,
+        metrics: {
+          avgHrv: hrv,
+          avgGsr: gsr,
+          frontalEngagementPct: 0,
+          binauralBetaHz: 0
+        },
+        aiLogs: [
+          `Terapia de Exposición VR completada. Tiempo: ${timer}s. Nivel máximo de exposición: ${exposureLevel}/5.`,
+          `Índice de Habituación: ${gsr < 3.5 ? 'Óptimo (Desensibilización lograda)' : 'Elevado (Requiere más sesiones)'}`
+        ]
+      }
     };
-    const report: VrTherapyReport = {
-      sessionGuid: telemetry.sessionId,
-      exposureType: 'Exposición VR Inmersiva a Pantalla Completa',
-      sympatheticToneIndex: 62,
-      vagalReactivityIndex: 45,
-      habituationRate: 'Óptima',
-      synthesizedClinicalSummary: `Sesión de tratamiento completada en ${timer} segundos para el paciente ${safePatientName} (${safePatientId}).`
-    };
-    onUpdatePatientVrData(telemetry, report);
-    onClose();
+
+    try {
+      await fetch('/api/vr/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionReport)
+      });
+      alert('✅ Terapia de exposición guardada en el expediente.');
+      onClose();
+    } catch (error) {
+      console.error("Error al guardar:", error);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col p-6 overflow-y-auto">
+      {/* HEADER */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-cyan-600 rounded-xl text-white">
+          <div className="p-2 bg-rose-900/50 border border-rose-500/30 rounded-xl text-rose-400">
             <Glasses className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">Consola de Tratamiento VR Inmersivo</h2>
+            <h2 className="text-lg font-bold text-white">Consola de Exposición VR (VRET) • TAG & Fobias</h2>
             <p className="text-xs text-slate-400">
-              Paciente: <span className="text-slate-200 font-semibold">{safePatientName}</span> ({safePatientId})
+              Paciente ID: <span className="text-rose-300 font-semibold">{patientId}</span>
             </p>
           </div>
         </div>
-        <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300">
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex gap-3">
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          </div>
+          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* PANEL PRINCIPAL: Control de Entorno */}
         <div className="md:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
           <div>
-            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider block mb-2">Simulación de Escenario VR</span>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">Simulación de Escenario VR</span>
+              <span className="text-xs font-mono font-bold text-slate-400">T: {timer}s</span>
+            </div>
+            
             <div className="h-64 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center space-y-2">
-                <Activity className={`w-12 h-12 text-cyan-400 mx-auto ${isRunning ? 'animate-pulse' : ''}`} />
+              <div className="text-center space-y-4 z-10 relative">
+                <Glasses className={`w-12 h-12 mx-auto ${isRunning ? 'text-rose-500 animate-pulse' : 'text-slate-600'}`} />
                 <p className="text-sm font-semibold text-slate-300">
-                  {isRunning ? 'Tratamiento en Ejecución en Visor VR...' : 'Consola en Espera'}
+                  {isRunning ? `Exposición Activa - Nivel ${exposureLevel}` : 'Consola en Espera'}
                 </p>
-                <p className="text-xs font-mono text-cyan-400 font-bold">Tiempo: {timer}s</p>
               </div>
+              {/* Efecto visual de intensidad en la consola */}
+              {isRunning && <div className="absolute inset-0 bg-rose-500/10" style={{ opacity: exposureLevel * 0.2 }}></div>}
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 mt-6">
-            <button
-              onClick={() => setIsRunning(!isRunning)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition ${
-                isRunning ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'
-              }`}
-            >
-              {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              <span>{isRunning ? 'Pausar' : 'Iniciar Sesión'}</span>
-            </button>
-            <button
-              onClick={handleFinish}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Finalizar y Guardar</span>
-            </button>
+          {/* Controles de Intensidad */}
+          {isRunning && (
+            <div className="mt-4 p-4 bg-slate-950 rounded-xl border border-slate-800">
+              <span className="text-xs font-bold text-slate-400 block mb-3">Control de Estímulo Fóbico (Tiempo Real):</span>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map(level => (
+                  <button
+                    key={level}
+                    onClick={() => handleLevelChange(level)}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${exposureLevel === level ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  >
+                    Nivel {level}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Botonera de Acción */}
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-800">
+             <button
+                onClick={handleEmergencyStop}
+                disabled={!isRunning}
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 border border-slate-700 rounded-xl text-xs font-bold transition disabled:opacity-50"
+              >
+                <ShieldAlert className="w-4 h-4" /> Aterrizaje de Emergencia
+              </button>
+
+            <div className="flex gap-3">
+              {!isRunning ? (
+                <button onClick={handleStart} className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-rose-600/20">
+                  <Play className="w-4 h-4" /> Iniciar Exposición
+                </button>
+              ) : (
+                <button onClick={handleFinish} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20">
+                  <Square className="w-4 h-4" /> Finalizar y Evaluar
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <span className="text-xs text-slate-400 font-semibold block mb-1">Tono Vagal / HRV</span>
-            <span className="text-2xl font-bold text-emerald-400">42 ms</span>
+        {/* PANEL LATERAL: Telemetría */}
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col justify-center">
+            <span className="text-xs text-slate-400 font-bold uppercase block mb-1 flex items-center gap-1">
+               <HeartPulse className="w-4 h-4 text-emerald-400" /> Tono Vagal (Relajación)
+            </span>
+            <div className="flex items-end gap-2">
+              <span className="text-4xl font-black text-emerald-400">{hrv}</span>
+              <span className="text-sm text-slate-500 font-bold mb-1">ms</span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">Valores altos indican recuperación parasimpática ante la fobia.</p>
           </div>
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <span className="text-xs text-slate-400 font-semibold block mb-1">Conductancia Cutánea (GSR)</span>
-            <span className="text-2xl font-bold text-cyan-400">2.4 µS</span>
+
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col justify-center">
+            <span className="text-xs text-slate-400 font-bold uppercase block mb-1 flex items-center gap-1">
+               <Activity className="w-4 h-4 text-amber-400" /> Sudoración (Estrés - GSR)
+            </span>
+            <div className="flex items-end gap-2">
+              <span className="text-4xl font-black text-amber-400">{gsr}</span>
+              <span className="text-sm text-slate-500 font-bold mb-1">µS</span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">Valores altos indican picos de ansiedad (lucha o huida).</p>
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-xs text-slate-400 font-mono">
+            <strong>IA Habituation Index:</strong> Calculando tasa de adaptación en tiempo real según cruce GSR/HRV...
           </div>
         </div>
       </div>
