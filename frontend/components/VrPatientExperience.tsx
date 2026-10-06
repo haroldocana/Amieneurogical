@@ -15,7 +15,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   const [sessionActive, setSessionActive] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [stimulus, setStimulus] = useState<StimulusType>('NONE');
-  const [flashFeedback, setFlashFeedback] = useState(false); // Para el destello del gatillo
+  const [flashFeedback, setFlashFeedback] = useState(false);
   
   const stats = useRef({ hits: 0, omissions: 0, commissions: 0, lastReaction: 0 });
   const showTimeRef = useRef<number>(0);
@@ -32,11 +32,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     setStimulus('NONE');
     clearActiveTimeout();
     
-    // Intervalo aleatorio entre 1 y 2.5 segundos (Estándar Go/No-Go)
     const delay = Math.random() * 1500 + 1000;
     
     timeoutRef.current = setTimeout(() => {
-      const isGo = Math.random() > 0.25; // 75% Probabilidad Verde
+      const isGo = Math.random() > 0.25;
       setStimulus(isGo ? 'GO' : 'NOGO');
       showTimeRef.current = Date.now();
 
@@ -45,7 +44,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
           stats.current.omissions++;
           sendTelemetry(0, Math.max(10, 50 - stats.current.omissions));
           scheduleNextStimulus();
-        }, 1500); // 1.5s máximo para responder
+        }, 1500);
       } else {
         timeoutRef.current = setTimeout(() => {
           scheduleNextStimulus();
@@ -58,20 +57,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     if (e) e.stopPropagation();
     if (!sessionActive) return;
 
-    // 1. Feedback visual inmediato de que se presionó el gatillo
     setFlashFeedback(true);
     setTimeout(() => setFlashFeedback(false), 100);
 
-    // Si hace clic sin estímulo, ignorar lógicamente pero dar el destello
     if (stimulus === 'NONE') return;
 
     clearActiveTimeout();
     const reactionTime = Date.now() - showTimeRef.current;
-
-    // 2. Desaparecer el estímulo inmediatamente para retroalimentación cognitiva
     setStimulus('NONE');
 
-    // 3. Calcular métricas
     if (stimulus === 'GO') {
       stats.current.hits++;
       stats.current.lastReaction = reactionTime;
@@ -125,11 +119,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
 
   return (
     <div 
-      // Fondo Inmersivo Anti-Mareo (Radial)
       className="fixed inset-0 z-[9999] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-white flex flex-col items-center justify-center select-none touch-none"
       onPointerDown={handleInteract}
     >
-      {/* Destello de confirmación de clic */}
       {flashFeedback && <div className="absolute inset-0 bg-white/10 z-0 pointer-events-none transition-opacity duration-75"></div>}
 
       <button 
@@ -187,14 +179,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
             </div>
           )}
 
-          {/* CRUZ DE FIJACIÓN (SVG PERFECTO) */}
           {countdown === null && stimulus === 'NONE' && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
               <Plus className="w-16 h-16 text-slate-400" strokeWidth={1} />
             </div>
           )}
 
-          {/* ESTÍMULOS CON ANIMACIÓN DE ENTRADA SUAVE */}
           {countdown === null && stimulus === 'GO' && (
             <div className="w-80 h-80 bg-emerald-500 rounded-full shadow-[0_0_150px_rgba(16,185,129,0.9)] animate-in zoom-in-50 duration-75"></div>
           )}
