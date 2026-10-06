@@ -3,7 +3,8 @@ import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users
 import { PatientRecord } from '../types';
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
 import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
-import { VrExposureTherapyModule } from './VrExposureTherapyModule'; // <-- NUEVA IMPORTACIÓN
+import { VrExposureTherapyModule } from './VrExposureTherapyModule';
+import { VrSocialCognitionModule } from './VrSocialCognitionModule'; // <-- NUEVA IMPORTACIÓN
 
 interface Props {
   patient: PatientRecord;
@@ -29,7 +30,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Pupilometría, contacto visual y tolerancia a sobrecarga sensorial.',
       icon: <Eye className="w-6 h-6 text-indigo-400" />,
       color: 'border-indigo-500/30 bg-indigo-900/20 hover:bg-indigo-900/40',
-      ready: false
+      ready: true // <-- ¡AHORA ESTÁ ACTIVO EL DE TEA!
     },
     {
       id: 'NEURO_HYPNOSIS',
@@ -53,7 +54,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Biofeedback GSR/HRV, reactividad amigdalina y exposición VRET.',
       icon: <HeartPulse className="w-6 h-6 text-rose-400" />,
       color: 'border-rose-500/30 bg-rose-900/20 hover:bg-rose-900/40',
-      ready: true // <-- ¡AHORA ESTÁ ACTIVO EL DE ANSIEDAD!
+      ready: true
     },
     {
       id: 'NEURO_DEGEN',
@@ -70,12 +71,16 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
     return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
   }
 
+  if (activeModule === 'TEA_SOCIAL') {
+    return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- ENRUTADOR AÑADIDO
+  }
+
   if (activeModule === 'NEURO_HYPNOSIS') {
     return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
   }
 
   if (activeModule === 'TAG_ANXIETY') {
-    return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- ENRUTADOR AÑADIDO
+    return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
   }
 
   // Placeholder para los módulos que construiremos después
