@@ -10,22 +10,20 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// 1. CONFIGURACIÓN DE MIDDLEWARES & SEGURIDAD CORS
+// 1. MIDDLEWARES & CORS
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-user-id', 'Accept']
 }));
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 2. CONEXIÓN A BASE DE DATOS MONGODB ATLAS
+// 2. MONGODB ATLAS & ESQUEMAS
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:amie2026@cluster0.mongodb.net/amie_clinical_db?retryWrites=true&w=majority';
-
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ Base de Datos MongoDB Atlas Conectada Exitosamente'))
-  .catch(err => console.error('❌ Error de conexión a MongoDB:', err.message));
+  .then(() => console.log('✅ MongoDB Conectada'))
+  .catch(err => console.error('❌ Error MongoDB:', err.message));
 
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
@@ -44,7 +42,7 @@ const VrSession = mongoose.model('VrSession', vrSessionSchema);
 
 const vrLiveStreams = new Map<string, any>();
 
-// 3. RUTAS API (HTTP)
+// 3. RUTAS HTTP API
 app.get('/api/saas/profile', async (req, res) => {
   try {
     const userId = req.query.userId || req.headers['x-user-id'] || 'harold01';
@@ -60,7 +58,7 @@ app.post('/api/vr/stream', (req, res) => {
     const patientId = payload.patientId || 'PAC-8104';
     vrLiveStreams.set(patientId, payload);
     broadcastToClients({ type: 'VR_LIVE_STREAM', ...payload });
-    return res.status(200).json({ success: true, message: 'Telemetría VR en vivo actualizada.' });
+    return res.status(200).json({ success: true, message: 'OK' });
   } catch (err: any) { return res.status(500).json({ success: false, error: err.message }); }
 });
 
@@ -71,10 +69,9 @@ app.get('/api/vr/stream', (req, res) => {
   return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
 });
 
-// Health Check
-app.get('/health', (req, res) => { res.status(200).json({ status: 'OK', engine: 'AMIE Backend' }); });
+app.get('/health', (req, res) => { res.status(200).json({ status: 'OK' }); });
 
-// 4. WEBSOCKET SERVER GLOBAL (Aquí estaba el error antes, ahora acepta todo)
+// 4. WEBSOCKET SERVER GLOBAL
 const wss = new WebSocketServer({ server });
 const connectedClients = new Set<WebSocket>();
 
@@ -86,12 +83,11 @@ wss.on('connection', (ws) => {
       const patientId = data.patientId || 'PAC-8104';
       if (data && data.metrics) vrLiveStreams.set(patientId, data);
       
-      // Handshake para enlazar pantallas
       if (data.type === 'HANDSHAKE' || data.type === 'JOIN_ROOM') {
         ws.send(JSON.stringify({ type: 'HANDSHAKE_ACK', patientId }));
       }
       broadcastToClients(data, ws);
-    } catch (e) { console.error('❌ Error WSS:', e); }
+    } catch (e) { console.error('Error WSS:', e); }
   });
   ws.on('close', () => { connectedClients.delete(ws); });
 });
@@ -103,9 +99,9 @@ function broadcastToClients(data: any, senderWs: WebSocket | null = null) {
   });
 }
 
-// 5. INICIALIZACIÓN
+// 5. INICIO DE SERVIDOR
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor AMIE Backend corriendo en puerto ${PORT}`);
-  console.log(`📡 WebSocket endpoint listo en wss://amieneurogical.onrender.com`);
+  console.log(`🚀 Backend corriendo en puerto ${PORT}`);
+  console.log(`📡 WebSocket endpoint listo`);
 });
