@@ -1,6 +1,7 @@
 import { MASTER_VR_ENVIRONMENTS } from '../constants';
 
 export interface VrCommandPayload {
+  type: string;
   environmentId: string;
   unitySceneName: string;
   parameters: Record<string, any>;
@@ -10,16 +11,39 @@ export interface VrCommandPayload {
 
 export class VrControlService {
   private static ws: WebSocket | null = null;
+  private static currentUrl: string = '';
 
-  public static connect(ipAddress: string = '192.168.1.105', port: number = 8080) {
-    this.ws = new WebSocket(`ws://${ipAddress}:${port}/vr-control`);
+  // Conecta automáticamente al backend en Render o al local según el entorno
+  public static connect(customUrl?: string) {
+    const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    
+    // Si estás en Render, usa wss:// (seguro). Si no, ws://localhost
+    const defaultWsUrl = isProd 
+      ? `wss://${window.location.host}` 
+      : 'ws://localhost:10000';
+
+    this.currentUrl = customUrl || defaultWsUrl;
+    this.connectInternal();
+  }
+
+  private static connectInternal() {
+    if (this.ws?.readyState === WebSocket.OPEN) return;
+
+    console.log(`🔌 [AMIE VR CONTROL] Conectando a ${this.currentUrl}...`);
+    this.ws = new WebSocket(this.currentUrl);
 
     this.ws.onopen = () => {
-      console.log('🔌 [AMIE VR CONTROL] Conectado exitosamente al Visor VR');
+      console.log('✅ [AMIE VR CONTROL] Conectado exitosamente al puente VR (Render)');
     };
 
     this.ws.onerror = (err) => {
-      console.error('❌ [AMIE VR CONTROL] Error de conexión con el Visor VR', err);
+      console.error('❌ [AMIE VR CONTROL] Error de conexión', err);
+    };
+
+    // Auto-reconectar si se cae la red
+    this.ws.onclose = () => {
+      console.warn('⚠️ [AMIE VR CONTROL] Conexión cerrada. Reconectando en 3s...');
+      setTimeout(() => this.connectInternal(), 3000);
     };
   }
 
@@ -33,6 +57,7 @@ export class VrControlService {
     }
 
     const payload: VrCommandPayload = {
+      type: 'LOAD_MASTER_ENVIRONMENT', // Identificador para el Switch del Backend
       environmentId: envConfig.id,
       unitySceneName: envConfig.unitySceneName,
       parameters: customParams || envConfig.controllableParameters,
@@ -45,6 +70,14 @@ export class VrControlService {
       console.log(`🚀 [AMIE VR] Enviado comando de carga: ${envConfig.name}`, payload);
     } else {
       console.warn('⚠️ WebSocket no conectado. Simulando transmisión a Unity...');
+    }
+  }
+
+  public static disconnect() {
+    if (this.ws) {
+      this.ws.onclose = null; // Desactiva la auto-reconexión si cerramos a propósito
+      this.ws.close();
+      this.ws = null;
     }
   }
 }
