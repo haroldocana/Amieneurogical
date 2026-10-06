@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
-import { Activity, PlayCircle, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, BatteryWarning, HeartCrack } from 'lucide-react';
+import { Activity, PlayCircle, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, BatteryWarning, HeartCrack, Glasses } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
@@ -129,6 +129,9 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
         </div>
         
         <div className="flex items-center gap-3">
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          </div>
           <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-2">
             <RefreshCw className="w-4 h-4" /> Sincronizar
           </button>
@@ -142,21 +145,44 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
             <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><BatteryWarning className="w-4 h-4 text-slate-400" /> Fases de Evaluación</h3>
             <div className="space-y-3">
+              
+              {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+              {!isConnected && sessionPhase === 'IDLE' && !isFinished && (
+                <div className="mb-4 p-3 bg-slate-950 border border-slate-700 border-dashed rounded-xl flex flex-col items-center text-center gap-2">
+                  <Glasses className="w-6 h-6 text-slate-500 animate-pulse" />
+                  <div className="text-[11px] text-slate-400 leading-relaxed">
+                    <strong className="text-slate-300 block mb-1">Esperando conexión del paciente...</strong>
+                    El paciente debe colocarse el visor e iniciar sesión con ID: <span className="text-slate-300 font-mono bg-slate-800 px-1 rounded">{patientId}</span>
+                  </div>
+                </div>
+              )}
+
               {sessionPhase === 'IDLE' && !isFinished && (
-                <button onClick={startMotorTest} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2">
-                  <PlayCircle className="w-5 h-5" /> 1. Test Biomotor (Latencia)
+                <button 
+                  disabled={!isConnected}
+                  onClick={startMotorTest} 
+                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 ${
+                    !isConnected 
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+                      : 'bg-slate-700 hover:bg-slate-600 text-white'
+                  }`}
+                >
+                  <PlayCircle className="w-5 h-5" /> {!isConnected ? 'Esperando VR...' : '1. Test Biomotor (Latencia)'}
                 </button>
               )}
+
               {sessionPhase === 'MOTOR_TEST' && (
                 <button onClick={startAnhedoniaTest} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2">
                   <HeartCrack className="w-5 h-5" /> 2. Test Anhedonia (Recompensa)
                 </button>
               )}
+
               {(sessionPhase === 'MOTOR_TEST' || sessionPhase === 'ANHEDONIA_TEST') && (
                 <button onClick={handleGenerateReport} className="w-full py-3 bg-rose-900 hover:bg-rose-800 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2">
                   <StopCircle className="w-5 h-5" /> Finalizar Prueba IA
                 </button>
               )}
+
             </div>
             <div className="mt-4 p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-xs text-slate-400 leading-relaxed">
               La IA mide la lentitud física (retardo psicomotor) y la falta de respuesta fisiológica ante estímulos positivos (aplanamiento afectivo).
