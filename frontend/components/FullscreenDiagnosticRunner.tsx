@@ -1,26 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge'; // <-- IMPORTACIÓN DEL PUENTE
 import { 
-  Usb, 
-  Wifi, 
-  Bluetooth, 
-  Cpu, 
-  Activity, 
-  X, 
-  Play, 
-  CheckCircle2, 
-  RotateCcw, 
-  Terminal, 
-  ArrowRight,
-  Signal,
-  FastForward,
-  Radio
+  Usb, Wifi, Bluetooth, Cpu, Activity, X, Play, CheckCircle2, RotateCcw, 
+  Terminal, ArrowRight, Signal, FastForward, Radio, Heart
 } from 'lucide-react';
 
 interface FullscreenDiagnosticRunnerProps {
   patient?: PatientRecord;
   onClose: () => void;
   onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
+  onOpenModules?: () => void; // <-- Nuevo prop para saltar al Master Selector
 }
 
 type ConnectionType = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED';
@@ -28,119 +18,67 @@ type ConnectionType = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED';
 export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProps> = ({
   patient,
   onClose,
-  onUpdatePatientVrData
+  onUpdatePatientVrData,
+  onOpenModules
 }) => {
-  const [connectionType, setConnectionType] = useState<ConnectionType>('USB');
-  const [isConnected, setIsConnected] = useState(true);
+  const patientId = patient?.id || 'PAC-8104';
+  const [connectionType, setConnectionType] = useState<ConnectionType>('WIFI');
   const [isCapturing, setIsCapturing] = useState(true);
   const [wifiIp, setWifiIp] = useState('192.168.1.105');
   
+  // 🔌 CONEXIÓN REAL AL VISOR (Canal de Calibración)
+  const { isConnected: wsConnected, liveData, syncSession } = useVrTelemetryBridge('receiver', patientId, 'CALIBRATION');
+
   const [logs, setLogs] = useState<string[]>([
     '[SYSTEM] Inicializando subsistema multicanal (USB / Bluetooth / Wi-Fi)...',
     '[SYSTEM] Telemetría activa en tiempo real.'
   ]);
 
-  // Cierre garantizado con tecla Escape
+  // Extraemos datos reales o usamos fallbacks si no hay visor
+  const realHrv = liveData?.metrics?.hrvRmssdMs || 45;
+  const realGsr = liveData?.metrics?.gsrMicroSiemens || 2.4;
+  const realRt = liveData?.metrics?.reactionTimeMs || 240;
+
+  useEffect(() => {
+    if (wsConnected) {
+      setLogs(prev => [...prev, '[WSS] Enlace WebSocket con el visor Meta Quest ESTABLECIDO.']);
+    }
+  }, [wsConnected]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Enlace Bluetooth LE (WebBluetooth API)
-  const handleConnectBluetooth = async () => {
-    setLogs(prev => [...prev, '[BLE] Escaneando dispositivos Bluetooth LE...']);
-    try {
-      if ('bluetooth' in navigator) {
-        const device = await (navigator as any).bluetooth.requestDevice({
-          acceptAllDevices: true
-        });
-        setIsConnected(true);
-        setLogs(prev => [...prev, `[BLE] Enlazado a: ${device.name || 'Sensor BLE'}`]);
-      } else {
-        setIsConnected(true);
-        setLogs(prev => [...prev, '[BLE] Modo emulación Bluetooth activo.']);
-      }
-    } catch {
-      setIsConnected(true);
-      setLogs(prev => [...prev, '[BLE] Conexión virtual de respaldo lista.']);
-    }
-  };
-
-  // Enlace Wi-Fi WebSocket
   const handleConnectWifi = () => {
     setLogs(prev => [...prev, `[WIFI] Conectando a ws://${wifiIp}:8080...`]);
+    syncSession(); // Fuerza la reconexión de nuestro puente
+  };
+
+  const handleTareZero = () => {
+    setLogs(prev => [...prev, '[TARE] Calibrando línea base isométrica y autonómica...']);
     setTimeout(() => {
-      setIsConnected(true);
-      setLogs(prev => [...prev, `[WIFI] Socket activo en IP ${wifiIp}`]);
-    }, 500);
+      setLogs(prev => [...prev, `[TARE] Línea base fijada: HRV=${realHrv}ms | GSR=${realGsr}µS`]);
+    }, 800);
   };
 
-  // Enlace USB
-  const handlePairUsb = async () => {
-    setLogs(prev => [...prev, '[USB] Solicitando puerto WebUSB/HID...']);
-    try {
-      if ('usb' in navigator) {
-        const device = await (navigator as any).usb.requestDevice({ filters: [] });
-        setIsConnected(true);
-        setLogs(prev => [...prev, `[USB] Dispositivo enlazado: ${device.productName || 'Sensor USB'}`]);
-      } else {
-        setIsConnected(true);
-        setLogs(prev => [...prev, '[USB] Puerto Virtual COM1 activo (1000 Hz).']);
-      }
-    } catch {
-      setIsConnected(true);
-      setLogs(prev => [...prev, '[USB] Modo directo local activado.']);
-    }
-  };
-
-  // Transferencia de telemetría y desbloqueo total
-  const handleTransferAndClose = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    
-    if (onUpdatePatientVrData) {
-      const mockTelemetry: VrTelemetryData = {
-        sessionId: `DIAG-${connectionType}-${Math.floor(1000 + Math.random() * 9000)}`,
-        timestamp: new Date().toISOString(),
-        gsrMicroSiemens: [1.2, 2.4, 3.1, 2.8, 1.9],
-        hrvRmssdMs: [45, 38, 42, 40, 46],
-        habituationIndexH: 2.5,
-        stressPeaksCount: 1,
-        exposureDurationSec: 180,
-        saccadicRateHz: 1.1
-      };
-      const mockReport: VrTherapyReport = {
-        sessionGuid: mockTelemetry.sessionId,
-        exposureType: `Calibración Neuromotora via ${connectionType}`,
-        sympatheticToneIndex: 45,
-        vagalReactivityIndex: 62,
-        habituationRate: 'Óptima',
-        synthesizedClinicalSummary: `Conexión ${connectionType} establecida. Telemetría sincronizada correctamente.`
-      };
-      onUpdatePatientVrData(mockTelemetry, mockReport);
-    }
-    
-    onClose();
+  const handleGoToModules = () => {
+    if (onOpenModules) onOpenModules();
+    else onClose();
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 lg:p-6 bg-slate-950/90 backdrop-blur-md"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden relative text-slate-100 flex flex-col max-h-[95vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* CABECERA CON BOTÓN PRINCIPAL DE SALTO */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 lg:p-6 bg-slate-950/90 backdrop-blur-md">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden relative text-slate-100 flex flex-col max-h-[95vh]">
+        
+        {/* CABECERA */}
         <div className="bg-slate-950 px-5 py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-cyan-600/20 text-cyan-400 rounded-lg border border-cyan-500/30">
-              <Signal className="w-5 h-5 animate-pulse" />
+            <div className={`p-2 rounded-lg border ${wsConnected ? 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' : 'bg-rose-600/20 text-rose-400 border-rose-500/30'}`}>
+              <Signal className={`w-5 h-5 ${wsConnected ? 'animate-pulse' : ''}`} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -149,80 +87,33 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
                   {connectionType}
                 </span>
               </h3>
-              <p className="text-[11px] text-slate-400">
-                Paciente: {patient?.id || 'PAC-8104'} | Telemetría Neuromotora
-              </p>
+              <p className="text-[11px] text-slate-400">Paciente: {patientId} | Telemetría Neuromotora</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* BOTÓN REQUERIDO PARA OMITIR LA PANTALLA DE INMEDIATO */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-lg active:scale-95 transition cursor-pointer"
-            >
+            <button onClick={handleGoToModules} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-lg active:scale-95 transition cursor-pointer">
               <FastForward className="w-3.5 h-3.5" />
               <span>SALTAR E IR A MÓDULOS</span>
             </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 cursor-pointer"
-              title="Cerrar modal"
-            >
+            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* SELECTOR PROTOCOLO: USB / BLUETOOTH / WI-FI / SIMULADO */}
+        {/* SELECTOR PROTOCOLO */}
         <div className="bg-slate-950/80 px-5 py-2 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
           <span className="text-xs text-slate-400 font-semibold shrink-0">Protocolo de Entrada:</span>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setConnectionType('USB')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                connectionType === 'USB' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Usb className="w-3.5 h-3.5" />
-              <span>USB Directo</span>
+            <button onClick={() => setConnectionType('USB')} className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${connectionType === 'USB' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              <Usb className="w-3.5 h-3.5" /> <span>USB Directo</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setConnectionType('BLUETOOTH')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                connectionType === 'BLUETOOTH' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Bluetooth className="w-3.5 h-3.5" />
-              <span>Bluetooth BLE</span>
+            <button onClick={() => setConnectionType('BLUETOOTH')} className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${connectionType === 'BLUETOOTH' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              <Bluetooth className="w-3.5 h-3.5" /> <span>Bluetooth BLE</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setConnectionType('WIFI')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                connectionType === 'WIFI' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Wifi className="w-3.5 h-3.5" />
-              <span>Wi-Fi Socket</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setConnectionType('SIMULATED')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                connectionType === 'SIMULATED' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Radio className="w-3.5 h-3.5" />
-              <span>Simulación</span>
+            <button onClick={() => setConnectionType('WIFI')} className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${connectionType === 'WIFI' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              <Wifi className="w-3.5 h-3.5" /> <span>Wi-Fi (VR Bridge)</span>
             </button>
           </div>
         </div>
@@ -238,71 +129,27 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
               </span>
 
               <div className="flex items-center justify-between p-2 bg-slate-900 rounded-lg border border-slate-800 text-xs">
-                <span className="text-slate-400">Estado:</span>
-                <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                  isConnected ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300'
-                }`}>
-                  {isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}
+                <span className="text-slate-400">Estado de Red WSS:</span>
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${wsConnected ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300'}`}>
+                  {wsConnected ? 'EN LÍNEA' : 'DESCONECTADO'}
                 </span>
               </div>
 
-              {connectionType === 'USB' && (
-                <button
-                  type="button"
-                  onClick={handlePairUsb}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                >
-                  Emparejar Dispositivo USB
-                </button>
-              )}
-
-              {connectionType === 'BLUETOOTH' && (
-                <button
-                  type="button"
-                  onClick={handleConnectBluetooth}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Bluetooth className="w-4 h-4" />
-                  <span>Vincular Bluetooth LE</span>
-                </button>
-              )}
-
               {connectionType === 'WIFI' && (
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={wifiIp}
-                    onChange={(e) => setWifiIp(e.target.value)}
-                    placeholder="192.168.1.105"
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleConnectWifi}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Wifi className="w-4 h-4" />
-                    <span>Conectar por Wi-Fi</span>
+                  <input type="text" value={wifiIp} onChange={(e) => setWifiIp(e.target.value)} placeholder="192.168.1.105" className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none" />
+                  <button onClick={handleConnectWifi} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
+                    <Wifi className="w-4 h-4" /> <span>Sincronizar Telemetría VR</span>
                   </button>
-                </div>
-              )}
-
-              {connectionType === 'SIMULATED' && (
-                <div className="text-[11px] text-purple-300 bg-purple-950/40 p-2.5 rounded-lg border border-purple-500/30">
-                  Modo sintético activo para pruebas clínicas sin hardware adjunto.
                 </div>
               )}
             </div>
 
             <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <RotateCcw className="w-4 h-4 text-cyan-400" /> Calibración Isométrica
+                <RotateCcw className="w-4 h-4 text-cyan-400" /> Calibración Basal
               </span>
-              <button
-                type="button"
-                onClick={() => setLogs(prev => [...prev, '[TARE] Línea base calibrada.'])}
-                className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition cursor-pointer"
-              >
+              <button onClick={handleTareZero} className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition cursor-pointer">
                 Ejecutar Tare Zero
               </button>
             </div>
@@ -317,49 +164,19 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Tiempo Reacción</span>
-                  <span className="text-base font-bold text-white font-mono">240 ms</span>
+                  <span className="text-[10px] text-slate-400 block flex items-center gap-1"><Heart className="w-3 h-3 text-rose-400"/> Tono Vagal (HRV)</span>
+                  <span className="text-base font-bold text-white font-mono">{realHrv} ms</span>
                 </div>
                 <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Prensión Grip</span>
-                  <span className="text-base font-bold text-cyan-300 font-mono">32.5 kg</span>
+                  <span className="text-[10px] text-slate-400 block">Conductancia (GSR)</span>
+                  <span className="text-base font-bold text-amber-300 font-mono">{realGsr} µS</span>
                 </div>
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
-                <span className="text-[10px] text-slate-400 font-semibold block">Señal Bruta EEG (8 Canales - µV)</span>
-                <div className="grid grid-cols-4 gap-1 text-center font-mono text-[10px]">
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH1: 12.4</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH2: -4.2</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH3: 18.1</div>
-                  <div className="bg-slate-950 p-1 rounded text-cyan-300">CH4: 8.5</div>
-                </div>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">Tiempo de Reacción (Latencia)</span>
+                  <span className="text-base font-bold text-cyan-300 font-mono">{realRt} ms</span>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCapturing(!isCapturing);
-                  setLogs(prev => [...prev, isCapturing ? '[STREAM] Pausado.' : '[STREAM] Capturando.']);
-                }}
-                className={`py-2 px-3 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  isCapturing ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                }`}
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span>{isCapturing ? 'Pausar' : 'Capturar'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleTransferAndClose}
-                className="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Transferir</span>
-              </button>
             </div>
           </div>
 
@@ -369,18 +186,14 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
               <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5 font-mono">
                 <Terminal className="w-3.5 h-3.5 text-cyan-400" /> STREAM LOGS
               </span>
-              <div className="h-36 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-400 p-2 bg-slate-900 rounded-lg border border-slate-800">
-                {logs.map((log, i) => (
-                  <p key={i}>{log}</p>
+              <div className="h-36 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-400 p-2 bg-slate-900 rounded-lg border border-slate-800 flex flex-col-reverse">
+                {[...logs].reverse().map((log, i) => (
+                  <p key={i} className="pb-1">{log}</p>
                 ))}
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-3 w-full py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-xl active:scale-95"
-            >
+            <button onClick={handleGoToModules} className="mt-3 w-full py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-xl active:scale-95">
               <span>VER TODOS LOS MÓDULOS</span>
               <ArrowRight className="w-4 h-4" />
             </button>
