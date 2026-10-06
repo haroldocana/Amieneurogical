@@ -36,11 +36,19 @@ const User = mongoose.model('User', userSchema);
 const vrSessionSchema = new mongoose.Schema({
   patientId: { type: String, required: true, index: true },
   taskName: { type: String, required: true },
+  durationSeconds: { type: Number, default: 0 },
+  metrics: {
+    avgReactionTimeMs: { type: Number, default: 0 },
+    omissions: { type: Number, default: 0 },
+    commissions: { type: Number, default: 0 },
+    frontalEngagementPct: { type: Number, default: 0 },
+    binauralBetaHz: { type: Number, default: 15.0 }
+  },
+  aiLogs: [{ type: String }],
   completedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 const VrSession = mongoose.model('VrSession', vrSessionSchema);
 
-// ¡CORREGIDO! JS puro no usa <string, any>
 const vrLiveStreams = new Map();
 
 // 3. RUTAS HTTP API
@@ -55,6 +63,7 @@ app.get('/api/saas/profile', async (req, res) => {
   }
 });
 
+// Ruta para recibir el streaming en vivo
 app.post('/api/vr/stream', (req, res) => {
   try {
     const payload = req.body;
@@ -74,12 +83,50 @@ app.get('/api/vr/stream', (req, res) => {
   return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
 });
 
+// ¡NUEVO! Ruta para guardar el informe en MongoDB
+app.post('/api/vr/telemetry', async (req, res) => {
+  try {
+    const { patientId, sessionData } = req.body;
+    const targetPatient = patientId || 'PAC-8104';
+
+    vrLiveStreams.delete(targetPatient);
+
+    const savedSession = await VrSession.create({
+      patientId: targetPatient,
+      taskName: sessionData?.taskName || 'ExecutiveControl',
+      durationSeconds: sessionData?.durationSeconds || 0,
+      metrics: {
+        avgReactionTimeMs: sessionData?.metrics?.avgReactionTimeMs || 0,
+        omissions: sessionData?.metrics?.omissions || 0,
+        commissions: sessionData?.metrics?.commissions || 0,
+        frontalEngagementPct: sessionData?.metrics?.frontalEngagementPct || 0,
+        binauralBetaHz: sessionData?.metrics?.binauralBetaHz || 15.0
+      },
+      aiLogs: sessionData?.aiLogs || [],
+      completedAt: new Date()
+    });
+
+    broadcastToClients({
+      type: 'VR_SESSION_COMPLETED',
+      patientId: targetPatient,
+      session: savedSession
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Reporte guardado exitosamente.',
+      sessionId: savedSession._id
+    });
+  } catch (err) {
+    console.error('Error guardando reporte VR:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/health', (req, res) => { res.status(200).json({ status: 'OK' }); });
 
 // 4. WEBSOCKET SERVER GLOBAL
 const wss = new WebSocketServer({ server });
-
-// ¡CORREGIDO! JS puro no usa <WebSocket>
 const connectedClients = new Set();
 
 wss.on('connection', (ws) => {
@@ -104,7 +151,7 @@ wss.on('connection', (ws) => {
 function broadcastToClients(data, senderWs = null) {
   const payload = JSON.stringify(data);
   connectedClients.forEach(client => {
-    if (client !== senderWs && client.readyState === 1) { // 1 significa estado OPEN
+    if (client !== senderWs && client.readyState === 1) { 
       client.send(payload);
     }
   });
