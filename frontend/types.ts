@@ -175,16 +175,21 @@ export interface EyeTrackingPupilometry {
   source: 'PICO_EYE_TOBII' | 'DIY_OV9281_PUPILCORE' | 'MEDIA_PIPE' | 'SIMULATED';
 }
 
+// 🔥 ACTUALIZADO: Permite datos de todos los 8 módulos clínicos sin dar error de TypeScript
 export interface VrTelemetryData {
   sessionId: string;
   timestamp: string | number;
   deviceId?: SupportedVrDevice;
-  gsrMicroSiemens: number[];
-  hrvRmssdMs: number[];
+  
+  // Variables Base (Permite Array para historial o Number para Stream en vivo)
+  gsrMicroSiemens?: number[] | number;
+  hrvRmssdMs?: number[] | number;
   heartRateBpm?: number;
-  habituationIndexH: number;
-  stressPeaksCount: number;
-  exposureDurationSec: number;
+  habituationIndexH?: number;
+  stressPeaksCount?: number;
+  exposureDurationSec?: number;
+  
+  // Biomecánica VR Clásica
   headMotion6DoF?: HeadMotion6DoF;
   controllers?: {
     left: ControllerTelemetry;
@@ -193,6 +198,33 @@ export interface VrTelemetryData {
   pupilDiameterMm?: number;
   saccadicRateHz?: number;
   eyeTracking?: EyeTrackingPupilometry;
+
+  // --- NUEVAS MÉTRICAS MÓDULOS AVANZADOS ---
+  avgHrv?: number;
+  avgGsr?: number;
+  frontalEngagementPct?: number;
+  binauralBetaHz?: number;
+  
+  // Módulo TDM (Depresión) y Motor
+  biomotorLatencyMs?: number;
+  movementVelocityPct?: number;
+  emotionalReactivityScore?: number;
+  
+  // Módulo Neurodegenerativo
+  tremorMm?: number;
+  navEfficiency?: number;
+  navErrors?: number;
+
+  // Módulo Forense Cluster B
+  affinityScore?: number;
+
+  // Módulo Gamma
+  gammaPowerUv2?: number;
+  dmnDeactivationPct?: number;
+  insightIndex?: number;
+
+  // Flexibilidad para el futuro (NoSQL)
+  [key: string]: any;
 }
 
 export interface VrTherapyReport {
@@ -202,6 +234,8 @@ export interface VrTherapyReport {
   vagalReactivityIndex: number;
   habituationRate: 'Óptima' | 'Moderada' | 'Ausente/Saturada';
   synthesizedClinicalSummary: string;
+  aiLogs?: string[];
+  [key: string]: any;
 }
 
 // --- PERFIL DE PSICOFARMACOLOGÍA ---
@@ -266,7 +300,7 @@ export interface PatientRecord {
   };
   functionalAreas: {
     sleep: number;
-    appetite: number;
+    applete: number;
     energy: number;
     social: number;
     attention: number;
