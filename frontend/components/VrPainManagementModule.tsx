@@ -3,7 +3,7 @@ import {
   ShieldAlert, Play, Square, Video, Activity, Brain, X, 
   Snowflake, ThermometerSnowflake, Zap, Target, AudioWaveform,
   Printer, RotateCcw, CheckCircle2, Sparkles, Maximize2, Minimize2,
-  FileText, ShieldCheck, Heart
+  FileText, ShieldCheck, Heart, Glasses
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -23,6 +23,8 @@ interface TelemetryPoint {
 }
 
 export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) => {
+  const patientId = patient?.id || 'PAC-8104';
+
   // Configuración Clínica Inicial
   const [painCondition, setPainCondition] = useState<PainCondition>('FIBROMYALGIA');
   const [visualMetaphor, setVisualMetaphor] = useState<VisualMetaphor>('GLACIAL_FRACTALS');
@@ -51,7 +53,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'AnalgesiaVR');
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patientId, 'AnalgesiaVR');
 
   // Transmisión en tiempo real al servidor
   useEffect(() => {
@@ -63,7 +65,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
         habituationIndex: Math.floor(immersionLoadPct)
       });
     }
-  }, [gsr, hrv, currentPainLevel, immersionLoadPct, sessionActive, safetyTriggered]);
+  }, [gsr, hrv, currentPainLevel, immersionLoadPct, sessionActive, safetyTriggered, transmit]);
 
   // Motor Closed-Loop de Modulación del Dolor
   useEffect(() => {
@@ -158,7 +160,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
       : 0;
 
     const sessionReport = {
-      patientId: patient?.id || 'PAC-8104',
+      patientId: patientId,
       sessionData: {
         taskName: 'AnalgesiaVR',
         durationSeconds: sessionDuration || 300,
@@ -208,7 +210,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
   };
 
   const handlePrintIndividualReport = () => {
-    const patientName = patient.patientNameAnonymized || patient.id || 'PAC-8104';
+    const patientName = patient.patientNameAnonymized || patientId;
     const painReductionPct = baselinePain > 0 
       ? Math.max(0, ((baselinePain - currentPainLevel) / baselinePain) * 100) 
       : 0;
@@ -231,7 +233,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
           .card-value { font-size: 18px; font-weight: bold; color: #0f172a; }
           .card-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
           .verdict { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 8px; font-size: 12px; color: #166534; margin-top: 15px; }
-          .logs { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; font-mono; font-size: 10px; margin-top: 15px; }
+          .logs { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 10px; margin-top: 15px; }
         </style>
       </head>
       <body>
@@ -333,7 +335,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Paciente: <strong className="text-slate-200">{patient.patientNameAnonymized || patient.id || 'PAC-8104'}</strong> | Diana: <span className="text-cyan-300 font-mono">{getConditionName(painCondition)}</span>
+                  Paciente: <strong className="text-slate-200">{patient.patientNameAnonymized || patientId}</strong> | Diana: <span className="text-cyan-300 font-mono">{getConditionName(painCondition)}</span>
                 </p>
               </div>
             </div>
@@ -498,7 +500,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
               Analgesia Inmersiva & Modulación del Dolor (Zero-Opioid VR)
             </h1>
             <p className="text-[10px] text-cyan-400 font-mono flex items-center gap-2">
-              Paciente: <strong className="text-white">{patient.name || 'PAC-8104'}</strong> | Bloqueo Cortical Mediado por IA
+              Paciente: <strong className="text-white">{patient.patientNameAnonymized || patientId}</strong> | Bloqueo Cortical Mediado por IA
             </p>
           </div>
         </div>
@@ -518,12 +520,12 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
 
           <button
             onClick={handleEmergencyEgress}
-            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95"
+            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
           >
             <ShieldAlert className="w-4 h-4" /> Egress (Abortar)
           </button>
 
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300">
+          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -581,7 +583,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
                     key={env.id}
                     disabled={sessionActive}
                     onClick={() => setVisualMetaphor(env.id as VisualMetaphor)}
-                    className={`text-left p-2.5 rounded-lg text-[10.5px] font-semibold border transition ${
+                    className={`text-left p-2.5 rounded-lg text-[10.5px] font-semibold border transition cursor-pointer ${
                       visualMetaphor === env.id
                         ? 'bg-cyan-950/80 border-cyan-500 text-white shadow-md shadow-cyan-500/20'
                         : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'
@@ -732,13 +734,30 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
           </div>
 
           <div className="pt-3 border-t border-slate-800 space-y-2 shrink-0">
+            {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+            {!isConnected && !sessionActive && (
+              <div className="mb-4 p-3 bg-slate-900/80 border border-cyan-500/30 border-dashed rounded-xl flex items-center gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+                  <Glasses className="w-5 h-5 text-cyan-400 animate-pulse" />
+                </div>
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  <strong className="text-white block mb-0.5">Esperando paciente...</strong>
+                  Para habilitar el ensayo, el paciente debe colocarse el visor e iniciar sesión con ID: <span className="text-cyan-300 font-mono bg-cyan-900/30 px-1 rounded">{patientId}</span>
+                </div>
+              </div>
+            )}
+
             {!sessionActive ? (
               <button
+                disabled={!isConnected}
                 onClick={handleStartSession}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-cyan-600/20 transition active:scale-95 cursor-pointer"
+                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl transition cursor-pointer ${
+                  !isConnected 
+                    ? 'bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-600/20'
+                }`}
               >
-                <Play className="w-4 h-4 fill-current" />
-                Iniciar Analgesia Inmersiva
+                {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4 fill-current" /> Iniciar Analgesia Inmersiva</>}
               </button>
             ) : (
               <button
