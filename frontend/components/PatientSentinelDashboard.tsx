@@ -1,6 +1,6 @@
 import React from 'react';
 import { PatientRecord } from '../types';
-import { Smartphone, Moon, Activity, PhoneCall, ShieldAlert, Zap, Clock } from 'lucide-react';
+import { Smartphone, Moon, Activity, PhoneCall, ShieldAlert, Zap, Clock, BrainCircuit } from 'lucide-react';
 
 interface PatientSentinelDashboardProps {
   patient?: PatientRecord;
@@ -48,6 +48,14 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
   const isNightWakeupHigh = nightWakeups > 3;
   const isBiomotorCritical = biomotorLatencyMs > 420 || biomotorLatencyMs < 200;
   const isHighRisk = riskScore === 'CRÍTICO' || riskScore === 'ALTO' || isNightWakeupHigh;
+
+  // MOTOR DE RECOMENDACIÓN CLÍNICA AMIE PARA VR
+  const getVrRecommendation = () => {
+    if (biomotorLatencyMs > 420) return "Sugerencia AMIE: Ejecutar Módulo VR de Depresión (TDM) - Evaluar aplanamiento psicomotor.";
+    if (biomotorLatencyMs < 200 && screenNightMinutes > 60) return "Sugerencia AMIE: Ejecutar Módulo VR TDAH o Descarte de Fase Maníaca.";
+    if (isNightWakeupHigh) return "Sugerencia AMIE: Ejecutar Módulo VR de Ansiedad (TAG) / Neurohipnosis para modulación vagal.";
+    return "Paciente basal. Seleccione módulo VR según criterio en el Master Selector.";
+  };
 
   return (
     <div className={`rounded-xl p-4 border shadow-xl transition-all ${
@@ -160,8 +168,14 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
           {riskRationale}
         </p>
 
+        {/* RECOMENDADOR DE MÓDULO VR */}
+        <div className="flex items-center gap-2 p-2 mt-2 bg-sky-950/40 border border-sky-900/50 rounded-lg text-sky-200">
+          <BrainCircuit className="w-4 h-4 text-sky-400 shrink-0" />
+          <span className="text-[11px] font-medium">{getVrRecommendation()}</span>
+        </div>
+
         {isHighRisk && (
-          <div className="p-2.5 bg-rose-950/60 border border-rose-500/40 rounded-lg text-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="p-2.5 bg-rose-950/60 border border-rose-500/40 rounded-lg text-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
               <span className="text-[11px] font-semibold">
