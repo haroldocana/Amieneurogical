@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
+import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule'; // <-- NUEVA IMPORTACIÓN
 
 interface Props {
   patient: PatientRecord;
@@ -35,7 +36,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Inducción de trance, modulación vagotónica y analgesia VR.',
       icon: <Zap className="w-6 h-6 text-purple-400" />,
       color: 'border-purple-500/30 bg-purple-900/20 hover:bg-purple-900/40',
-      ready: false
+      ready: true // <-- ¡AHORA ESTÁ ACTIVO!
     },
     {
       id: 'TDM_DEPRESSION',
@@ -66,6 +67,10 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
   // Enrutador Dinámico: Carga la consola específica según el módulo seleccionado
   if (activeModule === 'TDAH_EXECUTIVE') {
     return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
+  }
+
+  if (activeModule === 'NEURO_HYPNOSIS') {
+    return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
   }
 
   // Placeholder para los módulos que construiremos después
@@ -137,7 +142,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
            <div>
              <h4 className="text-sky-300 font-bold mb-1">Carga Selectiva de Sensores (Regla del 90%)</h4>
              <p className="text-sm text-sky-200/70 leading-relaxed">
-               Para evitar la cinetosis y asegurar latencia cero, el entorno (Holodeck) permanecerá en reposo hasta que selecciones un módulo. El servidor enviará un paquete JSON al visor Meta Quest 3S activando <strong>únicamente</strong> los sensores requeridos por el protocolo clínico seleccionado (ej. Hand-Tracking para Parkinson, Audio Binaural para TDAH).
+               Para evitar la cinetosis y asegurar latencia cero, el entorno (Holodeck) permanecerá en reposo hasta que selecciones un módulo. El servidor enviará un paquete JSON al visor Meta Quest 3S activando <strong>únicamente</strong> los sensores requeridos por el protocolo clínico seleccionado.
              </p>
            </div>
         </div>
