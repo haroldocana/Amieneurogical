@@ -109,38 +109,47 @@ const CLUSTER_B_PHENOTYPES: PhenotypeProfile[] = [
 
 export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
+  
+  // PUENTE REAL A TELEMETRÍA VR
   const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'CLUSTER_B_FORENSIC');
+
+  // Extracción de datos en vivo (previene errores si llega un array o un número)
+  const rawHrv = liveData?.metrics?.hrvRmssdMs;
+  const currentHrv = Array.isArray(rawHrv) ? rawHrv[rawHrv.length - 1] : (rawHrv || '--');
+
+  const rawGsr = liveData?.metrics?.gsrMicroSiemens;
+  const currentGsr = Array.isArray(rawGsr) ? rawGsr[rawGsr.length - 1] : (rawGsr || '--');
 
   const [selectedPhenotypeKey, setSelectedPhenotypeKey] = useState<string>('NARC_GRANDIOSE');
   const [hasConsentAccepted, setHasConsentAccepted] = useState<boolean>(false);
   const activeProfile = CLUSTER_B_PHENOTYPES.find(p => p.key === selectedPhenotypeKey) || CLUSTER_B_PHENOTYPES[0];
 
-  const [isSimulatingTest, setIsSimulatingTest] = useState(false);
+  const [isProvocationActive, setIsProvocationActive] = useState(false);
   const [testTimer, setTestTimer] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    let timer: any = null;
-    if (isSimulatingTest) {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (isProvocationActive) {
       timer = setInterval(() => setTestTimer(prev => prev + 1), 1000);
     } else {
       setTestTimer(0);
     }
     return () => { if (timer) clearInterval(timer); };
-  }, [isSimulatingTest]);
+  }, [isProvocationActive]);
 
   const handleStartProvocation = () => {
-    setIsSimulatingTest(true);
+    setIsProvocationActive(true);
     syncSession();
     transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'CLUSTER_B_FORENSIC' });
     transmit({ type: 'START_PROVOCATION', phenotype: selectedPhenotypeKey });
   };
 
   const handleStopProvocation = async () => {
-    setIsSimulatingTest(false);
+    setIsProvocationActive(false);
     transmit({ type: 'STOP_TEST' });
     
-    // Guardado silencioso en DB al detener la prueba
+    // Guardado silencioso en DB al detener la prueba con datos reales
     setIsSaving(true);
     try {
       await fetch('/api/vr/telemetry', {
@@ -151,7 +160,11 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
           sessionData: {
             taskName: `Forensic_ClusterB_${selectedPhenotypeKey}`,
             durationSeconds: testTimer,
-            metrics: { affinityScore: activeProfile.affinityScore },
+            metrics: { 
+              affinityScore: activeProfile.affinityScore,
+              finalHrv: currentHrv,
+              finalGsr: currentGsr
+            },
             aiLogs: [`Evaluación pericial completada. Perfil: ${activeProfile.title}. TriPM Audacia: ${activeProfile.metrics.triarchicBoldness}`],
             completedAt: new Date().toISOString()
           }
@@ -181,7 +194,9 @@ ${activeProfile.description}
 
 2. ENSAYO DE PROVOCACIÓN INMERSIVA EN VR:
 - Escenario: ${activeProfile.provocationScenario}
-- Patrón Biométrico: ${activeProfile.biomarkerSignature}
+- Patrón Biométrico Esperado: ${activeProfile.biomarkerSignature}
+- Última Métrica HRV Registrada: ${currentHrv} ms
+- Última Métrica GSR Registrada: ${currentGsr} µS
 
 3. MEDIDA PSICOPÁTICA TRIÁRQUICA (TriPM):
 - Audacia (Boldness): ${activeProfile.metrics.triarchicBoldness}
@@ -204,7 +219,7 @@ Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col font-sans text-slate-100 overflow-y-auto">
       
-      {/* HEADER DE CIERRE */}
+      {/* HEADER DE CIERRE CON INDICADOR DE CONEXIÓN */}
       <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-gradient-to-tr from-purple-600 via-rose-600 to-indigo-600 rounded-lg text-white shadow-lg shadow-purple-600/20">
@@ -215,11 +230,16 @@ Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
             <p className="text-xs text-slate-400">Paciente ID: <strong className="text-purple-300">{patientId}</strong></p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
+          {/* INDICADOR EN VIVO DE CONEXIÓN */}
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          </div>
+
           <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-purple-300 rounded-xl text-xs font-bold transition flex items-center gap-2">
             <RefreshCw className="w-4 h-4" /> Sincronizar VR
           </button>
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition">
+          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-xl transition border border-rose-500/20">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -300,6 +320,25 @@ Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
                 <div className="text-cyan-300 font-bold pt-1">Firma Biofisiológica Esperada:</div>
                 <p className="text-slate-400 text-[11px] font-sans">{activeProfile.biomarkerSignature}</p>
               </div>
+
+              {/* PANEL EN VIVO: Se muestra solo cuando inicia la prueba */}
+              {isProvocationActive && (
+                <div className="mt-3 p-3 bg-slate-950 border border-emerald-500/30 rounded-xl flex items-center justify-around shadow-inner animate-pulse">
+                  <div className="text-center">
+                    <span className="block text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-center gap-1">
+                      <HeartPulse className="w-3 h-3 text-emerald-400"/> Tono Vagal (HRV)
+                    </span>
+                    <span className="text-xl font-black text-emerald-400">{currentHrv} ms</span>
+                  </div>
+                  <div className="w-px h-10 bg-slate-800"></div>
+                  <div className="text-center">
+                    <span className="block text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-center gap-1">
+                      <Activity className="w-3 h-3 text-amber-400"/> Estrés (GSR)
+                    </span>
+                    <span className="text-xl font-black text-amber-400">{currentGsr} µS</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -309,13 +348,13 @@ Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
 
               <button
                 disabled={!hasConsentAccepted}
-                onClick={!isSimulatingTest ? handleStartProvocation : handleStopProvocation}
+                onClick={!isProvocationActive ? handleStartProvocation : handleStopProvocation}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
                   !hasConsentAccepted ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 
-                  isSimulatingTest ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/20'
+                  isProvocationActive ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/20'
                 }`}
               >
-                {!hasConsentAccepted ? 'Requiere Consentimiento' : isSimulatingTest ? 'Detener Ensayo Bio-VR' : 'Iniciar Provocación en VR Quest 3S'}
+                {!hasConsentAccepted ? 'Requiere Consentimiento' : isProvocationActive ? 'Detener Ensayo Bio-VR' : 'Iniciar Provocación en VR Quest 3S'}
               </button>
             </div>
           </div>
