@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
-import { X, Play, Square, Activity, Glasses, ArrowUpRight, ArrowDownRight, ShieldAlert } from 'lucide-react';
+// 🔥 CORRECCIÓN: Agregado HeartPulse y eliminados los que no se usaban
+import { X, Play, Square, Activity, Glasses, ShieldAlert, HeartPulse } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
