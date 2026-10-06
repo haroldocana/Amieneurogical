@@ -1,9 +1,48 @@
 import { PatientRecord, MedicalLicenseAccount } from './types';
 
+// Opcional: Puedes mover estas interfaces a tu types.ts en el futuro
+export interface MorrisonPrinciple {
+  letter: string;
+  title: string;
+  text: string;
+}
+
+export interface ClinicalCasePreset {
+  name: string;
+  label: string;
+  description: string;
+  record: PatientRecord;
+}
+
+export interface VrEnvironmentTarget {
+  code: string;
+  dsm5: string;
+  name: string;
+}
+
+export interface VrEnvironmentConfig {
+  id: string;
+  name: string;
+  unitySceneName: string;
+  supportedClinicalTasks: string[];
+  targetDisorders: VrEnvironmentTarget[];
+  controllableParameters: Record<string, any>;
+}
+
+export interface MasterVrConfig {
+  version: string;
+  systemName: string;
+  updatedAt: string;
+  environmentsCount: number;
+  coveredDisordersCount: number;
+  defaultSamplingRateHz: number;
+  masterEnvironments: VrEnvironmentConfig[];
+}
+
 // ============================================================================
 // PRINCIPIOS DIAGNÓSTICOS DE JAMES MORRISON (DSM-5)
 // ============================================================================
-export const MORRISON_CLINICAL_PRINCIPLES = [
+export const MORRISON_CLINICAL_PRINCIPLES: MorrisonPrinciple[] = [
   { letter: 'A', title: 'Seguridad en Diagnóstico Diferencial', text: 'Establezca su diagnóstico diferencial en forma jerárquica conforme a la seguridad del paciente (trastornos orgánicos y tratables primero).' },
   { letter: 'B', title: 'Antecedentes Familiares', text: 'Los antecedentes familiares orientan el diagnóstico; revalúe tras entrevistar a la familia.' },
   { letter: 'C', title: 'Etiología Física & Tratamientos', text: 'Los trastornos físicos y su farmacoterapia pueden inducir o agravar los síntomas mentales.' },
@@ -57,12 +96,7 @@ export const INITIAL_LICENSES: MedicalLicenseAccount[] = [
 // ============================================================================
 // CASOS CLÍNICOS PRE-CARGADOS (PRESETS)
 // ============================================================================
-export const CLINICAL_CASE_PRESETS: { 
-  name: string; 
-  label: string; 
-  description: string; 
-  record: PatientRecord 
-}[] = [
+export const CLINICAL_CASE_PRESETS: ClinicalCasePreset[] = [
   {
     name: 'Caso 1: Trauma y Riesgo Autolítico (PAC-8104)',
     label: 'Caso 1: Trauma y Riesgo Autolítico (PAC-8104)',
@@ -172,7 +206,7 @@ export const CLINICAL_CASE_PRESETS: {
 // ============================================================================
 // CONFIGURACIÓN MAESTRA DE ENTORNOS VR (52 TRASTORNOS CIE-11 / DSM-5)
 // ============================================================================
-export const MASTER_VR_ENVIRONMENTS = {
+export const MASTER_VR_ENVIRONMENTS: MasterVrConfig = {
   version: "3.8.0-AMIE-CLINICAL",
   systemName: "AMIE VR 52-DISORDER MASTER CONFIGURATION",
   updatedAt: "2026-03-20T00:00:00Z",
