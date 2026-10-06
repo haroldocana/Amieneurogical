@@ -3,7 +3,7 @@ import { PatientRecord, VrTelemetryData } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { 
   ShieldAlert, Activity, Brain, Eye, HeartPulse, FileText, 
-  Download, Zap, UserCheck, AlertTriangle, Scale, Lock, Info, CheckCircle2, X, RefreshCw
+  Download, Zap, UserCheck, AlertTriangle, Scale, Lock, Info, CheckCircle2, X, RefreshCw, Glasses
 } from 'lucide-react';
 
 interface Props {
@@ -321,6 +321,19 @@ Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
                 <p className="text-slate-400 text-[11px] font-sans">{activeProfile.biomarkerSignature}</p>
               </div>
 
+              {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+              {!isConnected && !isProvocationActive && (
+                <div className="mt-3 p-3 bg-slate-900/80 border border-purple-500/30 border-dashed rounded-xl flex items-center gap-3">
+                  <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+                    <Glasses className="w-5 h-5 text-purple-400 animate-pulse" />
+                  </div>
+                  <div className="text-xs text-slate-300 leading-relaxed">
+                    <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
+                    Para habilitar el ensayo, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patientId}</span>
+                  </div>
+                </div>
+              )}
+
               {/* PANEL EN VIVO: Se muestra solo cuando inicia la prueba */}
               {isProvocationActive && (
                 <div className="mt-3 p-3 bg-slate-950 border border-emerald-500/30 rounded-xl flex items-center justify-around shadow-inner animate-pulse">
@@ -351,10 +364,13 @@ Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
                 onClick={!isProvocationActive ? handleStartProvocation : handleStopProvocation}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
                   !hasConsentAccepted ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 
+                  (!isConnected && !isProvocationActive) ? 'bg-purple-900/30 text-purple-300 border border-purple-500/30' :
                   isProvocationActive ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/20'
                 }`}
               >
-                {!hasConsentAccepted ? 'Requiere Consentimiento' : isProvocationActive ? 'Detener Ensayo Bio-VR' : 'Iniciar Provocación en VR Quest 3S'}
+                {!hasConsentAccepted ? 'Requiere Consentimiento' : 
+                 (!isConnected && !isProvocationActive) ? 'Esperando Visor VR...' : 
+                 isProvocationActive ? 'Detener Ensayo Bio-VR' : 'Iniciar Provocación en VR Quest 3S'}
               </button>
             </div>
           </div>
