@@ -268,16 +268,14 @@ app.post('/api/sentinel/telemetry', async (req, res) => {
 // 6. RUTAS API: TELEMETRÍA VR EN TIEMPO REAL & INFORMES DE PRUEBA
 // -----------------------------------------------------------------------
 
-// A) RECEPCIÓN EN TIEMPO REAL (Meta Quest 3 transmite aquí cada segundo/milisegundo)
+// A) RECEPCIÓN EN TIEMPO REAL (Meta Quest 3 transmite aquí)
 app.post('/api/vr/stream', (req, res) => {
   try {
     const payload = req.body;
     const patientId = payload.patientId || 'PAC-8104';
 
-    // Almacena en la memoria del servidor para la PC que consulta vía polling HTTP
     vrLiveStreams.set(patientId, payload);
 
-    // Retransmite inmediatamente por WebSockets a todos los monitores conectados
     broadcastToClients({
       type: 'VR_LIVE_STREAM',
       ...payload
@@ -289,7 +287,7 @@ app.post('/api/vr/stream', (req, res) => {
   }
 });
 
-// B) LECTURA EN TIEMPO REAL (La PC del médico consulta aquí si no usa WS directo)
+// B) LECTURA EN TIEMPO REAL (Retorna objeto JSON seguro incluso si está vacío)
 app.get('/api/vr/stream', (req, res) => {
   const patientId = (req.query.patientId as string) || 'PAC-8104';
   const currentStream = vrLiveStreams.get(patientId);
@@ -297,20 +295,19 @@ app.get('/api/vr/stream', (req, res) => {
   if (currentStream) {
     return res.status(200).json(currentStream);
   } else {
-    return res.status(204).send(); // Sin contenido activo por el momento
+    // Retorna JSON válido en lugar de 204 para evitar crash en res.json() del frontend
+    return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
   }
 });
 
-// C) CONSOLIDACIÓN DE REPORTE INDIVIDUAL VR (Guardado definitivo al presionar "Finalizar VR")
+// C) CONSOLIDACIÓN DE REPORTE INDIVIDUAL VR
 app.post('/api/vr/telemetry', async (req, res) => {
   try {
     const { patientId, sessionData } = req.body;
     const targetPatient = patientId || 'PAC-8104';
 
-    // 1. Limpia la transmisión en vivo de la memoria al finalizar la prueba
     vrLiveStreams.delete(targetPatient);
 
-    // 2. Guarda la prueba individual en MongoDB
     const savedSession = await VrSession.create({
       patientId: targetPatient,
       taskName: sessionData?.taskName || 'ExecutiveControl',
@@ -328,7 +325,6 @@ app.post('/api/vr/telemetry', async (req, res) => {
 
     console.log(`💾 [VR REPORT SAVED] Prueba individual guardada para ${targetPatient} (ID DB: ${savedSession._id})`);
 
-    // 3. Notifica a la PC del médico que la sesión concluyó y hay un nuevo informe
     broadcastToClients({
       type: 'VR_SESSION_COMPLETED',
       patientId: targetPatient,
@@ -363,9 +359,10 @@ app.get('/health', (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// 7. WEBSOCKET SERVER (TELEMETRÍA EN TIEMPO REAL A 60 FPS)
+// 7. WEBSOCKET SERVER (ACEPTA CUALQUIER RUTA Y COMPLETA EL HANDSHAKE)
 // -----------------------------------------------------------------------
-const wss = new WebSocketServer({ server, path: '/ws/quest3s' });
+// Eliminada la restricción { path: '/ws/quest3s' } para admitir wss://domain.com/
+const wss = new WebSocketServer({ server });
 
 const connectedClients = new Set<WebSocket>();
 
@@ -376,14 +373,23 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message.toString());
-      
-      // Si llega streaming por WebSocket, actualizamos también la memoria en caché para endpoints GET
-      if (data && data.patientId && data.metrics) {
-        vrLiveStreams.set(data.patientId, data);
+      const patientId = data.patientId || 'PAC-8104';
+
+      // 1. Guardar copia en memoria
+      if (data && data.metrics) {
+        vrLiveStreams.set(patientId, data);
       }
 
+      // 2. Responder confirmación explícita (Handshake) si el cliente inicia la sala
+      if (data.type === 'HANDSHAKE' || data.type === 'JOIN_ROOM') {
+        ws.send(JSON.stringify({ type: 'HANDSHAKE_ACK', patientId }));
+      }
+
+      // 3. Retransmitir a los demás clientes conectados (PC y Visor)
       broadcastToClients(data, ws);
-    } catch (e) {}
+    } catch (e) {
+      console.error('❌ Error procesando mensaje WebSocket:', e);
+    }
   });
 
   ws.on('close', () => {
@@ -407,5 +413,5 @@ function broadcastToClients(data: any, senderWs: WebSocket | null = null) {
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor AMIE Backend corriendo en puerto ${PORT}`);
-  console.log(`📡 WebSocket endpoint listo en ws://localhost:${PORT}/ws/quest3s`);
+  console.log(`📡 WebSocket endpoint listo en wss://amieneurogical.onrender.com`);
 });
