@@ -1106,7 +1106,6 @@ export default function App() {
         <FullscreenTreatmentConsole
           patient={safePatient}
           onClose={() => setIsFullscreenConsoleOpen(false)}
-          onUpdatePatientVrData={handleUpdatePatientVrData}
         />
       )}
 
