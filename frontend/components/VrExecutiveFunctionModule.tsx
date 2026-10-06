@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Activity, Brain, Settings, PlayCircle, Zap, Cpu, RefreshCw, Send, FileText, Save, StopCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PatientRecord } from '../types';
@@ -10,7 +10,9 @@ interface Props {
 
 export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  const { isConnected, isPeerConnected, liveData, syncSession, sendRemoteStart } = useVrTelemetryBridge('receiver', patientId, 'ExecutiveControl');
+  
+  // Extraemos transmit para poder enviar el comando de STOP manual si es necesario
+  const { isConnected, isPeerConnected, liveData, syncSession, sendRemoteStart, transmit } = useVrTelemetryBridge('receiver', patientId, 'ExecutiveControl');
 
   const [aiMode, setAiMode] = useState<boolean>(true);
   const [monitoringActive, setMonitoringActive] = useState<boolean>(false);
@@ -20,11 +22,11 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
 
   const rawMetrics = liveData?.metrics || { hits: 0, omissions: 0, commissions: 0, reactionTimeMs: 0 };
   
-  // SOLUCIÓN TR: Filtramos el 0. Si el visor manda 0 (por omisión), mantenemos un fallback visual.
-  // En un entorno de producción real, usaríamos un useRef para mantener el último valor mayor a 0.
+  // SOLUCIÓN TR: Filtramos el 0.
   const TR = rawMetrics.reactionTimeMs > 0 ? rawMetrics.reactionTimeMs : (rawMetrics.hits > 0 ? 350 : 0); 
   const trColor = TR === 0 ? 'text-slate-500' : TR < 300 ? 'text-emerald-400' : TR < 450 ? 'text-amber-400' : 'text-rose-400';
 
+  // 1. INICIAR PRUEBA
   const handleStartMonitoring = () => {
     setMonitoringActive(true);
     setIsFinished(false);
@@ -32,17 +34,19 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     sendRemoteStart();
   };
 
-  // NUEVO: Generador de Informe IA Preliminar
+  // 2. DETENER Y GENERAR INFORME (Holodeck Reset)
   const handleGenerateReport = () => {
     setMonitoringActive(false);
     setIsFinished(true);
+    
+    // Comando para limpiar el visor del paciente y volver a sala de espera
+    transmit({ type: 'STOP_TEST', patientId, moduleName: 'ExecutiveControl' });
 
     const { hits, omissions, commissions } = rawMetrics;
     const totalRespuestas = hits + omissions + commissions;
     
     let report = `Análisis Biocomportamental completado con ${totalRespuestas} paquetes de datos.\n\n`;
     
-    // Motor de inferencia básico basado en métricas Go/No-Go
     if (totalRespuestas === 0) {
       report += "⚠️ No se detectó interacción del paciente. Prueba invalidada.";
     } else {
@@ -70,6 +74,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     setAiReport(report);
   };
 
+  // 3. GUARDAR EN MONGODB
   const handleSaveToDatabase = async () => {
     setIsSaving(true);
     try {
@@ -88,14 +93,14 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
               frontalEngagementPct: rawMetrics.hits > 0 ? 85 : 0, 
               binauralBetaHz: 15.0
             },
-            aiLogs: [aiReport] // Guardamos el informe en la base de datos
+            aiLogs: [aiReport] 
           }
         })
       });
       
       if (response.ok) {
         alert('✅ Dictamen IA y métricas guardadas exitosamente en el Expediente Clínico (MongoDB).');
-        onClose();
+        safeClose();
       } else {
         alert('❌ Error al guardar en el servidor.');
       }
@@ -107,6 +112,23 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     }
   };
 
+  // 4. CIERRE SEGURO (Desmontaje)
+  const safeClose = () => {
+    if (monitoringActive) {
+      transmit({ type: 'STOP_TEST', patientId, moduleName: 'ExecutiveControl' });
+    }
+    onClose();
+  };
+
+  // 5. CLEANUP DE SEGURIDAD (Si el médico recarga la página por accidente)
+  useEffect(() => {
+    return () => {
+      if (monitoringActive) {
+        transmit({ type: 'STOP_TEST', patientId, moduleName: 'ExecutiveControl' });
+      }
+    };
+  }, [monitoringActive, patientId, transmit]);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col font-sans text-slate-200">
       <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between">
@@ -115,7 +137,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             <Brain className="w-6 h-6 text-sky-400" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white leading-tight">CONSOLA DEL PROFESIONAL • TDAH (Executive Control)</h2>
+            <h2 className="text-lg font-bold text-white leading-tight">MÓDULO CLÍNICO • TDAH (Executive Control)</h2>
             <p className="text-xs text-slate-400">Paciente ID: <strong className="text-sky-300">{patientId}</strong></p>
           </div>
         </div>
@@ -127,7 +149,9 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
           <div className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected || isPeerConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
             <Activity className="w-4 h-4" />{isConnected || isPeerConnected ? 'VR Enlazado (En Vivo)' : 'Sin Señal VR'}
           </div>
-          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Cerrar</button>
+          <button onClick={safeClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+            Volver al Selector
+          </button>
         </div>
       </div>
 
