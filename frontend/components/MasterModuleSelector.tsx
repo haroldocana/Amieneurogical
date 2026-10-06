@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
-import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule'; // <-- NUEVA IMPORTACIÓN
+import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
+import { VrExposureTherapyModule } from './VrExposureTherapyModule'; // <-- NUEVA IMPORTACIÓN
 
 interface Props {
   patient: PatientRecord;
@@ -36,7 +37,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Inducción de trance, modulación vagotónica y analgesia VR.',
       icon: <Zap className="w-6 h-6 text-purple-400" />,
       color: 'border-purple-500/30 bg-purple-900/20 hover:bg-purple-900/40',
-      ready: true // <-- ¡AHORA ESTÁ ACTIVO!
+      ready: true 
     },
     {
       id: 'TDM_DEPRESSION',
@@ -52,7 +53,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Biofeedback GSR/HRV, reactividad amigdalina y exposición VRET.',
       icon: <HeartPulse className="w-6 h-6 text-rose-400" />,
       color: 'border-rose-500/30 bg-rose-900/20 hover:bg-rose-900/40',
-      ready: false
+      ready: true // <-- ¡AHORA ESTÁ ACTIVO EL DE ANSIEDAD!
     },
     {
       id: 'NEURO_DEGEN',
@@ -64,13 +65,17 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
     }
   ];
 
-  // Enrutador Dinámico: Carga la consola específica según el módulo seleccionado
+  // Enrutadores Dinámicos: Carga la consola específica según el módulo seleccionado
   if (activeModule === 'TDAH_EXECUTIVE') {
     return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
   }
 
   if (activeModule === 'NEURO_HYPNOSIS') {
     return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
+  }
+
+  if (activeModule === 'TAG_ANXIETY') {
+    return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- ENRUTADOR AÑADIDO
   }
 
   // Placeholder para los módulos que construiremos después
@@ -136,7 +141,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
           ))}
         </div>
 
-        {/* Explicación de la Arquitectura Optimizada (Regla del 90%) */}
+        {/* Explicación de la Arquitectura Optimizada */}
         <div className="mt-8 p-6 bg-sky-950/20 border border-sky-900/30 rounded-2xl flex items-start gap-4">
            <Users className="w-6 h-6 text-sky-400 shrink-0 mt-1" />
            <div>
