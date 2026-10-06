@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users, ShieldAlert } from 'lucide-react';
+import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users, ShieldAlert, Lightbulb } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
 import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
@@ -7,7 +7,8 @@ import { VrExposureTherapyModule } from './VrExposureTherapyModule';
 import { VrSocialCognitionModule } from './VrSocialCognitionModule';
 import { VrDepressionModule } from './VrDepressionModule';
 import { VrCognitiveDeclineModule } from './VrCognitiveDeclineModule';
-import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule'; // <-- IMPORTADO CON TU NOMBRE EXACTO
+import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule';
+import { VrGammaInsightModule } from './VrGammaInsightModule'; // <-- NUEVA IMPORTACIÓN
 
 interface Props {
   patient: PatientRecord;
@@ -17,7 +18,6 @@ interface Props {
 export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient }) => {
   const [activeModule, setActiveModule] = useState<string | null>(null);
 
-  // Diccionario de Configuración Dinámica de Módulos
   const modules = [
     {
       id: 'TDAH_EXECUTIVE',
@@ -73,18 +73,26 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Medida TriPM, Narcisismo y ensayos de provocación (Requiere Consentimiento).',
       icon: <ShieldAlert className="w-6 h-6 text-rose-500" />,
       color: 'border-rose-500/50 bg-rose-950/40 hover:bg-rose-900/50',
-      ready: true // <-- NUEVO MÓDULO FORENSE
+      ready: true
+    },
+    {
+      id: 'GAMMA_INSIGHT',
+      title: 'Estimulación Gamma 40Hz',
+      desc: 'Desacoplamiento de red DMN para TOC, Autismo Rígido y Rumiación.',
+      icon: <Lightbulb className="w-6 h-6 text-amber-400" />,
+      color: 'border-amber-500/50 bg-amber-950/40 hover:bg-amber-900/50',
+      ready: true // <-- NUEVO MÓDULO GAMMA
     }
   ];
 
-  // Enrutadores Dinámicos
   if (activeModule === 'TDAH_EXECUTIVE') return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'TEA_SOCIAL') return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'NEURO_HYPNOSIS') return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'TAG_ANXIETY') return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'TDM_DEPRESSION') return <VrDepressionModule patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'NEURO_DEGEN') return <VrCognitiveDeclineModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'CLUSTER_B_FORENSIC') return <PsychopathyNarcissismModule patient={patient} onUpdatePatientVrData={() => {}} />; // <-- TU COMPONENTE
+  if (activeModule === 'CLUSTER_B_FORENSIC') return <PsychopathyNarcissismModule patient={patient} onUpdatePatientVrData={() => {}} />;
+  if (activeModule === 'GAMMA_INSIGHT') return <VrGammaInsightModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- TU ENRUTADOR
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-950 flex flex-col font-sans text-slate-200 overflow-y-auto">
@@ -103,7 +111,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       <div className="p-8 max-w-6xl mx-auto w-full">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6">Módulos Diagnósticos y Terapéuticos VR</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {modules.map(mod => (
             <div 
               key={mod.id}
@@ -118,27 +126,10 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Activo
                 </span>
               </div>
-              
               <h3 className="text-lg font-bold text-slate-100 mb-2">{mod.title}</h3>
               <p className="text-sm text-slate-400 leading-relaxed flex-1">{mod.desc}</p>
-              
-              <div className="mt-6 flex items-center text-xs font-bold text-slate-500 group-hover:text-slate-300 transition-colors">
-                <span>Cargar Entorno y Sensores</span>
-                <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-              </div>
             </div>
           ))}
-        </div>
-
-        {/* Arquitectura */}
-        <div className="mt-8 p-6 bg-sky-950/20 border border-sky-900/30 rounded-2xl flex items-start gap-4">
-           <Users className="w-6 h-6 text-sky-400 shrink-0 mt-1" />
-           <div>
-             <h4 className="text-sky-300 font-bold mb-1">Carga Selectiva de Sensores (Regla del 90%)</h4>
-             <p className="text-sm text-sky-200/70 leading-relaxed">
-               Para evitar la cinetosis y asegurar latencia cero, el entorno (Holodeck) permanecerá en reposo hasta que selecciones un módulo. El servidor enviará un paquete JSON al visor Meta Quest 3S activando <strong>únicamente</strong> los sensores requeridos por el protocolo clínico seleccionado.
-             </p>
-           </div>
         </div>
       </div>
     </div>
