@@ -1,143 +1,197 @@
 import React from 'react';
 import { PsychotherapyFramework, PharmacologyClass } from '../types';
-import { BookOpen, CheckCircle, ShieldCheck, Activity, Pill, Brain, ChevronRight, AlertTriangle, Clock } from 'lucide-react';
+import { BookOpen, CheckCircle, ShieldCheck, Activity, Pill, Brain, ChevronRight, AlertTriangle, Clock, Info, Zap } from 'lucide-react';
 
 interface ClinicalExecutionGuidePanelProps {
-  selectedFramework: PsychotherapyFramework;
-  selectedPharmacology: PharmacologyClass;
+  selectedFramework: PsychotherapyFramework | string;
+  selectedPharmacology: PharmacologyClass | string;
 }
 
 export const ClinicalExecutionGuidePanel: React.FC<ClinicalExecutionGuidePanelProps> = ({
   selectedFramework,
   selectedPharmacology,
 }) => {
-  const getTherapyGuide = (fw: PsychotherapyFramework) => {
+  
+  // ------------------------------------------------------------------------
+  // 1. DICCIONARIO DE PSICOTERAPIA
+  // ------------------------------------------------------------------------
+  const getTherapyGuide = (fw: string) => {
     switch (fw) {
       case 'TCC':
         return {
           title: 'Terapia Cognitivo-Conductual (TCC Estandarizada)',
           duration: '12 a 16 Sesiones estructuradas',
           steps: [
-            { step: 'Fase 1: Psicoeducación & Registro de Pensamientos', desc: 'Identificación de distorsiones cognitivas (catastrofismo, inferencia arbitraria, visión de túnel) mediante registros tripartitos (Situación-Pensamiento Automático-Emoción).' },
+            { step: 'Fase 1: Psicoeducación & Registro de Pensamientos', desc: 'Identificación de distorsiones cognitivas (catastrofismo, inferencia arbitraria) mediante registros tripartitos.' },
             { step: 'Fase 2: Reestructuración Cognitiva & Prueba de Realidad', desc: 'Disputa socrática y búsqueda de evidencia empírica contradictoria para generar pensamientos alternativos equilibrados.' },
-            { step: 'Fase 3: Exposición Gradual con Prevención de Respuesta (EPR)', desc: 'Jerarquización de estímulos fóbicos/obsesivos (escala 0-100 SUDS) y deshabituación progresiva sin neutralizaciones.' },
-            { step: 'Fase 4: Activación Conductual & Prevención de Recaídas', desc: 'Programación de actividades orientadas a maestría y placer; consolidación de estrategias de afrontamiento autónomo.' },
+            { step: 'Fase 3: Exposición Gradual (EPR)', desc: 'Jerarquización de estímulos fóbicos/obsesivos (escala 0-100 SUDS) y deshabituación progresiva sin neutralizaciones.' },
+            { step: 'Fase 4: Activación Conductual', desc: 'Programación de actividades orientadas a maestría y placer; consolidación de afrontamiento.' },
           ],
-          contraindications: 'Psicosis aguda franca activa o intoxicación aguda por sustancias (requiere estabilización previa).'
+          contraindications: 'Psicosis aguda activa o intoxicación severa por sustancias.'
         };
       case 'DBT':
         return {
           title: 'Terapia Dialéctico-Conductual (DBT - Linehan)',
-          duration: 'Módulos de 24 semanas individuales + grupales',
+          duration: 'Módulos de 24 semanas (individual + grupal)',
           steps: [
-            { step: 'Fase 1: Habilidades de Mindfulness Nuclear', desc: 'Entrenamiento en habilidades "Qué" (Observar, Describir, Participar) y habilidades "Cómo" (No juzgar, Mente de Sabio, Efectividad).' },
-            { step: 'Fase 2: Tolerancia al Malestar & Habilidades TIPP', desc: 'Uso de temperatura (frío), ejercicio intenso, respiración pausada y relajación muscular progresiva para frenar impulsos autolesivos.' },
-            { step: 'Fase 3: Regulación Emocional & Acción Opuesta', desc: 'Identificación del impulso de acción destructivo y ejecución deliberada de la conducta conductual contraria.' },
-            { step: 'Fase 4: Efectividad Interpersonal (DEAR MAN)', desc: 'Expresión asertiva de necesidades y establecimiento de límites sin deterioro vincular ni autoimagen.' },
+            { step: 'Fase 1: Habilidades de Mindfulness Nuclear', desc: 'Entrenamiento en Mente de Sabio y habilidades Qué/Cómo (Observar, Describir, No juzgar).' },
+            { step: 'Fase 2: Tolerancia al Malestar (TIPP)', desc: 'Uso de temperatura, ejercicio intenso y respiración pausada para frenar impulsos autolesivos agudos.' },
+            { step: 'Fase 3: Regulación Emocional', desc: 'Identificación del impulso destructivo y ejecución deliberada de la "acción opuesta".' },
+            { step: 'Fase 4: Efectividad Interpersonal (DEAR MAN)', desc: 'Expresión asertiva de necesidades y establecimiento de límites sin deterioro vincular.' },
           ],
-          contraindications: 'Deterioro neurocognitivo mayor avanzado que impida el aprendizaje procedimental de habilidades.'
+          contraindications: 'Deterioro neurocognitivo mayor que impida el aprendizaje procedimental.'
         };
       case 'EMDR':
         return {
-          title: 'Desensibilización y Reprocesamiento por Movimientos Oculares (EMDR - 8 Fases)',
-          duration: '8 a 12 Sesiones focalizadas en blanco traumático',
+          title: 'Reprocesamiento por Movimientos Oculares (EMDR)',
+          duration: '8 a 12 Sesiones focalizadas en trauma',
           steps: [
-            { step: 'Fase 1-2: Historia Clínica & Preparación (Lugar Seguro)', desc: 'Estabilización, instalación del recurso "Lugar Seguro" y evaluación de capacidad disociativa (DES-II).' },
-            { step: 'Fase 3: Evaluación del Blanco Traumático', desc: 'Identificación de imagen nuclear, Cognición Negativa (CN), Cognición Positiva deseada (CP) y escala VOC / SUD.' },
-            { step: 'Fase 4-5: Desensibilización & Estimulación Bilateral (EB)', desc: 'Sets continuos de movimientos oculares o tapping táctil bilateral hasta reducir el SUD a 0.' },
-            { step: 'Fase 6-8: Examen Corporal, Cierre & Reevaluación', desc: 'Verificación de tensión somática residual e integración adaptativa de memorias.' },
+            { step: 'Fase 1-2: Preparación & Lugar Seguro', desc: 'Estabilización, anclaje de recursos y evaluación de capacidad disociativa (DES-II).' },
+            { step: 'Fase 3: Evaluación del Blanco Traumático', desc: 'Identificación de imagen nuclear, Cognición Negativa (CN) y escala VOC / SUD.' },
+            { step: 'Fase 4-5: Desensibilización & Estimulación Bilateral (EB)', desc: 'Sets continuos de movimientos oculares o tapping bilateral hasta reducir el SUD a 0.' },
+            { step: 'Fase 6-8: Cierre Somático & Reevaluación', desc: 'Verificación de tensión somática residual e integración adaptativa de memorias.' },
           ],
           contraindications: 'Epilepsia no controlada, inestabilidad cardiovascular severa o disociación estructural no estabilizada.'
         };
       case 'ACT':
         return {
-          title: 'Terapia de Aceptación y Compromiso (ACT - Flexibilidad Psicológica)',
+          title: 'Terapia de Aceptación y Compromiso (ACT)',
           duration: '10 a 14 Sesiones experienciales',
           steps: [
             { step: 'Fase 1: Desesperanza Creativa', desc: 'Evidenciar la ineficacia del control evitativo ("el control es el problema, no la solución").' },
-            { step: 'Fase 2: Defusión Cognitiva & Yo como Contexto', desc: 'Desprenderse de la literalidad del lenguaje mental ("notar que estoy teniendo el pensamiento de...") mediante metáforas.' },
-            { step: 'Fase 3: Aceptación Abierta & Contacto con el Momento Presente', desc: 'Hacer espacio a las sensaciones difíciles sin huida ni lucha somática.' },
-            { step: 'Fase 4: Clarificación de Valores & Acción Comprometida', desc: 'Definición de direcciones vitales significativas y trazado de metas conductuales innegociables.' },
+            { step: 'Fase 2: Defusión Cognitiva', desc: 'Desprenderse de la literalidad del lenguaje mental mediante metáforas ("notar que estoy teniendo el pensamiento de...").' },
+            { step: 'Fase 3: Aceptación & Momento Presente', desc: 'Hacer espacio a las sensaciones difíciles sin huida ni lucha somática.' },
+            { step: 'Fase 4: Clarificación de Valores', desc: 'Definición de direcciones vitales significativas y trazado de acción comprometida.' },
           ],
           contraindications: 'Fase maníaca aguda descompensada o confusión metabólica.'
         };
       case 'SISTEMICA':
         return {
-          title: 'Terapia Familiar Sistémica Estructural & Estratégica',
+          title: 'Terapia Familiar Sistémica (Estructural / Estratégica)',
           duration: '8 a 12 Sesiones vinculares',
           steps: [
-            { step: 'Fase 1: Mapeo de Límites, Jerarquías y Alianzas', desc: 'Genograma relacional e identificación del "paciente identificado" y dinámicas de triangulación.' },
-            { step: 'Fase 2: Preguntas Circulares & Reencuadre', desc: 'Romper la causalidad lineal atribucional para mostrar el circuito de retroalimentación relacional.' },
-            { step: 'Fase 3: Prescripciones Conductuales & Tareas Paradójicas', desc: 'Intervención en la homeostasis familiar disfuncional para reestablecer la parentalidad efectiva.' },
+            { step: 'Fase 1: Mapeo Relacional', desc: 'Genograma e identificación del "paciente identificado", límites y alianzas.' },
+            { step: 'Fase 2: Preguntas Circulares', desc: 'Romper la causalidad lineal atribucional para mostrar el circuito de retroalimentación familiar.' },
+            { step: 'Fase 3: Prescripciones Paradójicas', desc: 'Intervención en la homeostasis disfuncional para reestablecer jerarquías sanas.' },
           ],
-          contraindications: 'Violencia física o abuso intrafamiliar activo no contenido por la justicia.'
+          contraindications: 'Violencia física activa o abuso intrafamiliar no contenido judicialmente.'
         };
+      case 'TERAPIA_ESQUEMAS':
+        return {
+          title: 'Terapia de Esquemas (Jeffrey Young)',
+          duration: '1 a 2 Años (Trastornos de la Personalidad)',
+          steps: [
+            { step: 'Fase 1: Evaluación de Esquemas Tempranos (EMT)', desc: 'Identificación de esquemas desadaptativos (abandono, defecto, privación emocional) mediante inventarios.' },
+            { step: 'Fase 2: Técnicas Experienciales', desc: 'Reparentalización limitada, trabajo con sillas y rescriptura de imágenes traumáticas de la infancia.' },
+            { step: 'Fase 3: Romper Patrones Conductuales', desc: 'Sustitución de modos de afrontamiento disfuncionales (rendición, evitación, sobrecompensación) por el modo de "Adulto Sano".' },
+          ],
+          contraindications: 'Falta de capacidad reflexiva básica o psicopatía primaria severa.'
+        };
+      case 'GESTALT':
       case 'PSICODINAMICA_BREVE':
       default:
         return {
-          title: 'Psicoterapia Psicodinámica Breve Focal',
+          title: 'Psicoterapia Focal (Psicodinámica / Humanista)',
           duration: '16 a 20 Sesiones focalizadas',
           steps: [
-            { step: 'Fase 1: Delimitación del Foco Terapéutico y Alianza', desc: 'Identificación del conflicto nuclear relacional (CCRT - Core Conflictual Relationship Theme).' },
-            { step: 'Fase 2: Análisis de Transferencia & Mecanismos de Defensa', desc: 'Interpretación en el aquí-y-ahora de la repetición vincular, escisión, proyección o intelectualización.' },
-            { step: 'Fase 3: Elaboración y Duelo de Separación', desc: 'Integración afectiva y cierre programado trabajando la angustia de separación.' },
+            { step: 'Fase 1: Delimitación del Foco Terapéutico', desc: 'Identificación del conflicto nuclear relacional (ej. Tema Central de Conflicto Relacional - CCRT).' },
+            { step: 'Fase 2: Análisis del "Aquí y Ahora"', desc: 'Interpretación de transferencias, bloqueos emocionales y mecanismos de defensa en sesión.' },
+            { step: 'Fase 3: Elaboración y Cierre', desc: 'Integración afectiva de las partes disociadas y trabajo sobre la angustia de separación al alta.' },
           ],
-          contraindications: 'Trastornos de la personalidad con acting-out violento inminente sin marco de contención.'
+          contraindications: 'Riesgo inminente de acting-out violento sin marco de contención institucional.'
         };
     }
   };
 
-  const getPharmaGuide = (pc: PharmacologyClass) => {
+  // ------------------------------------------------------------------------
+  // 2. DICCIONARIO FARMACOLÓGICO
+  // ------------------------------------------------------------------------
+  const getPharmaGuide = (pc: string) => {
     switch (pc) {
       case 'ISRS':
         return {
           title: 'Inhibidores Selectivos de la Recaptación de Serotonina (ISRS)',
           examples: 'Sertralina (50-200 mg/d), Escitalopram (10-20 mg/d), Fluoxetina (20-60 mg/d)',
-          titration: 'Iniciar con dosis semititrada (ej. Sertralina 25-50 mg) durante 7 días para mitigar náuseas o ansiedad paradójica inicial. Evaluar respuesta a las 4-6 semanas.',
-          monitoring: 'Vigilancia de viraje a hipomanía en pacientes bipolares ocultos. Monitoreo de ideación suicida en <24 años durante primeras 2 semanas.',
+          titration: 'Iniciar con dosis semititrada (ej. Sertralina 25-50 mg) durante 7 días para mitigar náuseas o ansiedad paradójica inicial. Evaluar respuesta clínica a las 4-6 semanas.',
+          monitoring: 'Vigilancia de viraje a hipomanía en bipolares ocultos. Monitoreo de ideación suicida en <24 años durante primeras 2 semanas.',
           contraindications: 'Uso concomitante de IMAO (riesgo de síndrome serotoninérgico) o hipersensibilidad.'
         };
       case 'ESTABILIZADORES_ANIMO':
         return {
-          title: 'Estabilizadores del Ánimo (Litio / Valproato / Lamotrigina)',
-          examples: 'Carbonato de Litio (600-1200 mg/d), Divalproato de Sodio (500-1500 mg/d), Lamotrigina (100-200 mg/d)',
-          titration: 'Litio: titular según litemia sérica meta (0.6 - 1.0 mEq/L en mantenimiento; 0.8 - 1.2 mEq/L en fase aguda). Lamotrigina: titulación lenta (25mg x 2 sem, 50mg x 2 sem) para prevenir síndrome de Stevens-Johnson.',
-          monitoring: 'Litio: TSH, creatinina, electrólitos y ECG basales y cada 6 meses. Valproato: pruebas de función hepática y biometría hemática.',
-          contraindications: 'Insuficiencia renal crónica severa (Litio), daño hepático severo o embarazo primer trimestre (Valproato).'
+          title: 'Estabilizadores del Ánimo (Litio / Anticonvulsivantes)',
+          examples: 'Litio (600-1200 mg/d), Valproato (500-1500 mg/d), Lamotrigina (100-200 mg/d)',
+          titration: 'Litio: titular según litemia sérica (0.6-1.0 mEq/L). Lamotrigina: titulación extremadamente lenta (25mg x 2 sem) para prevenir síndrome de Stevens-Johnson.',
+          monitoring: 'Litio: TSH, creatinina, electrólitos basales. Valproato: Pruebas de función hepática y biometría hemática.',
+          contraindications: 'Insuficiencia renal crónica severa (Litio), embarazo primer trimestre (Valproato).'
         };
       case 'ANTIPSICOTICOS_ATIPICOS':
         return {
           title: 'Antipsicóticos de Segunda Generación (Atípicos)',
-          examples: 'Quetiapina (150-600 mg/d), Aripiprazol (5-15 mg/d), Olanzapina (5-20 mg/d), Risperidona (1-4 mg/d)',
-          titration: 'Quetiapina: inicio gradual nocturno (50 mg a 300 mg) por efecto sedativo H1. Aripiprazol: inicio matutino (5 mg) por perfil agonista parcial.',
-          monitoring: 'Perfil metabólico basal y semestral (glucemia, lípidos, circunferencia abdominal, peso). Monitoreo de síntomas extrapiramidales o discinesia.',
-          contraindications: 'Demencia con psicosis relacionada (advertencia de mortalidad en ancianos), prolongación severa del intervalo QTc.'
+          examples: 'Quetiapina (150-600 mg/d), Aripiprazol (5-15 mg/d), Olanzapina (5-20 mg/d)',
+          titration: 'Quetiapina: inicio gradual nocturno (50 mg a 300 mg) por efecto sedativo H1. Aripiprazol: inicio matutino (5 mg) por su perfil de agonismo parcial excitatorio.',
+          monitoring: 'Perfil metabólico basal y semestral (glucemia, lípidos, peso). Monitoreo de síntomas extrapiramidales.',
+          contraindications: 'Demencia con psicosis relacionada (riesgo de mortalidad), prolongación severa del intervalo QTc.'
         };
       case 'ESTIMULANTES':
         return {
           title: 'Psicoestimulantes / Moduladores Dopaminérgicos (TDAH)',
-          examples: 'Metilfenidato Liberación Prolongada (18-54 mg/d), Lisdexanfetamina (30-70 mg/d), Atomoxetina (40-80 mg/d)',
-          titration: 'Metilfenidato: inicio con 18-20 mg matutino; ajustar semanalmente según desempeño ejecutivo y ausencia de insomnio vespertino.',
-          monitoring: 'Presión arterial, frecuencia cardíaca y curva de peso. Interrogar sobre tics motores o antecedentes de abuso de sustancias.',
-          contraindications: 'Hipertensión severa descontrolada, glaucoma de ángulo estrecho, arritmias cardíacas o psicosis activa.'
+          examples: 'Metilfenidato LP (18-54 mg/d), Lisdexanfetamina (30-70 mg/d)',
+          titration: 'Metilfenidato: inicio con 18-20 mg matutino; ajustar semanalmente según desempeño ejecutivo y tolerancia vespertina.',
+          monitoring: 'Presión arterial, frecuencia cardíaca y curva de peso. Interrogar sobre tics motores o insomnio.',
+          contraindications: 'Hipertensión severa descontrolada, glaucoma de ángulo estrecho, psicosis activa o riesgo cardiovascular agudo.'
+        };
+      case 'BENZODIACEPINAS':
+        return {
+          title: 'Moduladores GABAérgicos (Benzodiacepinas / Hipnóticos)',
+          examples: 'Clonazepam (0.5-2 mg/d), Alprazolam (0.25-1 mg/d), Lorazepam (1-2 mg/d)',
+          titration: 'Uso estrictamente PRN (por razón necesaria) o esquemas cortos (<4 semanas). Retiro siempre gradual disminuyendo 10-25% de la dosis cada semana.',
+          monitoring: 'Vigilancia de tolerancia, dependencia cruzada y depresión respiratoria. Evaluar riesgo de caídas en adultos mayores.',
+          contraindications: 'Apnea del sueño severa, Miastenia Gravis, historial activo de trastorno por uso de sustancias (TUS).'
         };
       case 'ISRN':
       default:
         return {
           title: 'Inhibidores de la Recaptación de Serotonina y Noradrenalina (IRSN)',
-          examples: 'Venlafaxina (75-225 mg/d), Duloxetina (30-90 mg/d), Desvenlafaxina (50-100 mg/d)',
-          titration: 'Venlafaxina: iniciar 37.5 - 75 mg/d; efecto noradrenérgico se acentúa por encima de 150 mg/d.',
-          monitoring: 'Monitoreo de presión arterial (posible elevación diastólica dosis-dependiente).',
-          contraindications: 'Hipertensión arterial no controlada o uso de IMAO.'
+          examples: 'Venlafaxina (75-225 mg/d), Duloxetina (30-90 mg/d)',
+          titration: 'Venlafaxina: iniciar 37.5 mg/d; el efecto noradrenérgico terapéutico real se acentúa por encima de 150 mg/d.',
+          monitoring: 'Monitoreo estricto de presión arterial (elevación diastólica dosis-dependiente común).',
+          contraindications: 'Hipertensión arterial sistémica no controlada o fallo hepático agudo.'
         };
     }
   };
 
-  const therapy = getTherapyGuide(selectedFramework);
-  const pharma = getPharmaGuide(selectedPharmacology);
+  // ------------------------------------------------------------------------
+  // 3. MOTOR DE SINERGIA BIOCLÍNICA (CÓMO INTERACTÚAN TERAPIA Y FÁRMACO)
+  // ------------------------------------------------------------------------
+  const getSynergyExplanation = (fw: string, pc: string) => {
+    if (fw === 'TCC' && (pc === 'ISRS' || pc === 'ISRN')) {
+      return "El fármaco actúa como 'facilitador'. Al reducir la reactividad de la amígdala y el pensamiento rumiante, el paciente adquiere la claridad cognitiva necesaria para participar en la reestructuración de la TCC y tolerar la exposición (EPR) sin sufrir crisis de pánico incontrolables.";
+    }
+    if (fw === 'EMDR' && pc === 'BENZODIACEPINAS') {
+      return "PRECAUCIÓN: Las benzodiacepinas bloquean el procesamiento afectivo y la consolidación de la memoria. Su uso crónico inhibe el éxito del EMDR, ya que el paciente necesita conectar somáticamente con el recuerdo para desensibilizarlo. Úsese solo como rescate extremo.";
+    }
+    if ((fw === 'DBT' || fw === 'TERAPIA_ESQUEMAS') && pc === 'ESTABILIZADORES_ANIMO') {
+      return "Sinergia de contención límbica. El estabilizador previene las caídas alostáticas abruptas y los picos de impulsividad agresiva, proporcionando un 'suelo neuroquímico' estable para que el paciente pueda aprender e implementar las habilidades de tolerancia al malestar y mindfulness de la DBT.";
+    }
+    if (pc === 'ANTIPSICOTICOS_ATIPICOS') {
+      return "El antipsicótico reduce el pensamiento desorganizado, la paranoia o la excitación severa. Permite establecer una alianza terapéutica básica. La psicoterapia debe enfocarse en psicoeducación, adherencia al tratamiento y pruebas de realidad suaves, sin confrontación directa de delirios.";
+    }
+    if (pc === 'ESTIMULANTES') {
+      return "El estimulante optimiza el tono dopaminérgico prefrontal, mejorando la memoria de trabajo y la inhibición de impulsos. La psicoterapia asociada debe ser pragmática (ej. TCC enfocada en funciones ejecutivas), organizando rutinas, agendas y sistemas de recompensas externas.";
+    }
+    
+    // Sinergia genérica para combinaciones no específicas
+    return "La farmacología modula los síntomas agudos (bottom-up), regulando el sistema nervioso autónomo, mientras la psicoterapia reestructura el procesamiento cortical y los esquemas mentales (top-down). Ambos garantizan neuroplasticidad sostenible a largo plazo.";
+  };
+
+  const therapy = getTherapyGuide(selectedFramework as string);
+  const pharma = getPharmaGuide(selectedPharmacology as string);
+  const synergyText = getSynergyExplanation(selectedFramework as string, selectedPharmacology as string);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-5">
+      
+      {/* HEADER PRINCIPAL */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg">
@@ -152,12 +206,23 @@ export const ClinicalExecutionGuidePanel: React.FC<ClinicalExecutionGuidePanelPr
             </p>
           </div>
         </div>
-        <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-sky-500/20 text-sky-300 border border-sky-500/40">
+        <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-sky-500/20 text-sky-300 border border-sky-500/40 hidden sm:inline-block">
           DSM-5 / NICE / APA
         </span>
       </div>
 
+      {/* BANNER INFORMATIVO PARA EL PROFESIONAL */}
+      <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-start gap-3">
+        <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-slate-300 leading-relaxed">
+          <strong className="text-white block mb-1">¿Cómo utilizar esta guía de co-terapia?</strong>
+          Esta sección funciona como un Asistente de Decisión Clínica (CDSS). A la izquierda, encontrarás las fases secuenciales de la psicoterapia seleccionada para organizar tus sesiones. A la derecha, los parámetros farmacocinéticos de seguridad para titulación. Revisa la <strong>Sinergia Bioclínica</strong> en la parte inferior para entender cómo interactúan ambos tratamientos en el cerebro del paciente.
+        </p>
+      </div>
+
+      {/* COLUMNAS DE TERAPIA Y FARMACOLOGÍA */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        
         {/* Psychotherapy Protocol */}
         <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
@@ -182,45 +247,64 @@ export const ClinicalExecutionGuidePanel: React.FC<ClinicalExecutionGuidePanelPr
             ))}
           </div>
 
-          <div className="p-2.5 bg-rose-950/40 border border-rose-500/30 rounded-lg text-[11px] text-rose-200">
-            <strong className="text-rose-300">Precauciones / Contraindicaciones: </strong>
-            <span>{therapy.contraindications}</span>
+          <div className="p-2.5 bg-rose-950/40 border border-rose-500/30 rounded-lg text-[11px] text-rose-200 mt-4">
+            <strong className="text-rose-300 flex items-center gap-1 mb-1">
+              <AlertTriangle className="w-3 h-3" /> Precauciones / Contraindicaciones:
+            </strong>
+            <span className="pl-4 block">{therapy.contraindications}</span>
           </div>
         </div>
 
         {/* Pharmacology Titration & Monitoring Protocol */}
-        <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-            <div className="flex items-center gap-2">
-              <Pill className="w-4 h-4 text-emerald-400" />
-              <h4 className="font-bold text-xs text-emerald-300 uppercase">{pharma.title}</h4>
+        <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Pill className="w-4 h-4 text-emerald-400" />
+                <h4 className="font-bold text-xs text-emerald-300 uppercase">{pharma.title}</h4>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">Guía de Prescripción</span>
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">Guía de Prescripción</span>
+
+            <div className="space-y-2.5 text-xs text-slate-300">
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                <span className="font-bold text-slate-200 block mb-1">Moléculas & Dosis Habituales:</span>
+                <p className="text-cyan-300 font-mono text-[11px]">{pharma.examples}</p>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                <span className="font-bold text-slate-200 block mb-1">Esquema de Titulación Inicial:</span>
+                <p className="text-slate-300 text-[11px] leading-relaxed">{pharma.titration}</p>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                <span className="font-bold text-slate-200 block mb-1">Monitorización & Laboratorios Requeridos:</span>
+                <p className="text-slate-300 text-[11px] leading-relaxed">{pharma.monitoring}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2.5 text-xs text-slate-300">
-            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-              <span className="font-bold text-slate-200 block mb-1">Moléculas & Dosis Habituales:</span>
-              <p className="text-cyan-300 font-mono text-[11px]">{pharma.examples}</p>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-              <span className="font-bold text-slate-200 block mb-1">Esquema de Titulación Inicial:</span>
-              <p className="text-slate-300 text-[11px] leading-relaxed">{pharma.titration}</p>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-              <span className="font-bold text-slate-200 block mb-1">Monitorización & Laboratorios Requeridos:</span>
-              <p className="text-slate-300 text-[11px] leading-relaxed">{pharma.monitoring}</p>
-            </div>
-          </div>
-
-          <div className="p-2.5 bg-rose-950/40 border border-rose-500/30 rounded-lg text-[11px] text-rose-200">
-            <strong className="text-rose-300">Contraindicaciones Absolutas: </strong>
-            <span>{pharma.contraindications}</span>
+          <div className="p-2.5 bg-rose-950/40 border border-rose-500/30 rounded-lg text-[11px] text-rose-200 mt-4">
+            <strong className="text-rose-300 flex items-center gap-1 mb-1">
+              <ShieldCheck className="w-3 h-3" /> Contraindicaciones Absolutas:
+            </strong>
+            <span className="pl-4 block">{pharma.contraindications}</span>
           </div>
         </div>
+
       </div>
+
+      {/* EXPLICACIÓN DE SINERGIA BIOCLÍNICA */}
+      <div className="mt-4 p-4 bg-gradient-to-r from-indigo-950/50 to-slate-900 border border-indigo-500/30 rounded-xl">
+        <h4 className="font-bold text-indigo-300 text-xs mb-2 flex items-center gap-1.5 uppercase tracking-wider">
+          <Zap className="w-4 h-4 text-amber-400" />
+          Mecanismo de Sinergia Bioclínica
+        </h4>
+        <p className="text-xs text-indigo-100/80 leading-relaxed italic">
+          {synergyText}
+        </p>
+      </div>
+
     </div>
   );
 };
