@@ -997,4 +997,185 @@ export default function App() {
 
               <button
                 onClick={() => setIsFullscreenExecOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition cursor-pointer"
+              >
+                <Target className="w-4 h-4 text-sky-200" />
+                <span>Consola TDAH (Executive Control)</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenMemoryOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-200" />
+                <span>Consola Memoria & Fobias</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenFndOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4 text-indigo-200" />
+                <span>Consola Mirror VR (FND)</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenPainOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
+              >
+                <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
+                <span>Consola Analgesia VR</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenHypnosisOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-purple-200" />
+                <span>Consola Neurohipnosis Closed-Loop</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenDevTraumaOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 via-pink-700 to-rose-700 hover:from-purple-700 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
+              >
+                <Brain className="w-4 h-4 text-pink-200" />
+                <span>Consola Trauma Evolutivo & AIMA</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenDiagnosticOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
+              >
+                <Brain className="w-4 h-4" />
+                <span>Consola Diagnóstico 3D</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenConsoleOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
+              >
+                <Glasses className="w-4 h-4" />
+                <span>Consola Tratamiento</span>
+              </button>
+            </div>
+
+            <VrTherapyModule
+              patient={safePatient}
+              onUpdatePatientVrData={handleUpdatePatientVrData}
+            />
+          </div>
+        )}
+
+        {/* TAB: TESTER CENTINELA MÓVIL */}
+        {activeTab === 'sentinel_tester' && (
+          <div className="py-2">
+            <SentinelMobileCollector />
+          </div>
+        )}
+
+        {/* Tab 8: Referencia */}
+        {activeTab === 'referral' && (
+          <PsychiatryReferralView
+            patient={safePatient}
+            analysis={analysis}
+            currentDoctorName={doctorName}
+            colegiadoNumber={colegiadoNumber}
+          />
+        )}
+
+        {/* Tab 9: Panel SaaS & Licencias */}
+        {activeTab === 'saas' && <AdminSaaSPanel />}
+      </main>
+
+      <FloatingAmieAssistant
+        currentPatientId={safePatientId}
+        onNavigateTab={(targetTab: string) => setActiveTab(targetTab as AppTab)}
+        activeTab={activeTab}
+      />
+
+      <DsmGuideModal
+        isOpen={isDsmModalOpen}
+        onClose={() => setIsDsmModalOpen(false)}
+        defaultView={dsmModalView}
+      />
+
+      {/* MODALES A PANTALLA COMPLETA */}
+      {isFullscreenConsoleOpen && (
+        <FullscreenTreatmentConsole
+          patient={safePatient}
+          onClose={() => setIsFullscreenConsoleOpen(false)}
+        />
+      )}
+
+      {isFullscreenDiagnosticOpen && (
+        <FullscreenDiagnosticRunner
+          patient={safePatient}
+          onClose={() => setIsFullscreenDiagnosticOpen(false)}
+          onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
+      )}
+
+      {isFullscreenHypnosisOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <VrClosedLoopHypnosisModule
+            patient={safePatient}
+            onClose={() => setIsFullscreenHypnosisOpen(false)}
+          />
+        </div>
+      )}
+
+      {isFullscreenPhenotypeOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <DigitalPhenotypeModule
+            patient={safePatient}
+            onClose={() => setIsFullscreenPhenotypeOpen(false)}
+          />
+        </div>
+      )}
+
+      {isFullscreenPainOpen && (
+        <VrPainManagementModule
+          patient={safePatient}
+          onClose={() => setIsFullscreenPainOpen(false)}
+        />
+      )}
+
+      {isFullscreenFndOpen && (
+        <VrFunctionalNeurologyModule
+          patient={safePatient}
+          onClose={() => setIsFullscreenFndOpen(false)}
+        />
+      )}
+
+      {isFullscreenMemoryOpen && (
+        <VrMemoryReconsolidationModule
+          patient={safePatient}
+          onClose={() => setIsFullscreenMemoryOpen(false)}
+        />
+      )}
+
+      {/* AQUÍ ESTÁ LA MAGIA: EL COMPONENTE DE TDAH AHORA ABRE EL ENRUTADOR */}
+      {isFullscreenExecOpen && (
+        <VrModuleRouter
+          patient={safePatient}
+          onClose={() => setIsFullscreenExecOpen(false)}
+        />
+      )}
+
+      {isFullscreenGammaOpen && (
+        <VrGammaInsightModule
+          patient={safePatient}
+          onClose={() => setIsFullscreenGammaOpen(false)}
+        />
+      )}
+
+      {isFullscreenDevTraumaOpen && (
+        <VrDevelopmentalTraumaFullscreenMonitor
+          patient={safePatient}
+          onClose={() => setIsFullscreenDevTraumaOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
