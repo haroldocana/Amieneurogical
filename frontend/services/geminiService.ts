@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
 import { CLINICAL_CASE_PRESETS } from '../constants';
 import { consumeAiCredit } from './userService';
@@ -15,7 +16,9 @@ const GEMINI_API_KEY =
   '';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
-const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
+
+// 🔥 CORRECCIÓN CRÍTICA: Coincidencia exacta con tu server.js en Render
+const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ';
 
 const CLOUD_RUN_API_URL = import.meta.env.VITE_CLOUD_RUN_URL || 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
 
@@ -601,7 +604,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
       functionalAreasAssessment: `Sueño: ${patient.functionalAreas.sleep}/100, Energía: ${patient.functionalAreas.energy}/100`,
       acousticBiometricAssessment: 'PILAR 3.A: Modulación de voz en rango de eutimia.',
       vrHabituationAssessment: `PILAR 3.B: HRV = ${hrvVal} ms, GSR = ${gsrVal} µS. Tono Vagal estable.`,
-      regionalLobeBreakdown: { frontal: 'Normal', temporal: 'Simétrico', parietal: 'Sin alterations', occipital: 'Ritmo posterior adecuado' },
+      regionalLobeBreakdown: { frontal: 'Normal', temporal: 'Simétrico', parietal: 'Sin alteraciones', occipital: 'Ritmo posterior adecuado' },
       convergenceScore: 92.5
     },
     pharmacologicalEffectiveness: [],
