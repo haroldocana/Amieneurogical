@@ -1,6 +1,6 @@
 import express from 'express';
 import http from 'http';
-import { WebSocketServer } from 'ws';
+import WebSocket, { WebSocketServer } from 'ws'; 
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
@@ -37,9 +37,7 @@ const vrSessionSchema = new mongoose.Schema({
   patientId: { type: String, required: true, index: true },
   taskName: { type: String, required: true },
   durationSeconds: { type: Number, default: 0 },
-  // 🔥 CAMBIO CRÍTICO: Schema.Types.Mixed permite guardar CUALQUIER métrica dinámica
-  // (Temblor, TriPM, HRV, GSR, etc.) sin que Mongoose lo bloquee.
-  metrics: { type: mongoose.Schema.Types.Mixed, default: {} },
+  metrics: { type: mongoose.Schema.Types.Mixed, default: {} }, 
   aiLogs: [{ type: String }],
   completedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
@@ -59,7 +57,6 @@ app.get('/api/saas/profile', async (req, res) => {
   }
 });
 
-// Ruta para recibir el streaming en vivo
 app.post('/api/vr/stream', (req, res) => {
   try {
     const payload = req.body;
@@ -79,7 +76,6 @@ app.get('/api/vr/stream', (req, res) => {
   return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
 });
 
-// Ruta para guardar el informe en MongoDB
 app.post('/api/vr/telemetry', async (req, res) => {
   try {
     const { patientId, sessionData } = req.body;
@@ -87,12 +83,11 @@ app.post('/api/vr/telemetry', async (req, res) => {
 
     vrLiveStreams.delete(targetPatient);
 
-    // 🔥 CAMBIO CRÍTICO: Pasamos 'sessionData.metrics' directamente
     const savedSession = await VrSession.create({
       patientId: targetPatient,
       taskName: sessionData?.taskName || 'Unspecified_Task',
       durationSeconds: sessionData?.durationSeconds || 0,
-      metrics: sessionData?.metrics || {}, // Ahora guarda toda la data biométrica nueva
+      metrics: sessionData?.metrics || {}, 
       aiLogs: sessionData?.aiLogs || [],
       completedAt: new Date()
     });
@@ -116,11 +111,76 @@ app.post('/api/vr/telemetry', async (req, res) => {
 
 app.get('/health', (req, res) => { res.status(200).json({ status: 'OK' }); });
 
-// 4. WEBSOCKET SERVER GLOBAL
+// ============================================================================
+// 🔥 4. PROXY SHIM PARA VERTEX AI (REST API) - ¡Agregado!
+// ============================================================================
+app.post('/api-proxy', async (req, res) => {
+  if (req.headers['x-app-proxy'] !== 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ') {
+    return res.status(401).json({ error: 'Acceso denegado: Proxy no autorizado' });
+  }
+
+  try {
+    const { originalUrl, method, headers, body } = req.body;
+    const finalUrl = originalUrl;
+
+    console.log(`[API Proxy] Redirigiendo a: ${finalUrl}`);
+
+    const response = await fetch(finalUrl, {
+      method: method || 'POST',
+      headers: {
+        ...headers,
+        'Host': new URL(finalUrl).host,
+        'Origin': '',
+        'Referer': ''
+      },
+      body: typeof body === 'object' ? JSON.stringify(body) : body
+    });
+
+    const data = await response.text();
+    res.status(response.status).send(data);
+
+  } catch (error) {
+    console.error('[API Proxy] Error:', error);
+    res.status(500).json({ error: 'Proxy Request Failed', details: error.message });
+  }
+});
+
+// ============================================================================
+// 5. WEBSOCKET SERVER GLOBAL (VR TELEMETRY + GEMINI PROXY)
+// ============================================================================
 const wss = new WebSocketServer({ server });
 const connectedClients = new Set();
 
-wss.on('connection', (ws) => {
+// 🔥 CAMBIO: Añadimos 'req' para poder leer la ruta de la conexión entrante
+wss.on('connection', (ws, req) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // ---> A) INTERCEPTOR: PROXY HACIA GEMINI LIVE API
+  if (url.pathname === '/ws-proxy') {
+    const target = url.searchParams.get('target');
+    if (!target) return ws.close();
+
+    console.log(`[WS Proxy] Puente con Vertex AI establecido: ${target}`);
+    const targetWs = new WebSocket(target);
+
+    // Frontend -> Backend -> Google
+    ws.on('message', (msg) => {
+      if (targetWs.readyState === WebSocket.OPEN) targetWs.send(msg);
+    });
+
+    // Google -> Backend -> Frontend
+    targetWs.on('message', (msg) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    });
+
+    targetWs.on('close', () => ws.close());
+    ws.on('close', () => targetWs.close());
+    targetWs.on('error', (err) => console.error('[WS Proxy Target Error]', err));
+    ws.on('error', (err) => console.error('[WS Proxy Client Error]', err));
+    return;
+  }
+
+  // ---> B) FLUJO NORMAL: TELEMETRÍA AMIE VR
   connectedClients.add(ws);
   ws.on('message', (message) => {
     try {
@@ -133,13 +193,13 @@ wss.on('connection', (ws) => {
       }
       broadcastToClients(data, ws);
     } catch (e) { 
-      console.error('Error WSS:', e); 
+      console.error('Error WSS Telemetría:', e); 
     }
   });
+  
   ws.on('close', () => { connectedClients.delete(ws); });
 });
 
-// Transmisión a todos los clientes excepto el que envía
 function broadcastToClients(data, senderWs = null) {
   const payload = JSON.stringify(data);
   connectedClients.forEach(client => {
@@ -149,7 +209,7 @@ function broadcastToClients(data, senderWs = null) {
   });
 }
 
-// 5. INICIO DE SERVIDOR
+// 6. INICIO DE SERVIDOR
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Backend corriendo en puerto ${PORT}`);
