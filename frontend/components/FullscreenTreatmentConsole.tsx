@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void;
 }
 
-export const VrExposureTherapyModule: React.FC<Props> = ({ patient, onClose }) => {
+export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
   
   // Conexión real al visor VR
@@ -18,9 +18,12 @@ export const VrExposureTherapyModule: React.FC<Props> = ({ patient, onClose }) =
   const [timer, setTimer] = useState(0);
   const [exposureLevel, setExposureLevel] = useState(1); // Nivel de intensidad de la fobia (1 a 5)
 
-  // Telemetría en vivo desde el visor (o simulada por el Bridge si no hay hardware)
-  const hrv = liveData?.metrics?.hrvRmssdMs || 42;
-  const gsr = liveData?.metrics?.gsrMicroSiemens || 2.4;
+  // Telemetría a prueba de balas (extrae el último valor si es un array de historial)
+  const rawHrv = liveData?.metrics?.hrvRmssdMs;
+  const hrv = Array.isArray(rawHrv) ? rawHrv[rawHrv.length - 1] : (rawHrv || 42);
+
+  const rawGsr = liveData?.metrics?.gsrMicroSiemens;
+  const gsr = Array.isArray(rawGsr) ? rawGsr[rawGsr.length - 1] : (rawGsr || 2.4);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
