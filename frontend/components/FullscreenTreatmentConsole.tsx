@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
-// 🔥 CORRECCIÓN: Agregado HeartPulse y eliminados los que no se usaban
 import { X, Play, Square, Activity, Glasses, ShieldAlert, HeartPulse } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -151,25 +150,48 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
           )}
 
           {/* Botonera de Acción */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-800">
-             <button
-                onClick={handleEmergencyStop}
-                disabled={!isRunning}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 border border-slate-700 rounded-xl text-xs font-bold transition disabled:opacity-50"
-              >
-                <ShieldAlert className="w-4 h-4" /> Aterrizaje de Emergencia
-              </button>
+          <div className="mt-6">
+            {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+            {!isConnected && !isRunning && (
+              <div className="mb-4 p-3 bg-slate-900/80 border border-sky-500/30 border-dashed rounded-xl flex items-center gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+                  <Glasses className="w-5 h-5 text-sky-400 animate-pulse" />
+                </div>
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
+                  Para habilitar el ensayo, el paciente debe colocarse el visor <strong className="text-sky-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-sky-300 font-mono bg-sky-900/30 px-1 rounded">{patientId}</span>
+                </div>
+              </div>
+            )}
 
-            <div className="flex gap-3">
-              {!isRunning ? (
-                <button onClick={handleStart} className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-rose-600/20">
-                  <Play className="w-4 h-4" /> Iniciar Exposición
+            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+               <button
+                  onClick={handleEmergencyStop}
+                  disabled={!isRunning}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 border border-slate-700 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                >
+                  <ShieldAlert className="w-4 h-4" /> Aterrizaje de Emergencia
                 </button>
-              ) : (
-                <button onClick={handleFinish} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20">
-                  <Square className="w-4 h-4" /> Finalizar y Evaluar
-                </button>
-              )}
+
+              <div className="flex gap-3">
+                {!isRunning ? (
+                  <button 
+                    disabled={!isConnected}
+                    onClick={handleStart} 
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition ${
+                      !isConnected 
+                        ? 'bg-sky-900/30 text-sky-300 border border-sky-500/30 cursor-not-allowed' 
+                        : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20 cursor-pointer'
+                    }`}
+                  >
+                    {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> Iniciar Exposición</>}
+                  </button>
+                ) : (
+                  <button onClick={handleFinish} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20">
+                    <Square className="w-4 h-4" /> Finalizar y Evaluar
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
