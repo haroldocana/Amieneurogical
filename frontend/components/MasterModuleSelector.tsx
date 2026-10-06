@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users } from 'lucide-react';
+import { Brain, Eye, Activity, HeartPulse, Zap, Fingerprint, ChevronRight, Users, ShieldAlert } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
 import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
 import { VrExposureTherapyModule } from './VrExposureTherapyModule';
 import { VrSocialCognitionModule } from './VrSocialCognitionModule';
 import { VrDepressionModule } from './VrDepressionModule';
-import { VrCognitiveDeclineModule } from './VrCognitiveDeclineModule'; // <-- IMPORTACIÓN FINAL
+import { VrCognitiveDeclineModule } from './VrCognitiveDeclineModule';
+import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule'; // <-- IMPORTADO CON TU NOMBRE EXACTO
 
 interface Props {
   patient: PatientRecord;
@@ -16,7 +17,7 @@ interface Props {
 export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient }) => {
   const [activeModule, setActiveModule] = useState<string | null>(null);
 
-  // Diccionario de Configuración Dinámica de Módulos (TODOS ACTIVOS)
+  // Diccionario de Configuración Dinámica de Módulos
   const modules = [
     {
       id: 'TDAH_EXECUTIVE',
@@ -64,34 +65,26 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       desc: 'Navegación espacial, memoria de trabajo y cinemática de temblor.',
       icon: <Fingerprint className="w-6 h-6 text-amber-400" />,
       color: 'border-amber-500/30 bg-amber-900/20 hover:bg-amber-900/40',
-      ready: true // <-- ¡ÚLTIMO MÓDULO ACTIVADO!
+      ready: true
+    },
+    {
+      id: 'CLUSTER_B_FORENSIC',
+      title: 'Perfilado Forense (Cluster B)',
+      desc: 'Medida TriPM, Narcisismo y ensayos de provocación (Requiere Consentimiento).',
+      icon: <ShieldAlert className="w-6 h-6 text-rose-500" />,
+      color: 'border-rose-500/50 bg-rose-950/40 hover:bg-rose-900/50',
+      ready: true // <-- NUEVO MÓDULO FORENSE
     }
   ];
 
-  // Enrutadores Dinámicos: Carga la consola específica según el módulo seleccionado
-  if (activeModule === 'TDAH_EXECUTIVE') {
-    return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
-  }
-
-  if (activeModule === 'TEA_SOCIAL') {
-    return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />;
-  }
-
-  if (activeModule === 'NEURO_HYPNOSIS') {
-    return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
-  }
-
-  if (activeModule === 'TAG_ANXIETY') {
-    return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
-  }
-
-  if (activeModule === 'TDM_DEPRESSION') {
-    return <VrDepressionModule patient={patient} onClose={() => setActiveModule(null)} />;
-  }
-
-  if (activeModule === 'NEURO_DEGEN') {
-    return <VrCognitiveDeclineModule patient={patient} onClose={() => setActiveModule(null)} />; // <-- ENRUTADOR AÑADIDO
-  }
+  // Enrutadores Dinámicos
+  if (activeModule === 'TDAH_EXECUTIVE') return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'TEA_SOCIAL') return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'NEURO_HYPNOSIS') return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'TAG_ANXIETY') return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'TDM_DEPRESSION') return <VrDepressionModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'NEURO_DEGEN') return <VrCognitiveDeclineModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'CLUSTER_B_FORENSIC') return <PsychopathyNarcissismModule patient={patient} onUpdatePatientVrData={() => {}} />; // <-- TU COMPONENTE
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-950 flex flex-col font-sans text-slate-200 overflow-y-auto">
@@ -106,7 +99,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
         </button>
       </div>
 
-      {/* Cuadrícula de Módulos (Holodeck Control) */}
+      {/* Cuadrícula de Módulos */}
       <div className="p-8 max-w-6xl mx-auto w-full">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6">Módulos Diagnósticos y Terapéuticos VR</h2>
         
@@ -121,7 +114,6 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
                 <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
                   {mod.icon}
                 </div>
-                {/* Como todos están ready, simplificamos esta parte */}
                 <span className="px-2.5 py-1 bg-emerald-950 border border-emerald-800 text-[10px] font-bold text-emerald-400 rounded-full flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Activo
                 </span>
@@ -138,7 +130,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
           ))}
         </div>
 
-        {/* Explicación de la Arquitectura Optimizada */}
+        {/* Arquitectura */}
         <div className="mt-8 p-6 bg-sky-950/20 border border-sky-900/30 rounded-2xl flex items-start gap-4">
            <Users className="w-6 h-6 text-sky-400 shrink-0 mt-1" />
            <div>
