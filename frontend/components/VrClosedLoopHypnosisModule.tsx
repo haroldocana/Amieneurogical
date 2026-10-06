@@ -15,7 +15,8 @@ import {
   Heart,
   Sliders,
   Sunrise,
-  ShieldCheck
+  ShieldCheck,
+  Glasses
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -59,7 +60,7 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'Neurohypnosis');
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'Neurohypnosis');
 
   // Transmisión en vivo de fisiología y profundidad del trance
   useEffect(() => {
@@ -72,7 +73,7 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         omissions: susceptibilityScore || 0
       });
     }
-  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, susceptibilityScore, isActiveSession, isAbreactionTriggered]);
+  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, susceptibilityScore, isActiveSession, isAbreactionTriggered, transmit]);
 
   // Simulación y lectura biométrica en vivo en bucle cerrado
   useEffect(() => {
@@ -419,30 +420,53 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
       </div>
 
       {/* Controles de Sesión Maestros */}
-      <div className="flex items-center justify-between border-t border-slate-800 pt-4">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <Sliders className="w-4 h-4 text-purple-400" />
-          <span>Resonador Vagal: <strong className="text-emerald-400">EN LÍNEA</strong></span>
-        </div>
+      <div>
+        {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+        {!isConnected && sessionPhase === 'IDLE' && (
+          <div className="mb-4 p-3 bg-slate-900/80 border border-purple-500/30 border-dashed rounded-xl flex items-center gap-3">
+            <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+              <Glasses className="w-5 h-5 text-purple-400 animate-pulse" />
+            </div>
+            <div className="text-xs text-slate-300 leading-relaxed">
+              <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
+              Para habilitar la inducción, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patient?.id || 'PAC-8104'}</span>
+            </div>
+          </div>
+        )}
 
-        <div className="flex items-center gap-3">
-          {sessionPhase === 'IDLE' && (
-            <button onClick={handleStartInduction} className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs rounded-xl shadow-lg hover:scale-105 transition">
-              <Play className="w-4 h-4" /> <span>Iniciar Inducción Profunda</span>
-            </button>
-          )}
+        <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Sliders className="w-4 h-4 text-purple-400" />
+            <span>Resonador Vagal: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}</strong></span>
+          </div>
 
-          {sessionPhase === 'INDUCTION' && (
-            <button onClick={handleStartAwakening} className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow-lg transition">
-              <Sunrise className="w-4 h-4" /> <span>Iniciar Des-inducción (Amanecer)</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {sessionPhase === 'IDLE' && (
+              <button 
+                disabled={!isConnected}
+                onClick={handleStartInduction} 
+                className={`flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg transition ${
+                  !isConnected 
+                    ? 'bg-purple-900/30 text-purple-300 border border-purple-500/30 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:scale-105'
+                }`}
+              >
+                {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> <span>Iniciar Inducción Profunda</span></>}
+              </button>
+            )}
 
-          {(sessionPhase === 'AWAKENING' || sessionPhase === 'INDUCTION') && (
-            <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-xl transition">
-              <Square className="w-4 h-4" /> <span>Finalizar Apagado</span>
-            </button>
-          )}
+            {sessionPhase === 'INDUCTION' && (
+              <button onClick={handleStartAwakening} className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow-lg transition">
+                <Sunrise className="w-4 h-4" /> <span>Iniciar Des-inducción (Amanecer)</span>
+              </button>
+            )}
+
+            {(sessionPhase === 'AWAKENING' || sessionPhase === 'INDUCTION') && (
+              <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-xl transition">
+                <Square className="w-4 h-4" /> <span>Finalizar Apagado</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
