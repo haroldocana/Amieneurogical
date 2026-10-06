@@ -6,8 +6,9 @@
   "description": "Node backend for proxying Google Cloud API requests",
   "main": "server.ts",
   "scripts": {
-    "start": "node server.js",
-    "dev": "tsx watch server.ts"
+    "start": "npx tsx server.ts",
+    "dev": "tsx watch server.ts",
+    "build": "echo 'No build required for tsx execution'"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
