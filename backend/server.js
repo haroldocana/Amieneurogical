@@ -37,13 +37,9 @@ const vrSessionSchema = new mongoose.Schema({
   patientId: { type: String, required: true, index: true },
   taskName: { type: String, required: true },
   durationSeconds: { type: Number, default: 0 },
-  metrics: {
-    avgReactionTimeMs: { type: Number, default: 0 },
-    omissions: { type: Number, default: 0 },
-    commissions: { type: Number, default: 0 },
-    frontalEngagementPct: { type: Number, default: 0 },
-    binauralBetaHz: { type: Number, default: 15.0 }
-  },
+  // 🔥 CAMBIO CRÍTICO: Schema.Types.Mixed permite guardar CUALQUIER métrica dinámica
+  // (Temblor, TriPM, HRV, GSR, etc.) sin que Mongoose lo bloquee.
+  metrics: { type: mongoose.Schema.Types.Mixed, default: {} },
   aiLogs: [{ type: String }],
   completedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
@@ -83,7 +79,7 @@ app.get('/api/vr/stream', (req, res) => {
   return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
 });
 
-// ¡NUEVO! Ruta para guardar el informe en MongoDB
+// Ruta para guardar el informe en MongoDB
 app.post('/api/vr/telemetry', async (req, res) => {
   try {
     const { patientId, sessionData } = req.body;
@@ -91,17 +87,12 @@ app.post('/api/vr/telemetry', async (req, res) => {
 
     vrLiveStreams.delete(targetPatient);
 
+    // 🔥 CAMBIO CRÍTICO: Pasamos 'sessionData.metrics' directamente
     const savedSession = await VrSession.create({
       patientId: targetPatient,
-      taskName: sessionData?.taskName || 'ExecutiveControl',
+      taskName: sessionData?.taskName || 'Unspecified_Task',
       durationSeconds: sessionData?.durationSeconds || 0,
-      metrics: {
-        avgReactionTimeMs: sessionData?.metrics?.avgReactionTimeMs || 0,
-        omissions: sessionData?.metrics?.omissions || 0,
-        commissions: sessionData?.metrics?.commissions || 0,
-        frontalEngagementPct: sessionData?.metrics?.frontalEngagementPct || 0,
-        binauralBetaHz: sessionData?.metrics?.binauralBetaHz || 15.0
-      },
+      metrics: sessionData?.metrics || {}, // Ahora guarda toda la data biométrica nueva
       aiLogs: sessionData?.aiLogs || [],
       completedAt: new Date()
     });
@@ -148,6 +139,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => { connectedClients.delete(ws); });
 });
 
+// Transmisión a todos los clientes excepto el que envía
 function broadcastToClients(data, senderWs = null) {
   const payload = JSON.stringify(data);
   connectedClients.forEach(client => {
