@@ -36,8 +36,9 @@ class TelemetryManager {
   private bleServer: any = null;
   private webSocket: WebSocket | null = null;
   
-  private simulationInterval: any = null;
-  private watchdogTimer: any = null;
+  // 🔥 Ajuste TypeScript: Tipado seguro para temporizadores en el navegador
+  private simulationInterval: ReturnType<typeof setInterval> | null = null;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
   private lastPacketTime: number = 0;
 
   private gripZeroOffsetKg: number = 0;
@@ -420,6 +421,9 @@ class TelemetryManager {
     this.serialPort = null;
     this.bleServer = null;
     this.webSocket = null;
+
+    this.simulationInterval = null;
+    this.watchdogTimer = null;
 
     this.activeProtocol = 'DISCONNECTED';
     this.activeProfile = 'GENERIC_BLE';
