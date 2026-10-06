@@ -13,7 +13,9 @@ import {
   RefreshCw,
   Eye,
   Heart,
-  Sliders
+  Sliders,
+  Sunrise,
+  ShieldCheck
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -35,8 +37,10 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     timestamp: Date.now()
   });
 
-  // Estado del Motor Closed-Loop
+  // Estado del Motor Closed-Loop y Fases de Sesión
+  const [sessionPhase, setSessionPhase] = useState<'IDLE' | 'INDUCTION' | 'AWAKENING'>('IDLE');
   const [isActiveSession, setIsActiveSession] = useState(false);
+  const [emdrActive, setEmdrActive] = useState(false);
   const [tranceDepthPct, setTranceDepthPct] = useState(15);
   const [susceptibilityScore, setSusceptibilityScore] = useState<number | null>(null);
   const [binauralFreqHz, setBinauralFreqHz] = useState(6.0); // Modulación de ondas Theta (4-7 Hz)
@@ -63,8 +67,8 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
       transmit({
         hrv: telemetry.hrvRmssdMs,
         gsr: telemetry.gsrMicroSiemens,
-        stressLevel: tranceDepthPct, // Transmitimos la profundidad del trance (%)
-        habituationIndex: Math.floor(binauralFreqHz * 10), // Frecuencia binaural codificada
+        stressLevel: tranceDepthPct, 
+        habituationIndex: Math.floor(binauralFreqHz * 10), 
         omissions: susceptibilityScore || 0
       });
     }
@@ -75,16 +79,17 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     if (!isActiveSession) return;
 
     const interval = setInterval(() => {
-      // Variación biométrica continua simulando respuesta autonómica
-      const randomHrvDelta = (Math.random() - 0.48) * 4;
-      const randomGsrDelta = (Math.random() - 0.5) * 0.2;
+      // Variación biométrica (Si estamos despertando, forzamos el ritmo a subir)
+      const awakeningModifier = sessionPhase === 'AWAKENING' ? 1.5 : 0;
+      const randomHrvDelta = (Math.random() - 0.48) * 4 - awakeningModifier; 
+      const randomGsrDelta = (Math.random() - 0.5) * 0.2 + (awakeningModifier * 0.1);
 
       setTelemetry(prev => {
         const nextHrv = Math.max(10, Math.min(100, prev.hrvRmssdMs + randomHrvDelta));
         const nextGsr = Math.max(0.5, Math.min(12, prev.gsrMicroSiemens + randomGsrDelta));
 
-        // Verificación de Watchdog Anti-Abreacción (GSR > 6.0 u HRV < 14ms)
-        if (nextGsr - gsrBaselineRef.current > 3.8 || nextHrv < 14) {
+        // Verificación de Watchdog Anti-Abreacción (Desactivado temporalmente si estamos despertando intencionalmente)
+        if (sessionPhase !== 'AWAKENING' && (nextGsr - gsrBaselineRef.current > 3.8 || nextHrv < 14)) {
           triggerSafetyGrounding('DISPARO DE RESPUESTA SIMPÁTICA CRÍTICA: Cambios abruptos de GSR/HRV sugieren abreacción traumática.');
         }
 
@@ -94,8 +99,9 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         const depth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
         setTranceDepthPct(Math.min(98, Math.max(10, depth)));
 
-        // Arrastre de frecuencias binaurales según profundidad
-        if (depth > 70) setBinauralFreqHz(4.5);
+        // Arrastre de frecuencias binaurales según profundidad o fase
+        if (sessionPhase === 'AWAKENING') setBinauralFreqHz(14.0); // Beta para despertar
+        else if (depth > 70) setBinauralFreqHz(4.5);
         else if (depth > 40) setBinauralFreqHz(6.0);
         else setBinauralFreqHz(8.5);
 
@@ -109,7 +115,49 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [isActiveSession]);
+  }, [isActiveSession, sessionPhase]);
+
+  // -------------------------------------------------------------------------
+  // CONTROLADORES DE FASE Y HERRAMIENTAS DE TRAUMA
+  // -------------------------------------------------------------------------
+  const handleStartInduction = () => {
+    setIsActiveSession(true);
+    setSessionPhase('INDUCTION');
+    setIsAbreactionTriggered(false);
+    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'NEURO_HYPNOSIS' });
+    transmit({ type: 'START_INDUCTION' });
+  };
+
+  const handleStartAwakening = () => {
+    setSessionPhase('AWAKENING');
+    setEmdrActive(false);
+    transmit({ type: 'START_AWAKENING' }); // Lanza el Efecto Amanecer en VR
+  };
+
+  const toggleEmdr = () => {
+    const newState = !emdrActive;
+    setEmdrActive(newState);
+    transmit({ type: 'TOGGLE_EMDR', active: newState });
+  };
+
+  const triggerSafetyGrounding = (reason: string) => {
+    setIsAbreactionTriggered(true);
+    setSessionPhase('IDLE');
+    setIsActiveSession(false);
+    setTranceDepthPct(0);
+    setEmdrActive(false);
+    setBinauralFreqHz(14.0); 
+    setAbreactionMessage(reason);
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
+  };
+
+  const handleResetSession = () => {
+    setIsAbreactionTriggered(false);
+    setAbreactionMessage(null);
+    setIsActiveSession(false);
+    setSessionPhase('IDLE');
+    setTranceDepthPct(15);
+  };
 
   // Medición de Susceptibilidad Biométrica
   const handleEvaluateSusceptibility = () => {
@@ -143,35 +191,20 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         const result = await model.generateContent(prompt);
         setScriptText(result.response.text() || 'A medida que escuchas el pulso binaural, nota cómo tu cuerpo elige su propio ritmo para descansar...');
       } else {
-        setScriptText('A medida que escuchas la frecuencia en este espacio virtual, tu cuerpo puede notar cómo la respiración se vuelve más profunda y tranquila. No hay necesidad de forzar nada, solo permitir que el ritmo natural te guíe...');
+        setScriptText('A medida que escuchas la frecuencia en este espacio virtual, tu cuerpo puede notar cómo la respiración se vuelve más profunda y tranquila...');
       }
     } catch (e) {
-      setScriptText('Permítete notar la sensación de seguridad en este entorno inmersivo. Cada respiración te ayuda a encontrar mayor estabilidad y calma...');
+      setScriptText('Permítete notar la sensación de seguridad en este entorno inmersivo. Cada respiración te ayuda a encontrar mayor estabilidad...');
     } finally {
       setIsGeneratingScript(false);
     }
   };
 
-  const triggerSafetyGrounding = (reason: string) => {
-    setIsAbreactionTriggered(true);
-    setIsActiveSession(false);
-    setTranceDepthPct(0);
-    setBinauralFreqHz(14.0); // Retorno a frecuencia Beta de alerta consciente
-    setAbreactionMessage(reason);
-  };
-
-  const handleResetSession = () => {
-    setIsAbreactionTriggered(false);
-    setAbreactionMessage(null);
-    setIsActiveSession(false);
-    setTranceDepthPct(15);
-  };
-
-  // -------------------------------------------------------------------------
   // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
-  // -------------------------------------------------------------------------
   const handleEndSession = async () => {
     setIsActiveSession(false);
+    setSessionPhase('IDLE');
+    transmit({ type: 'STOP_TEST' });
 
     const sessionReport = {
       patientId: patient?.id || 'PAC-8104',
@@ -183,7 +216,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
           avgGsr: telemetry.gsrMicroSiemens,
           omissions: 0,
           commissions: 0,
-          frontalEngagementPct: tranceDepthPct, // Profundidad de trance (%)
+          frontalEngagementPct: tranceDepthPct, 
           binauralBetaHz: binauralFreqHz
         },
         aiLogs: [
@@ -200,8 +233,6 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionReport)
       });
-      console.log(`Reporte VR Neurohipnosis guardado para ${patient?.id || 'PAC-8104'}. Trance Depth: ${tranceDepthPct}%`);
-
       if (onClose) onClose();
     } catch (error) {
       console.error("Error al guardar reporte VR:", error);
@@ -226,13 +257,13 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Modulación de pulsos binaurales, metáforas ericksonianas y monitoreo de abreacción en tiempo real.
+              Modulación de pulsos binaurales, metáforas generativas y protocolo de aterrizaje seguro.
             </p>
           </div>
         </div>
 
         {onClose && (
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition">
             ✕
           </button>
         )}
@@ -256,10 +287,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
             <p className="text-slate-300">2. Frecuencia binaural conmutada a 14 Hz (Ritmo Beta de vigilia).</p>
             <p className="text-slate-300">3. Voz directiva: "Siente tus pies sobre el suelo y respira lento."</p>
           </div>
-          <button
-            onClick={handleResetSession}
-            className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow"
-          >
+          <button onClick={handleResetSession} className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow">
             Restablecer Estado y Reiniciar Módulo
           </button>
         </div>
@@ -267,7 +295,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
 
       {/* Indicadores Biométricos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+        <div className={`bg-slate-950 p-4 rounded-xl border space-y-1 ${sessionPhase === 'AWAKENING' ? 'border-amber-500/50 bg-amber-950/20' : 'border-slate-800'}`}>
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
             <Heart className="w-3.5 h-3.5 text-rose-400" /> Tono Vagal (HRV)
           </span>
@@ -287,10 +315,10 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> Frecuencia Binaural
+            <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> Frec. Binaural
           </span>
           <div className="text-xl font-mono font-bold text-cyan-400">
-            {binauralFreqHz} <span className="text-xs text-slate-500">Hz (Theta)</span>
+            {binauralFreqHz} <span className="text-xs text-slate-500">Hz {sessionPhase === 'AWAKENING' ? '(Beta)' : '(Theta)'}</span>
           </div>
         </div>
 
@@ -307,29 +335,50 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         </div>
       </div>
 
-      {/* Susceptibilidad */}
-      <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <span className="text-xs font-bold text-white flex items-center gap-1.5">
-            <Eye className="w-4 h-4 text-cyan-400" /> Escala Biométrica de Susceptibilidad Hipnótica
-          </span>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            Cuantifica la receptividad fisiológica antes de iniciar el trance.
-          </p>
+      {/* Susceptibilidad & Herramientas de Trauma */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-4">
+          <div>
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Eye className="w-4 h-4 text-cyan-400" /> Escala de Susceptibilidad
+            </span>
+            <p className="text-[11px] text-slate-400 mt-1">Cuantifica la receptividad antes del trance.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {susceptibilityScore !== null && (
+              <div className="px-3 py-1.5 bg-purple-950 border border-purple-500/40 rounded-lg text-xs font-mono">
+                Puntaje: <strong className="text-purple-300">{susceptibilityScore}/100</strong>
+              </div>
+            )}
+            <button onClick={handleEvaluateSusceptibility} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition">
+              Medir Susceptibilidad
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {susceptibilityScore !== null && (
-            <div className="px-3 py-1.5 bg-purple-950 border border-purple-500/40 rounded-lg text-xs font-mono">
-              Susceptibilidad: <strong className="text-purple-300">{susceptibilityScore}/100</strong>
-            </div>
-          )}
-          <button
-            onClick={handleEvaluateSusceptibility}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition"
-          >
-            Medir Susceptibilidad
-          </button>
+        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-4">
+          <div>
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-rose-400" /> Herramientas de Procesamiento
+            </span>
+            <p className="text-[11px] text-slate-400 mt-1">EMDR Bilateral y Grounding de Emergencia.</p>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={toggleEmdr} 
+              disabled={sessionPhase !== 'INDUCTION'}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${emdrActive ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 disabled:opacity-50'}`}
+            >
+              {emdrActive ? 'Detener EMDR' : 'Activar EMDR'}
+            </button>
+            <button 
+              onClick={() => triggerSafetyGrounding('Aterrizaje manual iniciado por el terapeuta.')} 
+              disabled={sessionPhase !== 'INDUCTION'}
+              className="flex-1 py-2 bg-rose-950 border border-rose-500/50 text-rose-300 text-xs font-bold rounded-xl transition disabled:opacity-50 hover:bg-rose-900"
+            >
+              Abortar (Grounding)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -369,7 +418,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         </div>
       </div>
 
-      {/* Controles de Sesión */}
+      {/* Controles de Sesión Maestros */}
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Sliders className="w-4 h-4 text-purple-400" />
@@ -377,21 +426,21 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         </div>
 
         <div className="flex items-center gap-3">
-          {!isActiveSession ? (
-            <button
-              onClick={() => { setIsActiveSession(true); setIsAbreactionTriggered(false); }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-105 transition"
-            >
-              <Play className="w-4 h-4" />
-              <span>Iniciar Trance Closed-Loop VR</span>
+          {sessionPhase === 'IDLE' && (
+            <button onClick={handleStartInduction} className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs rounded-xl shadow-lg hover:scale-105 transition">
+              <Play className="w-4 h-4" /> <span>Iniciar Inducción Profunda</span>
             </button>
-          ) : (
-            <button
-              onClick={handleEndSession} // <-- Conecta guardado a MongoDB y cierre limpio
-              className="flex items-center gap-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/20 transition"
-            >
-              <Square className="w-4 h-4" />
-              <span>Detener Sesión</span>
+          )}
+
+          {sessionPhase === 'INDUCTION' && (
+            <button onClick={handleStartAwakening} className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow-lg transition">
+              <Sunrise className="w-4 h-4" /> <span>Iniciar Des-inducción (Amanecer)</span>
+            </button>
+          )}
+
+          {(sessionPhase === 'AWAKENING' || sessionPhase === 'INDUCTION') && (
+            <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-xl transition">
+              <Square className="w-4 h-4" /> <span>Finalizar Apagado</span>
             </button>
           )}
         </div>
