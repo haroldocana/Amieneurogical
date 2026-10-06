@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
-import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge'; // <-- IMPORTACIÓN DEL PUENTE
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { 
   Usb, Wifi, Bluetooth, Cpu, Activity, X, Play, CheckCircle2, RotateCcw, 
-  Terminal, ArrowRight, Signal, FastForward, Radio, Heart
+  Terminal, ArrowRight, Signal, FastForward, Radio, Heart, Glasses
 } from 'lucide-react';
 
 interface FullscreenDiagnosticRunnerProps {
   patient?: PatientRecord;
   onClose: () => void;
   onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
-  onOpenModules?: () => void; // <-- Nuevo prop para saltar al Master Selector
+  onOpenModules?: () => void;
 }
 
 type ConnectionType = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED';
@@ -23,7 +23,6 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
 }) => {
   const patientId = patient?.id || 'PAC-8104';
   const [connectionType, setConnectionType] = useState<ConnectionType>('WIFI');
-  const [isCapturing, setIsCapturing] = useState(true);
   const [wifiIp, setWifiIp] = useState('192.168.1.105');
   
   // 🔌 CONEXIÓN REAL AL VISOR (Canal de Calibración)
@@ -149,8 +148,28 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
               <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
                 <RotateCcw className="w-4 h-4 text-cyan-400" /> Calibración Basal
               </span>
-              <button onClick={handleTareZero} className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition cursor-pointer">
-                Ejecutar Tare Zero
+              
+              {/* ALERTA: ESPERANDO AL PACIENTE (Si no hay conexión) */}
+              {!wsConnected && (
+                <div className="mb-2 p-2 bg-slate-900/80 border border-amber-500/30 border-dashed rounded-lg flex items-center gap-2">
+                  <Glasses className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                  <div className="text-[10px] text-slate-300 leading-tight">
+                    <strong className="text-amber-300">Esperando paciente...</strong> Coloque el visor e ingrese el ID: <span className="font-mono bg-slate-800 px-1 rounded">{patientId}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* BOTÓN BLOQUEADO HASTA QUE HAYA CONEXIÓN */}
+              <button 
+                disabled={!wsConnected}
+                onClick={handleTareZero} 
+                className={`w-full py-2 text-xs font-semibold rounded-lg border transition ${
+                  !wsConnected 
+                    ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed' 
+                    : 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-500 cursor-pointer shadow-lg shadow-cyan-600/20'
+                }`}
+              >
+                {!wsConnected ? 'Esperando Conexión VR...' : 'Ejecutar Tare Zero (Calibrar)'}
               </button>
             </div>
           </div>
