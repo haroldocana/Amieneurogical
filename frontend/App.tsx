@@ -917,9 +917,11 @@ function DoctorWorkstation() {
         )}
 
         {/* Tab Cluster B & Perfilado Biocomportamental */}
+        {/* ✨ AQUÍ ESTÁ EL CAMBIO SOLICITADO ✨ */}
         {activeTab === 'cluster_b' && (
-          <PsychopathyNarcissismModule 
+          <VrModuleRouter 
             patient={safePatient}
+            initialModuleId="CLUSTER_B_FORENSIC"
             onClose={() => setActiveTab('workstation')}
           />
         )}
@@ -996,7 +998,6 @@ function DoctorWorkstation() {
                 <span>Fenotipado Digital & Recaídas</span>
               </button>
 
-              {/* ✨ AHORA TODOS ESTOS BOTONES USAN EL ENRUTADOR VrModuleRouter ✨ */}
               <button
                 onClick={() => setActiveVrModuleId('GAMMA_INSIGHT')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
@@ -1120,7 +1121,7 @@ function DoctorWorkstation() {
 
       {/* MODALES A PANTALLA COMPLETA */}
       
-      {/* ✨ AQUÍ ESTÁ LA MAGIA: EL ENRUTADOR QUE PREGUNTA ROL PARA TODAS LAS TERAPIAS ✨ */}
+      {/* EL ENRUTADOR QUE PREGUNTA ROL PARA TODAS LAS TERAPIAS */}
       {activeVrModuleId && (
         <VrModuleRouter
           patient={safePatient}
