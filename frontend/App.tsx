@@ -26,6 +26,9 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 
+// CONSOLA UNIFICADA IMPULSADA POR IA & VR
+import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
+
 // MÓDULOS ESPECIALIZADOS
 import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
 import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
@@ -76,7 +79,8 @@ import {
   Wifi,
   ShieldCheck,
   CheckCircle2,
-  HeartHandshake
+  HeartHandshake,
+  Monitor
 } from 'lucide-react';
 
 type AppTab = 
@@ -151,6 +155,7 @@ function DoctorWorkstation() {
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
   const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState<boolean>(false);
   const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
+  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
   
   const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState<boolean>(false);
   const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState<boolean>(false);
@@ -168,6 +173,7 @@ function DoctorWorkstation() {
     setIsFullscreenDiagnosticOpen(false);
     setIsFullscreenHypnosisOpen(false);
     setIsFullscreenPhenotypeOpen(false);
+    setIsFullscreenUnifiedVrOpen(false);
     setIsFullscreenPainOpen(false);
     setIsFullscreenFndOpen(false);
     setIsFullscreenMemoryOpen(false);
@@ -987,6 +993,14 @@ function DoctorWorkstation() {
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
               <button
+                onClick={() => setIsFullscreenUnifiedVrOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:scale-105 text-white rounded-xl text-xs font-bold shadow-xl shadow-cyan-600/30 transition cursor-pointer"
+              >
+                <Monitor className="w-4 h-4 text-cyan-200" />
+                <span>Abrir Consola Inmersiva Unificada (IA + VR)</span>
+              </button>
+
+              <button
                 onClick={() => setIsFullscreenPhenotypeOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition cursor-pointer"
               >
@@ -1116,6 +1130,15 @@ function DoctorWorkstation() {
       />
 
       {/* MODALES A PANTALLA COMPLETA */}
+      {isFullscreenUnifiedVrOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <AmieUnifiedVrConsole
+            patient={safePatient}
+            onClose={() => setIsFullscreenUnifiedVrOpen(false)}
+          />
+        </div>
+      )}
+
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
           patient={safePatient}
