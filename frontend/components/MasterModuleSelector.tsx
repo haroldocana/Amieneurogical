@@ -20,6 +20,7 @@ import { VrFunctionalNeurologyModule } from './VrFunctionalNeurologyModule';
 import { VrMemoryReconsolidationModule } from './VrMemoryReconsolidationModule';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './VrDevelopmentalTraumaFullscreenMonitor';
 import { VrReactiveDesireModule } from './VrReactiveDesireModule';
+import { VrDualControlTherapyModule } from './VrDualControlTherapyModule';
 
 interface Props {
   patient: PatientRecord;
@@ -125,6 +126,14 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       icon: <HeartHandshake className="w-6 h-6 text-rose-300" />,
       color: 'border-rose-400/50 bg-rose-950/40 hover:bg-rose-900/50',
       ready: true
+    },
+    {
+      id: 'DUAL_CONTROL_SES_SIS',
+      title: 'Control Dual (SES / SIS)',
+      desc: 'Modelo Bancroft & Nagoski: Acelerador vs. Freno en terapia individual y de pareja.',
+      icon: <HeartHandshake className="w-6 h-6 text-rose-400" />,
+      color: 'border-rose-500/50 bg-rose-950/40 hover:bg-rose-900/50',
+      ready: true
     }
   ];
 
@@ -141,6 +150,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
   if (activeModule === 'EMDR_MEMORY') return <VrMemoryReconsolidationModule patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'DEV_TRAUMA') return <VrDevelopmentalTraumaFullscreenMonitor patient={patient} onClose={() => setActiveModule(null)} />;
   if (activeModule === 'REACTIVE_DESIRE') return <VrReactiveDesireModule patient={patient} onClose={() => setActiveModule(null)} />;
+  if (activeModule === 'DUAL_CONTROL_SES_SIS') return <VrDualControlTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-950 flex flex-col font-sans text-slate-200 overflow-y-auto">
@@ -155,7 +165,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
         </button>
       </div>
 
-      {/* Cuadrícula de Módulos (Ahora son 12, se acoplan perfecto en 3 filas de 4 columnas) */}
+      {/* Cuadrícula de Módulos */}
       <div className="p-8 max-w-7xl mx-auto w-full">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6 flex items-center gap-2">
           <Brain className="w-5 h-5 text-slate-400" />
