@@ -17,7 +17,8 @@ import {
   ShieldCheck,
   Glasses,
   Volume2,
-  Layers
+  Mic,
+  Radio
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -46,15 +47,20 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   const [tranceDepthPct, setTranceDepthPct] = useState(15);
   const [susceptibilityScore, setSusceptibilityScore] = useState<number | null>(null);
   
-  // Parámetros Multimodales (Audio Binaural + Visual Entrainment)
+  // Parámetros Multimodales
   const [binauralFreqHz, setBinauralFreqHz] = useState(6.0); // Theta (4-7 Hz)
   const [visualStrobeHz, setVisualStrobeHz] = useState(6.0);
-  const [audioVolume, setAudioVolume] = useState(70); // % volumen espacial en visor
+  const [audioVolume, setAudioVolume] = useState(70);
 
-  // Metáforas Cinemáticas Proyectadas
+  // NUEVO: Selector de Modo de Asistencia (Audio IA en Vivo vs Solo Texto)
+  const [useAiRealtimeAudio, setUseAiRealtimeAudio] = useState(true);
+  const [audioVoiceStyle, setAudioVoiceStyle] = useState<'SOFT_WHISPER' | 'DEEP_CALM' | 'BALANCED_THERAPIST'>('SOFT_WHISPER');
+
+  // Metáforas y Audio Generado por Gemini
   const [projectedText, setProjectedText] = useState<string>('');
-  const [isGeneratingText, setIsGeneratingText] = useState(false);
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [metaphorTopic, setMetaphorTopic] = useState<'KINETIC_BREATHING' | 'DEEP_DISSOCIATION' | 'ROOT_GROUNDING'>('KINETIC_BREATHING');
+  const [audioStreamStatus, setAudioStreamStatus] = useState<'STANDBY' | 'SYNTHESIZING' | 'STREAMING_ACTIVE'>('STANDBY');
 
   // Watchdog Anti-Abreacción
   const [isAbreactionTriggered, setIsAbreactionTriggered] = useState(false);
@@ -63,11 +69,11 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   const gsrBaselineRef = useRef<number>(2.1);
 
   // -------------------------------------------------------------------------
-  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
+  // CONEXIÓN PUENTE VR
   // -------------------------------------------------------------------------
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'NeurohypnosisMultimodal');
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'NeurohypnosisMultimodalAudio');
 
-  // Transmisión en vivo de bucle cerrado al visor (Audio + Video)
+  // Transmisión de bucle cerrado al visor
   useEffect(() => {
     if (isActiveSession && !isAbreactionTriggered) {
       transmit({
@@ -77,10 +83,11 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         binauralHz: binauralFreqHz,
         visualHz: visualStrobeHz,
         volume: audioVolume,
+        aiAudioActive: useAiRealtimeAudio,
         emdr: emdrActive
       });
     }
-  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, visualStrobeHz, audioVolume, emdrActive, isActiveSession, isAbreactionTriggered, transmit]);
+  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, visualStrobeHz, audioVolume, useAiRealtimeAudio, emdrActive, isActiveSession, isAbreactionTriggered, transmit]);
 
   // Simulación biométrica en bucle cerrado
   useEffect(() => {
@@ -95,18 +102,15 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         const nextHrv = Math.max(10, Math.min(100, prev.hrvRmssdMs + randomHrvDelta));
         const nextGsr = Math.max(0.5, Math.min(12, prev.gsrMicroSiemens + randomGsrDelta));
 
-        // Watchdog de Seguridad Anti-Abreacción
         if (sessionPhase !== 'AWAKENING' && (nextGsr - gsrBaselineRef.current > 3.8 || nextHrv < 14)) {
           triggerSafetyGrounding('DISPARO DE RESPUESTA SIMPÁTICA CRÍTICA: Alerta por alteración en conductancia cutánea.');
         }
 
-        // Cálculo de Profundidad del Trance
         const hrvFactor = Math.min(100, (nextHrv / 60) * 100);
         const gsrFactor = Math.max(0, 100 - (nextGsr * 15));
         const depth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
         setTranceDepthPct(Math.min(98, Math.max(10, depth)));
 
-        // Ajuste automático de frecuencias de audio y visuales
         if (sessionPhase === 'AWAKENING') {
           setBinauralFreqHz(14.0);
           setVisualStrobeHz(14.0);
@@ -140,13 +144,20 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     setIsActiveSession(true);
     setSessionPhase('INDUCTION');
     setIsAbreactionTriggered(false);
-    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'MULTIMODAL_HYPNOSIS' });
-    transmit({ type: 'START_MULTIMODAL_SESSION', binauralHz: binauralFreqHz, visualHz: visualStrobeHz });
+    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'MULTIMODAL_AUDIO_HYPNOSIS' });
+    transmit({ 
+      type: 'START_MULTIMODAL_SESSION', 
+      binauralHz: binauralFreqHz, 
+      visualHz: visualStrobeHz,
+      aiAudioEnabled: useAiRealtimeAudio,
+      voiceStyle: audioVoiceStyle 
+    });
   };
 
   const handleStartAwakening = () => {
     setSessionPhase('AWAKENING');
     setEmdrActive(false);
+    setAudioStreamStatus('STANDBY');
     transmit({ type: 'START_AWAKENING_SEQUENCE' });
   };
 
@@ -164,6 +175,7 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     setEmdrActive(false);
     setBinauralFreqHz(14.0);
     setVisualStrobeHz(14.0);
+    setAudioStreamStatus('STANDBY');
     setAbreactionMessage(reason);
     transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
   };
@@ -183,8 +195,10 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     setSusceptibilityScore(vagalScore + gsrScore + 12);
   };
 
-  const handleGenerateTextMetaphor = async () => {
-    setIsGeneratingText(true);
+  // Generación de Guion Textual y Síntesis de Voz en Tiempo Real con Gemini
+  const handleGenerateAiInductionContent = async () => {
+    setIsGeneratingContent(true);
+    setAudioStreamStatus('SYNTHESIZING');
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
       if (apiKey) {
@@ -192,41 +206,61 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
         const prompt = `
-Genera una secuencia corta de 3 frases cinemáticas de inducción hipnótica (para proyectar en texto flotante en VR) orientadas a: ${metaphorTopic}.
+Actúa como un sintetizador clínico de inducción ericksoniana en tiempo real para AMIE Engine.
+Genera un guion terapéutico enfocado en: ${metaphorTopic}.
 Paciente: ${patient.consultationReason} (${patient.age} años).
-Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). Máximo 25 palabras en total.
+HRV actual: ${telemetry.hrvRmssdMs} ms | GSR: ${telemetry.gsrMicroSiemens} µS.
+Estilo de voz requerido: ${audioVoiceStyle}.
+Usa lenguaje indirecto, pausas marcadas [PAUSA_3S], y doble vínculo. Máximo 40 palabras.
 `;
         const result = await model.generateContent(prompt);
-        setProjectedText(result.response.text() || 'Sigue la expansión de la luz | Nota cómo el cuerpo descansa | Paz profunda.');
+        const textOutput = result.response.text() || 'Nota cómo la respiración marca el ritmo de la calma...';
+        setProjectedText(textOutput);
+
+        // Si el usuario seleccionó usar audio IA en tiempo real, transmitimos el comando de streaming de voz al visor
+        if (useAiRealtimeAudio) {
+          setAudioStreamStatus('STREAMING_ACTIVE');
+          transmit({
+            type: 'STREAM_AI_VOICE',
+            script: textOutput,
+            voiceStyle: audioVoiceStyle,
+            volume: audioVolume
+          });
+        } else {
+          setAudioStreamStatus('STANDBY');
+        }
       } else {
-        setProjectedText('Observa el ritmo de las partículas lumínicas | Cada exhalación profundiza la calma | Siente el apoyo del entorno.');
+        setProjectedText('Observa el compás de las partículas de luz | Cada exhalación profundiza el descanso.');
+        setAudioStreamStatus('STANDBY');
       }
     } catch (e) {
-      setProjectedText('Permítete seguir el compás visual | El cuerpo encuentra su propio balance | Descanso.');
+      setProjectedText('Permítete seguir el ritmo visual | El cuerpo encuentra su propio balance.');
+      setAudioStreamStatus('STANDBY');
     } finally {
-      setIsGeneratingText(false);
+      setIsGeneratingContent(false);
     }
   };
 
   const handleEndSession = async () => {
     setIsActiveSession(false);
     setSessionPhase('IDLE');
+    setAudioStreamStatus('STANDBY');
     transmit({ type: 'STOP_TEST' });
 
     const sessionReport = {
       patientId: patient?.id || 'PAC-8104',
       sessionData: {
-        taskName: 'NeurohypnosisMultimodal_ClosedLoop',
+        taskName: 'NeurohypnosisMultimodal_AiAudioStream',
         durationSeconds: 300,
         metrics: {
           avgHrv: telemetry.hrvRmssdMs,
           avgGsr: telemetry.gsrMicroSiemens,
           frontalEngagementPct: tranceDepthPct,
-          binauralFreqHz: binauralFreqHz
+          aiAudioUsed: useAiRealtimeAudio
         },
         aiLogs: [
-          `Sesión de Neurohipnosis Multimodal (Audio + Visual) concluida. Profundidad: ${tranceDepthPct}%. Frecuencia Binaural/Estroboscópica: ${binauralFreqHz} Hz.`,
-          projectedText ? `Metáfora textual proyectada: "${projectedText}"` : 'Sin metáfora proyectada.'
+          `Sesión de Neurohipnosis con Audio IA en tiempo real concluida. Profundidad: ${tranceDepthPct}%. Estilo de voz: ${audioVoiceStyle}.`,
+          projectedText ? `Guion sintetizado: "${projectedText}"` : 'Sin guion generado.'
         ],
         completedAt: new Date().toISOString()
       }
@@ -250,25 +284,25 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-600 rounded-2xl text-white shadow-lg shadow-purple-600/30">
-            <Volume2 className="w-6 h-6" />
+            <Mic className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-black text-white tracking-tight">
-                Consola de Neurohipnosis Multimodal • Audio Binaural & Estroboscopía VR
+                Consola de Neurohipnosis • Audio IA en Tiempo Real & Estroboscopía VR
               </h2>
-              <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full">
-                CLOSED-LOOP MULTIMODAL
+              <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full">
+                GEMINI LIVE AUDIO STREAM
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Sincronización simultánea de audio binaural dinámico, pulsos visuales ópticos y texto cinematográfico en visor.
+              Generación y transmisión en streaming de voz terapéutica y pulsos visuales sincronizados al visor del paciente.
             </p>
           </div>
         </div>
 
         {onClose && (
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition cursor-pointer">
             ✕
           </button>
         )}
@@ -287,18 +321,18 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
             </div>
           </div>
           <div className="p-3 bg-slate-950/80 rounded-xl border border-rose-500/30 text-xs space-y-1 font-mono">
-            <span className="font-bold text-rose-400">PROTOCOLO DE GROUNDING MULTIMODAL INYECTADO:</span>
-            <p className="text-slate-300">1. Audio binaural conmutado a tono de vigilia (14 Hz) con volumen seguro.</p>
-            <p className="text-slate-300">2. Estroboscopio visual desactivado en el visor.</p>
-            <p className="text-slate-300">3. Estabilización de iluminación ambiental al 100%.</p>
+            <span className="font-bold text-rose-400">PROTOCOLO DE GROUNDING INYECTADO:</span>
+            <p className="text-slate-300">1. Transmisión de voz IA interrumpida instantáneamente.</p>
+            <p className="text-slate-300">2. Audio conmutado a tono de seguridad (14 Hz).</p>
+            <p className="text-slate-300">3. Estroboscopio óptico neutralizado.</p>
           </div>
-          <button onClick={handleResetSession} className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow">
+          <button onClick={handleResetSession} className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow cursor-pointer">
             Restablecer Estado y Reiniciar Consola
           </button>
         </div>
       )}
 
-      {/* Indicadores Biométricos y Frecuencias */}
+      {/* Indicadores Biométricos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
@@ -320,10 +354,10 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> Arrastre Binaural / Óptico
+            <Radio className="w-3.5 h-3.5 text-cyan-400" /> Estado de Audio IA
           </span>
-          <div className="text-xl font-mono font-bold text-cyan-400">
-            {binauralFreqHz} <span className="text-xs text-slate-500">Hz {sessionPhase === 'AWAKENING' ? '(Beta)' : '(Theta)'}</span>
+          <div className="text-xs font-mono font-bold text-cyan-400 pt-1">
+            {audioStreamStatus === 'STREAMING_ACTIVE' ? '🟢 Transmitiendo Voz' : audioStreamStatus === 'SYNTHESIZING' ? '🟡 Sintetizando...' : '⚪ En Espera'}
           </div>
         </div>
 
@@ -340,12 +374,12 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
         </div>
       </div>
 
-      {/* Controles de Volumen y Susceptibilidad */}
+      {/* Controles de Configuración de Voz IA y Volumen */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Volume2 className="w-4 h-4 text-cyan-400" /> Volumen de Paisaje Sonoro VR
+              <Volume2 className="w-4 h-4 text-cyan-400" /> Volumen Espacial en Visor
             </span>
             <span className="text-xs font-mono font-bold text-cyan-300">{audioVolume}%</span>
           </div>
@@ -360,31 +394,37 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
         </div>
 
         <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-3">
-          <div>
+          <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Eye className="w-4 h-4 text-purple-400" /> Índice de Susceptibilidad Multimodal
+              <Mic className="w-4 h-4 text-purple-400" /> Habilitar Síntesis de Voz IA en Vivo
             </span>
-            <p className="text-[10px] text-slate-400 mt-0.5">Cuantifica la respuesta al estímulo combinado (Audio + Visual).</p>
+            <input
+              type="checkbox"
+              checked={useAiRealtimeAudio}
+              onChange={(e) => setUseAiRealtimeAudio(e.target.checked)}
+              className="w-4 h-4 accent-purple-600 cursor-pointer"
+            />
           </div>
-          <div className="flex items-center gap-3">
-            {susceptibilityScore !== null && (
-              <div className="px-3 py-1 bg-purple-950 border border-purple-500/40 rounded-lg text-xs font-mono">
-                Puntaje: <strong className="text-purple-300">{susceptibilityScore}/100</strong>
-              </div>
-            )}
-            <button onClick={handleEvaluateSusceptibility} className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition cursor-pointer">
-              Evaluar Susceptibilidad
-            </button>
+          <div className="flex items-center gap-2">
+            <select
+              value={audioVoiceStyle}
+              onChange={(e) => setAudioVoiceStyle(e.target.value as any)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none"
+            >
+              <option value="SOFT_WHISPER">Susurro Suave y Cálido (Relajación)</option>
+              <option value="DEEP_CALM">Voz Profunda y Lenta (Trance Profundo)</option>
+              <option value="BALANCED_THERAPIST">Terapeuta Neutral y Permisivo</option>
+            </select>
           </div>
         </div>
       </div>
 
-      {/* Proyección de Metáforas en Texto Cinematográfico VR */}
+      {/* Generador y Proyección de Inducción con IA */}
       <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple-400" />
-            Secuencia Cinematográfica Textual en Visor
+            Motor de Guion e Inducción Terapéutica (Gemini AI)
           </span>
 
           <div className="flex items-center gap-2">
@@ -393,27 +433,27 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
               onChange={(e) => setMetaphorTopic(e.target.value as any)}
               className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none"
             >
-              <option value="KINETIC_BREATHING">Respiración Lumínica Sincronizada</option>
-              <option value="DEEP_DISSOCIATION">Disociación Espacial y Flotación</option>
-              <option value="ROOT_GROUNDING">Anclaje Sensorial y Estabilidad</option>
+              <option value="KINETIC_BREATHING">Respiración Lumínica y Expansión</option>
+              <option value="DEEP_DISSOCIATION">Disociación Segura y Flotación</option>
+              <option value="ROOT_GROUNDING">Anclaje de Estabilidad y Raíz</option>
             </select>
 
             <button
-              onClick={handleGenerateTextMetaphor}
-              disabled={isGeneratingText}
+              onClick={handleGenerateAiInductionContent}
+              disabled={isGeneratingContent}
               className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5 cursor-pointer"
             >
-              {isGeneratingText ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              <span>Generar Texto VR</span>
+              {isGeneratingContent ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>Sintetizar & Transmitir Voz IA</span>
             </button>
           </div>
         </div>
 
         <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-300 min-h-[90px] font-mono flex items-center justify-center text-center">
           {projectedText ? (
-            <span className="text-cyan-200 tracking-wide">✨ [{projectedText}]</span>
+            <span className="text-cyan-200 tracking-wide">🎙️ [{projectedText}]</span>
           ) : (
-            <span className="text-slate-500 italic">Haga clic en "Generar Texto VR" para desplegar la secuencia que el paciente leerá suavemente en su espacio virtual...</span>
+            <span className="text-slate-500 italic">Haga clic en "Sintetizar & Transmitir Voz IA" para generar el contenido dinámico adaptado a los biomarcadores del paciente...</span>
           )}
         </div>
       </div>
@@ -427,7 +467,7 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
             </div>
             <div className="text-xs text-slate-300 leading-relaxed">
               <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
-              Para iniciar la sesión multimodal, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patient?.id || 'PAC-8104'}</span>
+              Para iniciar la transmisión de audio IA en vivo, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> vinculado al expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patient?.id || 'PAC-8104'}</span>
             </div>
           </div>
         )}
@@ -435,7 +475,7 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
         <div className="flex items-center justify-between border-t border-slate-800 pt-4">
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Sliders className="w-4 h-4 text-purple-400" />
-            <span>Puente VR Multimodal: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}</strong></span>
+            <span>Puente VR Gemini Live: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}</strong></span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -449,7 +489,7 @@ Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). 
                     : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:scale-105 cursor-pointer'
                 }`}
               >
-                {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> <span>Iniciar Sesión Multimodal</span></>}
+                {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> <span>Iniciar Sesión con Voz IA</span></>}
               </button>
             )}
 
