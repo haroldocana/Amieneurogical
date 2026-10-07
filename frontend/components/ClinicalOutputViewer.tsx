@@ -16,7 +16,9 @@ import {
   Smartphone,
   Sparkles,
   Printer,
-  FileText
+  FileText,
+  Glasses,
+  HeartHandshake
 } from 'lucide-react';
 
 interface ClinicalOutputViewerProps {
@@ -49,13 +51,14 @@ export const ClinicalOutputViewer: React.FC<ClinicalOutputViewerProps> = ({
 ## 2. MATRIZ DE DIAGNÓSTICOS DIFERENCIALES Y DESCARTES DE SESGO
 ${analysis.differentialMatrix ? analysis.differentialMatrix.map(d => `- [${d.status}]${d.disorderName} (${d.codeCIE10}, Certeza:${d.certaintyPct}%): ${d.biasDiscardRationale} [Regla:${d.morrisonPrincipleApplied}]`).join('\n') : ''}
 
-## 3. EVALUACIÓN DE NEUROSENSOMETRÍA qEEG POR LÓBULOS Y BIOMARCADORES
+## 3. EVALUACIÓN DE NEUROSENSOMETRÍA qEEG Y TELEMETRÍA VR INMERSIVA
 - Frontal: ${analysis.bioclinicalTriangulation.regionalLobeBreakdown?.frontal || 'N/A'}
 - Temporal: ${analysis.bioclinicalTriangulation.regionalLobeBreakdown?.temporal || 'N/A'}
 - Parietal: ${analysis.bioclinicalTriangulation.regionalLobeBreakdown?.parietal || 'N/A'}
 - Occipital: ${analysis.bioclinicalTriangulation.regionalLobeBreakdown?.occipital || 'N/A'}
 - Triangulación Psicométrica: ${analysis.bioclinicalTriangulation.psychometricsSummary}
 - Dominios Neurovegetativos: ${analysis.bioclinicalTriangulation.functionalAreasAssessment}
+- Habituación VR / Autonómica: ${analysis.bioclinicalTriangulation.vrHabituationAssessment || 'Registros normales'}
 - Índice de Convergencia: ${analysis.bioclinicalTriangulation.convergenceScore}%
 
 ## 4. ALERTAS DE RIESGO INTEGRADO (SUICIDIO / PSICOSIS) Y APK CENTINELA
@@ -83,7 +86,6 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Safe Fallback Patient en caso de que no se pase directamente por prop
   const activePatientRecord: PatientRecord = patient || {
     id: 'PAC-8104',
     patientNameAnonymized: 'Paciente ID: PAC-8104',
@@ -112,7 +114,7 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => setShowReportExporter(!showReportExporter)}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition shadow-md shadow-sky-600/20"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition shadow-md shadow-sky-600/20 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>{showReportExporter ? 'Ocultar Dictamen PDF' : 'Generar PDF / Oficial'}</span>
@@ -120,7 +122,7 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
 
           <button
             onClick={handleCopyReport}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition cursor-pointer"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-sky-400" />}
             <span>{copied ? 'Copiado' : 'Copiar Texto'}</span>
@@ -128,7 +130,6 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
         </div>
       </div>
 
-      {/* Componente del Generador de Reporte Impreso / PDF */}
       {showReportExporter && (
         <ClinicalReportExporter
           patient={activePatientRecord}
@@ -179,7 +180,6 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
             </div>
           </div>
 
-          {/* Specifiers */}
           {analysis.principalDiagnosis.specifiers && analysis.principalDiagnosis.specifiers.length > 0 && (
             <div className="mb-3 flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-slate-400 font-semibold">Especificadores:</span>
@@ -202,12 +202,12 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
         <DifferentialMatrixTable matrix={analysis.differentialMatrix || []} />
       </div>
 
-      {/* BLOQUE 3: EVALUACIÓN DE NEUROSENSOMETRÍA qEEG POR LÓBULOS Y BIOMARCADORES */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-        <div className="flex items-center justify-between mb-3">
+      {/* BLOQUE 3: EVALUACIÓN DE NEUROSENSOMETRÍA qEEG Y TELEMETRÍA VR */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
+        <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
             <Activity className="w-4 h-4" />
-            <span>Bloque 3: Evaluación de Neurosensometría qEEG por Lóbulos & Triangulación</span>
+            <span>Bloque 3: Evaluación de Neurosensometría qEEG & Telemetría VR Inmersiva</span>
           </div>
           <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono">
             Convergencia: {analysis.bioclinicalTriangulation.convergenceScore}%
@@ -216,7 +216,7 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
 
         {/* 4-Lobe Regional Breakdown */}
         {analysis.bioclinicalTriangulation.regionalLobeBreakdown && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800">
               <div className="font-bold text-cyan-300 mb-1 flex items-center gap-1.5">
                 <Brain className="w-3.5 h-3.5" /> Lóbulo Frontal (F3, F4, Fz)
@@ -254,6 +254,17 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
             </div>
           </div>
         )}
+
+        {/* NUEVO: Tarjeta de Desempeño VR e Inmersión */}
+        <div className="p-3.5 rounded-lg bg-cyan-950/30 border border-cyan-500/30 flex items-start gap-3 text-xs">
+          <Glasses className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold text-cyan-200 block">Evaluación de Biometría & Habituation Rate en Entorno VR:</span>
+            <p className="text-cyan-100/80 leading-relaxed text-[11px]">
+              {analysis.bioclinicalTriangulation.vrHabituationAssessment || 'Registros inmersivos estables. Habituación autonómica adecuada bajo protocolos de exposición o relajación.'}
+            </p>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
           <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800">
@@ -342,7 +353,6 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
           )}
         </div>
 
-        {/* Pharmacological Effectiveness Card if available */}
         {analysis.pharmacologicalEffectiveness && analysis.pharmacologicalEffectiveness.length > 0 && (
           <div className="mb-3.5 p-3.5 rounded-lg bg-slate-950/90 border border-emerald-500/30 text-xs">
             <h4 className="font-bold text-emerald-300 mb-2 flex items-center gap-1.5">
@@ -406,7 +416,6 @@ ${analysis.recommendedActionPlan.urgentActions.map(u => `- ${u}`).join('\n')}
           </div>
         </div>
 
-        {/* Urgent Actions & Directives */}
         {analysis.recommendedActionPlan.urgentActions && analysis.recommendedActionPlan.urgentActions.length > 0 && (
           <div className="mt-3.5 p-3 rounded-lg bg-slate-950/90 border border-slate-800">
             <h4 className="font-bold text-amber-300 text-xs mb-1.5 flex items-center gap-1.5">
