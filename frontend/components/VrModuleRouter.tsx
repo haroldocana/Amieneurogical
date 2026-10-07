@@ -27,7 +27,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   // Catálogo de módulos disponibles para enrutar desde la consola
   const availableModules = [
     { id: 'TDAH_EXECUTIVE', title: 'Función Ejecutiva (TDAH)' },
-    { id: 'DUAL_CONTROL_SES_SIS', title: 'Control Dual (SES / SIS)' },
+    { id: 'DUAL_CONTROL_SES_SIS', title: 'Laboratorio Relacional y Control Dual (AMIE)' },
     { id: 'DEV_TRAUMA', title: 'Trauma Evolutivo (AIMA)' },
     { id: 'EMDR_MEMORY', title: 'Memoria y Fobias (EMDR)' },
     { id: 'CLUSTER_B_FORENSIC', title: 'Perfilado Forense (Cluster B)' },
