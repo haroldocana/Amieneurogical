@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PsychotherapyFramework, PharmacologyClass } from '../types';
 import { BookOpen, CheckCircle, ShieldCheck, Activity, Pill, Brain, ChevronRight, AlertTriangle, Clock, Info, Zap } from 'lucide-react';
 
@@ -104,17 +104,17 @@ export const ClinicalExecutionGuidePanel: React.FC<ClinicalExecutionGuidePanelPr
   };
 
   // ------------------------------------------------------------------------
-  // 2. DICCIONARIO FARMACOLÓGICO
+  // 2. DICCIONARIO FARMACOLÓGICO (Actualizado con TOC y TEA)
   // ------------------------------------------------------------------------
   const getPharmaGuide = (pc: string) => {
     switch (pc) {
       case 'ISRS':
         return {
-          title: 'Inhibidores Selectivos de la Recaptación de Serotonina (ISRS)',
-          examples: 'Sertralina (50-200 mg/d), Escitalopram (10-20 mg/d), Fluoxetina (20-60 mg/d)',
-          titration: 'Iniciar con dosis semititrada (ej. Sertralina 25-50 mg) durante 7 días para mitigar náuseas o ansiedad paradójica inicial. Evaluar respuesta clínica a las 4-6 semanas.',
-          monitoring: 'Vigilancia de viraje a hipomanía en bipolares ocultos. Monitoreo de ideación suicida en <24 años durante primeras 2 semanas.',
-          contraindications: 'Uso concomitante de IMAO (riesgo de síndrome serotoninérgico) o hipersensibilidad.'
+          title: 'Inhibidores Selectivos de la Recaptación de Serotonina (ISRS / Alta Dosis TOC)',
+          examples: 'Sertralina (100-250 mg/d), Fluoxetina (40-80 mg/d), Escitalopram (20 mg/d)',
+          titration: 'En TOC, las dosis terapéuticas suelen duplicar las de depresión. Iniciar bajo esquema estándar y titular ascendentemente cada 2 semanas según tolerancia.',
+          monitoring: 'Vigilancia de viraje a hipomanía, acatisia y seguimiento de respuesta a las 8-12 semanas (latencia clínica mayor en TOC).',
+          contraindications: 'Uso concomitante de IMAO o hipersensibilidad al principio activo.'
         };
       case 'ESTABILIZADORES_ANIMO':
         return {
@@ -126,19 +126,19 @@ export const ClinicalExecutionGuidePanel: React.FC<ClinicalExecutionGuidePanelPr
         };
       case 'ANTIPSICOTICOS_ATIPICOS':
         return {
-          title: 'Antipsicóticos de Segunda Generación (Atípicos)',
-          examples: 'Quetiapina (150-600 mg/d), Aripiprazol (5-15 mg/d), Olanzapina (5-20 mg/d)',
-          titration: 'Quetiapina: inicio gradual nocturno (50 mg a 300 mg) por efecto sedativo H1. Aripiprazol: inicio matutino (5 mg) por su perfil de agonismo parcial excitatorio.',
-          monitoring: 'Perfil metabólico basal y semestral (glucemia, lípidos, peso). Monitoreo de síntomas extrapiramidales.',
-          contraindications: 'Demencia con psicosis relacionada (riesgo de mortalidad), prolongación severa del intervalo QTc.'
+          title: 'Antipsicóticos de Segunda Generación (Atípicos / TEA & Irritabilidad)',
+          examples: 'Aripiprazol (2-15 mg/d), Risperidona (0.5-3 mg/d), Quetiapina (150-600 mg/d)',
+          titration: 'Aripiprazol o Risperidona en TEA: inicio a dosis muy bajas (ej. 0.5 mg o 2 mg) para evitar sedación excesiva o efectos extrapiramidales agudizados.',
+          monitoring: 'Perfil metabólico basal y semestral (glucemia, lípidos, peso). Monitoreo de somnolencia e hiperprolactinemia (Risperidona).',
+          contraindications: 'Demencia con psicosis relacionada, prolongación severa del intervalo QTc.'
         };
       case 'ESTIMULANTES':
         return {
-          title: 'Psicoestimulantes / Moduladores Dopaminérgicos (TDAH)',
-          examples: 'Metilfenidato LP (18-54 mg/d), Lisdexanfetamina (30-70 mg/d)',
-          titration: 'Metilfenidato: inicio con 18-20 mg matutino; ajustar semanalmente según desempeño ejecutivo y tolerancia vespertina.',
-          monitoring: 'Presión arterial, frecuencia cardíaca y curva de peso. Interrogar sobre tics motores o insomnio.',
-          contraindications: 'Hipertensión severa descontrolada, glaucoma de ángulo estrecho, psicosis activa o riesgo cardiovascular agudo.'
+          title: 'Psicoestimulantes y Moduladores No Estimulantes (TDAH Complejo)',
+          examples: 'Metilfenidato LP (18-54 mg/d), Lisdexanfetamina (30-70 mg/d), Atomoxetina (40-100 mg/d)',
+          titration: 'Atomoxetina (No estimulante): ideal en TDAH con alta ansiedad comórbida; inicio a 0.5 mg/kg/d y ajuste a las 2-4 semanas (máx 1.2 mg/kg/d).',
+          monitoring: 'Presión arterial, frecuencia cardíaca, control de peso y evaluación de insomnio o tics.',
+          contraindications: 'Hipertensión severa descontrolada, glaucoma, uso reciente de IMAO.'
         };
       case 'BENZODIACEPINAS':
         return {
@@ -161,23 +161,26 @@ export const ClinicalExecutionGuidePanel: React.FC<ClinicalExecutionGuidePanelPr
   };
 
   // ------------------------------------------------------------------------
-  // 3. MOTOR DE SINERGIA BIOCLÍNICA (CÓMO INTERACTÚAN TERAPIA Y FÁRMACO)
+  // 3. MOTOR DE SINERGIA BIOCLÍNICA AMPLIADO (Incluye TEA, TOC y TDAH)
   // ------------------------------------------------------------------------
   const getSynergyExplanation = (fw: string, pc: string) => {
     if (fw === 'TCC' && (pc === 'ISRS' || pc === 'ISRN')) {
       return "El fármaco actúa como 'facilitador'. Al reducir la reactividad de la amígdala y el pensamiento rumiante, el paciente adquiere la claridad cognitiva necesaria para participar en la reestructuración de la TCC y tolerar la exposición (EPR) sin sufrir crisis de pánico incontrolables.";
+    }
+    if (pc === 'ISRS' && fw === 'TCC' && selectedPharmacology === 'ISRS') {
+      return "Sinergia crítica para Trastorno Obsesivo-Compulsivo (TOC): Los circuitos corticostriatotalámicos (CSTC) hiperactivos requieren concentraciones elevadas de recaptación de serotonina para modular el bucle orbitofrontal. La psicoterapia concurrente de Exposición con Prevención de Respuesta (EPR) entrena la habituación sin la cual el fármaco por sí solo muestra altas tasas de recaída.";
+    }
+    if (pc === 'ANTIPSICOTICOS_ATIPICOS') {
+      return "Sinergia para Trastorno del Espectro Autista (TEA) y conductas disruptivas: El antipsicótico reduce la hiperreactividad a estímulos ambientales y la irritabilidad severa mediante bloqueo parcial dopaminérgico/serotoninérgico. La intervención psicoterapéutica (como los módulos de cognición social y tolerancia sensorial VR) se beneficia de este 'piso de calma', permitiendo procesar rostros y expresiones sin saturación atencional.";
+    }
+    if (pc === 'ESTIMULANTES') {
+      return "Sinergia en TDAH Complejo: En perfiles con alta reactividad autonómica o comorbilidad ansiosa, el uso de moduladores prefrontales optimiza el tono dopaminérgico y la inhibición de impulsos (Go/No-Go). La estrategia psicoterapéutica asociada se enfoca en estructuración de funciones ejecutivas y agendas externas.";
     }
     if (fw === 'EMDR' && pc === 'BENZODIACEPINAS') {
       return "PRECAUCIÓN: Las benzodiacepinas bloquean el procesamiento afectivo y la consolidación de la memoria. Su uso crónico inhibe el éxito del EMDR, ya que el paciente necesita conectar somáticamente con el recuerdo para desensibilizarlo. Úsese solo como rescate extremo.";
     }
     if ((fw === 'DBT' || fw === 'TERAPIA_ESQUEMAS') && pc === 'ESTABILIZADORES_ANIMO') {
       return "Sinergia de contención límbica. El estabilizador previene las caídas alostáticas abruptas y los picos de impulsividad agresiva, proporcionando un 'suelo neuroquímico' estable para que el paciente pueda aprender e implementar las habilidades de tolerancia al malestar y mindfulness de la DBT.";
-    }
-    if (pc === 'ANTIPSICOTICOS_ATIPICOS') {
-      return "El antipsicótico reduce el pensamiento desorganizado, la paranoia o la excitación severa. Permite establecer una alianza terapéutica básica. La psicoterapia debe enfocarse en psicoeducación, adherencia al tratamiento y pruebas de realidad suaves, sin confrontación directa de delirios.";
-    }
-    if (pc === 'ESTIMULANTES') {
-      return "El estimulante optimiza el tono dopaminérgico prefrontal, mejorando la memoria de trabajo y la inhibición de impulsos. La psicoterapia asociada debe ser pragmática (ej. TCC enfocada en funciones ejecutivas), organizando rutinas, agendas y sistemas de recompensas externas.";
     }
     
     // Sinergia genérica para combinaciones no específicas
