@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HeartHandshake, ShieldAlert, Activity, Sparkles, ArrowRight, Brain, User, Users, Flame, Lock } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge'; // <-- IMPORTACIÓN DEL PUENTE VR
 
 interface Props {
   patient: PatientRecord;
@@ -12,11 +13,13 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
   const [currentPhase, setCurrentPhase] = useState<'assessment' | 'sis_release' | 'ses_activation'>('assessment');
   
   // Métricas del Modelo de Control Dual (Acelerador vs Freno)
-  const [sisBrakeLevel, setSisBrakeLevel] = useState<number>(78); // Sistema de Inhibición (Freno)
-  const [sesAcceleratorLevel, setSesAcceleratorLevel] = useState<number>(35); // Sistema de Excitación (Acelerador)
+  const [sisBrakeLevel, setSisBrakeLevel] = useState<number>(78);
+  const [sesAcceleratorLevel, setSesAcceleratorLevel] = useState<number>(35);
   const [activeStressor, setActiveStressor] = useState<string>('Carga mental y fatiga ejecutiva');
 
-  // Banco de estresores específicos según el perfil clínico
+  // CONEXIÓN AL VISOR PICO 3
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DUAL_CONTROL');
+
   const stressorsMap = {
     INDIVIDUAL_FEMALE: [
       'Autocrítica corporal y vergüenza de la imagen (Body Shame)',
@@ -38,6 +41,21 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
     ]
   };
 
+  // Función para mandar el comando a las gafas Pico 3
+  const handleTransmitToVR = () => {
+    let command = { type: 'LOAD_MODULE', ecosystem: 'NEUTRAL_VOID', isVideo: false };
+
+    if (currentPhase === 'sis_release') {
+      // Fase 2: Apagar el Freno -> Cargar entorno de relajación profunda
+      command = { type: 'LOAD_MODULE', ecosystem: 'CALM_BEACH_SUNSET', isVideo: false };
+    } else if (currentPhase === 'ses_activation') {
+      // Fase 3: Encender Acelerador -> Cargar VIDEO 360 de intimidad/romance
+      command = { type: 'LOAD_MODULE', ecosystem: 'terapia_pareja_escena1', isVideo: true };
+    }
+
+    transmit(command);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col font-sans p-6 overflow-y-auto">
       {/* Cabecera Principal */}
@@ -45,10 +63,13 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
         <div>
           <h1 className="text-xl font-black text-white flex items-center gap-2">
             <HeartHandshake className="w-6 h-6 text-rose-400" />
-            AMIE • Motor Clínico de Control Dual (Bancroft & Janssen / Nagoski)
+            AMIE • Motor Clínico de Control Dual (Deseo Reactivo)
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
             Expediente Activo: <strong className="text-sky-400">{patient?.id || 'PAC-8104'}</strong> | Enfoque: <span className="text-rose-300 font-semibold uppercase">{profileType}</span>
+            <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold ${isConnected ? 'bg-emerald-950 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
+              {isConnected ? 'PICO 3 CONECTADO' : 'ESPERANDO VISOR...'}
+            </span>
           </p>
         </div>
         <button 
@@ -127,7 +148,7 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
             </div>
 
             <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-              <strong className="text-rose-300">Diagnóstico Neurobiológico:</strong> Con el freno a este nivel, cualquier estímulo de aceleración generará resistencia o rechazo defensivo. Es imperativo ejecutar la Fase 1.
+              <strong className="text-rose-300">Diagnóstico Neurobiológico:</strong> Con el freno a este nivel, cualquier estímulo de aceleración generará resistencia o rechazo defensivo. Es imperativo ejecutar la Fase 1 y 2.
             </p>
           </div>
 
@@ -175,7 +196,7 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
               <span className="px-2 py-0.5 bg-sky-950 border border-sky-800 text-[10px] font-bold text-sky-400 rounded">Fase 1</span>
               <h3 className="font-bold text-xs text-white">Mapeo y Calibración Dual</h3>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Evaluación cruzada de estresores cotidianos y medición de la línea base de conductancia cutánea.
+                Evaluación cruzada de estresores cotidianos y medición de la línea base de conductancia cutánea. (Sin Inmersión)
               </p>
             </div>
 
@@ -187,7 +208,7 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
               <span className="px-2 py-0.5 bg-purple-950 border border-purple-800 text-[10px] font-bold text-purple-400 rounded">Fase 2</span>
               <h3 className="font-bold text-xs text-white">Descompresión (Apagar el Freno)</h3>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Entorno virtual de cierre del ciclo del estrés, descarga de carga mental y regulación vagotónica.
+                Entorno virtual de cierre del ciclo del estrés, descarga mental y regulación vagotónica. <strong className="text-purple-300">(Activa VR: Playa / Refugio)</strong>
               </p>
             </div>
 
@@ -199,7 +220,7 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
               <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-[10px] font-bold text-emerald-400 rounded">Fase 3</span>
               <h3 className="font-bold text-xs text-white">Afecto Sin Demanda (SES)</h3>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Estímulos seguros y libres de presión para reeducar el sistema nervioso en la respuesta placentera.
+                Estímulos seguros y libres de presión para reeducar el sistema nervioso. <strong className="text-emerald-300">(Activa VR: Video 360 Íntimo)</strong>
               </p>
             </div>
 
@@ -213,10 +234,15 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
             </div>
             
             <button 
-              onClick={() => alert(`Transmitiendo protocolo de Control Dual (${profileType}) al visor Pico 3...`)}
-              className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-lg transition"
+              disabled={!isConnected}
+              onClick={handleTransmitToVR}
+              className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition ${
+                !isConnected 
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white cursor-pointer'
+              }`}
             >
-              <span>Transmitir al Visor VR</span>
+              <span>{isConnected ? 'Transmitir al Visor VR' : 'Conecte las gafas primero'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
