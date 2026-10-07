@@ -5,22 +5,8 @@ import {
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 
-// IMPORTACIONES DE MÓDULOS BASE
-import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
-import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
-import { VrExposureTherapyModule } from './VrExposureTherapyModule';
-import { VrSocialCognitionModule } from './VrSocialCognitionModule';
-import { VrDepressionModule } from './VrDepressionModule';
-import { VrCognitiveDeclineModule } from './VrCognitiveDeclineModule';
-import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule';
-import { VrGammaInsightModule } from './VrGammaInsightModule';
-
-// IMPORTACIONES DE LOS NUEVOS MÓDULOS
-import { VrFunctionalNeurologyModule } from './VrFunctionalNeurologyModule';
-import { VrMemoryReconsolidationModule } from './VrMemoryReconsolidationModule';
-import { VrDevelopmentalTraumaFullscreenMonitor } from './VrDevelopmentalTraumaFullscreenMonitor';
-import { VrReactiveDesireModule } from './VrReactiveDesireModule';
-import { VrDualControlTherapyModule } from './VrDualControlTherapyModule';
+// IMPORTAMOS NUESTRO ENRUTADOR PRINCIPAL
+import { VrModuleRouter } from './VrModuleRouter';
 
 interface Props {
   patient: PatientRecord;
@@ -28,7 +14,7 @@ interface Props {
 }
 
 export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient }) => {
-  const [activeModule, setActiveModule] = useState<string | null>(null);
+  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
 
   const modules = [
     {
@@ -120,14 +106,6 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
       ready: true
     },
     {
-      id: 'REACTIVE_DESIRE',
-      title: 'Terapia de Pareja',
-      desc: 'Deseo reactivo, modelo de control dual y biofeedback HRV en pareja.',
-      icon: <HeartHandshake className="w-6 h-6 text-rose-300" />,
-      color: 'border-rose-400/50 bg-rose-950/40 hover:bg-rose-900/50',
-      ready: true
-    },
-    {
       id: 'DUAL_CONTROL_SES_SIS',
       title: 'Control Dual (SES / SIS)',
       desc: 'Modelo Bancroft & Nagoski: Acelerador vs. Freno en terapia individual y de pareja.',
@@ -137,20 +115,16 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
     }
   ];
 
-  // ENRUTADOR DINÁMICO
-  if (activeModule === 'TDAH_EXECUTIVE') return <VrExecutiveFunctionModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'TEA_SOCIAL') return <VrSocialCognitionModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'NEURO_HYPNOSIS') return <VrClosedLoopHypnosisModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'TAG_ANXIETY') return <VrExposureTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'TDM_DEPRESSION') return <VrDepressionModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'NEURO_DEGEN') return <VrCognitiveDeclineModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'CLUSTER_B_FORENSIC') return <PsychopathyNarcissismModule patient={patient} onUpdatePatientVrData={() => {}} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'GAMMA_INSIGHT') return <VrGammaInsightModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'FND_MIRROR') return <VrFunctionalNeurologyModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'EMDR_MEMORY') return <VrMemoryReconsolidationModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'DEV_TRAUMA') return <VrDevelopmentalTraumaFullscreenMonitor patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'REACTIVE_DESIRE') return <VrReactiveDesireModule patient={patient} onClose={() => setActiveModule(null)} />;
-  if (activeModule === 'DUAL_CONTROL_SES_SIS') return <VrDualControlTherapyModule patient={patient} onClose={() => setActiveModule(null)} />;
+  // ENRUTADOR DINÁMICO UNIFICADO A TRAVÉS DE VrModuleRouter
+  if (activeModuleId) {
+    return (
+      <VrModuleRouter 
+        patient={patient} 
+        onClose={() => setActiveModuleId(null)} 
+        initialModuleId={activeModuleId} 
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-950 flex flex-col font-sans text-slate-200 overflow-y-auto">
@@ -176,7 +150,7 @@ export const MasterModuleSelector: React.FC<Props> = ({ patient, onClosePatient 
           {modules.map(mod => (
             <div 
               key={mod.id}
-              onClick={() => setActiveModule(mod.id)}
+              onClick={() => setActiveModuleId(mod.id)}
               className={`group relative p-6 rounded-2xl border ${mod.color} cursor-pointer transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 overflow-hidden flex flex-col h-full`}
             >
               <div className="flex items-start justify-between mb-4">
