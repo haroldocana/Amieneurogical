@@ -26,7 +26,6 @@ export interface VrStreamPayload {
 
 const BACKEND_DOMAIN = 'amieneurogical.onrender.com';
 const WS_URL = `wss://${BACKEND_DOMAIN}`;
-const HTTP_URL = `https://${BACKEND_DOMAIN}`;
 
 export const useVrTelemetryBridge = (
   mode: 'sender' | 'receiver',
@@ -92,7 +91,12 @@ export const useVrTelemetryBridge = (
           } catch (e) {}
         };
 
-        ws.onerror = () => setIsConnected(false);
+        ws.onerror = () => {
+          if (!isMounted) return;
+          setIsConnected(false);
+          setIsPeerConnected(false);
+        };
+
         ws.onclose = () => {
           if (!isMounted) return;
           setIsConnected(false);
@@ -107,26 +111,9 @@ export const useVrTelemetryBridge = (
 
     connectWs();
 
-    const pollInterval = setInterval(async () => {
-      if (mode === 'receiver' && (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN)) {
-        try {
-          const res = await fetch(`${HTTP_URL}/api/vr/stream?patientId=${patientId}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.timestamp && data.status !== 'WAITING_STREAM') {
-              setLiveData(normalizePacket(data));
-              setIsConnected(true);
-              setIsPeerConnected(true);
-            }
-          }
-        } catch (err) {}
-      }
-    }, 1200);
-
     return () => {
       isMounted = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      clearInterval(pollInterval);
       if (socketRef.current) socketRef.current.close();
     };
   }, [mode, patientId, moduleName]);
@@ -152,8 +139,17 @@ export const useVrTelemetryBridge = (
       socketRef.current.send(JSON.stringify(payload));
       return;
     }
-    try { await fetch(`${HTTP_URL}/api/vr/stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch (error) {}
   }, [mode, patientId, moduleName]);
 
-  return { isConnected: isConnected || isPeerConnected, isPeerConnected, isStreaming: isConnected || isPeerConnected, liveData, lastPacket: liveData, remoteCommand, syncSession, sendRemoteStart, transmit };
+  return { 
+    isConnected, 
+    isPeerConnected, 
+    isStreaming: isConnected && isPeerConnected, 
+    liveData, 
+    lastPacket: liveData, 
+    remoteCommand, 
+    syncSession, 
+    sendRemoteStart, 
+    transmit 
+  };
 };
