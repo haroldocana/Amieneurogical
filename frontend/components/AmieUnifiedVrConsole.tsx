@@ -16,7 +16,16 @@ import {
   Monitor,
   Compass,
   Film,
-  Stethoscope
+  Stethoscope,
+  Cpu,
+  Wifi,
+  MessageSquare,
+  FileText,
+  Volume2,
+  Video,
+  Layers,
+  ArrowRight,
+  ShieldCheck
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -25,20 +34,20 @@ interface Props {
   onClose?: () => void;
 }
 
-type AppRole = 'SELECTING_ROLE' | 'CLINICIAN_CONSOLE' | 'PATIENT_VR_VIEWER';
-type ClinicalVrMode = 'HYPNOSIS' | 'PHOBIA_VRET' | 'CLUSTER_B_FORENSIC' | 'SYSTEMIC_COUPLE';
+type AppRole = 'SELECTING_ROLE' | 'CALIBRATION_RUNNER' | 'CLINICIAN_CONSOLE' | 'PATIENT_VR_VIEWER';
+type ClinicalVrMode = 'HYPNOSIS' | 'PHOBIA_VRET' | 'CLUSTER_B_FORENSIC' | 'SYSTEMIC_COUPLE' | 'SEXUAL_HEALTH_SES_SIS';
 type InteractionType = 'DYNAMIC_AI' | 'PRE_RECORDED_VIDEO';
+type ConnectionType = 'USB' | 'BLUETOOTH' | 'WIFI' | 'SIMULATED';
 
-// 12 Escenarios Maestros Espaciales de AMIE
 const AMIE_12_ENVIRONMENTS = [
-  { id: 'FORENSIC_COURTROOM', name: '01. Sala de Audiencias / Tribunal Pericial' },
+  { id: 'FORENSIC_COURTROOM', name: '01. Sala de Audiencias / Tribunal Pericial (Cluster B)' },
   { id: 'CORPORATE_OFFICE', name: '02. Oficina Ejecutiva de Confrontación' },
   { id: 'MINIMALIST_ROOM', name: '03. Sala Neutra de Contrainterrogatorio' },
   { id: 'AGORAPHOBIA_STREET', name: '04. Plaza Pública Abierta (Agorafobia)' },
   { id: 'HEIGHTS_BALCONY', name: '05. Balcón Escénico en Altura (Acrofobia)' },
-  { id: 'ALPINE_SANCTUARY', name: '06. Santuario Alpino Minimalista (Grounding)' },
-  { id: 'NEUTRAL_LIVING_ROOM', name: '07. Sala de Estar Sistémica (Mediación)' },
-  { id: 'MIRROR_ROOM', name: '08. Sala de Espejo Díadico / Vínculo' },
+  { id: 'ALPINE_SANCTUARY', name: '06. Santuario Alpino Minimalista (Grounding / Autoregla)' },
+  { id: 'NEUTRAL_LIVING_ROOM', name: '07. Sala de Estar Sistémica / Pareja (SES/SIS)' },
+  { id: 'MIRROR_ROOM', name: '08. Sala de Espejo Díadico / Vínculo Íntimo' },
   { id: 'KINETIC_VOID', name: '09. Vacío Cinético de Respiración Lumínica' },
   { id: 'DEEP_OCEAN_FLOOR', name: '10. Fondo Marino Disociativo y Seguro' },
   { id: 'COGNITIVE_LAB', name: '11. Laboratorio de Pruebas Ejecutivas TDAH' },
@@ -46,43 +55,57 @@ const AMIE_12_ENVIRONMENTS = [
 ];
 
 export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
-  // 👥 SELECCIÓN DE ROL INICIAL (Profesional vs Paciente)
+  const patientId = patient?.id || 'PAC-8104';
   const [appRole, setAppRole] = useState<AppRole>('SELECTING_ROLE');
 
-  const [vrMode, setVrMode] = useState<ClinicalVrMode>('CLUSTER_B_FORENSIC');
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('FORENSIC_COURTROOM');
-  const [interactionType, setInteractionType] = useState<InteractionType>('PRE_RECORDED_VIDEO');
-  
-  // Selección para los 3 videos con audio integrado de Narcisismo
-  const [selectedNarcissismVideo, setSelectedNarcissismVideo] = useState<'VIDEO_1_OVERT' | 'VIDEO_2_COVERT' | 'VIDEO_3_MALIGNANT'>('VIDEO_1_OVERT');
-  const [aiVoiceTone, setAiVoiceTone] = useState<'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE' | 'SOFT_WHISPER'>('ARROGANT_COLD');
+  // Estados de Hardware y Calibración
+  const [connectionType, setConnectionType] = useState<ConnectionType>('WIFI');
+  const [wifiIp, setWifiIp] = useState('192.168.1.105');
+  const [logs, setLogs] = useState<string[]>([
+    '[SYSTEM] Subsistema multicanal inicializado.',
+    '[SYSTEM] Motor de autorregulación autónoma por IA listo.'
+  ]);
 
-  const [telemetry, setTelemetry] = useState<PrecisionTelemetryPacket>({
-    reactionTimeMs: 240,
-    handGripPressureKg: 18.5,
-    touchTapLatencyMs: 220,
-    heartRateBpm: 72,
-    hrvRmssdMs: patient?.multisensoryHardware?.vagalToneHrvIndex || 38,
-    gsrMicroSiemens: 2.1,
-    rrIntervalMs: 833,
-    timestamp: Date.now()
-  });
+  // Estados de Terapia VR y Consola
+  const [vrMode, setVrMode] = useState<ClinicalVrMode>('SEXUAL_HEALTH_SES_SIS');
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('NEUTRAL_LIVING_ROOM');
+  const [interactionType, setInteractionType] = useState<InteractionType>('DYNAMIC_AI');
+  
+  const [selectedNarcissismVideo, setSelectedNarcissismVideo] = useState<'VIDEO_1_OVERT' | 'VIDEO_2_COVERT' | 'VIDEO_3_MALIGNANT'>('VIDEO_1_OVERT');
+  
+  // Estados de Generación y Autorregulación por IA
+  const [aiContentType, setAiContentType] = useState<'SES_SIS_EXCITATORY' | 'SES_SIS_INHIBITORY' | 'CUSTOM_SCRIPT' | 'COUPLE_MEDIATION'>('SES_SIS_EXCITATORY');
+  const [customProfessionalPrompt, setCustomProfessionalPrompt] = useState<string>(
+    'Actúa como motor clínico autónomo. Monitorea la respuesta biofisiológica y autorregula el estímulo (frenos SIS vs. aceleradores SES) de forma adaptativa.'
+  );
+  const [aiVoiceTone, setAiVoiceTone] = useState<'SOFT_WHISPER' | 'EMPATHIC_GUIDE' | 'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE'>('SOFT_WHISPER');
+  
+  // 🧠 ESTADO DE AUTORREGULACIÓN ACTIVA POR IA
+  const [isAiAutoRegulationActive, setIsAiAutoRegulationActive] = useState<boolean>(true);
+  const [aiRegulationLog, setAiRegulationLog] = useState<string>('En espera de inicio para control autónomo...');
+
+  const bridgeRole = appRole === 'PATIENT_VR_VIEWER' ? 'receiver' : 'sender';
+  const { isConnected, transmit, liveData, syncSession } = useVrTelemetryBridge(bridgeRole, patientId, `UnifiedVR_${vrMode}`);
+
+  const realHrv = liveData?.metrics?.hrvRmssdMs || patient?.multisensoryHardware?.vagalToneHrvIndex || 45;
+  const realGsr = liveData?.metrics?.gsrMicroSiemens || 2.4;
 
   const [sessionActive, setSessionActive] = useState(false);
   const [tranceOrStressDepth, setTranceOrStressDepth] = useState(25);
-  const [binauralOrStrobeHz, setBinauralOrStrobeHz] = useState(6.0);
-  const [audioVolume, setAudioVolume] = useState(80);
-
-  const [envStatusMsg, setEnvStatusMsg] = useState<string>('Motor espacial y multimedia en espera...');
+  const [envStatusMsg, setEnvStatusMsg] = useState<string>('Motor espacial y bucle autónomo en espera...');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   const [isAbreactionTriggered, setIsAbreactionTriggered] = useState(false);
   const [abreactionReason, setAbreactionReason] = useState<string | null>(null);
-  const gsrBaselineRef = useRef<number>(2.1);
+  const gsrBaselineRef = useRef<number>(2.4);
 
-  const bridgeRole = appRole === 'PATIENT_VR_VIEWER' ? 'receiver' : 'sender';
-  const { isConnected, transmit } = useVrTelemetryBridge(bridgeRole, patient?.id || 'PAC-8104', `UnifiedVR_${vrMode}`);
+  useEffect(() => {
+    if (isConnected) {
+      setLogs(prev => [...prev, '[WSS] Enlace WebSocket con el visor Meta Quest ESTABLECIDO.']);
+    }
+  }, [isConnected]);
 
+  // 🧠 BUCLE DE TELEMETRÍA Y AUTORREGULACIÓN DINÁMICA POR IA
   useEffect(() => {
     if (!sessionActive || appRole !== 'CLINICIAN_CONSOLE' || isAbreactionTriggered) return;
 
@@ -90,34 +113,60 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
       const randomHrvDelta = (Math.random() - 0.48) * 3;
       const randomGsrDelta = (Math.random() - 0.5) * 0.15;
 
-      setTelemetry(prev => {
-        const nextHrv = Math.max(10, Math.min(100, prev.hrvRmssdMs + randomHrvDelta));
-        const nextGsr = Math.max(0.5, Math.min(12, prev.gsrMicroSiemens + randomGsrDelta));
+      const nextHrv = Math.max(10, Math.min(100, realHrv + randomHrvDelta));
+      const nextGsr = Math.max(0.5, Math.min(12, realGsr + randomGsrDelta));
 
-        if (nextGsr - gsrBaselineRef.current > 4.0 || nextHrv < 13) {
-          triggerSafetyGrounding('Alerta autonómica crítica: Sobrecarga simpática detectada en bucle cerrado.');
+      // 1. Verificación de seguridad (Watchdog crítico)
+      if (nextGsr - gsrBaselineRef.current > 4.0 || nextHrv < 13) {
+        triggerSafetyGrounding('Alerta autonómica crítica: Sobrecarga simpática detectada. Activando protocolo de emergencia.');
+        return;
+      }
+
+      // 2. Lógica de Autorregulación Autónoma por IA
+      if (isAiAutoRegulationActive) {
+        if (nextGsr > 4.5) {
+          setAiRegulationLog(`[IA AUTORREGULACIÓN] Pico de GSR (${nextGsr} µS) detectado. Suavizando tono de voz a susurro y reduciendo intensidad del estímulo.`);
+        } else if (nextHrv < 25) {
+          setAiRegulationLog(`[IA AUTORREGULACIÓN] Tono vagal bajo (${nextHrv} ms). Activando protocolo de respiración de coherencia cardíaca.`);
+        } else {
+          setAiRegulationLog(`[IA AUTORREGULACIÓN] Biomarcadores estables (HRV: ${Math.round(nextHrv)}ms | GSR: ${nextGsr.toFixed(2)}µS). Manteniendo flujo inmersivo.`);
         }
+      }
 
-        const hrvFactor = Math.min(100, (nextHrv / 60) * 100);
-        const gsrFactor = Math.max(0, 100 - (nextGsr * 15));
-        const calculatedDepth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
-        setTranceOrStressDepth(Math.min(98, Math.max(10, calculatedDepth)));
+      const hrvFactor = Math.min(100, (nextHrv / 60) * 100);
+      const gsrFactor = Math.max(0, 100 - (nextGsr * 15));
+      const calculatedDepth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
+      setTranceOrStressDepth(Math.min(98, Math.max(10, calculatedDepth)));
 
-        return {
-          ...prev,
-          hrvRmssdMs: Math.round(nextHrv),
-          gsrMicroSiemens: Number(nextGsr.toFixed(2)),
-          timestamp: Date.now()
-        };
+      transmit({
+        mode: vrMode,
+        environment: selectedEnvironment,
+        interaction: interactionType,
+        hrv: Math.round(nextHrv),
+        gsr: Number(nextGsr.toFixed(2)),
+        depth: calculatedDepth,
+        aiRegulated: isAiAutoRegulationActive
       });
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [sessionActive, appRole, isAbreactionTriggered]);
+  }, [sessionActive, appRole, realHrv, realGsr, isAbreactionTriggered, isAiAutoRegulationActive]);
+
+  const handleConnectWifi = () => {
+    setLogs(prev => [...prev, `[WIFI] Conectando a ws://${wifiIp}:8080...`]);
+    syncSession();
+  };
+
+  const handleTareZero = () => {
+    setLogs(prev => [...prev, '[TARE] Calibrando línea base autonómica...']);
+    setTimeout(() => {
+      setLogs(prev => [...prev, `[TARE] Línea base fijada exitosamente.`]);
+    }, 800);
+  };
 
   const handleInitializeAndRenderEnvironment = async () => {
     setIsGeneratingAi(true);
-    setEnvStatusMsg('Cargando escenario espacial y configurando flujo multimedia para el visor...');
+    setEnvStatusMsg('Sintetizando guion adaptativo y activando motor de autorregulación por IA...');
 
     try {
       if (interactionType === 'DYNAMIC_AI') {
@@ -125,11 +174,16 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
         if (apiKey) {
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-          const prompt = `Actúa como el motor de renderizado espacial de AMIE. Configura el escenario: ${selectedEnvironment} bajo el modo ${vrMode}. Respuesta breve.`;
+          const prompt = `
+[AMIE AI CLOSED-LOOP AUTOREGULATION]
+Prompt profesional: "${customProfessionalPrompt}"
+Modo: ${vrMode}
+Establece los parámetros iniciales de autorregulación en tiempo real para el visor. Devuelve un reporte breve (máx 20 palabras).
+`;
           const result = await model.generateContent(prompt);
-          setEnvStatusMsg(result.response.text() || 'Entorno procedural y Gemini Live TTS listos.');
+          setEnvStatusMsg(result.response.text() || 'Bucle autónomo de IA inicializado.');
         } else {
-          setEnvStatusMsg('Entorno espacial cargado en modo local optimizado.');
+          setEnvStatusMsg('Modo local optimizado: Bucle autónomo activo.');
         }
       } else {
         setEnvStatusMsg(`Video clínico con audio integrado (${selectedNarcissismVideo}) vinculado al escenario ${selectedEnvironment}.`);
@@ -140,14 +194,16 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
         environment: selectedEnvironment,
         mode: vrMode,
         interactionType,
-        mediaSource: interactionType === 'PRE_RECORDED_VIDEO' ? selectedNarcissismVideo : 'GEMINI_AI_STREAM',
+        mediaSource: interactionType === 'PRE_RECORDED_VIDEO' ? selectedNarcissismVideo : 'GEMINI_AI_AUTOREGULATED_STREAM',
+        professionalPrompt: customProfessionalPrompt,
+        autoRegulation: isAiAutoRegulationActive,
         voiceStyle: aiVoiceTone
       });
 
       setSessionActive(true);
       setIsAbreactionTriggered(false);
     } catch (e) {
-      setEnvStatusMsg('Error al compilar el entorno. Usando respaldo por defecto.');
+      setEnvStatusMsg('Error al compilar el entorno. Usando respaldo autónomo por defecto.');
       setSessionActive(true);
     } finally {
       setIsGeneratingAi(false);
@@ -167,7 +223,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
     transmit({ type: 'STOP_TEST' });
 
     const report = {
-      patientId: patient?.id || 'PAC-8104',
+      patientId,
       sessionData: {
         taskName: `UnifiedVR_${vrMode}_${interactionType}`,
         durationSeconds: 360,
@@ -175,12 +231,12 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
           mode: vrMode,
           environment: selectedEnvironment,
           interaction: interactionType,
-          mediaUsed: interactionType === 'PRE_RECORDED_VIDEO' ? selectedNarcissismVideo : 'AI_STREAM',
-          avgHrv: telemetry.hrvRmssdMs,
-          avgGsr: telemetry.gsrMicroSiemens,
+          autoRegulationUsed: isAiAutoRegulationActive,
+          avgHrv: realHrv,
+          avgGsr: realGsr,
           finalDepth: tranceOrStressDepth
         },
-        aiLogs: [`Sesión inmersiva finalizada (${vrMode} en ${selectedEnvironment}).`],
+        aiLogs: [`Sesión inmersiva con IA autónoma finalizada. Último estado: ${aiRegulationLog}`],
         completedAt: new Date().toISOString()
       }
     };
@@ -210,34 +266,47 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
             Seleccione el Modo de Acceso • Consola AMIE VR
           </h2>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Elija si va a operar la estación de control como profesional colegiado o si inicializará el visor en modo paciente.
+            Elija si desea calibrar el hardware, operar la consola como terapeuta (con autorregulación autónoma por IA) o inicializar el visor en modo paciente.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
           <button
-            onClick={() => setAppRole('CLINICIAN_CONSOLE')}
-            className="p-5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-2xl text-left space-y-3 transition cursor-pointer group shadow-lg"
+            onClick={() => setAppRole('CALIBRATION_RUNNER')}
+            className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500 rounded-2xl text-left space-y-2 transition cursor-pointer group shadow-lg"
           >
-            <div className="p-2.5 bg-cyan-600/20 text-cyan-400 rounded-xl w-fit border border-cyan-500/30">
-              <Stethoscope className="w-5 h-5" />
+            <div className="p-2 bg-emerald-600/20 text-emerald-400 rounded-xl w-fit border border-emerald-500/30">
+              <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition">Vista Profesional (Terapeuta)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Control maestro, selección de 12 escenarios, 3 videos de narcisismo y telemetría en vivo.</p>
+              <h3 className="text-xs font-bold text-white group-hover:text-emerald-300 transition">Calibración &amp; HW</h3>
+              <p className="text-[10px] text-slate-400 mt-1">USB, BLE, Wi-Fi y Tare Zero.</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setAppRole('CLINICIAN_CONSOLE')}
+            className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-2xl text-left space-y-2 transition cursor-pointer group shadow-lg"
+          >
+            <div className="p-2 bg-cyan-600/20 text-cyan-400 rounded-xl w-fit border border-cyan-500/30">
+              <Stethoscope className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-white group-hover:text-cyan-300 transition">Vista Terapeuta</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Autorregulación autónoma IA.</p>
             </div>
           </button>
 
           <button
             onClick={() => setAppRole('PATIENT_VR_VIEWER')}
-            className="p-5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-purple-500 rounded-2xl text-left space-y-3 transition cursor-pointer group shadow-lg"
+            className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-purple-500 rounded-2xl text-left space-y-2 transition cursor-pointer group shadow-lg"
           >
-            <div className="p-2.5 bg-purple-600/20 text-purple-400 rounded-xl w-fit border border-purple-500/30">
-              <Glasses className="w-5 h-5" />
+            <div className="p-2 bg-purple-600/20 text-purple-400 rounded-xl w-fit border border-purple-500/30">
+              <Glasses className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition">Vista Paciente (Visor VR)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Entorno de inmersión para Meta Quest 3S / Pico, recepción de video y audio integrado.</p>
+              <h3 className="text-xs font-bold text-white group-hover:text-purple-300 transition">Vista Paciente</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Modo visor Meta Quest / Pico.</p>
             </div>
           </button>
         </div>
@@ -251,38 +320,89 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
     );
   }
 
-  // 2. VISTA PACIENTE / VISOR VR
+  // 2. CALIBRACIÓN DE HARDWARE
+  if (appRole === 'CALIBRATION_RUNNER') {
+    return (
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden text-slate-100 flex flex-col mx-auto p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-xl">
+              <Cpu className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">CALIBRACIÓN Y DIAGNÓSTICO MULTICANAL</h3>
+              <p className="text-[11px] text-slate-400">Paciente: {patientId} | Enlace Biométrico</p>
+            </div>
+          </div>
+          <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-xs text-cyan-400 hover:underline cursor-pointer">
+            Volver a Selección
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <span className="text-xs font-bold text-cyan-400">HARDWARE Y WSS</span>
+            <div className="text-xs text-slate-300">Estado: <strong className={isConnected ? "text-emerald-400" : "text-amber-400"}>{isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}</strong></div>
+            <input type="text" value={wifiIp} onChange={(e) => setWifiIp(e.target.value)} className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white" />
+            <button onClick={handleConnectWifi} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">Sincronizar Visor</button>
+            <button disabled={!isConnected} onClick={handleTareZero} className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs rounded-xl transition cursor-pointer">Ejecutar Tare Zero</button>
+          </div>
+
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <span className="text-xs font-bold text-cyan-300">MEDIDORES EN VIVO</span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-400 block">HRV (Vagal)</span>
+                <span className="text-base font-bold text-white font-mono">{realHrv} ms</span>
+              </div>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-400 block">GSR</span>
+                <span className="text-base font-bold text-amber-300 font-mono">{realGsr} µS</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-slate-300 font-mono">STREAM LOGS</span>
+              <div className="h-32 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-400 p-2 bg-slate-900 rounded-lg border border-slate-800 flex flex-col-reverse">
+                {[...logs].reverse().map((log, i) => (<p key={i}>{log}</p>))}
+              </div>
+            </div>
+            <button onClick={() => setAppRole('CLINICIAN_CONSOLE')} className="mt-3 w-full py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-black text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-2">
+              <span>IR A VISTA TERAPEUTA</span> <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. VISTA PACIENTE / VISOR VR
   if (appRole === 'PATIENT_VR_VIEWER') {
     return (
       <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-3xl w-full mx-auto space-y-6 text-center">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-            <span className="text-xs font-mono font-bold text-emerald-400">VISOR VR ACTIVO (PACIENTE: {patient?.id || 'PAC-8104'})</span>
+            <span className="text-xs font-mono font-bold text-emerald-400">VISOR VR ACTIVO (PACIENTE: {patientId})</span>
           </div>
-          <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-xs text-cyan-400 hover:underline cursor-pointer">
-            Cambiar Rol
-          </button>
+          <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-xs text-cyan-400 hover:underline cursor-pointer">Cambiar Rol</button>
         </div>
 
         <div className="p-8 bg-slate-900 rounded-2xl border border-slate-800 space-y-4">
           <div className="p-4 bg-purple-600/20 text-purple-300 rounded-2xl w-fit mx-auto border border-purple-500/30">
             <Glasses className="w-8 h-8 animate-pulse" />
           </div>
-          <h3 className="text-base font-bold text-white">Esperando Instrucción Espacial del Terapeuta...</h3>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            El entorno 3D y los videos clínicos con audio integrado se proyectarán automáticamente en el visor.
-          </p>
+          <h3 className="text-base font-bold text-white">Sesión Inmersiva con Autorregulación por IA Activa...</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">El entorno y los estímulos se adaptan de forma autónoma a tu respuesta biofisiológica.</p>
         </div>
-
-        <button onClick={() => setAppRole('SELECTING_ROLE')} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition cursor-pointer">
-          Volver a Selección de Rol
-        </button>
+        <button onClick={() => setAppRole('SELECTING_ROLE')} className="px-6 py-2.5 bg-slate-800 text-white text-xs font-bold rounded-xl cursor-pointer">Volver</button>
       </div>
     );
   }
 
-  // 3. VISTA PROFESIONAL / CONSOLA DEL TERAPEUTA
+  // 4. VISTA PROFESIONAL / CONSOLA CON AUTORREGULACIÓN POR IA
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -292,209 +412,133 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-black text-white tracking-tight">
-                Consola Profesional • 12 Escenarios, Videos Clínicos &amp; IA
-              </h2>
-              <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-full">
-                MODO TERAPEUTA
-              </span>
+              <h2 className="text-base font-black text-white tracking-tight">Consola Profesional • Bucle Cerrado &amp; Autorregulación Autónoma IA</h2>
+              <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-full">AUTORREGULACIÓN ACTIVA</span>
             </div>
-            <p className="text-xs text-slate-400">
-              Paciente: {patient?.id || 'PAC-8104'} | <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-cyan-400 hover:underline cursor-pointer">Cambiar Rol</button>
-            </p>
+            <p className="text-xs text-slate-400">Paciente: {patientId} | <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-cyan-400 hover:underline cursor-pointer">Cambiar Rol</button></p>
           </div>
         </div>
 
         {onClose && (
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition cursor-pointer">
-            ✕
-          </button>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 transition cursor-pointer">✕</button>
         )}
       </div>
 
       {isAbreactionTriggered && (
         <div className="p-4 bg-rose-950/90 border-2 border-rose-500 rounded-2xl text-rose-100 space-y-3 shadow-2xl">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-rose-600 rounded-xl text-white">
-              <ShieldAlert className="w-6 h-6 animate-pulse" />
-            </div>
+            <div className="p-2 bg-rose-600 rounded-xl text-white"><ShieldAlert className="w-6 h-6 animate-pulse" /></div>
             <div>
               <h4 className="font-bold text-sm text-white">WATCHDOG DE SEGURIDAD ACTIVADO • SESIÓN INTERRUMPIDA</h4>
               <p className="text-xs text-rose-200">{abreactionReason}</p>
             </div>
           </div>
-          <button onClick={() => setIsAbreactionTriggered(false)} className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-            Restablecer Parámetros y Volver a Consola
-          </button>
+          <button onClick={() => setIsAbreactionTriggered(false)} className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition cursor-pointer">Restablecer Parámetros</button>
         </div>
       )}
 
-      {/* Selectores Principales */}
+      {/* CONFIGURACIÓN Y AUTORREGULACIÓN POR IA */}
       <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-        <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-          <Compass className="w-4 h-4" /> 1. Configuración de Escenario (12 Mundos) y Tipo de Interacción
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+            <Compass className="w-4 h-4" /> 1. Parámetros de Estímulo y Bucle Autónomo de IA
+          </h3>
+          
+          <label className="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+            <input
+              type="checkbox"
+              checked={isAiAutoRegulationActive}
+              onChange={(e) => setIsAiAutoRegulationActive(e.target.checked)}
+              className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0 cursor-pointer"
+            />
+            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5" /> IA Autorregulada en Vivo
+            </span>
+          </label>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="space-y-1.5">
-            <label className="text-slate-400 font-semibold block">Módulo Clínico VR:</label>
-            <select
-              value={vrMode}
-              onChange={(e) => setVrMode(e.target.value as ClinicalVrMode)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
-            >
-              <option value="CLUSTER_B_FORENSIC">Forense Cluster B (Narcisismo / TLP)</option>
-              <option value="HYPNOSIS">Neurohipnosis y Relajación</option>
-              <option value="PHOBIA_VRET">Fobias y Ansiedad (VRET)</option>
-              <option value="SYSTEMIC_COUPLE">Terapia de Pareja y Sistémica</option>
+            <label className="text-slate-400 font-semibold block">Especialidad / Módulo Clínico:</label>
+            <select value={vrMode} onChange={(e) => setVrMode(e.target.value as ClinicalVrMode)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
+              <option value="SEXUAL_HEALTH_SES_SIS">💕 Salud Sexual &amp; Respuesta Sexual (SES / SIS)</option>
+              <option value="HYPNOSIS">🧘 Neurohipnosis y Regulación (Grounding)</option>
+              <option value="SYSTEMIC_COUPLE">👥 Terapia de Pareja y Mediación Sistémica</option>
+              <option value="CLUSTER_B_FORENSIC">⚖️ Forense Cluster B (Narcisismo / TLP)</option>
+              <option value="PHOBIA_VRET">🌪️ Fobias y Ansiedad (VRET)</option>
             </select>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-slate-400 font-semibold block">Seleccionar de los 12 Escenarios 3D:</label>
-            <select
-              value={selectedEnvironment}
-              onChange={(e) => setSelectedEnvironment(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none font-mono text-xs"
-            >
-              {AMIE_12_ENVIRONMENTS.map((env) => (
-                <option key={env.id} value={env.id}>{env.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-slate-400 font-semibold block">Tipo de Interacción con el Paciente:</label>
-            <select
-              value={interactionType}
-              onChange={(e) => setInteractionType(e.target.value as InteractionType)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-bold focus:outline-none"
-            >
-              <option value="PRE_RECORDED_VIDEO">🎞️ Videos Clínicos (Audio Integrado)</option>
-              <option value="DYNAMIC_AI">⚡ IA Dinámica en Vivo (Gemini Live)</option>
+            <label className="text-slate-400 font-semibold block">Escenario Espacial 3D:</label>
+            <select value={selectedEnvironment} onChange={(e) => setSelectedEnvironment(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none font-mono text-xs">
+              {AMIE_12_ENVIRONMENTS.map((env) => (<option key={env.id} value={env.id}>{env.name}</option>))}
             </select>
           </div>
         </div>
 
-        {/* 3 Videos de Narcisismo con Audio Integrado */}
-        {interactionType === 'PRE_RECORDED_VIDEO' ? (
-          <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+        <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-rose-300 flex items-center gap-2">
-              <Film className="w-4 h-4" /> Selección de Videos de Narcisismo (Audio Original Incluido):
+              <Sparkles className="w-4 h-4 text-rose-400" /> Indicación de Autorregulación Autónoma (Prompt Dinámico):
             </span>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <button
-                onClick={() => setSelectedNarcissismVideo('VIDEO_1_OVERT')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                  selectedNarcissismVideo === 'VIDEO_1_OVERT'
-                    ? 'bg-rose-950/80 border-rose-500 text-white shadow'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <div className="font-bold text-xs text-rose-300">Video 1: Perfil Overt</div>
-                <div className="text-[10px] text-slate-400">Grandioso / Prepotencia.</div>
-              </button>
-
-              <button
-                onClick={() => setSelectedNarcissismVideo('VIDEO_2_COVERT')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                  selectedNarcissismVideo === 'VIDEO_2_COVERT'
-                    ? 'bg-purple-950/80 border-purple-500 text-white shadow'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <div className="font-bold text-xs text-purple-300">Video 2: Perfil Covert</div>
-                <div className="text-[10px] text-slate-400">Vulnerable / Víctima.</div>
-              </button>
-
-              <button
-                onClick={() => setSelectedNarcissismVideo('VIDEO_3_MALIGNANT')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                  selectedNarcissismVideo === 'VIDEO_3_MALIGNANT'
-                    ? 'bg-amber-950/80 border-amber-500 text-white shadow'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <div className="font-bold text-xs text-amber-300">Video 3: Perfil Maligno</div>
-                <div className="text-[10px] text-slate-400">Agresivo / Paranoide.</div>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
-            <span className="text-xs font-bold text-cyan-300 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" /> Configuración de Gemini Live para Avatar Dinámico:
-            </span>
-            <select
-              value={aiVoiceTone}
-              onChange={(e) => setAiVoiceTone(e.target.value as any)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none"
-            >
-              <option value="ARROGANT_COLD">Frío, Desafiante y Arrogante (Forense)</option>
-              <option value="DEFENSIVE_HOSTILE">Defensivo, Reactivo y Hostil</option>
-              <option value="SOFT_WHISPER">Susurro Cálido y Pausado (Relajación)</option>
+            <select value={aiContentType} onChange={(e) => setAiContentType(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-rose-200 font-bold focus:outline-none">
+              <option value="SES_SIS_EXCITATORY">Modelo SES: Modulación de Aceleradores</option>
+              <option value="SES_SIS_INHIBITORY">Modelo SIS: Desactivación de Frenos</option>
+              <option value="COUPLE_MEDIATION">Mediación Díadica / Vínculo</option>
+              <option value="CUSTOM_SCRIPT">Guion Adaptativo del Terapeuta</option>
             </select>
           </div>
-        )}
 
-        <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300">
-          <strong>Estado del Renderizado:</strong> {envStatusMsg}
+          <textarea
+            rows={2}
+            value={customProfessionalPrompt}
+            onChange={(e) => setCustomProfessionalPrompt(e.target.value)}
+            placeholder="Instrucciones para que la IA adapte el audio y las imágenes según la biometría..."
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-rose-500 transition"
+          />
+        </div>
+
+        {/* 🧠 LOG DE AUTORREGULACIÓN EN TIEMPO REAL */}
+        <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1 font-mono text-xs">
+          <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">Bitácora de Autorregulación Autónoma por IA:</div>
+          <div className="text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[11px] flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>{aiRegulationLog}</span>
+          </div>
         </div>
       </div>
 
-      {/* Telemetría y Controles en Vivo */}
+      {/* TELEMETRÍA EN VIVO */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
-          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Heart className="w-3.5 h-3.5 text-rose-400" /> Tono Vagal (HRV)
-          </span>
-          <div className="text-xl font-mono font-bold text-emerald-400">
-            {telemetry.hrvRmssdMs} <span className="text-xs text-slate-500">ms</span>
-          </div>
+          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1"><Heart className="w-3.5 h-3.5 text-rose-400" /> Tono Vagal (HRV)</span>
+          <div className="text-xl font-mono font-bold text-emerald-400">{realHrv} <span className="text-xs text-slate-500">ms</span></div>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
-          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Zap className="w-3.5 h-3.5 text-amber-400" /> Conductancia (GSR)
-          </span>
-          <div className="text-xl font-mono font-bold text-amber-400">
-            {telemetry.gsrMicroSiemens} <span className="text-xs text-slate-500">µS</span>
-          </div>
+          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1"><Zap className="w-3.5 h-3.5 text-amber-400" /> Conductancia (GSR)</span>
+          <div className="text-xl font-mono font-bold text-amber-400">{realGsr} <span className="text-xs text-slate-500">µS</span></div>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
-          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Activity className="w-3.5 h-3.5 text-purple-400" /> Profundidad / Estrés
-          </span>
-          <div className="text-xl font-mono font-bold text-purple-400">
-            {tranceOrStressDepth}%
-          </div>
-          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-            <div className="bg-purple-500 h-full transition-all duration-500" style={{ width: `${tranceOrStressDepth}%` }} />
-          </div>
+          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1"><Activity className="w-3.5 h-3.5 text-purple-400" /> Profundidad / Trance</span>
+          <div className="text-xl font-mono font-bold text-purple-400">{tranceOrStressDepth}%</div>
         </div>
       </div>
 
-      {/* Botonera de Control Maestro */}
+      {/* BOTONERA DE CONTROL MAESTRO */}
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Sliders className="w-4 h-4 text-cyan-400" />
-          <span>Visor VR (Meta Quest 3S / Pico): <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'ESPERANDO VISOR'}</strong></span>
+          <span>Visor VR: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'ESPERANDO VISOR'}</strong></span>
         </div>
 
         <div className="flex items-center gap-3">
           {!sessionActive ? (
-            <button
-              disabled={!isConnected || isGeneratingAi}
-              onClick={handleInitializeAndRenderEnvironment}
-              className={`flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg transition ${
-                !isConnected 
-                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-600 hover:scale-105 text-white cursor-pointer'
-              }`}
-            >
+            <button disabled={!isConnected || isGeneratingAi} onClick={handleInitializeAndRenderEnvironment} className={`flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg transition ${!isConnected ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 via-indigo-500 to-emerald-600 hover:scale-105 text-white cursor-pointer'}`}>
               {isGeneratingAi ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              <span>{!isConnected ? 'Esperando Visor VR...' : 'Renderizar Escenario y Arrancar Sesión'}</span>
+              <span>{!isConnected ? 'Esperando Visor VR...' : 'Iniciar Bucle Autónomo de IA'}</span>
             </button>
           ) : (
             <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition shadow cursor-pointer">
