@@ -38,7 +38,36 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
   const [emdrHz, setEmdrHz] = useState<number>(1.5);
 
-  // Enrutador Principal del Holodeck
+  // ============================================================================
+  // 1. LÓGICA DE AUDIO INMERSIVO AUTOMÁTICO (RECUPERADA)
+  // ============================================================================
+  useEffect(() => {
+    // Evitamos reproducir audio en el vacío neutral o en la sala de espera
+    if (activeEcosystem === 'NEUTRAL_VOID' || activeEnvironment === 'IDLE') return;
+
+    // Busca un archivo .mp3 con el MISMO nombre que el ecosistema/imagen
+    const audio = new Audio(`/audio/${activeEcosystem}.mp3`);
+    audio.loop = true; // Bucle continuo
+    audio.volume = 0.8; // Volumen al 80% para no aturdir
+
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.catch(error => {
+        console.warn(`Audio silenciado o no encontrado para: /audio/${activeEcosystem}.mp3`, error);
+      });
+    }
+
+    // Al cambiar de escenario, detenemos el audio actual y limpiamos memoria
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [activeEcosystem, activeEnvironment]);
+
+  // ============================================================================
+  // 2. ENRUTADOR PRINCIPAL DEL HOLODECK Y TELEMETRÍA
+  // ============================================================================
   useEffect(() => {
     if (!liveData) return;
 
@@ -87,7 +116,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
       </button>
 
       {/* ------------------------------------------------------------- */}
-      {/* 1. RENDERIZADO DEL MOTOR WEBXR (Entornos 360 y Video Pico 3) */}
+      {/* RENDERIZADO DEL MOTOR WEBXR (Entornos 360 y Video Pico 3) */}
       {/* ------------------------------------------------------------- */}
       {isWebXRModule && (
         <div className="absolute inset-0 z-[100]">
@@ -112,7 +141,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. RENDERIZADO DE ENTORNOS 2D CLÁSICOS (HTML/CSS DOM)         */}
+      {/* RENDERIZADO DE ENTORNOS 2D CLÁSICOS (HTML/CSS DOM)          */}
       {/* ------------------------------------------------------------- */}
       {!isWebXRModule && (
         <>
@@ -138,12 +167,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   );
 };
 
-
 // ============================================================================
 // COMPONENTES WEBXR (3D REALIDAD VIRTUAL INMERSIVA)
 // ============================================================================
 
-// A. Bolita de Movimiento Sacádico EMDR (3D)
 const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -159,7 +186,6 @@ const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   );
 };
 
-// B. Reproductor Esférico de Video 360 (.mp4)
 const VideoSphere = ({ url }: { url: string }) => {
   const texture = useVideoTexture(url);
   return (
@@ -169,7 +195,6 @@ const VideoSphere = ({ url }: { url: string }) => {
     </mesh>
   );
 };
-
 
 // ============================================================================
 // COMPONENTES 2D LEGACY (HTML/CSS)
@@ -255,95 +280,4 @@ const SocialCognitionEnvironment = ({ liveData }: any) => {
       {phase !== 'IDLE' && (
         <div className={`relative flex flex-col items-center ${phase === 'OVERSTIMULATION' ? 'animate-shake' : ''}`}>
           <div className="w-64 h-80 bg-slate-800 rounded-full border-4 border-slate-700 flex flex-col items-center pt-24 relative overflow-hidden shadow-2xl">
-            <div className="flex gap-8 mb-12 z-10">
-              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
-                 <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
-              </div>
-              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
-                 <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
-              </div>
-            </div>
-            <div className="w-16 h-2 bg-slate-600 rounded-full z-10"></div>
-            {phase === 'OVERSTIMULATION' && (
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50 mix-blend-overlay"></div>
-            )}
-          </div>
-          <p className="mt-8 text-slate-500 font-mono tracking-widest text-sm">
-            {phase === 'FACES' ? 'FASE 1: FIJACIÓN OCULAR' : 'FASE 2: RUIDO AMBIENTAL (75dB)'}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const DepressionEnvironment = ({ liveData, transmit }: any) => {
-  const [phase, setPhase] = useState<'IDLE' | 'MOTOR' | 'REWARD'>('IDLE');
-  const [targetPos, setTargetPos] = useState({ top: '50%', left: '50%' });
-
-  useEffect(() => {
-    if (liveData?.type === 'START_MOTOR_TRACKING') setPhase('MOTOR');
-    if (liveData?.type === 'START_REWARD_STIMULUS') setPhase('REWARD');
-  }, [liveData]);
-
-  const handleTouchTarget = () => {
-    transmit({ type: 'MOTOR_TARGET_HIT', timestamp: Date.now() });
-    setTargetPos({ top: `${Math.random() * 60 + 20}%`, left: `${Math.random() * 60 + 20}%` });
-  };
-
-  return (
-    <div className="absolute inset-0 bg-slate-950">
-      {phase === 'MOTOR' && (
-        <div className="absolute inset-0" onPointerDown={handleTouchTarget}>
-          <div className="absolute text-slate-500 font-mono text-center w-full top-20">ESTIRE SU BRAZO Y TOQUE LA ESFERA</div>
-          <div 
-            className="absolute w-24 h-24 bg-indigo-500 rounded-full shadow-[0_0_50px_rgba(99,102,241,0.5)] flex items-center justify-center cursor-pointer transition-all duration-1000 ease-out"
-            style={{ top: targetPos.top, left: targetPos.left, transform: 'translate(-50%, -50%)' }}
-          >
-            <Target className="w-12 h-12 text-white opacity-80" />
-          </div>
-        </div>
-      )}
-      
-      {phase === 'REWARD' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-sky-900 to-slate-950">
-          <div className="w-[500px] h-[500px] bg-yellow-400/20 rounded-full blur-[100px] absolute animate-pulse"></div>
-          <Sun className="w-48 h-48 text-yellow-300 animate-[spin_20s_linear_infinite]" />
-          <div className="absolute text-xl font-light tracking-widest text-sky-100 mt-64">EVALUANDO REACTIVIDAD AFECTIVA</div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const ExposureAnxietyEnvironment = ({ liveData }: any) => {
-  const [level, setLevel] = useState(1);
-
-  useEffect(() => {
-    if (liveData?.type === 'START_EXPOSURE' || liveData?.type === 'UPDATE_EXPOSURE_LEVEL') {
-      setLevel(liveData.level || 1);
-    }
-  }, [liveData]);
-
-  const tunnelScale = 1 - (level * 0.15);
-  const vignetteOpacity = level * 0.2;
-  const colorIntensity = level > 3 ? 'border-rose-900' : 'border-slate-800';
-
-  return (
-    <div className="absolute inset-0 bg-slate-950 flex items-center justify-center overflow-hidden">
-      <div 
-        className={`w-[1000px] h-[1000px] border-[100px] ${colorIntensity} rounded-full transition-all duration-1000 flex items-center justify-center`}
-        style={{ transform: `scale(${tunnelScale})` }}
-      >
-        <div className={`w-[800px] h-[800px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-80`}>
-          <div className={`w-[600px] h-[600px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-60`}>
-            {level > 4 && <div className="text-rose-500 font-mono tracking-widest animate-pulse">MANTENGA LA RESPIRACIÓN</div>}
-          </div>
-        </div>
-      </div>
-      
-      <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_100%)] pointer-events-none" style={{ opacity: vignetteOpacity }}></div>
-      <div className="absolute top-10 left-10 text-slate-500 font-mono text-sm">INTENSIDAD FÓBICA: NIVEL {level}</div>
-    </div>
-  );
-};
+            <div className="flex gap-8 mb-12 z-10
