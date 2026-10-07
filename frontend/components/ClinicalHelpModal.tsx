@@ -23,7 +23,10 @@ import {
   Tablet,
   ScanEye,
   Flame,
-  Activity
+  Activity,
+  HeartHandshake,
+  Tent,
+  Lightbulb
 } from 'lucide-react';
 
 export interface ClinicalHelpModalProps {
@@ -210,6 +213,74 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
           content: 'Genera llaves de acceso cifradas y sincronización institucional por niveles (Institucional, Clínica Privada, Investigación).'
         }
       ]
+    },
+    {
+      id: 'dual_control',
+      icon: HeartHandshake,
+      title: '8. Control Dual (SES / SIS)',
+      subtitle: 'Modelo Bancroft & Nagoski: Acelerador vs. Freno en Sexualidad',
+      color: 'text-rose-400',
+      badge: 'Terapia de Pareja / Individual',
+      summary: 'Evalúa la activación del Sistema de Excitación Sexual (SES) frente al Sistema de Inhibición Sexual (SIS) mediante estresores personalizados y biofeedback.',
+      details: [
+        {
+          heading: 'Evaluación de Aceleradores y Frenos',
+          content: 'Identifica qué contextos o cogniciones bloquean la respuesta sexual o activan la hiperreactividad simpática.'
+        },
+        {
+          heading: 'Biofeedback y Regulación',
+          content: 'Sincroniza la respiración y el control vagal (HRV) en pareja o de forma individual para reducir la ansiedad de ejecución.'
+        }
+      ]
+    },
+    {
+      id: 'cluster_b_forensic',
+      icon: ShieldAlert,
+      title: '9. Perfilado Forense Cluster B',
+      subtitle: 'Medida TriPM, Narcisismo y Ensayos de Provocación Inmersiva',
+      color: 'text-rose-500',
+      badge: 'Ámbito Pericial',
+      summary: 'Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y psicopáticos (Factor 1/2) bajo entornos controlados.',
+      details: [
+        {
+          heading: 'Provocación Controlada',
+          content: 'Expone al sujeto a escenarios de devaluación pública y evaluación de empatía automatizada.'
+        },
+        {
+          heading: 'Contraste Antisesgo',
+          content: 'Detecta discrepancias entre el autoreporte defensivo y la respuesta electrodérmica subcortical.'
+        }
+      ]
+    },
+    {
+      id: 'dev_trauma',
+      icon: Tent,
+      title: '10. Trauma Evolutivo & AIMA',
+      subtitle: 'Regulación del Apego y Entornos Uterinos/Seguros',
+      color: 'text-pink-400',
+      badge: 'Neurorecepción',
+      summary: 'Protocolo de modulación somática enfocado en la teoría polivagal para pacientes con antecedentes de trauma complejo del desarrollo.',
+      details: [
+        {
+          heading: 'Anclaje Sensorial Temprano',
+          content: 'Utiliza entornos de seguridad abstractos y sonidos binaurales para restablecer el tono vagal dorsal.'
+        }
+      ]
+    },
+    {
+      id: 'gamma_insight',
+      icon: Lightbulb,
+      title: '11. Opto-Neuromodulación Gamma 40Hz',
+      subtitle: 'Estimulación Sensorial para Alzheimer, TOC y TEA',
+      color: 'text-amber-400',
+      badge: 'Neuromodulación',
+      summary: 'Inducción de ondas cerebrales en banda gamma mediante patrones visuales y auditivos sincronizados para despeje microglial y neuroplasticidad.',
+      details: [
+        {
+          heading: 'Frecuencia Crítica',
+          content: 'Aplica pulsos estables a 40Hz orientados a la facilitación cognitiva y la reducción de rumiación obsesiva.'
+        }
+      ]
     }
   ];
 
@@ -238,7 +309,7 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
                   Guía Integral de Módulos Clínicos AMIE
                 </h2>
                 <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full">
-                  MANUAL TÉCNICO V3.7
+                  MANUAL TÉCNICO V3.8
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
