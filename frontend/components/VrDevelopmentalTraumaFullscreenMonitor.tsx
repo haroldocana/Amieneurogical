@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Video, Eye, HeartPulse, Brain, Waves, Sliders, X, 
-  Activity, User, Sparkles, AlertTriangle, ShieldCheck, Zap, Fingerprint, Network, Target, Compass
+  Activity, User, Sparkles, AlertTriangle, ShieldCheck, Zap, Fingerprint, Network, Target, Compass, Glasses, Tent
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { calculateAdaptedProgram, TraumaTypology, AdaptedProgramConfig } from '../services/developmentalTraumaEngine';
@@ -12,10 +12,15 @@ interface Props {
   onClose: () => void;
 }
 
+type AttachmentEcosystem = 
+  | 'WOMB_LIKE_CAVE' | 'PROTECTIVE_TREEHOUSE' | 'WARM_HEARTH' | 'CALM_BEACH_SUNSET'
+  | 'SAFE_PLACE_FOREST' | 'ZEN_GARDEN' | 'BIOLUMINESCENT_BEACH';
+
 export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patient, onClose }) => {
   // Estado de Selección de la Evaluación Evolutiva
   const [patientAge, setPatientAge] = useState<number>(patient.age || 28);
   const [traumaType, setTraumaType] = useState<TraumaTypology>('COMPLEX_REPETITIVE');
+  const [ecosystem, setEcosystem] = useState<AttachmentEcosystem>('WOMB_LIKE_CAVE');
   
   // Configuración calculada dinámicamente
   const [programConfig, setProgramConfig] = useState<AdaptedProgramConfig>(
@@ -49,7 +54,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DevelopmentalTrauma');
+  const { isConnected, syncSession, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DevelopmentalTrauma');
 
   // Transmisión en vivo de fisiología subcortical y niveles de trance/DMN
   useEffect(() => {
@@ -62,7 +67,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
         omissions: Math.floor(saccadicHz * 10)
       });
     }
-  }, [hrv, gsr, tranceDepth, dmnSuppressionPct, saccadicHz, sessionActive, safetyTriggered]);
+  }, [hrv, gsr, tranceDepth, dmnSuppressionPct, saccadicHz, sessionActive, safetyTriggered, transmit]);
 
   // Recalcular configuración si cambia la edad o la tipología
   useEffect(() => {
@@ -90,7 +95,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
         if (gsr > programConfig.gsrSafetyThresholduS) {
           setSafetyTriggered(true);
           setSessionActive(false);
-          const alertMsg = `⚠️️ ALERTA DE SEGURIDAD: Disparo de GSR (${gsr.toFixed(2)} µS) superó el límite permitido para la etapa ${programConfig.stageNameEs} (${programConfig.gsrSafetyThresholduS} µS). Iniciando desconexión inmediata.`;
+          const alertMsg = `⚠ ALERTA DE SEGURIDAD: Disparo de GSR (${gsr.toFixed(2)} µS) superó el límite permitido para la etapa ${programConfig.stageNameEs} (${programConfig.gsrSafetyThresholduS} µS). Iniciando desconexión inmediata.`;
           setAiLogs(prev => [`[${timeStr}] ${alertMsg}`, ...prev.slice(0, 9)]);
           alert(alertMsg);
           return;
@@ -138,7 +143,10 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
     setSessionActive(true);
     setTranceDepth(15);
     setDmnSuppressionPct(22);
-    setAiLogs([`[SISTEMA] Sesión iniciada. Sincronización biométrica con Meta Quest 3S / Pico Neo 3 establecida.`]);
+    setAiLogs([`[SISTEMA] Sesión iniciada. Ecosistema VR cargado: ${getEcosystemName(ecosystem)}. Sincronización biométrica con visor establecida.`]);
+    syncSession();
+    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'DevelopmentalTrauma' });
+    transmit({ type: 'START_AIMA_PROTOCOL', ecosystem });
   };
 
   const handleEmergencyEgress = () => {
@@ -191,6 +199,19 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
     }
   };
 
+  const getEcosystemName = (eco: AttachmentEcosystem) => {
+    const map: Record<AttachmentEcosystem, string> = {
+      'WOMB_LIKE_CAVE': 'Cueva Sensorial (Útero Simbólico)',
+      'PROTECTIVE_TREEHOUSE': 'Casa del Árbol (Refugio Infantil)',
+      'WARM_HEARTH': 'Hogar Cálido con Chimenea',
+      'CALM_BEACH_SUNSET': 'Playa en Atardecer (Respiración Guiada)',
+      'SAFE_PLACE_FOREST': 'Santuario Natural (Bosque)',
+      'ZEN_GARDEN': 'Jardín Zen Japonés',
+      'BIOLUMINESCENT_BEACH': 'Playa Bioluminiscente (Rítmico)'
+    };
+    return map[eco];
+  };
+
   const safePatientName = patient.patientNameAnonymized || patient.id || 'PAC-8104';
 
   return (
@@ -224,6 +245,10 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
             <Sparkles className={`w-3.5 h-3.5 text-purple-400 ${aiAutoPilot ? 'animate-spin' : ''}`} />
             {aiAutoPilot ? 'AI Closed-Loop Activo' : 'Control Manual Terapeuta'}
           </button>
+
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          </div>
 
           <button
             onClick={handleEmergencyEgress}
@@ -266,26 +291,41 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
             {/* Tipología del Trauma */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Naturaleza del Trauma / Disparador</label>
-              {[
-                { id: 'ATTACHMENT_DEVELOPMENTAL', name: 'Apego / Desarrollo (Infantil)' },
-                { id: 'COMPLEX_REPETITIVE', name: 'TEPT Complejo (TEPT-C / Repetitivo)' },
-                { id: 'SINGLE_EVENT_ACUTE', name: 'Evento Único Agudo (Asalto/Accidente)' },
-                { id: 'INTERPERSONAL_ABUSE', name: 'Abuso Interpersonal / Bullying' },
-                { id: 'LOSS_BEREAVEMENT', name: 'Duelo Traumático / Obsesión' }
-              ].map(t => (
-                <button
-                  key={t.id}
-                  disabled={sessionActive}
-                  onClick={() => setTraumaType(t.id as TraumaTypology)}
-                  className={`w-full text-left p-2 rounded-lg text-[11px] font-semibold border transition ${
-                    traumaType === t.id
-                      ? 'bg-purple-950/80 border-purple-500 text-white shadow-md'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'
-                  }`}
-                >
-                  {t.name}
-                </button>
-              ))}
+              <select 
+                disabled={sessionActive}
+                value={traumaType}
+                onChange={(e) => setTraumaType(e.target.value as TraumaTypology)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-[11px] font-semibold text-slate-200 outline-none"
+              >
+                <option value="ATTACHMENT_DEVELOPMENTAL">Apego / Desarrollo (Infantil)</option>
+                <option value="COMPLEX_REPETITIVE">TEPT Complejo (TEPT-C / Repetitivo)</option>
+                <option value="SINGLE_EVENT_ACUTE">Evento Único Agudo (Asalto/Accidente)</option>
+                <option value="INTERPERSONAL_ABUSE">Abuso Interpersonal / Bullying</option>
+                <option value="LOSS_BEREAVEMENT">Duelo Traumático / Obsesión</option>
+              </select>
+            </div>
+
+            {/* Ecosistema de Contención */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Refugio de Apego (Ecosistema VR)</label>
+              <select 
+                disabled={sessionActive}
+                value={ecosystem}
+                onChange={(e) => setEcosystem(e.target.value as AttachmentEcosystem)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-[11px] font-semibold text-slate-200 outline-none"
+              >
+                <optgroup label="Entornos de Contención">
+                  <option value="WOMB_LIKE_CAVE">Cueva Sensorial (Útero Simbólico)</option>
+                  <option value="PROTECTIVE_TREEHOUSE">Casa del Árbol (Refugio Infantil)</option>
+                  <option value="WARM_HEARTH">Hogar Cálido con Chimenea</option>
+                  <option value="SAFE_PLACE_FOREST">Santuario Natural (Bosque)</option>
+                  <option value="ZEN_GARDEN">Jardín Zen Japonés</option>
+                </optgroup>
+                <optgroup label="Entornos Rítmicos">
+                  <option value="CALM_BEACH_SUNSET">Playa en Atardecer (Respiración Guiada)</option>
+                  <option value="BIOLUMINESCENT_BEACH">Playa Bioluminiscente</option>
+                </optgroup>
+              </select>
             </div>
 
             {/* Mapeo de Causas Biopsicosociales */}
@@ -351,7 +391,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
           {/* Renderizador de Escena Simulada */}
           <div className="w-full h-full flex flex-col items-center justify-center relative">
             {sessionActive ? (
-              <div className="text-center space-y-4 relative z-10">
+              <div className="text-center space-y-6 relative z-10">
                 <div className="relative w-32 h-32 mx-auto flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full border-4 border-purple-500/20 animate-ping" />
                   <div className="absolute inset-2 rounded-full border-4 border-cyan-500/40 border-t-cyan-400 animate-spin" />
@@ -363,6 +403,9 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
                   </h3>
                   <p className="text-xs text-purple-300 font-mono mt-1">
                     Frecuencia Target: {binauralHz.toFixed(1)} Hz | Trance: {Math.floor(tranceDepth)}%
+                  </p>
+                  <p className="text-xs text-cyan-300 font-mono mt-2 bg-black/40 px-3 py-1 rounded inline-block">
+                    Ecosistema VR: {getEcosystemName(ecosystem)}
                   </p>
                 </div>
               </div>
@@ -413,76 +456,3 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-2">
               <Zap className="w-4 h-4 text-amber-400" /> AI Closed-Loop Regulator
             </h2>
-
-            {/* Bitácora de Inteligencia Artificial */}
-            <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] leading-relaxed flex flex-col gap-2 overflow-y-auto max-h-[260px] relative">
-              <div className="absolute top-2 right-2 pointer-events-none">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              </div>
-
-              {aiLogs.length > 0 ? (
-                aiLogs.map((log, i) => (
-                  <div key={i} className={`p-2 rounded border border-slate-800/60 ${i === 0 ? 'text-cyan-300 bg-cyan-950/30 font-semibold' : 'text-slate-400'}`}>
-                    {log}
-                  </div>
-                ))
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-600 italic text-center p-4">
-                  A la espera de activación del bucle bio-adaptativo...
-                </div>
-              )}
-            </div>
-
-            {/* Parámetros Manuales de Resguardo */}
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Audio Binaural Target:</span>
-                <span className="text-cyan-300 font-mono font-bold">{binauralHz.toFixed(1)} Hz</span>
-              </div>
-              <input 
-                type="range" 
-                min={programConfig.minBinauralHz} 
-                max={programConfig.maxBinauralHz} 
-                step="0.1"
-                value={binauralHz}
-                disabled={aiAutoPilot}
-                onChange={(e) => setBinauralHz(parseFloat(e.target.value))}
-                className="w-full accent-cyan-500 cursor-pointer disabled:opacity-30"
-              />
-              <span className="text-[9.5px] text-slate-500 block">Límite para {programConfig.stageNameEs}: {programConfig.minBinauralHz}Hz - {programConfig.maxBinauralHz}Hz</span>
-            </div>
-
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
-              <span className="text-[10px] font-bold text-rose-400 uppercase block">Límite de Seguridad Activo:</span>
-              <p className="text-xs text-slate-300">
-                GSR Safety Threshold: <strong className="text-white font-mono">{programConfig.gsrSafetyThresholduS} µS</strong>
-              </p>
-            </div>
-          </div>
-
-          {/* Botones de Control de Sesión */}
-          <div className="pt-3 border-t border-slate-800 space-y-2">
-            {!sessionActive ? (
-              <button
-                onClick={handleStartSession}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-purple-600/20 transition active:scale-95"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                Iniciar Protocolo Adaptado
-              </button>
-            ) : (
-              <button
-                onClick={handleEndSession} // <-- Actualizado para enviar el reporte a MongoDB y cerrar
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
-              >
-                <Square className="w-4 h-4 fill-current" />
-                Concluir Sesión VR
-              </button>
-            )}
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-};
