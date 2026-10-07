@@ -107,7 +107,6 @@ function DoctorWorkstation() {
   useEffect(() => {
     const checkIsPatientApp = () => {
       const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
-      
       const isAndroidDevice = /android/i.test(ua);
       const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
       const isLocalhostOrFile = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || window.location.protocol === 'capacitor:';
@@ -151,19 +150,15 @@ function DoctorWorkstation() {
   // MODALES PANTALLA COMPLETA
   const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
+  
+  // VARIABLES DE RUTEO GENERAL
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
-  const [isFullscreenHypnosisOpen, setIsFullscreenHypnosisOpen] = useState<boolean>(false);
   const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
   const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
   
-  const [isFullscreenPainOpen, setIsFullscreenPainOpen] = useState<boolean>(false);
-  const [isFullscreenFndOpen, setIsFullscreenFndOpen] = useState<boolean>(false);
-  const [isFullscreenMemoryOpen, setIsFullscreenMemoryOpen] = useState<boolean>(false);
-  const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState<boolean>(false);
-  const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState<boolean>(false);
-  const [isFullscreenDevTraumaOpen, setIsFullscreenDevTraumaOpen] = useState<boolean>(false);
-  const [isFullscreenDualControlOpen, setIsFullscreenDualControlOpen] = useState<boolean>(false);
+  // NÚCLEO DE RUTEO VR (Esta variable reemplaza a todos los booleanos individuales de VR)
+  const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
 
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
@@ -171,16 +166,9 @@ function DoctorWorkstation() {
     setIsDsmModalOpen(false);
     setIsFullscreenConsoleOpen(false);
     setIsFullscreenDiagnosticOpen(false);
-    setIsFullscreenHypnosisOpen(false);
     setIsFullscreenPhenotypeOpen(false);
     setIsFullscreenUnifiedVrOpen(false);
-    setIsFullscreenPainOpen(false);
-    setIsFullscreenFndOpen(false);
-    setIsFullscreenMemoryOpen(false);
-    setIsFullscreenExecOpen(false);
-    setIsFullscreenGammaOpen(false);
-    setIsFullscreenDevTraumaOpen(false);
-    setIsFullscreenDualControlOpen(false);
+    setActiveVrModuleId(null);
   };
 
   useEffect(() => {
@@ -1008,8 +996,9 @@ function DoctorWorkstation() {
                 <span>Fenotipado Digital & Recaídas</span>
               </button>
 
+              {/* ✨ AHORA TODOS ESTOS BOTONES USAN EL ENRUTADOR VrModuleRouter ✨ */}
               <button
-                onClick={() => setIsFullscreenGammaOpen(true)}
+                onClick={() => setActiveVrModuleId('GAMMA_INSIGHT')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
               >
                 <Lightbulb className="w-4 h-4 text-amber-100" />
@@ -1017,7 +1006,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenExecOpen(true)}
+                onClick={() => setActiveVrModuleId('TDAH_EXECUTIVE')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition cursor-pointer"
               >
                 <Target className="w-4 h-4 text-sky-200" />
@@ -1025,7 +1014,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenMemoryOpen(true)}
+                onClick={() => setActiveVrModuleId('EMDR_MEMORY')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4 text-rose-200" />
@@ -1033,7 +1022,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenFndOpen(true)}
+                onClick={() => setActiveVrModuleId('FND_MIRROR')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
               >
                 <UserCheck className="w-4 h-4 text-indigo-200" />
@@ -1041,7 +1030,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenPainOpen(true)}
+                onClick={() => setActiveVrModuleId('PAIN_MANAGEMENT')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
               >
                 <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
@@ -1049,7 +1038,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenHypnosisOpen(true)}
+                onClick={() => setActiveVrModuleId('NEURO_HYPNOSIS')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer"
               >
                 <Sparkles className="w-4 h-4 text-purple-200" />
@@ -1057,7 +1046,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenDevTraumaOpen(true)}
+                onClick={() => setActiveVrModuleId('DEV_TRAUMA')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 via-pink-700 to-rose-700 hover:from-purple-700 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
               >
                 <Brain className="w-4 h-4 text-pink-200" />
@@ -1065,7 +1054,7 @@ function DoctorWorkstation() {
               </button>
 
               <button
-                onClick={() => setIsFullscreenDualControlOpen(true)}
+                onClick={() => setActiveVrModuleId('DUAL_CONTROL_SES_SIS')}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-700 to-purple-800 hover:from-rose-500 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
               >
                 <HeartHandshake className="w-4 h-4 text-rose-200" />
@@ -1130,6 +1119,17 @@ function DoctorWorkstation() {
       />
 
       {/* MODALES A PANTALLA COMPLETA */}
+      
+      {/* ✨ AQUÍ ESTÁ LA MAGIA: EL ENRUTADOR QUE PREGUNTA ROL PARA TODAS LAS TERAPIAS ✨ */}
+      {activeVrModuleId && (
+        <VrModuleRouter
+          patient={safePatient}
+          initialModuleId={activeVrModuleId}
+          onClose={() => setActiveVrModuleId(null)}
+        />
+      )}
+
+      {/* Otras consolas que no usan Enrutador porque son exclusivas del doctor */}
       {isFullscreenUnifiedVrOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <AmieUnifiedVrConsole
@@ -1154,15 +1154,6 @@ function DoctorWorkstation() {
         />
       )}
 
-      {isFullscreenHypnosisOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
-          <VrClosedLoopHypnosisModule
-            patient={safePatient}
-            onClose={() => setIsFullscreenHypnosisOpen(false)}
-          />
-        </div>
-      )}
-
       {isFullscreenPhenotypeOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <DigitalPhenotypeModule
@@ -1170,55 +1161,6 @@ function DoctorWorkstation() {
             onClose={() => setIsFullscreenPhenotypeOpen(false)}
           />
         </div>
-      )}
-
-      {isFullscreenPainOpen && (
-        <VrPainManagementModule
-          patient={safePatient}
-          onClose={() => setIsFullscreenPainOpen(false)}
-        />
-      )}
-
-      {isFullscreenFndOpen && (
-        <VrFunctionalNeurologyModule
-          patient={safePatient}
-          onClose={() => setIsFullscreenFndOpen(false)}
-        />
-      )}
-
-      {isFullscreenMemoryOpen && (
-        <VrMemoryReconsolidationModule
-          patient={safePatient}
-          onClose={() => setIsFullscreenMemoryOpen(false)}
-        />
-      )}
-
-      {isFullscreenExecOpen && (
-        <VrModuleRouter
-          patient={safePatient}
-          onClose={() => setIsFullscreenExecOpen(false)}
-        />
-      )}
-
-      {isFullscreenGammaOpen && (
-        <VrGammaInsightModule
-          patient={safePatient}
-          onClose={() => setIsFullscreenGammaOpen(false)}
-        />
-      )}
-
-      {isFullscreenDevTraumaOpen && (
-        <VrDevelopmentalTraumaFullscreenMonitor
-          patient={safePatient}
-          onClose={() => setIsFullscreenDevTraumaOpen(false)}
-        />
-      )}
-
-      {isFullscreenDualControlOpen && (
-        <VrDualControlTherapyModule
-          patient={safePatient}
-          onClose={() => setIsFullscreenDualControlOpen(false)}
-        />
       )}
     </div>
   );
