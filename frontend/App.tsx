@@ -538,9 +538,9 @@ function DoctorWorkstation() {
               </HoverTooltip>
             </div>
 
-            {/* NUEVA PESTAÑA INDEPENDIENTE: SALUD SEXUAL & SES/SIS */}
+            {/* SALUD SEXUAL & SES/SIS CONECTADO A LA CONSOLA UNIFICADA (CON SELECTOR DE ROL) */}
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Sexología & Respuesta Sexual (SES / SIS)" description="Evaluación y tratamiento inmersivo de la excitación y la inhibición sexual (Bancroft & Janssen)." clinicalUtility="Mapeo de doble control sexual, disfunciones y biofeedback." badge="Sexualidad">
+              <HoverTooltip title="Sexología & Respuesta Sexual (SES / SIS)" description="Evaluación y tratamiento inmersivo con selección de rol Terapeuta/Paciente." clinicalUtility="Mapeo de doble control sexual y videos con IA." badge="Sexualidad">
                 <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'sexual_health' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
                   <HeartHandshake className="w-3.5 h-3.5 text-rose-300" />
                   <span>Salud Sexual & SES/SIS</span>
@@ -615,7 +615,7 @@ function DoctorWorkstation() {
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL SEGÚN EL TAB SELECCIONADO */}
+      {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
         {syncNotFoundAlert && (
           <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl">
@@ -693,9 +693,11 @@ function DoctorWorkstation() {
           <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
         )}
 
-        {/* RENDERIZADO DEL MÓDULO DE SALUD SEXUAL & SES/SIS INDEPENDIENTE */}
+        {/* SALUD SEXUAL CONECTADA A LA CONSOLA UNIFICADA (INCLUYE SELECTOR DE ROL TERAPEUTA VS PACIENTE) */}
         {activeTab === 'sexual_health' && (
-          <VrDualControlTherapyModule patient={safePatient} onClose={() => setActiveTab('workstation')} />
+          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+            <AmieUnifiedVrConsole patient={safePatient} onClose={() => setActiveTab('workstation')} />
+          </div>
         )}
 
         {activeTab === 'academy' && <AmieClinicalAcademy />}
