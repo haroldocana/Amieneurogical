@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        // 🔥 ESTA ES LA SOLUCIÓN AL ERROR DE RENDER: Permite cachear archivos de hasta 10MB
+        workbox: {
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,wasm}']
+        },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
         manifest: {
           name: 'Centinela AMIE',
@@ -51,6 +56,10 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       }
+    },
+    build: {
+      // Silencia la advertencia amarilla de Vite sobre archivos JS pesados (como Three.js)
+      chunkSizeWarningLimit: 5000,
     }
   };
 });
