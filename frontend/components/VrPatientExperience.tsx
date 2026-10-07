@@ -1,29 +1,83 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
-import { Wifi, WifiOff, X, RefreshCw, Plus, Infinity, ShieldAlert, ScanFace, Target, Sun } from 'lucide-react';
+import { Wifi, WifiOff, X, RefreshCw, Plus, Infinity, ShieldAlert, Target, Sun } from 'lucide-react';
+
+// IMPORTACIONES DE WEBXR PARA LOS NUEVOS MÓDULOS 360
+import { VRButton, XR, Controllers } from '@react-three/xr';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Environment, Sphere, useVideoTexture } from '@react-three/drei';
+import * as THREE from 'three';
 
 interface Props {
   patientId?: string;
   onClose: () => void;
 }
 
+type EnvironmentType = 
+  | 'IDLE' 
+  | 'TDAH_EXECUTIVE' 
+  | 'TEA_SOCIAL' 
+  | 'TDM_DEPRESSION' 
+  | 'TAG_ANXIETY'
+  // MÓDULOS 360 Inmersivos (WebXR)
+  | 'NEURO_HYPNOSIS' 
+  | 'DUAL_CONTROL' 
+  | 'DEV_TRAUMA' 
+  | 'EMDR_MEMORY' 
+  | 'GAMMA_INSIGHT' 
+  | 'PAIN_MANAGEMENT';
+
 export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', onClose }) => {
   const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'HOLODECK_IDLE');
 
-  type EnvironmentType = 'IDLE' | 'TDAH_EXECUTIVE' | 'NEURO_HYPNOSIS' | 'TAG_ANXIETY' | 'TEA_SOCIAL' | 'TDM_DEPRESSION';
   const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>('IDLE');
   
+  // Estados para el Motor WebXR (Fotos 360, Videos 360 y EMDR)
+  const [activeEcosystem, setActiveEcosystem] = useState<string>('NEUTRAL_VOID');
+  const [isVideo, setIsVideo] = useState<boolean>(false);
+  const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
+  const [emdrHz, setEmdrHz] = useState<number>(1.5);
+
   // Enrutador Principal del Holodeck
   useEffect(() => {
-    if (liveData?.type === 'LOAD_MODULE') {
+    if (!liveData) return;
+
+    if (liveData.type === 'LOAD_MODULE') {
       setActiveEnvironment(liveData.moduleName as EnvironmentType);
-    } else if (liveData?.type === 'STOP_TEST' || liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL') {
+      if (liveData.ecosystem) {
+        setActiveEcosystem(liveData.ecosystem);
+        setIsVideo(!!liveData.isVideo);
+      }
+    } 
+    else if (liveData.type === 'START_AIMA_PROTOCOL') {
+      if (liveData.ecosystem) {
+        setActiveEcosystem(liveData.ecosystem);
+        setIsVideo(false);
+      }
+    }
+    else if (liveData.type === 'START_BILATERAL_STIMULATION') {
+      setIsEmdrActive(true);
+      if (liveData.initialHz) setEmdrHz(liveData.initialHz);
+      if (liveData.ecosystem) {
+        setActiveEcosystem(liveData.ecosystem);
+        setIsVideo(!!liveData.isVideo);
+      }
+    }
+    else if (liveData.type === 'STOP_TEST' || liveData.type === 'TRIGGER_GROUNDING_PROTOCOL') {
       setActiveEnvironment('IDLE');
+      setIsEmdrActive(false);
+      setIsVideo(false);
     }
   }, [liveData]);
 
+  // Determinar si el módulo actual requiere el motor WebXR 360
+  const isWebXRModule = [
+    'DUAL_CONTROL', 'DEV_TRAUMA', 'EMDR_MEMORY', 'NEURO_HYPNOSIS', 'GAMMA_INSIGHT', 'PAIN_MANAGEMENT'
+  ].includes(activeEnvironment);
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
+      
       {/* BOTÓN DE EMERGENCIA */}
       <button 
         onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
@@ -32,15 +86,45 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
         <X className="w-8 h-8" />
       </button>
 
-      {/* RENDERIZADO DINÁMICO DE ENTORNOS */}
-      {activeEnvironment === 'IDLE' && <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />}
-      {activeEnvironment === 'TDAH_EXECUTIVE' && <AdhdExecutiveEnvironment remoteCommand={remoteCommand} transmit={transmit} />}
-      {activeEnvironment === 'NEURO_HYPNOSIS' && <HypnosisEnvironment liveData={liveData} />}
-      {activeEnvironment === 'TAG_ANXIETY' && <ExposureAnxietyEnvironment liveData={liveData} />}
-      {activeEnvironment === 'TEA_SOCIAL' && <SocialCognitionEnvironment liveData={liveData} />}
-      {activeEnvironment === 'TDM_DEPRESSION' && <DepressionEnvironment liveData={liveData} transmit={transmit} />}
+      {/* ------------------------------------------------------------- */}
+      {/* 1. RENDERIZADO DEL MOTOR WEBXR (Entornos 360 y Video Pico 3) */}
+      {/* ------------------------------------------------------------- */}
+      {isWebXRModule && (
+        <div className="absolute inset-0 z-[100]">
+          <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
+             {/* El VRButton nativo de React Three Fiber para activar las Pico 3 */}
+             <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
+          </div>
+          <Canvas>
+            <XR>
+              <Controllers />
+              <Suspense fallback={null}>
+                {isVideo ? (
+                  <VideoSphere url={`/ecosystems/${activeEcosystem}.mp4`} />
+                ) : (
+                  <Environment background={true} files={`/ecosystems/${activeEcosystem}.jpg`} />
+                )}
+              </Suspense>
+              {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
+            </XR>
+          </Canvas>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 2. RENDERIZADO DE ENTORNOS 2D CLÁSICOS (HTML/CSS DOM)         */}
+      {/* ------------------------------------------------------------- */}
+      {!isWebXRModule && (
+        <>
+          {activeEnvironment === 'IDLE' && <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />}
+          {activeEnvironment === 'TDAH_EXECUTIVE' && <AdhdExecutiveEnvironment remoteCommand={remoteCommand} transmit={transmit} />}
+          {activeEnvironment === 'TAG_ANXIETY' && <ExposureAnxietyEnvironment liveData={liveData} />}
+          {activeEnvironment === 'TEA_SOCIAL' && <SocialCognitionEnvironment liveData={liveData} />}
+          {activeEnvironment === 'TDM_DEPRESSION' && <DepressionEnvironment liveData={liveData} transmit={transmit} />}
+        </>
+      )}
       
-      {/* OVERLAY DE SEGURIDAD (Si el médico activa el Grounding desde cualquier consola) */}
+      {/* OVERLAY DE SEGURIDAD (Grounding Protocol - Se sobrepone a todo) */}
       {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
         <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
            <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
@@ -54,9 +138,43 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   );
 };
 
+
 // ============================================================================
-// 0. SALA DE ESPERA NEUTRAL
+// COMPONENTES WEBXR (3D REALIDAD VIRTUAL INMERSIVA)
 // ============================================================================
+
+// A. Bolita de Movimiento Sacádico EMDR (3D)
+const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (meshRef.current) {
+      const time = clock.getElapsedTime();
+      meshRef.current.position.x = Math.sin(time * Math.PI * hz) * 3;
+    }
+  });
+  return (
+    <Sphere ref={meshRef} args={[0.15, 32, 32]} position={[0, 1.5, -4]}>
+      <meshBasicMaterial color="#a855f7" />
+    </Sphere>
+  );
+};
+
+// B. Reproductor Esférico de Video 360 (.mp4)
+const VideoSphere = ({ url }: { url: string }) => {
+  const texture = useVideoTexture(url);
+  return (
+    <mesh>
+      <sphereGeometry args={[500, 60, 40]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} />
+    </mesh>
+  );
+};
+
+
+// ============================================================================
+// COMPONENTES 2D LEGACY (HTML/CSS)
+// ============================================================================
+
 const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, syncSession: () => void }) => (
   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black flex flex-col items-center justify-center transition-colors duration-1000">
     <div className="text-center space-y-6 max-w-xl p-8 bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-800/50 shadow-2xl">
@@ -73,9 +191,6 @@ const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, s
   </div>
 );
 
-// ============================================================================
-// 1. ENTORNO TDAH (Función Ejecutiva Go/No-Go)
-// ============================================================================
 const AdhdExecutiveEnvironment = ({ remoteCommand, transmit }: any) => {
   const [stimulus, setStimulus] = useState<'NONE' | 'GO' | 'NOGO'>('NONE');
   const [flash, setFlash] = useState(false);
@@ -127,47 +242,6 @@ const AdhdExecutiveEnvironment = ({ remoteCommand, transmit }: any) => {
   );
 };
 
-// ============================================================================
-// 2. ENTORNO HIPNOSIS (Trance y EMDR)
-// ============================================================================
-const HypnosisEnvironment = ({ liveData }: any) => {
-  const [phase, setPhase] = useState<'IDLE' | 'INDUCTION' | 'AWAKENING'>('IDLE');
-  const [emdrActive, setEmdrActive] = useState(false);
-
-  useEffect(() => {
-    if (liveData?.type === 'START_INDUCTION') setPhase('INDUCTION');
-    if (liveData?.type === 'START_AWAKENING') setPhase('AWAKENING');
-    if (liveData?.type === 'TOGGLE_EMDR') setEmdrActive(liveData.active);
-  }, [liveData]);
-
-  return (
-    <div className={`absolute inset-0 flex items-center justify-center transition-all duration-[3000ms] ${phase === 'AWAKENING' ? 'bg-gradient-to-t from-amber-600 via-orange-900 to-slate-900' : 'bg-black'}`}>
-      {phase === 'INDUCTION' && (
-        <div className="relative flex items-center justify-center w-full h-full overflow-hidden">
-           <div className="absolute w-[600px] h-[600px] bg-indigo-900/30 rounded-full blur-[100px] animate-[ping_8s_ease-in-out_infinite]"></div>
-           {emdrActive ? (
-             <div className="relative w-full max-w-4xl h-32 flex items-center">
-               <div className="w-16 h-16 bg-cyan-400 rounded-full blur-sm absolute shadow-[0_0_50px_rgba(34,211,238,1)] animate-[bounce-x_2s_ease-in-out_infinite_alternate]" style={{ animationName: 'emdrSweep', animationDuration: '1.5s', animationIterationCount: 'infinite' }}></div>
-             </div>
-           ) : (
-             <Infinity className="w-24 h-24 text-sky-200 opacity-80 animate-pulse drop-shadow-[0_0_25px_rgba(186,230,253,0.8)]" />
-           )}
-           <style>{`@keyframes emdrSweep { 0% { left: 0%; transform: scale(1); } 50% { transform: scale(1.2); } 100% { left: calc(100% - 4rem); transform: scale(1); } }`}</style>
-        </div>
-      )}
-      {phase === 'AWAKENING' && (
-        <div className="relative flex flex-col items-center justify-center w-full h-full z-10 text-center">
-           <div className="w-[800px] h-[800px] bg-amber-400/20 rounded-full blur-[150px] absolute -bottom-96"></div>
-           <h2 className="text-4xl font-light text-amber-100/90 tracking-widest mb-4">SINTIENDO LA ENERGÍA REGRESAR</h2>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// 3. NUEVO: ENTORNO TEA (Cognición Social y Sensorial)
-// ============================================================================
 const SocialCognitionEnvironment = ({ liveData }: any) => {
   const [phase, setPhase] = useState<'IDLE' | 'FACES' | 'OVERSTIMULATION'>('IDLE');
 
@@ -180,9 +254,7 @@ const SocialCognitionEnvironment = ({ liveData }: any) => {
     <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all ${phase === 'OVERSTIMULATION' ? 'bg-slate-800' : 'bg-slate-950'}`}>
       {phase !== 'IDLE' && (
         <div className={`relative flex flex-col items-center ${phase === 'OVERSTIMULATION' ? 'animate-shake' : ''}`}>
-          {/* Avatar Abstracto (Para rastreo de mirada) */}
           <div className="w-64 h-80 bg-slate-800 rounded-full border-4 border-slate-700 flex flex-col items-center pt-24 relative overflow-hidden shadow-2xl">
-            {/* Ojos del Avatar (Punto de atención conjunta) */}
             <div className="flex gap-8 mb-12 z-10">
               <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
                  <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
@@ -191,10 +263,7 @@ const SocialCognitionEnvironment = ({ liveData }: any) => {
                  <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
               </div>
             </div>
-            {/* Boca */}
             <div className="w-16 h-2 bg-slate-600 rounded-full z-10"></div>
-            
-            {/* Ruido Estático de Sobrecarga */}
             {phase === 'OVERSTIMULATION' && (
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50 mix-blend-overlay"></div>
             )}
@@ -208,9 +277,6 @@ const SocialCognitionEnvironment = ({ liveData }: any) => {
   );
 };
 
-// ============================================================================
-// 4. NUEVO: ENTORNO TDM (Depresión - Latencia Motora y Anhedonia)
-// ============================================================================
 const DepressionEnvironment = ({ liveData, transmit }: any) => {
   const [phase, setPhase] = useState<'IDLE' | 'MOTOR' | 'REWARD'>('IDLE');
   const [targetPos, setTargetPos] = useState({ top: '50%', left: '50%' });
@@ -220,13 +286,9 @@ const DepressionEnvironment = ({ liveData, transmit }: any) => {
     if (liveData?.type === 'START_REWARD_STIMULUS') setPhase('REWARD');
   }, [liveData]);
 
-  // Si el paciente toca el objetivo, se mueve a otro lado (Mide bradicinesia)
   const handleTouchTarget = () => {
     transmit({ type: 'MOTOR_TARGET_HIT', timestamp: Date.now() });
-    setTargetPos({
-      top: `${Math.random() * 60 + 20}%`,
-      left: `${Math.random() * 60 + 20}%`
-    });
+    setTargetPos({ top: `${Math.random() * 60 + 20}%`, left: `${Math.random() * 60 + 20}%` });
   };
 
   return (
@@ -254,9 +316,6 @@ const DepressionEnvironment = ({ liveData, transmit }: any) => {
   );
 };
 
-// ============================================================================
-// 5. NUEVO: ENTORNO TAG (Terapia de Exposición a Fobias)
-// ============================================================================
 const ExposureAnxietyEnvironment = ({ liveData }: any) => {
   const [level, setLevel] = useState(1);
 
@@ -266,14 +325,12 @@ const ExposureAnxietyEnvironment = ({ liveData }: any) => {
     }
   }, [liveData]);
 
-  // Simularemos Claustrofobia / Opresión visual
-  const tunnelScale = 1 - (level * 0.15); // El tunel se hace más pequeño
-  const vignetteOpacity = level * 0.2; // Los bordes se oscurecen más
+  const tunnelScale = 1 - (level * 0.15);
+  const vignetteOpacity = level * 0.2;
   const colorIntensity = level > 3 ? 'border-rose-900' : 'border-slate-800';
 
   return (
     <div className="absolute inset-0 bg-slate-950 flex items-center justify-center overflow-hidden">
-      {/* Túnel Opresivo que se cierra según el nivel de exposición */}
       <div 
         className={`w-[1000px] h-[1000px] border-[100px] ${colorIntensity} rounded-full transition-all duration-1000 flex items-center justify-center`}
         style={{ transform: `scale(${tunnelScale})` }}
@@ -285,12 +342,8 @@ const ExposureAnxietyEnvironment = ({ liveData }: any) => {
         </div>
       </div>
       
-      {/* Viñeta de oscurecimiento */}
       <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_100%)] pointer-events-none" style={{ opacity: vignetteOpacity }}></div>
-      
-      <div className="absolute top-10 left-10 text-slate-500 font-mono text-sm">
-        INTENSIDAD FÓBICA: NIVEL {level}
-      </div>
+      <div className="absolute top-10 left-10 text-slate-500 font-mono text-sm">INTENSIDAD FÓBICA: NIVEL {level}</div>
     </div>
   );
 };
