@@ -38,6 +38,7 @@ import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
 import { SentinelMobileCollector } from './components/SentinelMobileCollector';
+import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
 
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
@@ -74,7 +75,8 @@ import {
   Printer,
   Wifi,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  HeartHandshake
 } from 'lucide-react';
 
 type AppTab = 
@@ -156,6 +158,7 @@ function DoctorWorkstation() {
   const [isFullscreenExecOpen, setIsFullscreenExecOpen] = useState<boolean>(false);
   const [isFullscreenGammaOpen, setIsFullscreenGammaOpen] = useState<boolean>(false);
   const [isFullscreenDevTraumaOpen, setIsFullscreenDevTraumaOpen] = useState<boolean>(false);
+  const [isFullscreenDualControlOpen, setIsFullscreenDualControlOpen] = useState<boolean>(false);
 
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
@@ -171,6 +174,7 @@ function DoctorWorkstation() {
     setIsFullscreenExecOpen(false);
     setIsFullscreenGammaOpen(false);
     setIsFullscreenDevTraumaOpen(false);
+    setIsFullscreenDualControlOpen(false);
   };
 
   useEffect(() => {
@@ -1047,6 +1051,14 @@ function DoctorWorkstation() {
               </button>
 
               <button
+                onClick={() => setIsFullscreenDualControlOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-700 to-purple-800 hover:from-rose-500 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
+              >
+                <HeartHandshake className="w-4 h-4 text-rose-200" />
+                <span>Control Dual (SES / SIS)</span>
+              </button>
+
+              <button
                 onClick={() => setIsFullscreenDiagnosticOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
               >
@@ -1158,7 +1170,6 @@ function DoctorWorkstation() {
         />
       )}
 
-      {/* AQUÍ ESTÁ LA MAGIA: EL COMPONENTE DE TDAH AHORA ABRE EL ENRUTADOR */}
       {isFullscreenExecOpen && (
         <VrModuleRouter
           patient={safePatient}
@@ -1179,22 +1190,24 @@ function DoctorWorkstation() {
           onClose={() => setIsFullscreenDevTraumaOpen(false)}
         />
       )}
+
+      {isFullscreenDualControlOpen && (
+        <VrDualControlTherapyModule
+          patient={safePatient}
+          onClose={() => setIsFullscreenDualControlOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-// 2. NUEVO COMPONENTE APP QUE ENRUTA TODO
+// 2. COMPONENTE APP QUE ENRUTA TODO
 export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Redirigir la ruta raíz al panel del doctor para no perder el comportamiento por defecto */}
         <Route path="/" element={<Navigate to="/doctor" replace />} />
-        
-        {/* Ruta Privada: Panel del Médico (Este renderiza todo tu código de arriba) */}
         <Route path="/doctor" element={<DoctorWorkstation />} />
-        
-        {/* Ruta Paciente: El enlace que abres en el navegador del Pico 3 */}
         <Route path="/visor" element={<PicoVisorApp />} />
       </Routes>
     </Router>
