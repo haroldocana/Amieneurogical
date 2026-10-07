@@ -456,3 +456,56 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-2">
               <Zap className="w-4 h-4 text-amber-400" /> AI Closed-Loop Regulator
             </h2>
+
+            {/* Consola de Logs IA */}
+            <div className="flex-1 bg-black/50 border border-slate-800 rounded-xl p-3 overflow-y-auto font-mono text-[10px] space-y-2">
+              {aiLogs.length === 0 ? (
+                <div className="text-slate-500 text-center py-4">Esperando inicialización de la IA...</div>
+              ) : (
+                aiLogs.map((log, index) => (
+                  <div key={index} className={`pb-2 border-b border-slate-800/50 ${log.includes('ALERTA') || log.includes('EMERGENCIA') ? 'text-rose-400 font-bold' : log.includes('SISTEMA') ? 'text-cyan-400' : 'text-slate-300'}`}>
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Controles de Sesión Opcionales */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Estímulo Bilateral</span>
+              <button
+                disabled={!sessionActive}
+                onClick={() => setEmdrBilateralActive(!emdrBilateralActive)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${emdrBilateralActive && sessionActive ? 'bg-cyan-500' : 'bg-slate-700'} disabled:opacity-50`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${emdrBilateralActive && sessionActive ? 'translate-x-4' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Botones de Acción (Start/Stop) */}
+          <div className="space-y-3 shrink-0">
+            {!sessionActive ? (
+              <button
+                onClick={handleStartSession}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white p-3.5 rounded-xl font-bold shadow-lg shadow-purple-600/30 transition active:scale-95 cursor-pointer"
+              >
+                <Play className="w-5 h-5" />
+                Iniciar Protocolo Adaptado
+              </button>
+            ) : (
+              <button
+                onClick={handleEndSession}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 p-3.5 rounded-xl font-bold transition active:scale-95 cursor-pointer"
+              >
+                <Square className="w-5 h-5" />
+                Finalizar & Guardar Reporte
+              </button>
+            )}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
