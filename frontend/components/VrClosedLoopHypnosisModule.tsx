@@ -6,7 +6,6 @@ import {
   ShieldAlert,
   Brain,
   Activity,
-  Volume2,
   Zap,
   Play,
   Square,
@@ -16,7 +15,9 @@ import {
   Sliders,
   Sunrise,
   ShieldCheck,
-  Glasses
+  Glasses,
+  Volume2,
+  Layers
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -44,12 +45,16 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   const [emdrActive, setEmdrActive] = useState(false);
   const [tranceDepthPct, setTranceDepthPct] = useState(15);
   const [susceptibilityScore, setSusceptibilityScore] = useState<number | null>(null);
-  const [binauralFreqHz, setBinauralFreqHz] = useState(6.0); // Modulación de ondas Theta (4-7 Hz)
+  
+  // Parámetros Multimodales (Audio Binaural + Visual Entrainment)
+  const [binauralFreqHz, setBinauralFreqHz] = useState(6.0); // Theta (4-7 Hz)
+  const [visualStrobeHz, setVisualStrobeHz] = useState(6.0);
+  const [audioVolume, setAudioVolume] = useState(70); // % volumen espacial en visor
 
-  // Guion Ericksoriano Dinámico
-  const [scriptText, setScriptText] = useState<string>('');
-  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
-  const [currentMetaphorTopic, setCurrentMetaphorTopic] = useState<'ANXIETY_CONTAINMENT' | 'NARCISSISTIC_RESISTANCE' | 'TRAUMA_DESENSITIZATION' | 'PAIN_CONTROL'>('ANXIETY_CONTAINMENT');
+  // Metáforas Cinemáticas Proyectadas
+  const [projectedText, setProjectedText] = useState<string>('');
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
+  const [metaphorTopic, setMetaphorTopic] = useState<'KINETIC_BREATHING' | 'DEEP_DISSOCIATION' | 'ROOT_GROUNDING'>('KINETIC_BREATHING');
 
   // Watchdog Anti-Abreacción
   const [isAbreactionTriggered, setIsAbreactionTriggered] = useState(false);
@@ -60,27 +65,28 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'Neurohypnosis');
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'NeurohypnosisMultimodal');
 
-  // Transmisión en vivo de fisiología y profundidad del trance
+  // Transmisión en vivo de bucle cerrado al visor (Audio + Video)
   useEffect(() => {
     if (isActiveSession && !isAbreactionTriggered) {
       transmit({
         hrv: telemetry.hrvRmssdMs,
         gsr: telemetry.gsrMicroSiemens,
         stressLevel: tranceDepthPct, 
-        habituationIndex: Math.floor(binauralFreqHz * 10), 
-        omissions: susceptibilityScore || 0
+        binauralHz: binauralFreqHz,
+        visualHz: visualStrobeHz,
+        volume: audioVolume,
+        emdr: emdrActive
       });
     }
-  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, susceptibilityScore, isActiveSession, isAbreactionTriggered, transmit]);
+  }, [telemetry.hrvRmssdMs, telemetry.gsrMicroSiemens, tranceDepthPct, binauralFreqHz, visualStrobeHz, audioVolume, emdrActive, isActiveSession, isAbreactionTriggered, transmit]);
 
-  // Simulación y lectura biométrica en vivo en bucle cerrado
+  // Simulación biométrica en bucle cerrado
   useEffect(() => {
     if (!isActiveSession) return;
 
     const interval = setInterval(() => {
-      // Variación biométrica (Si estamos despertando, forzamos el ritmo a subir)
       const awakeningModifier = sessionPhase === 'AWAKENING' ? 1.5 : 0;
       const randomHrvDelta = (Math.random() - 0.48) * 4 - awakeningModifier; 
       const randomGsrDelta = (Math.random() - 0.5) * 0.2 + (awakeningModifier * 0.1);
@@ -89,22 +95,31 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         const nextHrv = Math.max(10, Math.min(100, prev.hrvRmssdMs + randomHrvDelta));
         const nextGsr = Math.max(0.5, Math.min(12, prev.gsrMicroSiemens + randomGsrDelta));
 
-        // Verificación de Watchdog Anti-Abreacción (Desactivado temporalmente si estamos despertando intencionalmente)
+        // Watchdog de Seguridad Anti-Abreacción
         if (sessionPhase !== 'AWAKENING' && (nextGsr - gsrBaselineRef.current > 3.8 || nextHrv < 14)) {
-          triggerSafetyGrounding('DISPARO DE RESPUESTA SIMPÁTICA CRÍTICA: Cambios abruptos de GSR/HRV sugieren abreacción traumática.');
+          triggerSafetyGrounding('DISPARO DE RESPUESTA SIMPÁTICA CRÍTICA: Alerta por alteración en conductancia cutánea.');
         }
 
-        // Modulación Closed-Loop del Trance
+        // Cálculo de Profundidad del Trance
         const hrvFactor = Math.min(100, (nextHrv / 60) * 100);
         const gsrFactor = Math.max(0, 100 - (nextGsr * 15));
         const depth = Math.round((hrvFactor * 0.6) + (gsrFactor * 0.4));
         setTranceDepthPct(Math.min(98, Math.max(10, depth)));
 
-        // Arrastre de frecuencias binaurales según profundidad o fase
-        if (sessionPhase === 'AWAKENING') setBinauralFreqHz(14.0); // Beta para despertar
-        else if (depth > 70) setBinauralFreqHz(4.5);
-        else if (depth > 40) setBinauralFreqHz(6.0);
-        else setBinauralFreqHz(8.5);
+        // Ajuste automático de frecuencias de audio y visuales
+        if (sessionPhase === 'AWAKENING') {
+          setBinauralFreqHz(14.0);
+          setVisualStrobeHz(14.0);
+        } else if (depth > 70) {
+          setBinauralFreqHz(4.5);
+          setVisualStrobeHz(4.5);
+        } else if (depth > 40) {
+          setBinauralFreqHz(6.0);
+          setVisualStrobeHz(6.0);
+        } else {
+          setBinauralFreqHz(8.5);
+          setVisualStrobeHz(8.5);
+        }
 
         return {
           ...prev,
@@ -119,26 +134,26 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   }, [isActiveSession, sessionPhase]);
 
   // -------------------------------------------------------------------------
-  // CONTROLADORES DE FASE Y HERRAMIENTAS DE TRAUMA
+  // CONTROLADORES DE SESIÓN
   // -------------------------------------------------------------------------
   const handleStartInduction = () => {
     setIsActiveSession(true);
     setSessionPhase('INDUCTION');
     setIsAbreactionTriggered(false);
-    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'NEURO_HYPNOSIS' });
-    transmit({ type: 'START_INDUCTION' });
+    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'MULTIMODAL_HYPNOSIS' });
+    transmit({ type: 'START_MULTIMODAL_SESSION', binauralHz: binauralFreqHz, visualHz: visualStrobeHz });
   };
 
   const handleStartAwakening = () => {
     setSessionPhase('AWAKENING');
     setEmdrActive(false);
-    transmit({ type: 'START_AWAKENING' }); // Lanza el Efecto Amanecer en VR
+    transmit({ type: 'START_AWAKENING_SEQUENCE' });
   };
 
   const toggleEmdr = () => {
     const newState = !emdrActive;
     setEmdrActive(newState);
-    transmit({ type: 'TOGGLE_EMDR', active: newState });
+    transmit({ type: 'TOGGLE_EMDR_MULTIMODAL', active: newState });
   };
 
   const triggerSafetyGrounding = (reason: string) => {
@@ -147,7 +162,8 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     setIsActiveSession(false);
     setTranceDepthPct(0);
     setEmdrActive(false);
-    setBinauralFreqHz(14.0); 
+    setBinauralFreqHz(14.0);
+    setVisualStrobeHz(14.0);
     setAbreactionMessage(reason);
     transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
   };
@@ -160,17 +176,15 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
     setTranceDepthPct(15);
   };
 
-  // Medición de Susceptibilidad Biométrica
   const handleEvaluateSusceptibility = () => {
     gsrBaselineRef.current = telemetry.gsrMicroSiemens || 2.1;
     const vagalScore = telemetry.hrvRmssdMs > 30 ? 45 : 25;
     const gsrScore = telemetry.gsrMicroSiemens < 3.0 ? 45 : 20;
-    setSusceptibilityScore(vagalScore + gsrScore + 8);
+    setSusceptibilityScore(vagalScore + gsrScore + 12);
   };
 
-  // Generación de Guion Ericksoriano con Gemini
-  const handleGenerateEricksonianScript = async () => {
-    setIsGeneratingScript(true);
+  const handleGenerateTextMetaphor = async () => {
+    setIsGeneratingText(true);
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
       if (apiKey) {
@@ -178,30 +192,22 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
         const prompt = `
-Eres el copiloto de Neurohipnosis Ericksoniana de AMIE Engine.
-Genera un guion hipnótico PERMISIVO e INDIRECTO para un paciente en entorno de VR Inmersivo.
-
-DATOS PACIENTE:
-- Motivo / Diagnóstico: ${patient.consultationReason}
-- Edad: ${patient.age} | Sexo: ${patient.gender}
-- Enfoque: ${currentMetaphorTopic}
-- HRV actual: ${telemetry.hrvRmssdMs} ms | GSR: ${telemetry.gsrMicroSiemens} µS
-
-Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas permisivas y marcadores de respiración [RESPIRA_LENTO]. Máximo 140 palabras.
+Genera una secuencia corta de 3 frases cinemáticas de inducción hipnótica (para proyectar en texto flotante en VR) orientadas a: ${metaphorTopic}.
+Paciente: ${patient.consultationReason} (${patient.age} años).
+Usa lenguaje permisivo, indirecto y evocador. Separa las frases con barras (|). Máximo 25 palabras en total.
 `;
         const result = await model.generateContent(prompt);
-        setScriptText(result.response.text() || 'A medida que escuchas el pulso binaural, nota cómo tu cuerpo elige su propio ritmo para descansar...');
+        setProjectedText(result.response.text() || 'Sigue la expansión de la luz | Nota cómo el cuerpo descansa | Paz profunda.');
       } else {
-        setScriptText('A medida que escuchas la frecuencia en este espacio virtual, tu cuerpo puede notar cómo la respiración se vuelve más profunda y tranquila...');
+        setProjectedText('Observa el ritmo de las partículas lumínicas | Cada exhalación profundiza la calma | Siente el apoyo del entorno.');
       }
     } catch (e) {
-      setScriptText('Permítete notar la sensación de seguridad en este entorno inmersivo. Cada respiración te ayuda a encontrar mayor estabilidad...');
+      setProjectedText('Permítete seguir el compás visual | El cuerpo encuentra su propio balance | Descanso.');
     } finally {
-      setIsGeneratingScript(false);
+      setIsGeneratingText(false);
     }
   };
 
-  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
   const handleEndSession = async () => {
     setIsActiveSession(false);
     setSessionPhase('IDLE');
@@ -210,19 +216,17 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
     const sessionReport = {
       patientId: patient?.id || 'PAC-8104',
       sessionData: {
-        taskName: 'Neurohypnosis',
+        taskName: 'NeurohypnosisMultimodal_ClosedLoop',
         durationSeconds: 300,
         metrics: {
           avgHrv: telemetry.hrvRmssdMs,
           avgGsr: telemetry.gsrMicroSiemens,
-          omissions: 0,
-          commissions: 0,
-          frontalEngagementPct: tranceDepthPct, 
-          binauralBetaHz: binauralFreqHz
+          frontalEngagementPct: tranceDepthPct,
+          binauralFreqHz: binauralFreqHz
         },
         aiLogs: [
-          `Sesión de Neurohipnosis VR concluida. Profundidad del trance alcanzada: ${tranceDepthPct}%. Frecuencia Binaural final: ${binauralFreqHz} Hz.`,
-          scriptText ? `Guion Ericksoniano: "${scriptText.substring(0, 120)}..."` : 'Sin guion generado.'
+          `Sesión de Neurohipnosis Multimodal (Audio + Visual) concluida. Profundidad: ${tranceDepthPct}%. Frecuencia Binaural/Estroboscópica: ${binauralFreqHz} Hz.`,
+          projectedText ? `Metáfora textual proyectada: "${projectedText}"` : 'Sin metáfora proyectada.'
         ],
         completedAt: new Date().toISOString()
       }
@@ -245,20 +249,20 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
       {/* Encabezado */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-600 rounded-2xl text-white shadow-lg shadow-purple-600/30">
-            <Sparkles className="w-6 h-6" />
+          <div className="p-3 bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-600 rounded-2xl text-white shadow-lg shadow-purple-600/30">
+            <Volume2 className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-black text-white tracking-tight">
-                Consola de Neurohipnosis & Bucle Cerrado (Closed-Loop)
+                Consola de Neurohipnosis Multimodal • Audio Binaural & Estroboscopía VR
               </h2>
               <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full">
-                ERICKSONIAN VR
+                CLOSED-LOOP MULTIMODAL
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Modulación de pulsos binaurales, metáforas generativas y protocolo de aterrizaje seguro.
+              Sincronización simultánea de audio binaural dinámico, pulsos visuales ópticos y texto cinematográfico en visor.
             </p>
           </div>
         </div>
@@ -270,7 +274,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         )}
       </div>
 
-      {/* Alerta del Watchdog Anti-Abreacción */}
+      {/* Alerta Watchdog */}
       {isAbreactionTriggered && (
         <div className="p-4 bg-rose-950/90 border-2 border-rose-500 rounded-2xl text-rose-100 space-y-3 shadow-2xl animate-shake">
           <div className="flex items-center gap-3">
@@ -283,20 +287,20 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
             </div>
           </div>
           <div className="p-3 bg-slate-950/80 rounded-xl border border-rose-500/30 text-xs space-y-1 font-mono">
-            <span className="font-bold text-rose-400">SECUENCIA DE GROUNDING SENSORIAL INYECTADA (5-4-3-2-1):</span>
-            <p className="text-slate-300">1. Iluminación neutra estática activada en entorno VR.</p>
-            <p className="text-slate-300">2. Frecuencia binaural conmutada a 14 Hz (Ritmo Beta de vigilia).</p>
-            <p className="text-slate-300">3. Voz directiva: "Siente tus pies sobre el suelo y respira lento."</p>
+            <span className="font-bold text-rose-400">PROTOCOLO DE GROUNDING MULTIMODAL INYECTADO:</span>
+            <p className="text-slate-300">1. Audio binaural conmutado a tono de vigilia (14 Hz) con volumen seguro.</p>
+            <p className="text-slate-300">2. Estroboscopio visual desactivado en el visor.</p>
+            <p className="text-slate-300">3. Estabilización de iluminación ambiental al 100%.</p>
           </div>
           <button onClick={handleResetSession} className="w-full py-2 bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow">
-            Restablecer Estado y Reiniciar Módulo
+            Restablecer Estado y Reiniciar Consola
           </button>
         </div>
       )}
 
-      {/* Indicadores Biométricos */}
+      {/* Indicadores Biométricos y Frecuencias */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <div className={`bg-slate-950 p-4 rounded-xl border space-y-1 ${sessionPhase === 'AWAKENING' ? 'border-amber-500/50 bg-amber-950/20' : 'border-slate-800'}`}>
+        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
             <Heart className="w-3.5 h-3.5 text-rose-400" /> Tono Vagal (HRV)
           </span>
@@ -316,7 +320,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> Frec. Binaural
+            <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> Arrastre Binaural / Óptico
           </span>
           <div className="text-xl font-mono font-bold text-cyan-400">
             {binauralFreqHz} <span className="text-xs text-slate-500">Hz {sessionPhase === 'AWAKENING' ? '(Beta)' : '(Theta)'}</span>
@@ -336,92 +340,86 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         </div>
       </div>
 
-      {/* Susceptibilidad & Herramientas de Trauma */}
+      {/* Controles de Volumen y Susceptibilidad */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-4">
+        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Volume2 className="w-4 h-4 text-cyan-400" /> Volumen de Paisaje Sonoro VR
+            </span>
+            <span className="text-xs font-mono font-bold text-cyan-300">{audioVolume}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={audioVolume}
+            onChange={(e) => setAudioVolume(Number(e.target.value))}
+            className="w-full accent-cyan-500 cursor-pointer"
+          />
+        </div>
+
+        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-3">
           <div>
             <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Eye className="w-4 h-4 text-cyan-400" /> Escala de Susceptibilidad
+              <Eye className="w-4 h-4 text-purple-400" /> Índice de Susceptibilidad Multimodal
             </span>
-            <p className="text-[11px] text-slate-400 mt-1">Cuantifica la receptividad antes del trance.</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Cuantifica la respuesta al estímulo combinado (Audio + Visual).</p>
           </div>
           <div className="flex items-center gap-3">
             {susceptibilityScore !== null && (
-              <div className="px-3 py-1.5 bg-purple-950 border border-purple-500/40 rounded-lg text-xs font-mono">
+              <div className="px-3 py-1 bg-purple-950 border border-purple-500/40 rounded-lg text-xs font-mono">
                 Puntaje: <strong className="text-purple-300">{susceptibilityScore}/100</strong>
               </div>
             )}
-            <button onClick={handleEvaluateSusceptibility} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition">
-              Medir Susceptibilidad
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex flex-col justify-between gap-4">
-          <div>
-            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-rose-400" /> Herramientas de Procesamiento
-            </span>
-            <p className="text-[11px] text-slate-400 mt-1">EMDR Bilateral y Grounding de Emergencia.</p>
-          </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={toggleEmdr} 
-              disabled={sessionPhase !== 'INDUCTION'}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${emdrActive ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 disabled:opacity-50'}`}
-            >
-              {emdrActive ? 'Detener EMDR' : 'Activar EMDR'}
-            </button>
-            <button 
-              onClick={() => triggerSafetyGrounding('Aterrizaje manual iniciado por el terapeuta.')} 
-              disabled={sessionPhase !== 'INDUCTION'}
-              className="flex-1 py-2 bg-rose-950 border border-rose-500/50 text-rose-300 text-xs font-bold rounded-xl transition disabled:opacity-50 hover:bg-rose-900"
-            >
-              Abortar (Grounding)
+            <button onClick={handleEvaluateSusceptibility} className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition cursor-pointer">
+              Evaluar Susceptibilidad
             </button>
           </div>
         </div>
       </div>
 
-      {/* Guion Ericksoriano */}
+      {/* Proyección de Metáforas en Texto Cinematográfico VR */}
       <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple-400" />
-            Metáfora Ericksoaniana Adaptativa
+            Secuencia Cinematográfica Textual en Visor
           </span>
 
           <div className="flex items-center gap-2">
             <select
-              value={currentMetaphorTopic}
-              onChange={(e) => setCurrentMetaphorTopic(e.target.value as any)}
+              value={metaphorTopic}
+              onChange={(e) => setMetaphorTopic(e.target.value as any)}
               className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none"
             >
-              <option value="ANXIETY_CONTAINMENT">Contención de Ansiedad</option>
-              <option value="NARCISSISTIC_RESISTANCE">Resistencia Narcisista / Perfil Defensivo</option>
-              <option value="TRAUMA_DESENSITIZATION">Desensibilización de Trauma</option>
-              <option value="PAIN_CONTROL">Analgesia y Control de Dolor</option>
+              <option value="KINETIC_BREATHING">Respiración Lumínica Sincronizada</option>
+              <option value="DEEP_DISSOCIATION">Disociación Espacial y Flotación</option>
+              <option value="ROOT_GROUNDING">Anclaje Sensorial y Estabilidad</option>
             </select>
 
             <button
-              onClick={handleGenerateEricksonianScript}
-              disabled={isGeneratingScript}
-              className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5"
+              onClick={handleGenerateTextMetaphor}
+              disabled={isGeneratingText}
+              className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5 cursor-pointer"
             >
-              {isGeneratingScript ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              <span>Generar Metáfora</span>
+              {isGeneratingText ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>Generar Texto VR</span>
             </button>
           </div>
         </div>
 
-        <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-300 min-h-[90px] font-serif italic">
-          {scriptText || 'Haga clic en "Generar Metáfora" para construir el guion inductivo adaptado al paciente...'}
+        <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-300 min-h-[90px] font-mono flex items-center justify-center text-center">
+          {projectedText ? (
+            <span className="text-cyan-200 tracking-wide">✨ [{projectedText}]</span>
+          ) : (
+            <span className="text-slate-500 italic">Haga clic en "Generar Texto VR" para desplegar la secuencia que el paciente leerá suavemente en su espacio virtual...</span>
+          )}
         </div>
       </div>
 
-      {/* Controles de Sesión Maestros */}
+      {/* Controles Maestros de Sesión */}
       <div>
-        {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
         {!isConnected && sessionPhase === 'IDLE' && (
           <div className="mb-4 p-3 bg-slate-900/80 border border-purple-500/30 border-dashed rounded-xl flex items-center gap-3">
             <div className="p-2 bg-slate-800 rounded-lg shrink-0">
@@ -429,7 +427,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
             </div>
             <div className="text-xs text-slate-300 leading-relaxed">
               <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
-              Para habilitar la inducción, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patient?.id || 'PAC-8104'}</span>
+              Para iniciar la sesión multimodal, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patient?.id || 'PAC-8104'}</span>
             </div>
           </div>
         )}
@@ -437,7 +435,7 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
         <div className="flex items-center justify-between border-t border-slate-800 pt-4">
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Sliders className="w-4 h-4 text-purple-400" />
-            <span>Resonador Vagal: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}</strong></span>
+            <span>Puente VR Multimodal: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'DESCONECTADO'}</strong></span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -448,22 +446,22 @@ Usa dobles vínculos ("puedes notar...", "quizás prefieras..."), metáforas per
                 className={`flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg transition ${
                   !isConnected 
                     ? 'bg-purple-900/30 text-purple-300 border border-purple-500/30 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:scale-105'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:scale-105 cursor-pointer'
                 }`}
               >
-                {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> <span>Iniciar Inducción Profunda</span></>}
+                {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> <span>Iniciar Sesión Multimodal</span></>}
               </button>
             )}
 
             {sessionPhase === 'INDUCTION' && (
-              <button onClick={handleStartAwakening} className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow-lg transition">
+              <button onClick={handleStartAwakening} className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow-lg transition cursor-pointer">
                 <Sunrise className="w-4 h-4" /> <span>Iniciar Des-inducción (Amanecer)</span>
               </button>
             )}
 
             {(sessionPhase === 'AWAKENING' || sessionPhase === 'INDUCTION') && (
-              <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-xl transition">
-                <Square className="w-4 h-4" /> <span>Finalizar Apagado</span>
+              <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-xl transition cursor-pointer">
+                <Square className="w-4 h-4" /> <span>Finalizar y Guardar Reporte</span>
               </button>
             )}
           </div>
