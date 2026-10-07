@@ -10,19 +10,13 @@ import {
   Play,
   Square,
   RefreshCw,
-  Eye,
   Heart,
   Sliders,
   Glasses,
-  Volume2,
-  Mic,
-  Radio,
-  Compass,
   Monitor,
-  Flame,
-  Layers,
-  Video,
-  Film
+  Compass,
+  Film,
+  Stethoscope
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -31,6 +25,7 @@ interface Props {
   onClose?: () => void;
 }
 
+type AppRole = 'SELECTING_ROLE' | 'CLINICIAN_CONSOLE' | 'PATIENT_VR_VIEWER';
 type ClinicalVrMode = 'HYPNOSIS' | 'PHOBIA_VRET' | 'CLUSTER_B_FORENSIC' | 'SYSTEMIC_COUPLE';
 type InteractionType = 'DYNAMIC_AI' | 'PRE_RECORDED_VIDEO';
 
@@ -51,13 +46,15 @@ const AMIE_12_ENVIRONMENTS = [
 ];
 
 export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
+  // 👥 SELECCIÓN DE ROL INICIAL (Profesional vs Paciente)
+  const [appRole, setAppRole] = useState<AppRole>('SELECTING_ROLE');
+
   const [vrMode, setVrMode] = useState<ClinicalVrMode>('CLUSTER_B_FORENSIC');
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('FORENSIC_COURTROOM');
   const [interactionType, setInteractionType] = useState<InteractionType>('PRE_RECORDED_VIDEO');
   
-  // Selección específica para los videos con audio integrado de Narcisismo
-  const [selectedNarcissismVideo, setSelectedNarcissismVideo] = useState<'VIDEO_1_OVERT' | 'VIDEO_2_COVERT'>('VIDEO_1_OVERT');
-  const [subCategoryOption, setSubCategoryOption] = useState<string>('OVERT_NARCISSISM');
+  // Selección para los 3 videos con audio integrado de Narcisismo
+  const [selectedNarcissismVideo, setSelectedNarcissismVideo] = useState<'VIDEO_1_OVERT' | 'VIDEO_2_COVERT' | 'VIDEO_3_MALIGNANT'>('VIDEO_1_OVERT');
   const [aiVoiceTone, setAiVoiceTone] = useState<'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE' | 'SOFT_WHISPER'>('ARROGANT_COLD');
 
   const [telemetry, setTelemetry] = useState<PrecisionTelemetryPacket>({
@@ -65,7 +62,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
     handGripPressureKg: 18.5,
     touchTapLatencyMs: 220,
     heartRateBpm: 72,
-    hrvRmssdMs: patient.multisensoryHardware?.vagalToneHrvIndex || 38,
+    hrvRmssdMs: patient?.multisensoryHardware?.vagalToneHrvIndex || 38,
     gsrMicroSiemens: 2.1,
     rrIntervalMs: 833,
     timestamp: Date.now()
@@ -83,25 +80,11 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
   const [abreactionReason, setAbreactionReason] = useState<string | null>(null);
   const gsrBaselineRef = useRef<number>(2.1);
 
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', `UnifiedVR_${vrMode}`);
+  const bridgeRole = appRole === 'PATIENT_VR_VIEWER' ? 'receiver' : 'sender';
+  const { isConnected, transmit } = useVrTelemetryBridge(bridgeRole, patient?.id || 'PAC-8104', `UnifiedVR_${vrMode}`);
 
   useEffect(() => {
-    if (sessionActive && !isAbreactionTriggered) {
-      transmit({
-        mode: vrMode,
-        environment: selectedEnvironment,
-        interaction: interactionType,
-        hrv: telemetry.hrvRmssdMs,
-        gsr: telemetry.gsrMicroSiemens,
-        depth: tranceOrStressDepth,
-        frequencyHz: binauralOrStrobeHz,
-        volume: audioVolume
-      });
-    }
-  }, [telemetry, tranceOrStressDepth, binauralOrStrobeHz, audioVolume, sessionActive, isAbreactionTriggered, vrMode, selectedEnvironment, interactionType, transmit]);
-
-  useEffect(() => {
-    if (!sessionActive) return;
+    if (!sessionActive || appRole !== 'CLINICIAN_CONSOLE' || isAbreactionTriggered) return;
 
     const interval = setInterval(() => {
       const randomHrvDelta = (Math.random() - 0.48) * 3;
@@ -130,7 +113,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [sessionActive]);
+  }, [sessionActive, appRole, isAbreactionTriggered]);
 
   const handleInitializeAndRenderEnvironment = async () => {
     setIsGeneratingAi(true);
@@ -142,12 +125,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
         if (apiKey) {
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-          const prompt = `
-Actúa como el motor de renderizado espacial procedural de AMIE Engine.
-Configura el escenario: ${selectedEnvironment} bajo el modo clínico: ${vrMode}.
-Devuelve una confirmación técnica concisa (máximo 15 palabras).
-`;
+          const prompt = `Actúa como el motor de renderizado espacial de AMIE. Configura el escenario: ${selectedEnvironment} bajo el modo ${vrMode}. Respuesta breve.`;
           const result = await model.generateContent(prompt);
           setEnvStatusMsg(result.response.text() || 'Entorno procedural y Gemini Live TTS listos.');
         } else {
@@ -202,7 +180,7 @@ Devuelve una confirmación técnica concisa (máximo 15 palabras).
           avgGsr: telemetry.gsrMicroSiemens,
           finalDepth: tranceOrStressDepth
         },
-        aiLogs: [`Sesión inmersiva finalizada (${vrMode} en ${selectedEnvironment}). Interacción: ${interactionType}.`],
+        aiLogs: [`Sesión inmersiva finalizada (${vrMode} en ${selectedEnvironment}).`],
         completedAt: new Date().toISOString()
       }
     };
@@ -219,24 +197,110 @@ Devuelve una confirmación técnica concisa (máximo 15 palabras).
     }
   };
 
+  // 1. PANTALLA DE SELECCIÓN DE ROL INICIAL
+  if (appRole === 'SELECTING_ROLE') {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-slate-100 max-w-2xl w-full mx-auto space-y-6 text-center">
+        <div className="p-4 bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-xl w-16 h-16 mx-auto flex items-center justify-center">
+          <Glasses className="w-8 h-8" />
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-xl font-black text-white tracking-tight">
+            Seleccione el Modo de Acceso • Consola AMIE VR
+          </h2>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Elija si va a operar la estación de control como profesional colegiado o si inicializará el visor en modo paciente.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+          <button
+            onClick={() => setAppRole('CLINICIAN_CONSOLE')}
+            className="p-5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500 rounded-2xl text-left space-y-3 transition cursor-pointer group shadow-lg"
+          >
+            <div className="p-2.5 bg-cyan-600/20 text-cyan-400 rounded-xl w-fit border border-cyan-500/30">
+              <Stethoscope className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition">Vista Profesional (Terapeuta)</h3>
+              <p className="text-[11px] text-slate-400 mt-1">Control maestro, selección de 12 escenarios, 3 videos de narcisismo y telemetría en vivo.</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setAppRole('PATIENT_VR_VIEWER')}
+            className="p-5 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-purple-500 rounded-2xl text-left space-y-3 transition cursor-pointer group shadow-lg"
+          >
+            <div className="p-2.5 bg-purple-600/20 text-purple-400 rounded-xl w-fit border border-purple-500/30">
+              <Glasses className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition">Vista Paciente (Visor VR)</h3>
+              <p className="text-[11px] text-slate-400 mt-1">Entorno de inmersión para Meta Quest 3S / Pico, recepción de video y audio integrado.</p>
+            </div>
+          </button>
+        </div>
+
+        {onClose && (
+          <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-300 transition pt-2 cursor-pointer">
+            Cancelar y volver
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // 2. VISTA PACIENTE / VISOR VR
+  if (appRole === 'PATIENT_VR_VIEWER') {
+    return (
+      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-3xl w-full mx-auto space-y-6 text-center">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+            <span className="text-xs font-mono font-bold text-emerald-400">VISOR VR ACTIVO (PACIENTE: {patient?.id || 'PAC-8104'})</span>
+          </div>
+          <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-xs text-cyan-400 hover:underline cursor-pointer">
+            Cambiar Rol
+          </button>
+        </div>
+
+        <div className="p-8 bg-slate-900 rounded-2xl border border-slate-800 space-y-4">
+          <div className="p-4 bg-purple-600/20 text-purple-300 rounded-2xl w-fit mx-auto border border-purple-500/30">
+            <Glasses className="w-8 h-8 animate-pulse" />
+          </div>
+          <h3 className="text-base font-bold text-white">Esperando Instrucción Espacial del Terapeuta...</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            El entorno 3D y los videos clínicos con audio integrado se proyectarán automáticamente en el visor.
+          </p>
+        </div>
+
+        <button onClick={() => setAppRole('SELECTING_ROLE')} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition cursor-pointer">
+          Volver a Selección de Rol
+        </button>
+      </div>
+    );
+  }
+
+  // 3. VISTA PROFESIONAL / CONSOLA DEL TERAPEUTA
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-lg shadow-cyan-600/30">
+          <div className="p-3 bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-lg">
             <Monitor className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-black text-white tracking-tight">
-                Consola Inmersiva Unificada • 12 Escenarios, IA & Videos Clínicos
+                Consola Profesional • 12 Escenarios, Videos Clínicos &amp; IA
               </h2>
               <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-full">
-                AMIE MULTIMODAL CORE
+                MODO TERAPEUTA
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Plataforma para Neurohipnosis, Fobias VRET, Forense Cluster B (con videos de audio integrado) y Sistémica.
+              Paciente: {patient?.id || 'PAC-8104'} | <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-cyan-400 hover:underline cursor-pointer">Cambiar Rol</button>
             </p>
           </div>
         </div>
@@ -300,53 +364,59 @@ Devuelve una confirmación técnica concisa (máximo 15 palabras).
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-slate-400 font-semibold block">Tipo de Interacción con el Paciente / Avatar:</label>
+            <label className="text-slate-400 font-semibold block">Tipo de Interacción con el Paciente:</label>
             <select
               value={interactionType}
               onChange={(e) => setInteractionType(e.target.value as InteractionType)}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-bold focus:outline-none"
             >
-              <option value="PRE_RECORDED_VIDEO">🎞️ Videos Clínicos (Con Audio Integrado)</option>
-              <option value="DYNAMIC_AI">⚡ IA Dinámica en Vivo (Gemini Live TTS)</option>
+              <option value="PRE_RECORDED_VIDEO">🎞️ Videos Clínicos (Audio Integrado)</option>
+              <option value="DYNAMIC_AI">⚡ IA Dinámica en Vivo (Gemini Live)</option>
             </select>
           </div>
         </div>
 
-        {/* Sub-configuración según la interacción elegida */}
+        {/* 3 Videos de Narcisismo con Audio Integrado */}
         {interactionType === 'PRE_RECORDED_VIDEO' ? (
           <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
             <span className="text-xs font-bold text-rose-300 flex items-center gap-2">
-              <Film className="w-4 h-4" /> Videos de Narcisismo con Audio Original Incluido:
+              <Film className="w-4 h-4" /> Selección de Videos de Narcisismo (Audio Original Incluido):
             </span>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <button
                 onClick={() => setSelectedNarcissismVideo('VIDEO_1_OVERT')}
-                className={`p-3 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
+                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                   selectedNarcissismVideo === 'VIDEO_1_OVERT'
                     ? 'bg-rose-950/80 border-rose-500 text-white shadow'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <div>
-                  <div className="font-bold text-xs text-rose-300">Video 1: Perfil Overt (Grandioso)</div>
-                  <div className="text-[10px] text-slate-400">Audio original con diálogo de desvalorización y prepotencia.</div>
-                </div>
-                <Play className="w-4 h-4 text-rose-400" />
+                <div className="font-bold text-xs text-rose-300">Video 1: Perfil Overt</div>
+                <div className="text-[10px] text-slate-400">Grandioso / Prepotencia.</div>
               </button>
 
               <button
                 onClick={() => setSelectedNarcissismVideo('VIDEO_2_COVERT')}
-                className={`p-3 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
+                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                   selectedNarcissismVideo === 'VIDEO_2_COVERT'
                     ? 'bg-purple-950/80 border-purple-500 text-white shadow'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <div>
-                  <div className="font-bold text-xs text-purple-300">Video 2: Perfil Covert (Vulnerable)</div>
-                  <div className="text-[10px] text-slate-400">Audio original con patrón de victimización y rencor oculto.</div>
-                </div>
-                <Play className="w-4 h-4 text-purple-400" />
+                <div className="font-bold text-xs text-purple-300">Video 2: Perfil Covert</div>
+                <div className="text-[10px] text-slate-400">Vulnerable / Víctima.</div>
+              </button>
+
+              <button
+                onClick={() => setSelectedNarcissismVideo('VIDEO_3_MALIGNANT')}
+                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                  selectedNarcissismVideo === 'VIDEO_3_MALIGNANT'
+                    ? 'bg-amber-950/80 border-amber-500 text-white shadow'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="font-bold text-xs text-amber-300">Video 3: Perfil Maligno</div>
+                <div className="text-[10px] text-slate-400">Agresivo / Paranoide.</div>
               </button>
             </div>
           </div>
