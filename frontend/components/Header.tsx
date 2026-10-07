@@ -11,7 +11,8 @@ import {
   Search,
   DownloadCloud,
   User,
-  LogOut
+  LogOut,
+  Glasses // <-- NUEVO ÍCONO PARA VR
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -27,6 +28,7 @@ interface HeaderProps {
   onSyncPacient: (pacId: string) => Promise<void>;
   isSyncingPac?: boolean;
   onLogout?: () => void;
+  onOpenVrModule?: () => void; // <-- NUEVA PROP PARA ABRIR EL HOLODECK VR
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -42,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSyncPacient,
   isSyncingPac = false,
   onLogout,
+  onOpenVrModule, // <-- DESESTRUCTURADO
 }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [searchPacId, setSearchPacId] = useState<string>(currentPatientId || 'PAC-8104');
@@ -122,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="submit"
                 disabled={isSyncingPac || !searchPacId.trim()}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white shadow-md shadow-cyan-600/20 active:scale-95 transition"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white shadow-md shadow-cyan-600/20 active:scale-95 transition cursor-pointer"
                 title="Petición de Sincronización de Expediente PAC"
               >
                 {isSyncingPac ? (
@@ -151,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Guía Interactivas y Ayuda */}
             <button
               onClick={() => setIsHelpOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition cursor-pointer"
               title="Abrir Guía Completa de Módulos AMIE"
             >
               <HelpCircle className="w-4 h-4 text-cyan-400" />
@@ -161,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Principios Morrison */}
             <button
               onClick={onOpenPrinciples}
-              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
               title="Ver los 16 principios diagnósticos de James Morrison"
             >
               <Stethoscope className="w-3.5 h-3.5 text-sky-400" />
@@ -171,12 +174,24 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Guía DSM-5 */}
             <button
               onClick={onOpenDsmGuide}
-              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
               title="Explorar el compendio de capítulos DSM-5"
             >
               <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
               <span>DSM-5</span>
             </button>
+
+            {/* NUEVO: Botón Lanzar Entornos VR */}
+            {onOpenVrModule && (
+              <button
+                onClick={onOpenVrModule}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white shadow-md shadow-purple-600/20 active:scale-95 transition cursor-pointer"
+                title="Lanzar Holodeck y Control de Visores VR (Pico/Quest)"
+              >
+                <Glasses className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Lanzar VR</span>
+              </button>
+            )}
 
             {/* Botón Ejecutar Análisis */}
             <button
@@ -185,7 +200,7 @@ export const Header: React.FC<HeaderProps> = ({
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md transition ${
                 isAnalyzing
                   ? 'bg-sky-700/50 text-sky-200 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-sky-500/20 active:scale-95'
+                  : 'bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-sky-500/20 active:scale-95 cursor-pointer'
               }`}
               title="Ejecutar análisis bioclínico multimodal AMIE"
             >
@@ -206,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 transition"
+                className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 transition cursor-pointer"
                 title="Cerrar Sesión Activa"
               >
                 <LogOut className="w-4 h-4" />
