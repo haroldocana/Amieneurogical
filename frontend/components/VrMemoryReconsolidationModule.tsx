@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Play, Square, Video, Activity, Brain, X, 
-  Zap, Target, Sparkles, RotateCcw, Lock, Unlock, Eye, HeartPulse
+  Zap, Target, Sparkles, RotateCcw, Lock, Unlock, Eye, HeartPulse, Glasses, Mountain
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -14,9 +14,15 @@ interface Props {
 type TraumaCategory = 'PTSD_COMBAT_ACCIDENT' | 'SPECIFIC_PHOBIA' | 'PANIC_AGORAPHOBIA' | 'EARLY_ATTACHMENT_TRAUMA';
 type ReconsolidationPhase = 'IDLE' | 'PHASE_1_RETRIEVAL' | 'PHASE_2_MISMATCH' | 'PHASE_3_REENCODING' | 'COMPLETED';
 
+type EmdrEcosystem = 
+  | 'NEUTRAL_VOID' | 'COSMIC_STARS' | 'CLINIC_ROOM' | 'LOW_POLY_WHITE_ROOM'
+  | 'SAFE_PLACE_FOREST' | 'ZEN_GARDEN' | 'SNOW_CABIN' | 'BIOLUMINESCENT_BEACH'
+  | 'SKYSCRAPER_ROOF' | 'AIRPLANE_CABIN' | 'CROWDED_AUDITORIUM' | 'CONFINED_ELEVATOR';
+
 export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClose }) => {
   // Configuración Clínica
   const [traumaCategory, setTraumaCategory] = useState<TraumaCategory>('PTSD_COMBAT_ACCIDENT');
+  const [ecosystem, setEcosystem] = useState<EmdrEcosystem>('SAFE_PLACE_FOREST');
   const [sessionActive, setSessionActive] = useState(false);
   const [aiAutoPilot, setAiAutoPilot] = useState(true);
 
@@ -39,7 +45,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'PTSDExposure');
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'PTSDExposure');
 
   // Transmisión en vivo de biometría amigdalar y fase de reconsolidación
   useEffect(() => {
@@ -52,7 +58,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
         omissions: Math.floor(engramLabilityPct) // Labilidad del engrama (%)
       });
     }
-  }, [gsr, hrv, extinctionIndexH, engramLabilityPct, currentPhase, sessionActive, safetyTriggered]);
+  }, [gsr, hrv, extinctionIndexH, engramLabilityPct, currentPhase, sessionActive, safetyTriggered, transmit]);
 
   // Motor Closed-Loop de Reconsolidación de Memoria
   useEffect(() => {
@@ -126,7 +132,8 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     setHrv(45);
     setEngramLabilityPct(10);
     setExtinctionIndexH(0.2);
-    setAiLogs([`[SISTEMA] Iniciando Protocolo de Reconsolidación de Memoria. Presentando detonante de engrama...`]);
+    setAiLogs([`[SISTEMA] Entorno VR cargado: ${getEcosystemName(ecosystem)}. Iniciando Reconsolidación...`]);
+    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'PTSDExposure', ecosystem });
   };
 
   const handleEmergencyEgress = () => {
@@ -166,8 +173,6 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionReport)
       });
-      console.log(`Reporte VR de Reconsolidación de Memoria guardado para ${patient?.id || 'PAC-8104'}. Índice H: ${extinctionIndexH.toFixed(2)}`);
-      
       if (onClose) onClose();
     } catch (error) {
       console.error("Error al guardar reporte VR:", error);
@@ -176,12 +181,30 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
   const getCategoryTitle = (cat: TraumaCategory) => {
     const map = {
-      'PTSD_COMBAT_ACCIDENT': 'TEPT: Evento Traumático / Combate / Accidente (CIE-11: 6B40)',
-      'SPECIFIC_PHOBIA': 'Fobia Específica: Acrofobia / Aracnofobia / Claustrofobia',
-      'PANIC_AGORAPHOBIA': 'Trastorno de Pánico y Crisis Agorafóbica (CIE-11: 6B01)',
-      'EARLY_ATTACHMENT_TRAUMA': 'Trauma Complejo de Apego Temprano / C-PTSD'
+      'PTSD_COMBAT_ACCIDENT': 'TEPT: Evento Traumático / Combate (CIE-11: 6B40)',
+      'SPECIFIC_PHOBIA': 'Fobia Específica: Alturas / Encierro',
+      'PANIC_AGORAPHOBIA': 'Trastorno de Pánico / Agorafobia',
+      'EARLY_ATTACHMENT_TRAUMA': 'Trauma Complejo de Apego (C-PTSD)'
     };
     return map[cat];
+  };
+
+  const getEcosystemName = (eco: EmdrEcosystem) => {
+    const map: Record<EmdrEcosystem, string> = {
+      'NEUTRAL_VOID': 'Vacío Neutral (Foco Total)',
+      'COSMIC_STARS': 'Nebulosa Estelar (Amplitud)',
+      'CLINIC_ROOM': 'Consultorio Clínico Virtual',
+      'LOW_POLY_WHITE_ROOM': 'Sala Estéril (Baja Sobrecarga)',
+      'SAFE_PLACE_FOREST': 'Santuario Natural (Bosque)',
+      'ZEN_GARDEN': 'Jardín Zen Japonés',
+      'SNOW_CABIN': 'Cabaña Nevada (Refugio)',
+      'BIOLUMINESCENT_BEACH': 'Playa Bioluminiscente',
+      'SKYSCRAPER_ROOF': 'Exposición: Rascacielos',
+      'AIRPLANE_CABIN': 'Exposición: Cabina Avión',
+      'CROWDED_AUDITORIUM': 'Exposición: Auditorio',
+      'CONFINED_ELEVATOR': 'Exposición: Ascensor'
+    };
+    return map[eco];
   };
 
   const safePatientName = patient.patientNameAnonymized || patient.id || 'PAC-8104';
@@ -197,7 +220,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
           </div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-              Reconsolidación de Memoria & Extinción de Fobias (VR Memory Reconsolidation)
+              Reconsolidación de Memoria & Extinción EMDR
             </h1>
             <p className="text-[10px] text-rose-300 font-mono flex items-center gap-2">
               Paciente: <strong className="text-white">{safePatientName}</strong> | Desacoplamiento Amigdalar en Bucle Cerrado
@@ -218,11 +241,15 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
             {aiAutoPilot ? 'AI Reconsolidation Auto-Pilot' : 'Control Manual Terapeuta'}
           </button>
 
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          </div>
+
           <button
             onClick={handleEmergencyEgress}
             className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95"
           >
-            <ShieldAlert className="w-4 h-4" /> Abortar VR (Egress)
+            <ShieldAlert className="w-4 h-4" /> Abortar VR
           </button>
 
           <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300">
@@ -234,26 +261,57 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
       {/* 2. MAIN LAYOUT */}
       <div className="flex-1 grid grid-cols-12 gap-5 p-5 overflow-hidden">
         
-        {/* LEFT PANEL: Selección de Traumas */}
+        {/* LEFT PANEL: Selección de Traumas y Entornos */}
         <div className="col-span-12 lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto space-y-4">
           <div className="space-y-5">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-2">
-              <Target className="w-4 h-4 text-rose-400" /> Diana Traumática / Fóbica
+              <Target className="w-4 h-4 text-rose-400" /> Diana Traumática y Ecosistema
             </h2>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Categoría de Memoria a Reescritura</label>
-              <select 
-                disabled={sessionActive}
-                value={traumaCategory}
-                onChange={(e) => setTraumaCategory(e.target.value as TraumaCategory)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50"
-              >
-                <option value="PTSD_COMBAT_ACCIDENT">TEPT: Evento Traumático / Combate</option>
-                <option value="SPECIFIC_PHOBIA">Fobia Específica (Alturas, Arañas, Agujas)</option>
-                <option value="PANIC_AGORAPHOBIA">Pánico y Agorafobia Espacial</option>
-                <option value="EARLY_ATTACHMENT_TRAUMA">Trauma Complejo de Apego (C-PTSD)</option>
-              </select>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">1. Ecosistema Seguro / Exposición</label>
+                <select 
+                  disabled={sessionActive || currentPhase === 'COMPLETED'}
+                  value={ecosystem}
+                  onChange={(e) => setEcosystem(e.target.value as EmdrEcosystem)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50"
+                >
+                  <optgroup label="Foco Absoluto (EMDR)">
+                    <option value="NEUTRAL_VOID">Vacío Neutral Geométrico</option>
+                    <option value="COSMIC_STARS">Nebulosa Estelar Inmersiva</option>
+                    <option value="CLINIC_ROOM">Consultorio Clínico Virtual</option>
+                    <option value="LOW_POLY_WHITE_ROOM">Sala Estéril (Baja Sobrecarga)</option>
+                  </optgroup>
+                  <optgroup label="Contención y Anclaje">
+                    <option value="SAFE_PLACE_FOREST">Santuario Natural (Bosque)</option>
+                    <option value="ZEN_GARDEN">Jardín Zen Japonés</option>
+                    <option value="SNOW_CABIN">Cabaña Nevada con Chimenea</option>
+                    <option value="BIOLUMINESCENT_BEACH">Playa Bioluminiscente</option>
+                  </optgroup>
+                  <optgroup label="Exposición Prolongada (VRET)">
+                    <option value="SKYSCRAPER_ROOF">Terraza de Rascacielos (Acrofobia)</option>
+                    <option value="AIRPLANE_CABIN">Cabina de Avión (Aerofobia)</option>
+                    <option value="CROWDED_AUDITORIUM">Auditorio Lleno (Ansiedad Social)</option>
+                    <option value="CONFINED_ELEVATOR">Ascensor Estrecho (Claustrofobia)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">2. Categoría de Memoria a Reescritura</label>
+                <select 
+                  disabled={sessionActive || currentPhase === 'COMPLETED'}
+                  value={traumaCategory}
+                  onChange={(e) => setTraumaCategory(e.target.value as TraumaCategory)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50"
+                >
+                  <option value="PTSD_COMBAT_ACCIDENT">TEPT: Evento Traumático / Accidente</option>
+                  <option value="SPECIFIC_PHOBIA">Fobia Específica Dirigida</option>
+                  <option value="PANIC_AGORAPHOBIA">Pánico y Agorafobia Espacial</option>
+                  <option value="EARLY_ATTACHMENT_TRAUMA">Trauma Complejo de Apego (C-PTSD)</option>
+                </select>
+              </div>
             </div>
 
             {/* Monitor de Estado de la Memoria (Labilidad) */}
@@ -292,12 +350,12 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
           <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1 mt-4">
             <span className="text-[10px] font-bold text-rose-400 uppercase block">Fundamento Neuro-Científico:</span>
             <p className="text-[10.5px] text-slate-300 leading-snug">
-              Al detonar el pánico brevemente y neutralizarlo en &lt;500ms mediante barridos EMDR y coherencia vagal, la amígdala pierde la capacidad de re-consolidar la señal de miedo, reescribiendo la sinapsis del recuerdo.
+              Al detonar el miedo y neutralizarlo mediante barridos EMDR y coherencia vagal en un entorno seguro, la amígdala pierde la capacidad de re-consolidar la señal, reescribiendo la sinapsis del recuerdo de forma permanente.
             </p>
           </div>
         </div>
 
-        {/* CENTER PANEL: POV Simulador VR (Retrieval vs Mismatch) */}
+        {/* CENTER PANEL: POV Simulador VR */}
         <div className="col-span-12 lg:col-span-6 bg-[#090308] rounded-2xl border-2 border-slate-800 relative flex flex-col items-center justify-center p-4 overflow-hidden shadow-2xl">
           
           {/* Overlay Status del Visor */}
@@ -306,28 +364,36 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
               <Video className={`w-3.5 h-3.5 ${sessionActive ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`} />
               Fase: <span className="font-bold text-white uppercase">{currentPhase.replace('PHASE_', 'Fase ')}</span>
             </div>
+            {sessionActive && (
+              <div className="bg-black/70 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700 text-[10px] text-slate-300 flex items-center gap-1.5">
+                <Mountain className="w-3 h-3 text-slate-400" /> {getEcosystemName(ecosystem)}
+              </div>
+            )}
           </div>
 
           {/* Renderizador de Estado Emocional 3D */}
           <div className="w-full h-full flex flex-col items-center justify-center relative">
-            {sessionActive ? (
+            {sessionActive || currentPhase === 'COMPLETED' ? (
               <div className="text-center space-y-6 relative z-10">
-                {/* Animación según la Fase de la Memoria */}
                 <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
-                  <div className={`absolute inset-0 border-[2px] rounded-full animate-ping ${
-                    currentPhase === 'PHASE_1_RETRIEVAL' ? 'border-rose-500/50' : 'border-emerald-500/50'
+                  <div className={`absolute inset-0 border-[2px] rounded-full ${
+                    currentPhase === 'COMPLETED' ? 'border-emerald-500' :
+                    currentPhase === 'PHASE_1_RETRIEVAL' ? 'border-rose-500/50 animate-ping' : 'border-emerald-500/50 animate-ping'
                   }`} style={{ animationDuration: currentPhase === 'PHASE_1_RETRIEVAL' ? '1s' : '3s' }} />
                   
-                  {/* EMDR Visual Sweep Cue */}
-                  <div className="absolute inset-4 border-[3px] border-purple-500/30 rounded-full animate-spin" style={{ animationDuration: `${(1 / emdrSweepSpeedHz).toFixed(1)}s` }} />
+                  {currentPhase !== 'COMPLETED' && (
+                    <div className="absolute inset-4 border-[3px] border-purple-500/30 rounded-full animate-spin" style={{ animationDuration: `${(1 / emdrSweepSpeedHz).toFixed(1)}s` }} />
+                  )}
                   
                   <Eye className={`w-16 h-16 transition-colors duration-500 ${
+                    currentPhase === 'COMPLETED' ? 'text-emerald-400' :
                     currentPhase === 'PHASE_1_RETRIEVAL' ? 'text-rose-500 animate-bounce' : 'text-emerald-300'
                   }`} />
                 </div>
                 
                 <div>
                   <h3 className={`text-lg font-bold font-mono tracking-widest uppercase ${
+                    currentPhase === 'COMPLETED' ? 'text-emerald-400' :
                     currentPhase === 'PHASE_1_RETRIEVAL' ? 'text-rose-400' : 'text-emerald-300'
                   }`}>
                     {currentPhase === 'PHASE_1_RETRIEVAL' && '1. Activación de Detonante Traumático'}
@@ -335,16 +401,18 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
                     {currentPhase === 'PHASE_3_REENCODING' && '3. Re-consolidación Neutra en Curso'}
                     {currentPhase === 'COMPLETED' && '✅ Reescritura Completada'}
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono mt-2">
-                    Barrido Sacádico EMDR: {emdrSweepSpeedHz.toFixed(1)} Hz | Frecuencia Theta: {binauralThetaHz.toFixed(1)} Hz
-                  </p>
+                  {currentPhase !== 'COMPLETED' && (
+                    <p className="text-xs text-slate-400 font-mono mt-2 bg-black/40 px-3 py-1 rounded inline-block">
+                      Barrido Sacádico EMDR: {emdrSweepSpeedHz.toFixed(1)} Hz | Frecuencia Theta: {binauralThetaHz.toFixed(1)} Hz
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="text-center space-y-4 relative z-10">
                 <Brain className="w-16 h-16 text-slate-700 mx-auto" />
                 <p className="text-xs font-semibold text-slate-400 max-w-sm">
-                  A la espera de inicio. El visor abrirá el engrama de la memoria traumática e inyectará de inmediato el desacoplamiento EMDR/Vagal.
+                  Selecciona el Ecosistema VR y la Categoría Traumática a la izquierda para iniciar la reprogramación del engrama.
                 </p>
               </div>
             )}
@@ -446,17 +514,36 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
           {/* Botones de Control de Sesión */}
           <div className="pt-3 border-t border-slate-800 space-y-2 shrink-0">
-            {!sessionActive ? (
+            
+            {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+            {!isConnected && !sessionActive && currentPhase !== 'COMPLETED' && (
+              <div className="mb-4 p-3 bg-slate-900/80 border border-rose-500/30 border-dashed rounded-xl flex items-center gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+                  <Glasses className="w-5 h-5 text-rose-400 animate-pulse" />
+                </div>
+                <div className="text-[11px] text-slate-300 leading-relaxed">
+                  <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
+                  El paciente debe colocarse el visor VR para acceder al ecosistema.
+                </div>
+              </div>
+            )}
+
+            {!sessionActive && currentPhase !== 'COMPLETED' ? (
               <button
+                disabled={!isConnected}
                 onClick={handleStartSession}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-600/20 transition active:scale-95"
+                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition active:scale-95 ${
+                  !isConnected 
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+                    : 'bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-rose-600/20'
+                }`}
               >
                 <Play className="w-4 h-4 fill-current" />
-                Iniciar Reescritura de Memoria
+                {!isConnected ? 'Esperando Visor...' : 'Iniciar Reescritura de Memoria'}
               </button>
             ) : (
               <button
-                onClick={handleEndSession} // <-- Actualizado para enviar telemetría final y cerrar
+                onClick={handleEndSession}
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
               >
                 <Square className="w-4 h-4 fill-current" />
