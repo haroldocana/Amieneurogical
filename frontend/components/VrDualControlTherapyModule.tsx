@@ -1,376 +1,150 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import React, { useState } from 'react';
+import { HeartHandshake, Sparkles, ArrowRight, Brain, User, Users, Flame, Lock, Video, MessageSquare, Ear } from 'lucide-react';
+import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
-import { Wifi, WifiOff, X, RefreshCw, Plus, ShieldAlert, Target, Sun } from 'lucide-react';
 
-// IMPORTACIONES DE WEBXR PARA LOS NUEVOS MÓDULOS 360
-import { VRButton, XR, Controllers } from '@react-three/xr';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, Sphere, useVideoTexture } from '@react-three/drei';
-import * as THREE from 'three';
+interface Props { patient: PatientRecord; onClose: () => void; }
 
-interface Props {
-  patientId?: string;
-  onClose: () => void;
-}
+export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }) => {
+  const [profileType, setProfileType] = useState<'INDIVIDUAL_FEMALE' | 'INDIVIDUAL_MALE' | 'COUPLE'>('INDIVIDUAL_FEMALE');
+  const [currentPhase, setCurrentPhase] = useState<'assessment' | 'sis_release' | 'ses_activation'>('assessment');
+  const [stimulusType, setStimulusType] = useState<'RELATIONAL_AUDIO' | 'PHYSICAL_VIDEO'>('RELATIONAL_AUDIO');
+  const [audioEcosystem, setAudioEcosystem] = useState('WARM_HEARTH');
+  const [promptText, setPromptText] = useState('Siento que me gustas mucho y quiero que seamos totalmente transparentes...');
+  const [videoScenario, setVideoScenario] = useState('narcissism_covert');
+  const [sisBrakeLevel, setSisBrakeLevel] = useState<number>(78);
+  const [sesAcceleratorLevel, setSesAcceleratorLevel] = useState<number>(35);
+  const [activeStressor, setActiveStressor] = useState<string>('Carga mental y fatiga ejecutiva');
 
-type EnvironmentType = 
-  | 'IDLE' 
-  | 'TDAH_EXECUTIVE' 
-  | 'TEA_SOCIAL' 
-  | 'TDM_DEPRESSION' 
-  | 'TAG_ANXIETY'
-  // MÓDULOS 360 Inmersivos (WebXR)
-  | 'NEURO_HYPNOSIS' 
-  | 'DUAL_CONTROL' 
-  | 'DEV_TRAUMA' 
-  | 'EMDR_MEMORY' 
-  | 'GAMMA_INSIGHT' 
-  | 'PAIN_MANAGEMENT';
+  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DUAL_CONTROL');
 
-export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', onClose }) => {
-  const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'HOLODECK_IDLE');
+  const stressorsMap = {
+    INDIVIDUAL_FEMALE: ['Autocrítica corporal y vergüenza de la imagen (Body Shame)', 'Carga mental doméstica y fatiga ejecutiva acumulada', 'Expectativa de rendimiento o complacencia hacia la pareja', 'Hipervigilancia por antecedentes de coerción o invasión'],
+    INDIVIDUAL_MALE: ['Ansiedad de ejecución y miedo anticipatorio a la falla (Espectador Ansioso)', 'Exigencia de rol y presión por iniciar o rendir', 'Agotamiento crónico por estrés laboral y financiero', 'Desconexión somática por bloqueo emocional'],
+    COUPLE: ['Tensión interpersonal no resuelta y resentimientos acumulados', 'Transaccionalidad del afecto (sentir que el cariño es solo un medio para el sexo)', 'Falta absoluta de privacidad o interrupciones constantes', 'Desincronización de los ciclos de descanso entre ambos']
+  };
 
-  const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>('IDLE');
-  
-  // Estados para el Motor WebXR (Fotos 360, Videos 360 y EMDR)
-  const [activeEcosystem, setActiveEcosystem] = useState<string>('NEUTRAL_VOID');
-  const [isVideo, setIsVideo] = useState<boolean>(false);
-  const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
-  const [emdrHz, setEmdrHz] = useState<number>(1.5);
-
-  // ============================================================================
-  // 1. LÓGICA DE AUDIO INMERSIVO AUTOMÁTICO
-  // ============================================================================
-  useEffect(() => {
-    // Evitamos reproducir audio en el vacío neutral o en la sala de espera
-    if (activeEcosystem === 'NEUTRAL_VOID' || activeEnvironment === 'IDLE') return;
-
-    // Busca un archivo .mp3 con el MISMO nombre que el ecosistema/imagen
-    const audio = new Audio(`/audio/${activeEcosystem}.mp3`);
-    audio.loop = true; // Bucle continuo
-    audio.volume = 0.8; // Volumen al 80% para no aturdir
-
-    const playPromise = audio.play();
-    
-    if (playPromise !== undefined) {
-      playPromise.catch(error => {
-        console.warn(`Audio silenciado o no encontrado para: /audio/${activeEcosystem}.mp3`, error);
-      });
-    }
-
-    // Al cambiar de escenario, detenemos el audio actual y limpiamos memoria
-    return () => {
-      audio.pause();
-      audio.src = '';
-    };
-  }, [activeEcosystem, activeEnvironment]);
-
-  // ============================================================================
-  // 2. ENRUTADOR PRINCIPAL DEL HOLODECK Y TELEMETRÍA
-  // ============================================================================
-  useEffect(() => {
-    if (!liveData) return;
-
-    if (liveData.type === 'LOAD_MODULE') {
-      setActiveEnvironment(liveData.moduleName as EnvironmentType);
-      if (liveData.ecosystem) {
-        setActiveEcosystem(liveData.ecosystem);
-        setIsVideo(!!liveData.isVideo);
-      }
-    } 
-    else if (liveData.type === 'START_AIMA_PROTOCOL') {
-      if (liveData.ecosystem) {
-        setActiveEcosystem(liveData.ecosystem);
-        setIsVideo(false);
+  const handleTransmitToVR = () => {
+    let command = { type: 'LOAD_MODULE', ecosystem: 'NEUTRAL_VOID', isVideo: false };
+    if (currentPhase === 'sis_release') {
+      command = { type: 'LOAD_MODULE', ecosystem: 'SAFE_PLACE_FOREST', isVideo: false };
+    } else if (currentPhase === 'ses_activation') {
+      if (stimulusType === 'RELATIONAL_AUDIO') {
+        command = { type: 'LOAD_MODULE', ecosystem: audioEcosystem, isVideo: false };
+      } else {
+        command = { type: 'LOAD_MODULE', ecosystem: videoScenario, isVideo: true };
       }
     }
-    else if (liveData.type === 'START_BILATERAL_STIMULATION') {
-      setIsEmdrActive(true);
-      if (liveData.initialHz) setEmdrHz(liveData.initialHz);
-      if (liveData.ecosystem) {
-        setActiveEcosystem(liveData.ecosystem);
-        setIsVideo(!!liveData.isVideo);
-      }
-    }
-    else if (liveData.type === 'STOP_TEST' || liveData.type === 'TRIGGER_GROUNDING_PROTOCOL') {
-      setActiveEnvironment('IDLE');
-      setIsEmdrActive(false);
-      setIsVideo(false);
-    }
-  }, [liveData]);
-
-  // Determinar si el módulo actual requiere el motor WebXR 360
-  const isWebXRModule = [
-    'DUAL_CONTROL', 'DEV_TRAUMA', 'EMDR_MEMORY', 'NEURO_HYPNOSIS', 'GAMMA_INSIGHT', 'PAIN_MANAGEMENT'
-  ].includes(activeEnvironment);
-
-  return (
-    <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
-      
-      {/* BOTÓN DE EMERGENCIA */}
-      <button 
-        onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
-        className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md"
-      >
-        <X className="w-8 h-8" />
-      </button>
-
-      {/* ------------------------------------------------------------- */}
-      {/* RENDERIZADO DEL MOTOR WEBXR (Entornos 360 y Video Pico 3) */}
-      {/* ------------------------------------------------------------- */}
-      {isWebXRModule && (
-        <div className="absolute inset-0 z-[100]">
-          <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
-             {/* El VRButton nativo de React Three Fiber para activar las Pico 3 */}
-             <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
-          </div>
-          <Canvas>
-            <XR>
-              <Controllers />
-              <Suspense fallback={null}>
-                {isVideo ? (
-                  // Carga los .mp4 desde la carpeta /video de tu GitHub
-                  <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
-                ) : (
-                  // Carga los .jpg desde la carpeta /ecosystems de tu GitHub
-                  <Environment background={true} files={`/ecosystems/${activeEcosystem}.jpg`} />
-                )}
-              </Suspense>
-              {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
-            </XR>
-          </Canvas>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* RENDERIZADO DE ENTORNOS 2D CLÁSICOS (HTML/CSS DOM)          */}
-      {/* ------------------------------------------------------------- */}
-      {!isWebXRModule && (
-        <>
-          {activeEnvironment === 'IDLE' && <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />}
-          {activeEnvironment === 'TDAH_EXECUTIVE' && <AdhdExecutiveEnvironment remoteCommand={remoteCommand} transmit={transmit} />}
-          {activeEnvironment === 'TAG_ANXIETY' && <ExposureAnxietyEnvironment liveData={liveData} />}
-          {activeEnvironment === 'TEA_SOCIAL' && <SocialCognitionEnvironment liveData={liveData} />}
-          {activeEnvironment === 'TDM_DEPRESSION' && <DepressionEnvironment liveData={liveData} transmit={transmit} />}
-        </>
-      )}
-      
-      {/* OVERLAY DE SEGURIDAD (Grounding Protocol - Se sobrepone a todo) */}
-      {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
-        <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
-           <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
-           <h1 className="text-5xl font-black text-white tracking-widest mb-4">RESPIRA LENTAMENTE</h1>
-           <div className="flex items-center gap-4 text-2xl text-slate-300 font-mono bg-slate-950 px-8 py-4 rounded-2xl border border-slate-800">
-             <span>INHALA (4s)</span> <span className="animate-pulse text-sky-400">---</span> <span>EXHALA (6s)</span>
-           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// COMPONENTES WEBXR (3D REALIDAD VIRTUAL INMERSIVA)
-// ============================================================================
-
-const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    if (meshRef.current) {
-      const time = clock.getElapsedTime();
-      meshRef.current.position.x = Math.sin(time * Math.PI * hz) * 3;
-    }
-  });
-  return (
-    <Sphere ref={meshRef} args={[0.15, 32, 32]} position={[0, 1.5, -4]}>
-      <meshBasicMaterial color="#a855f7" />
-    </Sphere>
-  );
-};
-
-const VideoSphere = ({ url }: { url: string }) => {
-  const texture = useVideoTexture(url);
-  return (
-    <mesh>
-      <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} />
-    </mesh>
-  );
-};
-
-// ============================================================================
-// COMPONENTES 2D LEGACY (HTML/CSS)
-// ============================================================================
-
-const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, syncSession: () => void }) => (
-  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black flex flex-col items-center justify-center transition-colors duration-1000">
-    <div className="text-center space-y-6 max-w-xl p-8 bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-800/50 shadow-2xl">
-      <div className="flex justify-center items-center gap-3">
-        <div className={`px-4 py-1.5 rounded-full border text-xs font-mono font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border-rose-500/50 text-rose-300'}`}>
-          {isConnected ? <Wifi className="w-4 h-4 animate-pulse" /> : <WifiOff className="w-4 h-4" />}
-          <span>{isConnected ? 'Sincronizado con Consola Médica' : 'Buscando Red...'}</span>
-        </div>
-        <button onPointerDown={syncSession} className="p-2 bg-slate-800 text-sky-400 rounded-full border border-slate-700 active:scale-95"><RefreshCw className="w-4 h-4" /></button>
-      </div>
-      <h1 className="text-2xl font-light tracking-wide text-slate-300">Sala de Reposo Inmersiva</h1>
-      <p className="text-slate-500 text-sm">Aguarde un momento. El profesional cargará su entorno clínico en breve.</p>
-    </div>
-  </div>
-);
-
-const AdhdExecutiveEnvironment = ({ remoteCommand, transmit }: any) => {
-  const [stimulus, setStimulus] = useState<'NONE' | 'GO' | 'NOGO'>('NONE');
-  const [flash, setFlash] = useState(false);
-  const stats = useRef({ hits: 0, omissions: 0, commissions: 0, lastReaction: 0 });
-  const showTime = useRef<number>(0);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const scheduleNext = useCallback(() => {
-    setStimulus('NONE');
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      const isGo = Math.random() > 0.25;
-      setStimulus(isGo ? 'GO' : 'NOGO');
-      showTime.current = Date.now();
-      timeoutRef.current = setTimeout(() => {
-        if (isGo) {
-          stats.current.omissions++;
-          transmit({ ...stats.current, reactionTimeMs: stats.current.lastReaction });
-        }
-        scheduleNext();
-      }, 1500);
-    }, Math.random() * 1500 + 1000);
-  }, [transmit]);
-
-  useEffect(() => {
-    if (remoteCommand === 'START_TEST') scheduleNext();
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [remoteCommand, scheduleNext]);
-
-  const handleInteract = () => {
-    setFlash(true); setTimeout(() => setFlash(false), 100);
-    if (stimulus === 'NONE') return;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    const rt = Date.now() - showTime.current;
-    setStimulus('NONE');
-    if (stimulus === 'GO') { stats.current.hits++; stats.current.lastReaction = rt; } 
-    else { stats.current.commissions++; }
-    transmit({ ...stats.current, reactionTimeMs: stats.current.lastReaction });
-    scheduleNext();
+    transmit(command);
   };
 
   return (
-    <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center cursor-crosshair" onPointerDown={handleInteract}>
-      {flash && <div className="absolute inset-0 bg-white/10 z-0"></div>}
-      {stimulus === 'NONE' && <Plus className="w-16 h-16 text-slate-600 opacity-50" strokeWidth={1} />}
-      {stimulus === 'GO' && <div className="w-80 h-80 bg-emerald-500 rounded-full shadow-[0_0_150px_rgba(16,185,129,0.9)] animate-in zoom-in-50 duration-75"></div>}
-      {stimulus === 'NOGO' && <div className="w-80 h-80 bg-rose-600 rounded-full shadow-[0_0_150px_rgba(225,29,72,0.9)] animate-in zoom-in-50 duration-75"></div>}
-    </div>
-  );
-};
-
-const SocialCognitionEnvironment = ({ liveData }: any) => {
-  const [phase, setPhase] = useState<'IDLE' | 'FACES' | 'OVERSTIMULATION'>('IDLE');
-
-  useEffect(() => {
-    if (liveData?.type === 'START_FACES') setPhase('FACES');
-    if (liveData?.type === 'START_OVERSTIMULATION') setPhase('OVERSTIMULATION');
-  }, [liveData]);
-
-  return (
-    <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all ${phase === 'OVERSTIMULATION' ? 'bg-slate-800' : 'bg-slate-950'}`}>
-      {phase !== 'IDLE' && (
-        <div className={`relative flex flex-col items-center ${phase === 'OVERSTIMULATION' ? 'animate-shake' : ''}`}>
-          <div className="w-64 h-80 bg-slate-800 rounded-full border-4 border-slate-700 flex flex-col items-center pt-24 relative overflow-hidden shadow-2xl">
-            <div className="flex gap-8 mb-12 z-10">
-              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
-                 <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
-              </div>
-              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
-                 <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
-              </div>
-            </div>
-            <div className="w-16 h-2 bg-slate-600 rounded-full z-10"></div>
-            {phase === 'OVERSTIMULATION' && (
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50 mix-blend-overlay"></div>
-            )}
-          </div>
-          <p className="mt-8 text-slate-500 font-mono tracking-widest text-sm">
-            {phase === 'FACES' ? 'FASE 1: FIJACIÓN OCULAR' : 'FASE 2: RUIDO AMBIENTAL (75dB)'}
+    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col font-sans p-6 overflow-y-auto">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
+        <div>
+          <h1 className="text-xl font-black text-white flex items-center gap-2"><HeartHandshake className="w-6 h-6 text-rose-400" /> AMIE • Motor Clínico y Laboratorio Relacional</h1>
+          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">Expediente Activo: <strong className="text-sky-400">{patient?.id || 'PAC-8104'}</strong> | Enfoque: <span className="text-rose-300 font-semibold uppercase">{profileType}</span>
+            <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold ${isConnected ? 'bg-emerald-950 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>{isConnected ? 'PICO 3 CONECTADO' : 'ESPERANDO VISOR...'}</span>
           </p>
         </div>
-      )}
-    </div>
-  );
-};
+        <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition cursor-pointer shadow-lg">Cerrar Módulo</button>
+      </div>
 
-const DepressionEnvironment = ({ liveData, transmit }: any) => {
-  const [phase, setPhase] = useState<'IDLE' | 'MOTOR' | 'REWARD'>('IDLE');
-  const [targetPos, setTargetPos] = useState({ top: '50%', left: '50%' });
+      <div className="max-w-6xl mx-auto w-full space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button onClick={() => setProfileType('INDIVIDUAL_FEMALE')} className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${profileType === 'INDIVIDUAL_FEMALE' ? 'bg-pink-950/40 border-pink-500 text-pink-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>
+            <User className="w-5 h-5 text-pink-400" />
+            <div className="text-left"><span className="block font-bold text-xs text-white">Individual (Femenino)</span><span className="text-[10px]">Foco: Body Shame, carga mental y SIS</span></div>
+          </button>
+          <button onClick={() => setProfileType('INDIVIDUAL_MALE')} className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${profileType === 'INDIVIDUAL_MALE' ? 'bg-sky-950/40 border-sky-500 text-sky-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>
+            <User className="w-5 h-5 text-sky-400" />
+            <div className="text-left"><span className="block font-bold text-xs text-white">Individual (Masculino)</span><span className="text-[10px]">Foco: Ansiedad de ejecución y rol</span></div>
+          </button>
+          <button onClick={() => setProfileType('COUPLE')} className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${profileType === 'COUPLE' ? 'bg-purple-950/40 border-purple-500 text-purple-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>
+            <Users className="w-5 h-5 text-purple-400" />
+            <div className="text-left"><span className="block font-bold text-xs text-white">Terapia de Pareja</span><span className="text-[10px]">Foco: Sincronía y desescalada</span></div>
+          </button>
+        </div>
 
-  useEffect(() => {
-    if (liveData?.type === 'START_MOTOR_TRACKING') setPhase('MOTOR');
-    if (liveData?.type === 'START_REWARD_STIMULUS') setPhase('REWARD');
-  }, [liveData]);
-
-  const handleTouchTarget = () => {
-    transmit({ type: 'MOTOR_TARGET_HIT', timestamp: Date.now() });
-    setTargetPos({ top: `${Math.random() * 60 + 20}%`, left: `${Math.random() * 60 + 20}%` });
-  };
-
-  return (
-    <div className="absolute inset-0 bg-slate-950">
-      {phase === 'MOTOR' && (
-        <div className="absolute inset-0" onPointerDown={handleTouchTarget}>
-          <div className="absolute text-slate-500 font-mono text-center w-full top-20">ESTIRE SU BRAZO Y TOQUE LA ESFERA</div>
-          <div 
-            className="absolute w-24 h-24 bg-indigo-500 rounded-full shadow-[0_0_50px_rgba(99,102,241,0.5)] flex items-center justify-center cursor-pointer transition-all duration-1000 ease-out"
-            style={{ top: targetPos.top, left: targetPos.left, transform: 'translate(-50%, -50%)' }}
-          >
-            <Target className="w-12 h-12 text-white opacity-80" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-6 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-4">
+            <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5"><Lock className="w-4 h-4 text-rose-400" /> Sistema de Inhibición (Freno - SIS)</span><span className="text-xl font-mono font-bold text-rose-400">{sisBrakeLevel}%</span></div>
+            <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-rose-900/50"><div className="bg-rose-500 h-full transition-all duration-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]" style={{ width: `${sisBrakeLevel}%` }}></div></div>
+            <div className="space-y-2">
+              <span className="text-[11px] font-semibold text-slate-400">Estresor Principal Detectado:</span>
+              <select value={activeStressor} onChange={(e) => setActiveStressor(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500">
+                {stressorsMap[profileType].map((st, idx) => (<option key={idx} value={st}>{st}</option>))}
+              </select>
+            </div>
+          </div>
+          <div className="p-6 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl space-y-4">
+            <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5"><Flame className="w-4 h-4 text-emerald-400" /> Sistema de Excitación (Acelerador - SES)</span><span className="text-xl font-mono font-bold text-emerald-400">{sesAcceleratorLevel}%</span></div>
+            <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-emerald-900/50"><div className="bg-emerald-500 h-full transition-all duration-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]" style={{ width: `${sesAcceleratorLevel}%` }}></div></div>
+            <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between text-[11px]"><span className="text-slate-400">Paridigma Clínico:</span><strong className="text-cyan-300">Acelerar con freno puesto = Cero Respuesta</strong></div>
           </div>
         </div>
-      )}
-      
-      {phase === 'REWARD' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-sky-900 to-slate-950">
-          <div className="w-[500px] h-[500px] bg-yellow-400/20 rounded-full blur-[100px] absolute animate-pulse"></div>
-          <Sun className="w-48 h-48 text-yellow-300 animate-[spin_20s_linear_infinite]" />
-          <div className="absolute text-xl font-light tracking-widest text-sky-100 mt-64">EVALUANDO REACTIVIDAD AFECTIVA</div>
-        </div>
-      )}
-    </div>
-  );
-};
 
-const ExposureAnxietyEnvironment = ({ liveData }: any) => {
-  const [level, setLevel] = useState(1);
-
-  useEffect(() => {
-    if (liveData?.type === 'START_EXPOSURE' || liveData?.type === 'UPDATE_EXPOSURE_LEVEL') {
-      setLevel(liveData.level || 1);
-    }
-  }, [liveData]);
-
-  const tunnelScale = 1 - (level * 0.15);
-  const vignetteOpacity = level * 0.2;
-  const colorIntensity = level > 3 ? 'border-rose-900' : 'border-slate-800';
-
-  return (
-    <div className="absolute inset-0 bg-slate-950 flex items-center justify-center overflow-hidden">
-      <div 
-        className={`w-[1000px] h-[1000px] border-[100px] ${colorIntensity} rounded-full transition-all duration-1000 flex items-center justify-center`}
-        style={{ transform: `scale(${tunnelScale})` }}
-      >
-        <div className={`w-[800px] h-[800px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-80`}>
-          <div className={`w-[600px] h-[600px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-60`}>
-            {level > 4 && <div className="text-rose-500 font-mono tracking-widest animate-pulse">MANTENGA LA RESPIRACIÓN</div>}
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5">
+          <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2"><Brain className="w-4 h-4 text-cyan-400" /> Secuencia Terapéutica Inmersiva (Visor Pico 3)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div onClick={() => { setCurrentPhase('assessment'); setSisBrakeLevel(78); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-2 ${currentPhase === 'assessment' ? 'bg-sky-600/20 border-sky-500' : 'bg-slate-950 border-slate-800'}`}>
+              <span className="px-2 py-0.5 bg-sky-950 border border-sky-800 text-[10px] font-bold text-sky-400 rounded">Fase 1</span><h3 className="font-bold text-xs text-white">Mapeo y Calibración Dual</h3>
+            </div>
+            <div onClick={() => { setCurrentPhase('sis_release'); setSisBrakeLevel(25); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-2 ${currentPhase === 'sis_release' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-950 border-slate-800'}`}>
+              <span className="px-2 py-0.5 bg-purple-950 border border-purple-800 text-[10px] font-bold text-purple-400 rounded">Fase 2</span><h3 className="font-bold text-xs text-white">Descompresión (Apagar Freno)</h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed">Entorno virtual de cierre del estrés. <strong className="text-purple-300">(SAFE_PLACE_FOREST)</strong></p>
+            </div>
+            <div onClick={() => { setCurrentPhase('ses_activation'); setSesAcceleratorLevel(85); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-3 ${currentPhase === 'ses_activation' ? 'bg-emerald-600/20 border-emerald-500' : 'bg-slate-950 border-slate-800'}`}>
+              <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-[10px] font-bold text-emerald-400 rounded">Fase 3: Exposición</span>
+              {currentPhase === 'ses_activation' && (
+                <div className="space-y-4 mt-2">
+                  <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800">
+                    <button onClick={() => setStimulusType('RELATIONAL_AUDIO')} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold rounded-md transition ${stimulusType === 'RELATIONAL_AUDIO' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><Ear className="w-3 h-3" /> Opción 1: Generar IA</button>
+                    <button onClick={() => setStimulusType('PHYSICAL_VIDEO')} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold rounded-md transition ${stimulusType === 'PHYSICAL_VIDEO' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}><Video className="w-3 h-3" /> Opción 2: Reproducir Video</button>
+                  </div>
+                  {stimulusType === 'RELATIONAL_AUDIO' && (
+                    <div className="space-y-3 p-4 bg-slate-900 rounded-lg border border-indigo-900/50">
+                      <div><label className="block text-[10px] text-indigo-300 font-bold uppercase mb-1">Objetivo Clínico (Voz IA):</label>
+                        <select className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-indigo-500" onChange={(e) => {
+                            const target = e.target.value;
+                            if (target === 'COUPLES') setPromptText("Siento que me gustas mucho y quiero que seamos totalmente transparentes...");
+                            if (target === 'TLP') setPromptText("Se acabó. Ya no soporto esto, me voy y no me busques.");
+                            if (target === 'SOCIAL') setPromptText("Todos te están mirando... y la verdad es que estás haciendo el ridículo.");
+                            if (target === 'TDAH_RSD') setPromptText("Otra vez te olvidaste. Eres un desastre, nunca haces nada bien.");
+                            if (target === 'TRAUMA') setPromptText("Vas a hacer lo que yo te diga, te guste o no. Aquí mando yo.");
+                          }}>
+                          <option value="COUPLES">Terapia de Pareja (Intimidad)</option><option value="TLP">Cluster B / TLP (Abandono)</option><option value="SOCIAL">Ansiedad Social (Juicio)</option><option value="TDAH_RSD">TDAH (Rechazo Sensible)</option><option value="TRAUMA">Trauma / TEPT (Coerción)</option>
+                        </select>
+                      </div>
+                      <div><label className="block text-[10px] text-indigo-300 font-bold uppercase mb-1">Entorno 360 de tu Catálogo:</label>
+                        <select value={audioEcosystem} onChange={(e) => setAudioEcosystem(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-200 focus:border-indigo-500">
+                          <option value="WARM_HEARTH">Hogar Cálido (Intimidad)</option><option value="CLINICAL_OFFICE">Oficina Clínica (Distancia)</option><option value="STERILE_ROOM">Habitación Estéril (Tensión)</option><option value="PROTECTIVE_TREEHOUSE">Casa del Árbol (Refugio)</option><option value="BIOLUMINESCENT_BEACH">Playa Bioluminiscente</option>
+                        </select>
+                      </div>
+                      <div><label className="block text-[10px] text-indigo-300 font-bold uppercase mb-1">Generar Prompt (Texto de la Voz):</label><textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-sky-200 h-16 resize-none focus:border-indigo-500 font-mono" /></div>
+                    </div>
+                  )}
+                  {stimulusType === 'PHYSICAL_VIDEO' && (
+                    <div className="space-y-2 p-3 bg-slate-900 rounded-lg border border-emerald-900/50">
+                      <label className="block text-[10px] text-emerald-300 font-bold uppercase">Seleccionar Video MP4 (/video):</label>
+                      <select value={videoScenario} onChange={(e) => setVideoScenario(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-200">
+                        <option value="narcissism_covert">Narcisismo Encubierto (Manipulación)</option><option value="narcissism_overt">Narcisismo Manifiesto (Agresión / Grandiosidad)</option><option value="narcissism_collapse">Colapso Narcisista (Victimización / Ira)</option>
+                      </select>
+                      <p className="text-[9px] text-slate-400 mt-1 flex gap-1"><Video className="w-3 h-3" /> Transmite el video directo al visor.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-400" /><span className="text-slate-300">Transmitiendo: <strong className="text-cyan-400 uppercase">{currentPhase === 'ses_activation' ? (stimulusType === 'RELATIONAL_AUDIO' ? `Generar IA: ${audioEcosystem}` : `Video: ${videoScenario}`) : currentPhase}</strong></span></div>
+            <button disabled={!isConnected} onClick={handleTransmitToVR} className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition cursor-pointer ${!isConnected ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white'}`}>
+              <span>{isConnected ? 'Transmitir al Visor VR' : 'Conecte las gafas primero'}</span><ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
-      
-      <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_100%)] pointer-events-none" style={{ opacity: vignetteOpacity }}></div>
-      <div className="absolute top-10 left-10 text-slate-500 font-mono text-sm">INTENSIDAD FÓBICA: NIVEL {level}</div>
     </div>
   );
 };
