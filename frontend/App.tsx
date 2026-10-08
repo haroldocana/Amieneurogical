@@ -29,19 +29,13 @@ import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRun
 // CONSOLA UNIFICADA IMPULSADA POR IA & VR (Gemini 3.8 Flash)
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
 
-// MÓDULOS ESPECIALIZADOS
-import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
-import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
-import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
-import { VrPainManagementModule } from './components/VrPainManagementModule';
-import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
-import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
+// ENRUTADOR MAESTRO DE MÓDULOS ESPECIALIZADOS (TDAH, Trauma, Dolor, Neurología, Hipnosis, etc.)
 import { VrModuleRouter } from './components/VrModuleRouter';
-import { VrGammaInsightModule } from './components/VrGammaInsightModule';
-import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
+
+// OTROS MÓDULOS ESPECIALIZADOS
+import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
 import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
 import { SentinelMobileCollector } from './components/SentinelMobileCollector';
-import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
 
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
@@ -63,14 +57,6 @@ import {
   Check,
   AlertTriangle,
   Glasses,
-  Sparkles,
-  Usb,
-  Layers,
-  ThermometerSnowflake,
-  UserCheck,
-  RotateCcw,
-  Target,
-  Lightbulb,
   Smartphone,
   BookOpen,
   UserX,
@@ -80,7 +66,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   HeartHandshake,
-  Monitor
+  Monitor,
+  Zap
 } from 'lucide-react';
 
 type AppTab =  
@@ -90,6 +77,7 @@ type AppTab =
   | 'apa_framework'
   | 'cluster_b'
   | 'sexual_health'
+  | 'vr_advanced_hub' // Pestaña dedicada al Hub de Módulos Especializados (TDAH, Trauma, Dolor, etc.)
   | 'academy'  
   | 'neuro_3d'  
   | 'neurosensometry'  
@@ -132,9 +120,11 @@ function DoctorWorkstation() {
   const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
-  // Pestaña inicial configurada en vr_therapy para acceso directo a los módulos inmersivos
-  const [activeTab, setActiveTab] = useState<AppTab>('vr_therapy');
+  const [activeTab, setActiveTab] = useState<AppTab>('workstation');
   const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
+  
+  // Estado para seleccionar submódulos específicos dentro del Hub Avanzado
+  const [activeAdvancedSubModule, setActiveAdvancedSubModule] = useState<string>('TDAH_ATTENTION_LAB');
 
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
@@ -152,11 +142,8 @@ function DoctorWorkstation() {
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
   const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
+  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
   
-  // Consola unificada abierta por defecto al iniciar la app
-  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(true);
-  
-  const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
   const closeAllModals = () => {
@@ -165,7 +152,6 @@ function DoctorWorkstation() {
     setIsFullscreenDiagnosticOpen(false);
     setIsFullscreenPhenotypeOpen(false);
     setIsFullscreenUnifiedVrOpen(false);
-    setActiveVrModuleId(null);
   };
 
   useEffect(() => {
@@ -243,8 +229,7 @@ function DoctorWorkstation() {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
     setColegiadoNumber(auth.colegiadoNumber || 749210);
-    setActiveTab('vr_therapy');
-    setIsFullscreenUnifiedVrOpen(true);
+    setActiveTab('workstation');
     setIsAuthenticated(true);
   };
 
@@ -493,7 +478,7 @@ function DoctorWorkstation() {
       {/* BARRA DE NAVEGACIÓN PRINCIPAL */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
+          <div className="flex items-center gap-1.5 flex-wrap py-1 font-sans w-full">
             
             <div className="shrink-0 inline-flex">
               <HoverTooltip title="Workstation Clínico" description="Núcleo de triaje y triangulación de riesgos." clinicalUtility="Dictamen DSM-5-TR." badge="Módulo 1">
@@ -540,12 +525,22 @@ function DoctorWorkstation() {
               </HoverTooltip>
             </div>
 
-            {/* SALUD SEXUAL & SES/SIS DIRECTAMENTE CONECTADA */}
+            {/* SALUD SEXUAL & SES/SIS INLINE */}
             <div className="shrink-0 inline-flex">
               <HoverTooltip title="Sexología & Respuesta Sexual (SES / SIS)" description="Evaluación y tratamiento inmersivo con Gemini 3.8 Flash." clinicalUtility="Mapeo de doble control sexual y generación de assets IA." badge="Sexualidad">
                 <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'sexual_health' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
                   <HeartHandshake className="w-3.5 h-3.5 text-rose-300" />
                   <span>Salud Sexual & SES/SIS</span>
+                </button>
+              </HoverTooltip>
+            </div>
+
+            {/* HUB DE MÓDULOS AVANZADOS (TDAH, Trauma, Dolor, Neurología, Hipnosis, etc.) */}
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip title="Módulos VR Avanzados (TDAH / Trauma / Dolor)" description="Acceso directo a todos los submódulos clínicos especializados." clinicalUtility="Intervención inmersiva." badge="Submódulos">
+                <button onClick={() => setActiveTab('vr_advanced_hub')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'vr_advanced_hub' ? 'bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                  <Zap className="w-3.5 h-3.5 text-indigo-300" />
+                  <span>Módulos TDAH, Trauma & Dolor</span>
                 </button>
               </HoverTooltip>
             </div>
@@ -691,13 +686,41 @@ function DoctorWorkstation() {
 
         {activeTab === 'apa_framework' && <ApaTherapeuticModule patient={safePatient} />}
 
+        {/* MÓDULO CLUSTER B INLINE */}
         {activeTab === 'cluster_b' && (
-          <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
+          <div className="space-y-4">
+            <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
+          </div>
         )}
 
+        {/* MÓDULO SALUD SEXUAL & SES/SIS INLINE */}
         {activeTab === 'sexual_health' && (
-          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <div className="space-y-4">
             <AmieUnifiedVrConsole patient={safePatient} onClose={() => setActiveTab('workstation')} />
+          </div>
+        )}
+
+        {/* HUB MAESTRO CON TODOS LOS MÓDULOS (TDAH, Trauma, Dolor, Neurología, Hipnosis, etc.) */}
+        {activeTab === 'vr_advanced_hub' && (
+          <div className="space-y-4">
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-indigo-300 flex items-center gap-2">
+                  <BrainCircuit className="w-4 h-4 text-indigo-400" /> Hub de Módulos Clínicos Avanzados
+                </h3>
+                <p className="text-xs text-slate-400">Seleccione el protocolo inmersivo especializado para la intervención terapéutica:</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => setActiveAdvancedSubModule('TDAH_ATTENTION_LAB')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeAdvancedSubModule === 'TDAH_ATTENTION_LAB' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'}`}>TDAH / Atención</button>
+                <button onClick={() => setActiveAdvancedSubModule('DEVELOPMENTAL_TRAUMA')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeAdvancedSubModule === 'DEVELOPMENTAL_TRAUMA' ? 'bg-purple-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'}`}>Trauma del Desarrollo</button>
+                <button onClick={() => setActiveAdvancedSubModule('PAIN_MANAGEMENT')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeAdvancedSubModule === 'PAIN_MANAGEMENT' ? 'bg-teal-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'}`}>Control de Dolor</button>
+                <button onClick={() => setActiveAdvancedSubModule('FUNCTIONAL_NEUROLOGY')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeAdvancedSubModule === 'FUNCTIONAL_NEUROLOGY' ? 'bg-cyan-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'}`}>Neurología Funcional</button>
+                <button onClick={() => setActiveAdvancedSubModule('MEMORY_RECONSOLIDATION')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeAdvancedSubModule === 'MEMORY_RECONSOLIDATION' ? 'bg-rose-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'}`}>Reconsolidación</button>
+                <button onClick={() => setActiveAdvancedSubModule('HYPNOSIS_CLOSED_LOOP')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeAdvancedSubModule === 'HYPNOSIS_CLOSED_LOOP' ? 'bg-amber-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'}`}>Hipnosis Bucle Cerrado</button>
+              </div>
+            </div>
+
+            <VrModuleRouter patient={safePatient} initialModuleId={activeAdvancedSubModule} onClose={() => setActiveTab('workstation')} />
           </div>
         )}
 
@@ -749,10 +772,6 @@ function DoctorWorkstation() {
 
       <FloatingAmieAssistant currentPatientId={safePatientId} onNavigateTab={(targetTab: string) => setActiveTab(targetTab as AppTab)} activeTab={activeTab} />
       <DsmGuideModal isOpen={isDsmModalOpen} onClose={() => setIsDsmModalOpen(false)} defaultView={dsmModalView} />
-
-      {activeVrModuleId && (
-        <VrModuleRouter patient={safePatient} initialModuleId={activeVrModuleId} onClose={() => setActiveVrModuleId(null)} />
-      )}
 
       {isFullscreenUnifiedVrOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
