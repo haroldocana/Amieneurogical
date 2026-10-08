@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Monitor, Glasses, ArrowRight, X, Brain } from 'lucide-react';
+import { Monitor, Glasses, ArrowRight, X } from 'lucide-react';
 import { PatientRecord } from '../types';
 
 // IMPORTACIÓN DE MÓDULOS DE CONSOLA MÉDICA
@@ -64,7 +64,8 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   }
 
   if (activeRole === 'PATIENT') {
-    return <VrPatientExperience patientId={patient?.id} onClose={() => setActiveRole('NONE')} />;
+    // Pasamos el initialModuleId con el módulo seleccionado hacia el visor del paciente
+    return <VrPatientExperience patientId={patient?.id} initialModuleId={selectedModuleId} onClose={() => setActiveRole('NONE')} />;
   }
 
   return (
