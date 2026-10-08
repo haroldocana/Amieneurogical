@@ -26,7 +26,7 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 
-// CONSOLA UNIFICADA IMPULSADA POR IA & VR
+// CONSOLA UNIFICADA IMPULSADA POR IA & VR (Gemini 3.8 Flash)
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
 
 // MÓDULOS ESPECIALIZADOS
@@ -89,7 +89,7 @@ type AppTab =
   | 'differential_bias'  
   | 'apa_framework'
   | 'cluster_b'
-  | 'sexual_health' // Pestaña independiente para Salud Sexual & SES/SIS
+  | 'sexual_health'
   | 'academy'  
   | 'neuro_3d'  
   | 'neurosensometry'  
@@ -538,9 +538,9 @@ function DoctorWorkstation() {
               </HoverTooltip>
             </div>
 
-            {/* SALUD SEXUAL & SES/SIS CONECTADO A LA CONSOLA UNIFICADA (CON SELECTOR DE ROL) */}
+            {/* SALUD SEXUAL CONECTADA A LA CONSOLA UNIFICADA (IA + GEMINI 3.8 FLASH) */}
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Sexología & Respuesta Sexual (SES / SIS)" description="Evaluación y tratamiento inmersivo con selección de rol Terapeuta/Paciente." clinicalUtility="Mapeo de doble control sexual y videos con IA." badge="Sexualidad">
+              <HoverTooltip title="Sexología & Respuesta Sexual (SES / SIS)" description="Evaluación y tratamiento inmersivo con Gemini 3.8 Flash." clinicalUtility="Mapeo de doble control sexual y generación de assets IA." badge="Sexualidad">
                 <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'sexual_health' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
                   <HeartHandshake className="w-3.5 h-3.5 text-rose-300" />
                   <span>Salud Sexual & SES/SIS</span>
@@ -693,7 +693,7 @@ function DoctorWorkstation() {
           <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
         )}
 
-        {/* SALUD SEXUAL CONECTADA A LA CONSOLA UNIFICADA (INCLUYE SELECTOR DE ROL TERAPEUTA VS PACIENTE) */}
+        {/* SALUD SEXUAL & SES/SIS DIRECTAMENTE CONECTADA A LA CONSOLA UNIFICADA */}
         {activeTab === 'sexual_health' && (
           <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
             <AmieUnifiedVrConsole patient={safePatient} onClose={() => setActiveTab('workstation')} />
