@@ -9,6 +9,7 @@ import { VrDualControlTherapyModule } from './VrDualControlTherapyModule';
 import { VrDevelopmentalTraumaFullscreenMonitor } from './VrDevelopmentalTraumaFullscreenMonitor';
 import { VrMemoryReconsolidationModule } from './VrMemoryReconsolidationModule';
 import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule';
+import { ClusterBForenseVrModule } from './ClusterBForenseVrModule';
 import { VrGammaInsightModule } from './VrGammaInsightModule';
 import { VrFunctionalNeurologyModule } from './VrFunctionalNeurologyModule';
 import { VrPainManagementModule } from './VrPainManagementModule';
@@ -24,7 +25,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   const [activeRole, setActiveRole] = useState<'NONE' | 'DOCTOR' | 'PATIENT'>('NONE');
   const [selectedModuleId, setSelectedModuleId] = useState<string>(initialModuleId);
 
-  // Catálogo de módulos disponibles para enrutar desde la consola
+  // Catálogo estandarizado de módulos disponibles para enrutar desde la consola
   const availableModules = [
     { id: 'TDAH_EXECUTIVE', title: 'Función Ejecutiva (TDAH)' },
     { id: 'DUAL_CONTROL_SES_SIS', title: 'Laboratorio Relacional y Control Dual (AMIE)' },
@@ -48,7 +49,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
       case 'EMDR_MEMORY':
         return <VrMemoryReconsolidationModule patient={patient} onClose={handleBack} />;
       case 'CLUSTER_B_FORENSIC':
-        return <PsychopathyNarcissismModule patient={patient} onUpdatePatientVrData={() => {}} onClose={handleBack} />;
+        return <ClusterBForenseVrModule patient={patient} onClose={handleBack} />;
       case 'GAMMA_INSIGHT':
         return <VrGammaInsightModule patient={patient} onClose={handleBack} />;
       case 'FND_MIRROR':
@@ -64,7 +65,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   }
 
   if (activeRole === 'PATIENT') {
-    // Pasamos el initialModuleId con el módulo seleccionado hacia el visor del paciente
+    // Pasamos el initialModuleId con el módulo seleccionado hacia el visor del paciente conectado en línea
     return <VrPatientExperience patientId={patient?.id} initialModuleId={selectedModuleId} onClose={() => setActiveRole('NONE')} />;
   }
 
@@ -131,7 +132,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white group-hover:text-emerald-300">2. Visor del Paciente</h3>
-                <p className="text-xs text-slate-400 mt-1">Abrir en el navegador web del Meta Quest 3S o Pico 3. Muestra la simulación inmersiva y emite la señal biométrica.</p>
+                <p className="text-xs text-slate-400 mt-1">Abrir en el navegador web del Meta Quest 3S o Pico 3. Muestra la simulación inmersiva y emite la señal biométrica en línea.</p>
               </div>
             </div>
             <div className="flex items-center text-xs font-bold text-emerald-400 gap-2">
