@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord } from '../types';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   Sparkles,
   Activity,
@@ -63,43 +64,37 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
   const realGsr = liveData?.metrics?.gsrMicroSiemens || 2.4;
 
   const [sessionActive, setSessionActive] = useState(false);
+  const [tranceOrStressDepth, setTranceOrStressDepth] = useState(25);
   const [envStatusMsg, setEnvStatusMsg] = useState<string>('Motor generativo de IA (Gemini 3.8 Flash) en espera...');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
+  const [isAbreactionTriggered, setIsAbreactionTriggered] = useState(false);
+  const [abreactionReason, setAbreactionReason] = useState<string | null>(null);
+  const gsrBaselineRef = useRef<number>(2.4);
+
   const handleInitializeAndRenderEnvironment = async () => {
     setIsGeneratingAi(true);
-    setEnvStatusMsg('Generando entorno y estímulo visual mediante Proxy IA...');
+    setEnvStatusMsg('Generando entorno y estímulo visual con Gemini 3.8 Flash...');
 
     try {
-      const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
-      const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ';
-      
+      const apiKey = 
+        import.meta.env.VITE_GEMINI_API_KEY || 
+        import.meta.env.GEMINI_API_KEY || 
+        import.meta.env.VITE_API_KEY || 
+        '';
+
       let generatedAssetUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80';
 
-      const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.8-flash:generateContent`;
-      const proxyPayload = {
-        contents: [{ role: 'user', parts: [{ text: `Describe visualmente en inglés y de forma fotorrealista esta escena para entorno clínico: "${customProfessionalPrompt}" (máx 15 palabras).` }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
-      };
-
-      const response = await fetch(`${BACKEND_URL}/api-proxy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-proxy': PROXY_HEADER
-        },
-        body: JSON.stringify({
-          originalUrl: vertexEndpoint,
-          body: proxyPayload
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          const queryTag = encodeURIComponent(rawText.trim());
+      if (apiKey && apiKey.startsWith('AIza')) {
+        try {
+          const genAI = new GoogleGenerativeAI(apiKey);
+          const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
+          const promptText = `Describe visualmente en inglés y de forma fotorrealista esta escena para entorno clínico: "${customProfessionalPrompt}" (máx 15 palabras).`;
+          const result = await model.generateContent(promptText);
+          const queryTag = encodeURIComponent(result.response.text().trim());
           generatedAssetUrl = `https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=1920&q=80&sig=${queryTag}`;
+        } catch (apiErr) {
+          console.warn("Aviso de API Gemini, usando motor procedural local:", apiErr);
         }
       } else {
         const encodedKeyword = encodeURIComponent(customProfessionalPrompt.slice(0, 20));
@@ -120,13 +115,21 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
       });
 
       setSessionActive(true);
+      setIsAbreactionTriggered(false);
     } catch (e) {
-      console.warn("Usando respaldo local:", e);
       setEnvStatusMsg('Entorno activo con parámetros predeterminados.');
       setSessionActive(true);
     } finally {
       setIsGeneratingAi(false);
     }
+  };
+
+  const triggerSafetyGrounding = (reason: string) => {
+    setIsAbreactionTriggered(true);
+    setSessionActive(false);
+    setTranceOrStressDepth(0);
+    setAbreactionReason(reason);
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
   };
 
   const handleEndSession = async () => {
