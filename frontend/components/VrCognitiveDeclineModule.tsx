@@ -10,7 +10,9 @@ interface Props {
 
 export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'NEURO_DEGEN');
+  
+  // CORRECCIÓN CLAVE: Cambiamos a 'sender' y unificamos el nombre del módulo con el enrutador ('NEURO_DEGEN')
+  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'NEURO_DEGEN');
 
   const [sessionPhase, setSessionPhase] = useState<'IDLE' | 'TREMOR_ANALYSIS' | 'SPATIAL_MAZE'>('IDLE');
   const [isFinished, setIsFinished] = useState(false);
@@ -47,19 +49,36 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
     setIsFinished(false);
     setTremorAmplitudeMm(0);
     syncSession();
-    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'NEURO_DEGEN' });
+    
+    // ORDENAMOS AL VISOR CARGAR EL ENTORNO DE EVALUACIÓN NEURODEGENERATIVA
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'NEURO_DEGEN',
+      ecosystem: 'LOW_POLY_WHITE_ROOM' // Sala estéril de calibración motora
+    });
+
     transmit({ type: 'START_TREMOR_TEST' });
   };
 
   const startSpatialMaze = () => {
     setSessionPhase('SPATIAL_MAZE');
+    
+    // Cambiamos el entorno en las gafas al laberinto espacial
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'NEURO_DEGEN',
+      ecosystem: 'ZEN_GARDEN' // O un laberinto virtual 3D
+    });
+
     transmit({ type: 'START_MAZE_TEST' });
   };
 
   const handleGenerateReport = () => {
     setSessionPhase('IDLE');
     setIsFinished(true);
-    transmit({ type: 'STOP_TEST' });
+    transmit({ type: 'STOP_TEST' }); // Devuelve al paciente a la sala de espera
 
     let report = `Análisis de Marcadores Neurodegenerativos (Cinemática Hand-Tracking y Navegación 6DoF).\n\n`;
     
@@ -99,10 +118,11 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
           }
         })
       });
-      alert('✅ Evaluación Neurodegenerativa guardada.');
+      alert('✅ Evaluación Neurodegenerativa guardada exitosamente en el expediente.');
       onClose();
     } catch (e) {
       console.error(e);
+      alert('Error al intentar guardar en el servidor.');
     } finally {
       setIsSaving(false);
     }
@@ -122,10 +142,14 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
         </div>
         
         <div className="flex items-center gap-3">
-          <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" /> Sincronizar
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          </div>
+
+          <button onClick={syncSession} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer">
+            <RefreshCw className="w-3.5 h-3.5" /><span>Sincronizar</span>
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">Volver al Selector</button>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Volver al Selector</button>
         </div>
       </div>
 
@@ -135,19 +159,23 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
             <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Network className="w-4 h-4 text-amber-400" /> Fases de Evaluación</h3>
             <div className="space-y-3">
               {sessionPhase === 'IDLE' && !isFinished && (
-                <button onClick={startTremorAnalysis} className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2">
+                <button 
+                  disabled={!isConnected}
+                  onClick={startTremorAnalysis} 
+                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 ${!isConnected ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-500 text-white cursor-pointer'}`}
+                >
                   <HandMetal className="w-5 h-5" /> 1. Análisis de Temblor (Manos)
                 </button>
               )}
               {sessionPhase === 'TREMOR_ANALYSIS' && (
-                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2">
+                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer">
 
 <Map className="w-5 h-5" />
 2. Navegación Espacial (Laberinto)
                 </button>
               )}
               {(sessionPhase === 'TREMOR_ANALYSIS' || sessionPhase === 'SPATIAL_MAZE') && (
-                <button onClick={handleGenerateReport} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2">
+                <button onClick={handleGenerateReport} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2 cursor-pointer">
                   <StopCircle className="w-5 h-5" /> Finalizar Prueba IA
                 </button>
               )}
@@ -187,24 +215,24 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
               {isFinished ? 'Dictamen Clínico (Neurodegenerativo)' : 'Monitorización Cognitiva y Motora VR'}
             </h3>
             {isFinished && (
-              <button onClick={handleSaveToDatabase} disabled={isSaving} className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2">
+              <button onClick={handleSaveToDatabase} disabled={isSaving} className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 cursor-pointer">
                 <Save className="w-4 h-4" /><span>Guardar Expediente</span>
               </button>
             )}
           </div>
 
-          <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-6">
+          <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-6 overflow-hidden">
             {!isFinished ? (
                <div className="flex flex-col items-center justify-center h-full">
                  <div className="relative w-48 h-48 mb-6 flex items-center justify-center border-4 border-slate-800 rounded-full">
-                    {sessionPhase === 'TREMOR_ANALYSIS' && <HandMetal className={`w-20 h-20 text-amber-400 ${tremorAmplitudeMm > 0 ? 'animate-shake' : ''}`} />}
+                    {sessionPhase === 'TREMOR_ANALYSIS' && <HandMetal className="w-20 h-20 text-amber-400 animate-bounce" />}
 
 <Map className="w-20 h-20 text-sky-400 animate-pulse" />
 {sessionPhase === 'SPATIAL_MAZE' && }
                     {sessionPhase === 'IDLE' && <Fingerprint className="w-16 h-16 text-slate-600" />}
                  </div>
                  <h4 className="text-lg font-bold text-slate-300">
-                   {sessionPhase === 'TREMOR_ANALYSIS' ? 'Analizando Cinemática de Manos...' : sessionPhase === 'SPATIAL_MAZE' ? 'Evaluando Memoria y Navegación...' : 'En Espera...'}
+                   {sessionPhase === 'TREMOR_ANALYSIS' ? 'Analizando Cinemática de Manos...' : sessionPhase === 'SPATIAL_MAZE' ? 'Evaluando Memoria y Navegación...' : 'En Espera de Conexión y Selección...'}
                  </h4>
                </div>
             ) : (
