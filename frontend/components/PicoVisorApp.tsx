@@ -3,8 +3,8 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, Sphere, Html } from '@react-three/drei';
 import * as THREE from 'three';
 
-// Pantalla flotante 3D que proyecta el video/imagen generado por IA en tiempo real
-const AiGeneratedVisualScreen = ({ prompt, assetUrl, audioTone }: { prompt: string; assetUrl: string; audioTone: string }) => {
+// Pantalla flotante 3D que renderiza el asset de IA de manera segura
+const SafeAiVisualScreen = ({ prompt, assetUrl, audioTone }: { prompt: string; assetUrl: string; audioTone: string }) => {
   return (
     <Html position={[0, 1.6, -2.5]} center transform distanceFactor={1.5}>
       <div className="w-[480px] p-6 bg-slate-950/95 backdrop-blur-2xl border border-rose-500/50 rounded-3xl shadow-[0_0_60px_rgba(244,63,94,0.4)] text-slate-100 space-y-4 select-none">
@@ -17,12 +17,15 @@ const AiGeneratedVisualScreen = ({ prompt, assetUrl, audioTone }: { prompt: stri
           <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full font-mono">Tono: {audioTone}</span>
         </div>
 
-        {/* Reproductor / Visor de la Imagen o Video Generado por IA */}
         <div className="w-full h-44 bg-slate-900 rounded-2xl border border-slate-800 relative overflow-hidden shadow-inner flex items-center justify-center">
           <img 
             src={assetUrl} 
             alt="Asset Generado por IA" 
-            className="absolute inset-0 w-full h-full object-cover opacity-75 hover:opacity-100 transition duration-500" 
+            className="absolute inset-0 w-full h-full object-cover opacity-80" 
+            onError={(e) => {
+              // Respaldo visual automático si la imagen falla al cargar
+              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80';
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent pointer-events-none" />
           <div className="absolute bottom-3 left-3 right-3 text-center">
@@ -33,7 +36,7 @@ const AiGeneratedVisualScreen = ({ prompt, assetUrl, audioTone }: { prompt: stri
         </div>
 
         <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-1">
-          <span className="text-emerald-400">● Renderizado Multimodal Activo</span>
+          <span className="text-emerald-400">● WebXR Multimodal Activo</span>
           <span>Bucle Cerrado SES/SIS</span>
         </div>
       </div>
@@ -114,7 +117,7 @@ export const PicoVisorApp = () => {
       <div className="absolute z-10 bottom-12 flex flex-col items-center gap-4">
         <div className="text-center space-y-1">
           <h1 className="text-slate-200 font-black text-lg uppercase tracking-widest">
-            Visor Clínico AMIE • Generación IA
+            Visor Clínico AMIE • WebXR
           </h1>
           <p className="text-[11px] text-slate-400 font-mono">Paciente: PAC-8104 | Bucle Cerrado</p>
           <div className={`px-3 py-1 rounded-full border text-[10px] font-bold inline-block ${isConnected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400' : 'bg-rose-950/80 border-rose-500 text-rose-400'}`}>
@@ -141,7 +144,7 @@ export const PicoVisorApp = () => {
         />
 
         {isAiSessionActive && (
-          <AiGeneratedVisualScreen 
+          <SafeAiVisualScreen 
             prompt={activePrompt} 
             assetUrl={generatedAssetUrl} 
             audioTone={activeVoiceTone} 
