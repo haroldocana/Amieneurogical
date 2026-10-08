@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Monitor, Glasses, ArrowRight, X } from 'lucide-react';
 import { PatientRecord } from '../types';
+import { immersionMedia } from '../services/immersionMediaService';
 
 // IMPORTACIÓN DE MÓDULOS DE CONSOLA MÉDICA
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
@@ -18,14 +19,28 @@ import { VrClosedLoopHypnosisModule } from './VrClosedLoopHypnosisModule';
 interface Props {
   patient: PatientRecord;
   onClose: () => void;
-  initialModuleId?: string; // Permite abrir un módulo específico opcionalmente
+  initialModuleId?: string;
 }
 
 export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModuleId = 'TDAH_EXECUTIVE' }) => {
   const [activeRole, setActiveRole] = useState<'NONE' | 'DOCTOR' | 'PATIENT'>('NONE');
   const [selectedModuleId, setSelectedModuleId] = useState<string>(initialModuleId);
 
-  // Catálogo estandarizado de módulos disponibles para enrutar desde la consola
+  // Mapeo unificado hacia las claves de assets en el servicio multimedia
+  const mapModuleToAssetKey = (modId: string): string => {
+    switch (modId) {
+      case 'NEURO_HYPNOSIS': return 'HYPNOSIS';
+      case 'DUAL_CONTROL_SES_SIS': return 'SEXUAL_HEALTH';
+      case 'CLUSTER_B_FORENSIC': return 'CLUSTER_B_FORENSIC';
+      case 'TDAH_EXECUTIVE': return 'TDAH_ATTENTION_LAB';
+      case 'DEV_TRAUMA': return 'DEVELOPMENTAL_TRAUMA';
+      case 'PAIN_MANAGEMENT': return 'PAIN_MANAGEMENT';
+      case 'FND_MIRROR': return 'FUNCTIONAL_NEUROLOGY';
+      case 'EMDR_MEMORY': return 'MEMORY_RECONSOLIDATION';
+      default: return 'ZEN_GARDEN';
+    }
+  };
+
   const availableModules = [
     { id: 'TDAH_EXECUTIVE', title: 'Función Ejecutiva (TDAH)' },
     { id: 'DUAL_CONTROL_SES_SIS', title: 'Laboratorio Relacional y Control Dual (AMIE)' },
@@ -65,8 +80,16 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   }
 
   if (activeRole === 'PATIENT') {
-    // Pasamos el initialModuleId con el módulo seleccionado hacia el visor del paciente conectado en línea
-    return <VrPatientExperience patientId={patient?.id} initialModuleId={selectedModuleId} onClose={() => setActiveRole('NONE')} />;
+    const assetKey = mapModuleToAssetKey(selectedModuleId);
+    const textureUrl = immersionMedia.getEcosystemAssetUrl(assetKey);
+
+    return (
+      <VrPatientExperience 
+        patientId={patient?.id || 'PAC-8104'} 
+        initialModuleId={selectedModuleId} 
+        onClose={() => setActiveRole('NONE')} 
+      />
+    );
   }
 
   return (
@@ -84,7 +107,6 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
           <h2 className="text-2xl font-black text-white">¿Qué rol desempeñará este dispositivo?</h2>
           <p className="text-xs text-slate-400">Paciente asignado: <strong className="text-slate-200">{patient?.id || 'PAC-8104'}</strong></p>
           
-          {/* Selector de Protocolo Clínico */}
           <div className="max-w-md mx-auto pt-2">
             <label className="block text-[11px] text-slate-400 mb-1 font-semibold uppercase tracking-wider">Protocolo / Módulo Activo:</label>
             <select
@@ -101,7 +123,6 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           
-          {/* OPCIÓN 1: COMPUTADORA DEL MÉDICO */}
           <div 
             onClick={() => setActiveRole('DOCTOR')}
             className="bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-sky-500/50 p-6 rounded-2xl cursor-pointer transition group flex flex-col justify-between space-y-6 shadow-lg"
@@ -121,7 +142,6 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
             </div>
           </div>
 
-          {/* OPCIÓN 2: VISOR META QUEST / PICO */}
           <div 
             onClick={() => setActiveRole('PATIENT')}
             className="bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/50 p-6 rounded-2xl cursor-pointer transition group flex flex-col justify-between space-y-6 shadow-lg"
