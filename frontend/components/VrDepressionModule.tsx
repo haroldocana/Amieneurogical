@@ -10,7 +10,9 @@ interface Props {
 
 export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'TDM_DEPRESSION');
+  
+  // CORRECCIÓN CLAVE: Cambiamos a 'sender' y unificamos el nombre del módulo con el enrutador ('TDM_DEPRESSION')
+  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'TDM_DEPRESSION');
 
   const [sessionPhase, setSessionPhase] = useState<'IDLE' | 'MOTOR_TEST' | 'ANHEDONIA_TEST'>('IDLE');
   const [isFinished, setIsFinished] = useState(false);
@@ -45,19 +47,36 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
     setMotorLatencyMs(300); // Latencia inicial normal
     setMovementVelocity(95);
     syncSession();
-    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'TDM_DEPRESSION' });
+    
+    // ORDENAMOS AL VISOR CARGAR EL ENTORNO DE DEPRESIÓN / TDM
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'TDM_DEPRESSION',
+      ecosystem: 'LOW_POLY_WHITE_ROOM' // Entorno neutro de calibración motora
+    });
+
     transmit({ type: 'START_MOTOR_TRACKING' });
   };
 
   const startAnhedoniaTest = () => {
     setSessionPhase('ANHEDONIA_TEST');
+    
+    // Cambiamos el entorno en las gafas al estímulo de recompensa
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'TDM_DEPRESSION',
+      ecosystem: 'SAFE_PLACE_FOREST' // Refugio o estímulo positivo inmersivo
+    });
+
     transmit({ type: 'START_REWARD_STIMULUS' });
   };
 
   const handleGenerateReport = () => {
     setSessionPhase('IDLE');
     setIsFinished(true);
-    transmit({ type: 'STOP_TEST' });
+    transmit({ type: 'STOP_TEST' }); // Devuelve al paciente a la sala de espera
 
     let report = `Análisis de Retardo Psicomotor y Reactividad Afectiva (Cinemática VR y Biofeedback).\n\n`;
     
@@ -129,13 +148,13 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
         </div>
         
         <div className="flex items-center gap-3">
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
             <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
           </div>
-          <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-2">
+          <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
             <RefreshCw className="w-4 h-4" /> Sincronizar
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">Volver al Selector</button>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Volver al Selector</button>
         </div>
       </div>
 
@@ -161,7 +180,7 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
                 <button 
                   disabled={!isConnected}
                   onClick={startMotorTest} 
-                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 ${
+                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer ${
                     !isConnected 
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
                       : 'bg-slate-700 hover:bg-slate-600 text-white'
@@ -172,13 +191,13 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
               )}
 
               {sessionPhase === 'MOTOR_TEST' && (
-                <button onClick={startAnhedoniaTest} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2">
+                <button onClick={startAnhedoniaTest} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer">
                   <HeartCrack className="w-5 h-5" /> 2. Test Anhedonia (Recompensa)
                 </button>
               )}
 
               {(sessionPhase === 'MOTOR_TEST' || sessionPhase === 'ANHEDONIA_TEST') && (
-                <button onClick={handleGenerateReport} className="w-full py-3 bg-rose-900 hover:bg-rose-800 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2">
+                <button onClick={handleGenerateReport} className="w-full py-3 bg-rose-900 hover:bg-rose-800 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2 cursor-pointer">
                   <StopCircle className="w-5 h-5" /> Finalizar Prueba IA
                 </button>
               )}
@@ -226,7 +245,6 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
           </div>
         </div>
 
-        {/* PANEL CENTRAL: VISUALIZACIÓN */}
         <div className="col-span-9 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
           <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
             <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
@@ -234,7 +252,7 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
               {isFinished ? 'Dictamen Clínico (Depresión Mayor)' : 'Monitorización de Retardo Psicomotor VR'}
             </h3>
             {isFinished && (
-              <button onClick={handleSaveToDatabase} disabled={isSaving} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50">
+              <button onClick={handleSaveToDatabase} disabled={isSaving} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50 cursor-pointer">
                 <Save className="w-4 h-4" /><span>{isSaving ? 'Guardando...' : 'Guardar Expediente'}</span>
               </button>
             )}
@@ -248,22 +266,22 @@ export const VrDepressionModule: React.FC<Props> = ({ patient, onClose }) => {
                </div>
             ) : !isFinished ? (
                <div className="flex flex-col items-center justify-center h-full">
-                 <div className="relative w-48 h-48 mb-6 flex items-center justify-center">
-                    {/* Visualización de la lentitud de movimiento */}
-                    <div className={`w-32 h-32 rounded-full border-4 ${sessionPhase === 'MOTOR_TEST' ? 'border-slate-600' : 'border-indigo-500'} flex items-center justify-center`}>
-                       <div className="w-4 h-4 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.8)]"
+                  <div className="relative w-48 h-48 mb-6 flex items-center justify-center">
+                     {/* Visualización de la lentitud de movimiento */}
+                     <div className={`w-32 h-32 rounded-full border-4 ${sessionPhase === 'MOTOR_TEST' ? 'border-slate-600' : 'border-indigo-500'} flex items-center justify-center`}>
+                        <div className="w-4 h-4 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.8)]"
                             style={{ 
                               animation: `spin ${100 / movementVelocity}s linear infinite`,
                               transformOrigin: '0 60px' 
                             }}>
-                       </div>
-                    </div>
-                 </div>
-                 
-                 <h4 className={`text-lg font-bold mb-2 ${sessionPhase === 'MOTOR_TEST' ? 'text-slate-300' : 'text-indigo-400'}`}>
-                   {sessionPhase === 'MOTOR_TEST' ? 'Evaluando Bradicinesia (Velocidad de Movimiento)' : 'Evaluando Reactividad ante Estímulo de Recompensa'}
-                 </h4>
-                 <p className="text-xs text-slate-500 font-mono">CAPTURA CINEMÁTICA MEDIANTE ACELERÓMETROS 6DoF</p>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  <h4 className={`text-lg font-bold mb-2 ${sessionPhase === 'MOTOR_TEST' ? 'text-slate-300' : 'text-indigo-400'}`}>
+                    {sessionPhase === 'MOTOR_TEST' ? 'Evaluando Bradicinesia (Velocidad de Movimiento)' : 'Evaluando Reactividad ante Estímulo de Recompensa'}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-mono">CAPTURA CINEMÁTICA MEDIANTE ACELERÓMETROS 6DoF</p>
                </div>
             ) : (
                <div className="h-full overflow-y-auto animate-in fade-in duration-300">
