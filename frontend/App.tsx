@@ -132,7 +132,8 @@ function DoctorWorkstation() {
   const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
-  const [activeTab, setActiveTab] = useState<AppTab>('workstation');
+  // Pestaña inicial configurada en vr_therapy para acceso directo a los módulos inmersivos
+  const [activeTab, setActiveTab] = useState<AppTab>('vr_therapy');
   const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
 
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
@@ -151,7 +152,9 @@ function DoctorWorkstation() {
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
   const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
-  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
+  
+  // Consola unificada abierta por defecto al iniciar la app
+  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(true);
   
   const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
@@ -177,7 +180,6 @@ function DoctorWorkstation() {
         setDoctorUsername(savedUsername || 'harold01');
         setColegiadoNumber(Number(savedColegiado) || 749210);
         setIsAuthenticated(true);
-        closeAllModals();
       }
     } catch (e) {
       console.warn('Acceso a localStorage restringido:', e);
@@ -241,8 +243,8 @@ function DoctorWorkstation() {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
     setColegiadoNumber(auth.colegiadoNumber || 749210);
-    closeAllModals();
-    setActiveTab('workstation');
+    setActiveTab('vr_therapy');
+    setIsFullscreenUnifiedVrOpen(true);
     setIsAuthenticated(true);
   };
 
@@ -538,7 +540,7 @@ function DoctorWorkstation() {
               </HoverTooltip>
             </div>
 
-            {/* SALUD SEXUAL CONECTADA A LA CONSOLA UNIFICADA (IA + GEMINI 3.8 FLASH) */}
+            {/* SALUD SEXUAL & SES/SIS DIRECTAMENTE CONECTADA */}
             <div className="shrink-0 inline-flex">
               <HoverTooltip title="Sexología & Respuesta Sexual (SES / SIS)" description="Evaluación y tratamiento inmersivo con Gemini 3.8 Flash." clinicalUtility="Mapeo de doble control sexual y generación de assets IA." badge="Sexualidad">
                 <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'sexual_health' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
@@ -693,7 +695,6 @@ function DoctorWorkstation() {
           <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
         )}
 
-        {/* SALUD SEXUAL & SES/SIS DIRECTAMENTE CONECTADA A LA CONSOLA UNIFICADA */}
         {activeTab === 'sexual_health' && (
           <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
             <AmieUnifiedVrConsole patient={safePatient} onClose={() => setActiveTab('workstation')} />
