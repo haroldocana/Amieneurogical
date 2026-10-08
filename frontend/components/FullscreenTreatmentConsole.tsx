@@ -16,9 +16,8 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
 
   const [isRunning, setIsRunning] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [exposureLevel, setExposureLevel] = useState(1); // Nivel de intensidad de la fobia (1 a 5)
+  const [exposureLevel, setExposureLevel] = useState(1); 
 
-  // Telemetría a prueba de balas (extrae el último valor si es un array de historial)
   const rawHrv = liveData?.metrics?.hrvRmssdMs;
   const hrv = Array.isArray(rawHrv) ? rawHrv[rawHrv.length - 1] : (rawHrv || 42);
 
@@ -36,7 +35,15 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
   const handleStart = () => {
     setIsRunning(true);
     syncSession();
-    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'TAG_ANXIETY' });
+    
+    // ORDENAMOS AL VISOR CARGAR EL ENTORNO
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'TAG_ANXIETY',
+      ecosystem: 'SAFE_PLACE' 
+    });
+    
     transmit({ type: 'START_EXPOSURE', level: exposureLevel });
   };
 
@@ -47,7 +54,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
 
   const handleEmergencyStop = () => {
     setIsRunning(false);
-    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' }); // Saca al paciente de la fobia inmediatamente
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' }); 
   };
 
   const handleFinish = async () => {
@@ -87,7 +94,6 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col p-6 overflow-y-auto">
-      {/* HEADER */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-rose-900/50 border border-rose-500/30 rounded-xl text-rose-400">
@@ -111,7 +117,6 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
       </div>
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* PANEL PRINCIPAL: Control de Entorno */}
         <div className="md:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-2">
@@ -126,12 +131,10 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
                   {isRunning ? `Exposición Activa - Nivel ${exposureLevel}` : 'Consola en Espera'}
                 </p>
               </div>
-              {/* Efecto visual de intensidad en la consola */}
               {isRunning && <div className="absolute inset-0 bg-rose-500/10" style={{ opacity: exposureLevel * 0.2 }}></div>}
             </div>
           </div>
 
-          {/* Controles de Intensidad */}
           {isRunning && (
             <div className="mt-4 p-4 bg-slate-950 rounded-xl border border-slate-800">
               <span className="text-xs font-bold text-slate-400 block mb-3">Control de Estímulo Fóbico (Tiempo Real):</span>
@@ -140,7 +143,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
                   <button
                     key={level}
                     onClick={() => handleLevelChange(level)}
-                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${exposureLevel === level ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition cursor-pointer ${exposureLevel === level ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                   >
                     Nivel {level}
                   </button>
@@ -149,9 +152,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
             </div>
           )}
 
-          {/* Botonera de Acción */}
           <div className="mt-6">
-            {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
             {!isConnected && !isRunning && (
               <div className="mb-4 p-3 bg-slate-900/80 border border-sky-500/30 border-dashed rounded-xl flex items-center gap-3">
                 <div className="p-2 bg-slate-800 rounded-lg shrink-0">
@@ -159,7 +160,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
                 </div>
                 <div className="text-xs text-slate-300 leading-relaxed">
                   <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
-                  Para habilitar el ensayo, el paciente debe colocarse el visor <strong className="text-sky-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-sky-300 font-mono bg-sky-900/30 px-1 rounded">{patientId}</span>
+                  Para habilitar el ensayo, el paciente debe colocarse el visor y seleccionar el rol de paciente.
                 </div>
               </div>
             )}
@@ -168,7 +169,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
                <button
                   onClick={handleEmergencyStop}
                   disabled={!isRunning}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 border border-slate-700 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 border border-slate-700 rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                 >
                   <ShieldAlert className="w-4 h-4" /> Aterrizaje de Emergencia
                 </button>
@@ -187,7 +188,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
                     {!isConnected ? 'Esperando Visor VR...' : <><Play className="w-4 h-4" /> Iniciar Exposición</>}
                   </button>
                 ) : (
-                  <button onClick={handleFinish} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20">
+                  <button onClick={handleFinish} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20 cursor-pointer">
                     <Square className="w-4 h-4" /> Finalizar y Evaluar
                   </button>
                 )}
@@ -196,7 +197,6 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({ patient, onClose }
           </div>
         </div>
 
-        {/* PANEL LATERAL: Telemetría */}
         <div className="space-y-4 flex flex-col">
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col justify-center">
             <span className="text-xs text-slate-400 font-bold uppercase block mb-1 flex items-center gap-1">
