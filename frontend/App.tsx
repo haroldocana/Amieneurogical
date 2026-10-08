@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { PicoVisorApp } from './components/PicoVisorApp';
+import { VrPatientExperience } from './components/VrPatientExperience';
 
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
@@ -67,7 +68,9 @@ import {
   HeartHandshake,
   Monitor,
   Zap,
-  Sparkles
+  Sparkles,
+  Layers,
+  Usb
 } from 'lucide-react';
 
 type AppTab =  
@@ -695,7 +698,7 @@ function DoctorWorkstation() {
 
         {activeTab === 'apa_framework' && <ApaTherapeuticModule patient={safePatient} />}
 
-        {/* MÓDULO CLUSTER B INLINE */}
+        {/* MÓDULO CLUSTER B INLINE -> Enruta mediante el selector unificado */}
         {activeTab === 'cluster_b' && (
           <div className="space-y-4">
             <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
@@ -716,7 +719,7 @@ function DoctorWorkstation() {
           </div>
         )}
 
-        {/* HUB MAESTRO CON TDAH, TRAUMA, DOLOR, NEUROLOGÍA, ETC. */}
+        {/* HUB MAESTRO CON TDAH, TRAUMA, DOLOR, NEUROLOGÍA, ETC. -> Usa VrModuleRouter para mostrar el selector dual */}
         {activeTab === 'vr_advanced_hub' && (
           <div className="space-y-4">
             <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3">
@@ -812,7 +815,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
-        <Route path="/visor" element={<PicoVisorApp />} />
+        {/* Ruta para el visor del paciente conectada directamente al componente WebXR unificado */}
+        <Route path="/visor" element={<VrPatientExperience onClose={() => window.location.href = '/doctor'} />} />
       </Routes>
     </Router>
   );
