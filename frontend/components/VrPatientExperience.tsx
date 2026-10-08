@@ -6,7 +6,6 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, Sphere, useVideoTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { immersionMedia } from '../services/immersionMediaService';
-import { VrErrorBoundary } from './VrErrorBoundary'; // <--- Importación clave para evitar el pantallazo rojo
 
 interface Props { patientId?: string; onClose: () => void; initialModuleId?: string; }
 
@@ -68,48 +67,46 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   }
 
   return (
-    <VrErrorBoundary>
-      <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
-        <button onPointerDown={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md">
-          <X className="w-8 h-8" />
-        </button>
+    <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
+      <button onPointerDown={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md">
+        <X className="w-8 h-8" />
+      </button>
 
-        {isWebXRModule && (
-          <div className="absolute inset-0 z-[100]">
-            <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
-               <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
-            </div>
-            <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [0, 0, 0.1] }}>
-              <XR>
-                <Controllers />
-                <Suspense fallback={<FallbackLoadingSphere />}>
-                  {isVideo ? (
-                    <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
-                  ) : (
-                    <Environment background={true} files={texturePath} />
-                  )}
-                </Suspense>
-                {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
-              </XR>
-            </Canvas>
+      {isWebXRModule && (
+        <div className="absolute inset-0 z-[100]">
+          <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
+             <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
           </div>
-        )}
+          <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [0, 0, 0.1] }}>
+            <XR>
+              <Controllers />
+              <Suspense fallback={<FallbackLoadingSphere />}>
+                {isVideo ? (
+                  <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
+                ) : (
+                  <Environment background={true} files={texturePath} />
+                )}
+              </Suspense>
+              {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
+            </XR>
+          </Canvas>
+        </div>
+      )}
 
-        {!isWebXRModule && (
-          <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />
-        )}
-        
-        {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
-          <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
-             <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
-             <h1 className="text-5xl font-black text-white tracking-widest mb-4">RESPIRA LENTAMENTE</h1>
-             <div className="flex items-center gap-4 text-2xl text-slate-300 font-mono bg-slate-950 px-8 py-4 rounded-2xl border border-slate-800">
-               <span>INHALA (4s)</span> <span className="animate-pulse text-sky-400">---</span> <span>EXHALA (6s)</span>
-             </div>
-          </div>
-        )}
-      </div>
-    </VrErrorBoundary>
+      {!isWebXRModule && (
+        <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />
+      )}
+      
+      {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
+        <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
+           <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
+           <h1 className="text-5xl font-black text-white tracking-widest mb-4">RESPIRA LENTAMENTE</h1>
+           <div className="flex items-center gap-4 text-2xl text-slate-300 font-mono bg-slate-950 px-8 py-4 rounded-2xl border border-slate-800">
+             <span>INHALA (4s)</span> <span className="animate-pulse text-sky-400">---</span> <span>EXHALA (6s)</span>
+           </div>
+        </div>
+      )}
+    </div>
   );
 };
 
