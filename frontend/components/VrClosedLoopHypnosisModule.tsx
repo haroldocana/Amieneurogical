@@ -18,7 +18,7 @@ type HypnosisProtocolType =
 
 export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  const { isConnected, transmit, liveData } = useVrTelemetryBridge('sender', patientId, 'HYPNOSIS_CLOSED_LOOP');
+  const { isConnected, transmit, liveData, syncSession } = useVrTelemetryBridge('sender', patientId, 'NEURO_HYPNOSIS');
 
   const [sessionActive, setSessionActive] = useState<boolean>(false);
   const [tranceDepth, setTranceDepth] = useState<number>(45); // 0 a 100%
@@ -60,11 +60,23 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
       setTranceDepth(adjustedDepth);
       setAiStatusLog(`[IA Bucle Cerrado]: Estabilidad vagal óptima (HRV: ${realHrv} ms). Profundizando inducción al ${adjustedDepth}%.`);
     }
-  }, [realHrv, realGsr, sessionActive, isAiAutoRegulationActive]);
+  }, [realHrv, realGsr, sessionActive, isAiAutoRegulationActive, transmit, tranceDepth]);
 
   const handleStartSession = () => {
     setSessionActive(true);
     setAiStatusLog('Sesión iniciada. Bucle cerrado multiaxial activo con IA monitorizando Z-scores y SNA.');
+    
+    // Aseguramos que el paciente está sincronizado antes de enviar comandos
+    syncSession();
+
+    // 1. CARGA DE ENTORNO VISUAL EN EL VISOR DEL PACIENTE
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      moduleName: 'NEURO_HYPNOSIS', 
+      ecosystem: 'HYPNOSIS' // Se asociará a ALPINE_SANCTUARY.jpg en immersionMediaService
+    });
+
+    // 2. ENVÍO DE PARÁMETROS DE HIPNOSIS Y AUDIO BINAURAL
     transmit({
       type: 'START_HYPNOSIS_PROTOCOL',
       protocol: inductionProtocol,
@@ -78,7 +90,8 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
   const handleStopSession = () => {
     setSessionActive(false);
     setAiStatusLog('Sesión finalizada por el clínico. Protocolo de salida completado.');
-    transmit({ type: 'STOP_HYPNOSIS_PROTOCOL' });
+    // Limpiamos el visor
+    transmit({ type: 'STOP_TEST' });
     if (onClose) onClose();
   };
 
@@ -94,7 +107,13 @@ export const VrClosedLoopHypnosisModule: React.FC<Props> = ({ patient, onClose }
             <p className="text-xs text-slate-400">Paciente: {patientId} | Repertorio profesional completo con autorregulación adaptativa por Inteligencia Artificial.</p>
           </div>
         </div>
-        {onClose && <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 cursor-pointer">✕</button>}
+        
+        <div className="flex items-center gap-4">
+           <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
+              <Activity className="w-4 h-4" />{isConnected ? 'Visor Conectado' : 'Visor Desconectado'}
+           </div>
+           {onClose && <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 cursor-pointer">✕</button>}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
