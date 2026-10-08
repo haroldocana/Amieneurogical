@@ -15,13 +15,15 @@ export interface VrStreamPayload {
   patientId: string;
   moduleName: string;
   timestamp: number;
-  type?: 'HANDSHAKE' | 'HANDSHAKE_ACK' | 'PEER_CONNECTED' | 'METRICS' | 'START_TEST' | 'STOP_TEST';
+  type?: string;
+  ecosystem?: string;
   metrics?: VrMetrics;
   reactionTimeMs?: number;
   omissions?: number;
   commissions?: number;
   habituationIndex?: number;
   hits?: number;
+  [key: string]: any;
 }
 
 const BACKEND_DOMAIN = 'amieneurogical.onrender.com';
@@ -43,6 +45,7 @@ export const useVrTelemetryBridge = (
   const normalizePacket = (raw: any): VrStreamPayload => {
     const metrics = raw.metrics || {};
     return {
+      ...raw,
       patientId: raw.patientId || patientId,
       moduleName: raw.moduleName || moduleName,
       timestamp: raw.timestamp || Date.now(),
@@ -131,15 +134,17 @@ export const useVrTelemetryBridge = (
   }, [patientId, moduleName]);
 
   const transmit = useCallback(async (metricsData: VrMetrics | any) => {
-    if (mode !== 'sender') return;
+    // ⚠️ ELIMINADO: if (mode !== 'sender') return; 
+    // Ahora la consola del doctor TAMBIÉN puede enviar comandos (ej. LOAD_MODULE)
+    
     const metrics: VrMetrics = metricsData.metrics ? metricsData.metrics : metricsData;
-    const payload: VrStreamPayload = normalizePacket({ patientId, moduleName, timestamp: Date.now(), type: 'METRICS', metrics, ...metrics });
+    const payload: VrStreamPayload = normalizePacket({ patientId, moduleName, timestamp: Date.now(), type: 'METRICS', metrics, ...metricsData });
 
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(payload));
       return;
     }
-  }, [mode, patientId, moduleName]);
+  }, [patientId, moduleName]);
 
   return { 
     isConnected, 
