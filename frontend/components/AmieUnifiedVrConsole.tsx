@@ -73,7 +73,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
   
   const [aiContentType, setAiContentType] = useState<'SES_SIS_EXCITATORY' | 'SES_SIS_INHIBITORY' | 'CUSTOM_SCRIPT' | 'COUPLE_MEDIATION'>('SES_SIS_EXCITATORY');
   const [customProfessionalPrompt, setCustomProfessionalPrompt] = useState<string>(
-    'Generar un entorno de seguridad y un guion con tono pausado que ayude a desarticular los frenos inhibitorios (SIS) por autoexigencia y vergüenza corporal...'
+    'Sincronizar los estímulos visuales espaciales 3D con la bitácora de autorregulación autónoma según los niveles de conductancia (GSR) y profundidad de trance del paciente.'
   );
   const [aiVoiceTone, setAiVoiceTone] = useState<'SOFT_WHISPER' | 'EMPATHIC_GUIDE' | 'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE'>('SOFT_WHISPER');
   
@@ -118,9 +118,9 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
 
       if (isAiAutoRegulationActive) {
         if (nextGsr > 4.5) {
-          setAiRegulationLog(`[IA AUTORREGULACIÓN] Pico de GSR (${nextGsr} µS). Suavizando tono de voz y reduciendo estímulo.`);
+          setAiRegulationLog(`[IA AUTORREGULACIÓN] Pico de GSR (${nextGsr.toFixed(2)} µS). Suavizando tono de voz y reduciendo estímulo.`);
         } else if (nextHrv < 25) {
-          setAiRegulationLog(`[IA AUTORREGULACIÓN] Tono vagal bajo (${nextHrv} ms). Activando respiración guiada.`);
+          setAiRegulationLog(`[IA AUTORREGULACIÓN] Tono vagal bajo (${Math.round(nextHrv)} ms). Activando respiración guiada.`);
         } else {
           setAiRegulationLog(`[IA AUTORREGULACIÓN] Biomarcadores estables (HRV: ${Math.round(nextHrv)}ms | GSR: ${nextGsr.toFixed(2)}µS).`);
         }
@@ -408,17 +408,17 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
         </div>
       </div>
 
-      {/* BOTONERA DE CONTROL */}
+      {/* BOTONERA DE CONTROL (HABILITADA PARA PRUEBA EN VIVO) */}
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Sliders className="w-4 h-4 text-cyan-400" />
-          <span>Visor VR: <strong className={isConnected ? "text-emerald-400" : "text-slate-500"}>{isConnected ? 'EN LÍNEA' : 'ESPERANDO VISOR'}</strong></span>
+          <span>Visor VR: <strong className={isConnected ? "text-emerald-400" : "text-amber-400"}>{isConnected ? 'EN LÍNEA' : 'MODO STANDBY / PRUEBA'}</strong></span>
         </div>
         <div className="flex items-center gap-3">
           {!sessionActive ? (
-            <button disabled={!isConnected || isGeneratingAi} onClick={handleInitializeAndRenderEnvironment} className={`flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg transition ${!isConnected ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 via-indigo-500 to-emerald-600 hover:scale-105 text-white cursor-pointer'}`}>
+            <button disabled={isGeneratingAi} onClick={handleInitializeAndRenderEnvironment} className="flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg transition bg-gradient-to-r from-cyan-500 via-indigo-500 to-emerald-600 hover:scale-105 text-white cursor-pointer">
               {isGeneratingAi ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              <span>{!isConnected ? 'Esperando Visor VR...' : 'Iniciar Bucle Autónomo de IA'}</span>
+              <span>Iniciar Bucle Autónomo de IA (Forzar Prueba)</span>
             </button>
           ) : (
             <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition shadow cursor-pointer">
