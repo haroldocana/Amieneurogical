@@ -45,12 +45,14 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'PTSDExposure');
+  // CORRECCIÓN CLAVE: Sincronizado el módulo con App.tsx y el Router ('EMDR_MEMORY')
+  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'EMDR_MEMORY');
 
   // Transmisión en vivo de biometría amigdalar y fase de reconsolidación
   useEffect(() => {
     if (sessionActive && !safetyTriggered) {
       transmit({
+        type: 'METRICS_UPDATE',
         gsr: Number(gsr.toFixed(2)),
         hrv: Math.floor(hrv),
         stressLevel: Number(gsr.toFixed(2)),
@@ -81,6 +83,13 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
               `[${timeStr}] 🔓 ENGRAMA LÁBIL: Pico de sobresalto amigdalar (${gsr.toFixed(1)} µS). Memoria abierta. Disparando Error de Predicción Mismatch + EMDR 3D.`,
               ...prev.slice(0, 8)
             ]);
+            
+            // Cuando la memoria se abre, disparamos EMDR visual
+            transmit({
+              type: 'START_BILATERAL_STIMULATION',
+              initialHz: emdrSweepSpeedHz,
+              ecosystem: ecosystem
+            });
           }
         } else if (currentPhase === 'PHASE_2_MISMATCH') {
           // Fase 2: Inyección de Señal de Seguridad Absoluta
@@ -102,6 +111,8 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
           if (engramLabilityPct <= 0) {
             setCurrentPhase('COMPLETED');
+            transmit({ type: 'STOP_BILATERAL_STIMULATION' }); // Detenemos la bola EMDR
+            
             setAiLogs(prev => [
               `[${timeStr}] ✅ RECONSOLIDACIÓN EXITOSA: Engrama traumático guardado sin carga afectiva. Índice H = ${extinctionIndexH.toFixed(2)}. Fobia/Trauma reescrito.`,
               ...prev.slice(0, 8)
@@ -113,6 +124,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
         if (gsr > 8.5) {
           setSafetyTriggered(true);
           setSessionActive(false);
+          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
           alert(`⚠️ ALERTA DE ABREACCIÓN: Desbordamiento autonómico (GSR: ${gsr.toFixed(1)} µS). Abortando exposición e inyectando campo biofílico de rescate.`);
         }
 
@@ -122,7 +134,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [sessionActive, currentPhase, gsr, hrv, engramLabilityPct, extinctionIndexH, safetyTriggered]);
+  }, [sessionActive, currentPhase, gsr, hrv, engramLabilityPct, extinctionIndexH, safetyTriggered, emdrSweepSpeedHz, ecosystem, transmit]);
 
   const handleStartSession = () => {
     setSafetyTriggered(false);
@@ -133,13 +145,25 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     setEngramLabilityPct(10);
     setExtinctionIndexH(0.2);
     setAiLogs([`[SISTEMA] Entorno VR cargado: ${getEcosystemName(ecosystem)}. Iniciando Reconsolidación...`]);
-    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'PTSDExposure', ecosystem });
+    
+    syncSession();
+    
+    // 1. Cargamos el entorno visual
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      moduleName: 'EMDR_MEMORY', 
+      ecosystem: ecosystem 
+    });
+
+    // 2. Iniciamos el protocolo de audio inmersivo
+    transmit({ type: 'START_AIMA_PROTOCOL', targetHz: binauralThetaHz });
   };
 
   const handleEmergencyEgress = () => {
     setSessionActive(false);
     setCurrentPhase('IDLE');
-    setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad. Abortando reconsolidación.`, ...prev]);
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
+    setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad (Grounding inyectado). Abortando reconsolidación.`, ...prev]);
   };
 
   // -------------------------------------------------------------------------
@@ -147,6 +171,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
   // -------------------------------------------------------------------------
   const handleEndSession = async () => {
     setSessionActive(false);
+    transmit({ type: 'STOP_TEST' }); // Limpiamos el visor del paciente
     setAiLogs(prev => [`[SISTEMA] Sesión completada. Guardando reporte de reconsolidación en el expediente...`, ...prev]);
 
     const sessionReport = {
@@ -192,7 +217,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
   const getEcosystemName = (eco: EmdrEcosystem) => {
     const map: Record<EmdrEcosystem, string> = {
       'NEUTRAL_VOID': 'Vacío Neutral (Foco Total)',
-      'COSMIC_STARS': 'Nebulosa Estelar (Amplitud)',
+      'COSMIC_STARS': 'Nebulosa Estelar Inmersiva',
       'CLINIC_ROOM': 'Consultorio Clínico Virtual',
       'LOW_POLY_WHITE_ROOM': 'Sala Estéril (Baja Sobrecarga)',
       'SAFE_PLACE_FOREST': 'Santuario Natural (Bosque)',
@@ -247,12 +272,12 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
           <button
             onClick={handleEmergencyEgress}
-            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95"
+            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
           >
             <ShieldAlert className="w-4 h-4" /> Abortar VR
           </button>
 
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300">
+          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -532,7 +557,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
               <button
                 disabled={!isConnected}
                 onClick={handleStartSession}
-                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition active:scale-95 ${
+                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer ${
                   !isConnected 
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
                     : 'bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-rose-600/20'
@@ -544,7 +569,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
             ) : (
               <button
                 onClick={handleEndSession}
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95"
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer"
               >
                 <Square className="w-4 h-4 fill-current" />
                 Concluir Sesión VR
