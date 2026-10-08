@@ -26,10 +26,8 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 
-// CONSOLA UNIFICADA IMPULSADA POR IA & VR (Gemini 3.8 Flash)
+// CONSOLA UNIFICADA Y MÓDULOS DE HIPNOSIS / ENRUTADOR VR
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
-
-// ENRUTADOR MAESTRO Y MÓDULO DE HIPNOSIS EN BUCLE CERRADO
 import { VrModuleRouter } from './components/VrModuleRouter';
 import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
 
