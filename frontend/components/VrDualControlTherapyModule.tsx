@@ -16,7 +16,8 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
   const [sesAcceleratorLevel, setSesAcceleratorLevel] = useState<number>(35);
   const [activeStressor, setActiveStressor] = useState<string>('Carga mental y fatiga ejecutiva');
 
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DUAL_CONTROL');
+  // CORRECCIÓN CLAVE: Cambiamos a 'sender' y unificamos el identificador del módulo con el enrutador ('DUAL_CONTROL')
+  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DUAL_CONTROL');
 
   const stressorsMap = {
     INDIVIDUAL_FEMALE: ['Autocrítica corporal y vergüenza de la imagen (Body Shame)', 'Carga mental doméstica y fatiga ejecutiva acumulada', 'Expectativa de rendimiento o complacencia hacia la pareja', 'Hipervigilancia por antecedentes de coerción o invasión'],
@@ -25,16 +26,21 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
   };
 
   const handleTransmitToVR = () => {
-    let command = { type: 'LOAD_MODULE', ecosystem: 'NEUTRAL_VOID', isVideo: false };
+    // Sincronizamos antes de transmitir el comando
+    syncSession();
+
+    let command: any = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL', ecosystem: 'NEUTRAL_VOID', isVideo: false };
+    
     if (currentPhase === 'sis_release') {
-      command = { type: 'LOAD_MODULE', ecosystem: 'SAFE_PLACE_FOREST', isVideo: false };
+      command = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL', ecosystem: 'SAFE_PLACE_FOREST', isVideo: false };
     } else if (currentPhase === 'ses_activation') {
       if (stimulusType === 'RELATIONAL_AUDIO') {
-        command = { type: 'LOAD_MODULE', ecosystem: audioEcosystem, isVideo: false };
+        command = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL', ecosystem: audioEcosystem, isVideo: false };
       } else {
-        command = { type: 'LOAD_MODULE', ecosystem: videoScenario, isVideo: true };
+        command = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL', ecosystem: videoScenario, isVideo: true };
       }
     }
+    
     transmit(command);
   };
 
@@ -44,7 +50,9 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
         <div>
           <h1 className="text-xl font-black text-white flex items-center gap-2"><HeartHandshake className="w-6 h-6 text-rose-400" /> AMIE • Motor Clínico y Laboratorio Relacional</h1>
           <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">Expediente Activo: <strong className="text-sky-400">{patient?.id || 'PAC-8104'}</strong> | Enfoque: <span className="text-rose-300 font-semibold uppercase">{profileType}</span>
-            <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold ${isConnected ? 'bg-emerald-950 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>{isConnected ? 'PICO 3 CONECTADO' : 'ESPERANDO VISOR...'}</span>
+            <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
+              {isConnected ? 'VR CONECTADO (EN VIVO)' : 'ESPERANDO VISOR...'}
+            </span>
           </p>
         </div>
         <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition cursor-pointer shadow-lg">Cerrar Módulo</button>
@@ -80,12 +88,12 @@ export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }
           <div className="p-6 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl space-y-4">
             <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5"><Flame className="w-4 h-4 text-emerald-400" /> Sistema de Excitación (Acelerador - SES)</span><span className="text-xl font-mono font-bold text-emerald-400">{sesAcceleratorLevel}%</span></div>
             <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-emerald-900/50"><div className="bg-emerald-500 h-full transition-all duration-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]" style={{ width: `${sesAcceleratorLevel}%` }}></div></div>
-            <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between text-[11px]"><span className="text-slate-400">Paridigma Clínico:</span><strong className="text-cyan-300">Acelerar con freno puesto = Cero Respuesta</strong></div>
+            <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between text-[11px]"><span className="text-slate-400">Paradigma Clínico:</span><strong className="text-cyan-300">Acelerar con freno puesto = Cero Respuesta</strong></div>
           </div>
         </div>
 
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5">
-          <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2"><Brain className="w-4 h-4 text-cyan-400" /> Secuencia Terapéutica Inmersiva (Visor Pico 3)</h2>
+          <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2"><Brain className="w-4 h-4 text-cyan-400" /> Secuencia Terapéutica Inmersiva (Visor WebXR)</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div onClick={() => { setCurrentPhase('assessment'); setSisBrakeLevel(78); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-2 ${currentPhase === 'assessment' ? 'bg-sky-600/20 border-sky-500' : 'bg-slate-950 border-slate-800'}`}>
               <span className="px-2 py-0.5 bg-sky-950 border border-sky-800 text-[10px] font-bold text-sky-400 rounded">Fase 1</span><h3 className="font-bold text-xs text-white">Mapeo y Calibración Dual</h3>
