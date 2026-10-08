@@ -40,7 +40,8 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
   const [isAvatarThinking, setIsAvatarThinking] = useState(false);
   const [isAiStreamingVoice, setIsAiStreamingVoice] = useState(false);
 
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'ClusterBForensicVR');
+  // CORRECCIÓN CLAVE: Nombre exacto del módulo y extracción de syncSession
+  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'CLUSTER_B_FORENSIC');
 
   const handleGenerateAiEnvironmentAndSession = async () => {
     setIsGeneratingEnv(true);
@@ -62,6 +63,9 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
       // Mapeo del entorno forense hacia el asset oficial en /ecosystems/
       const ecosystemAssetKey = selectedEnvironment === 'FORENSIC_COURTROOM' ? 'CLUSTER_B_FORENSIC' : 'ACROPHOBIA';
       const resolvedTextureUrl = immersionMedia.getEcosystemAssetUrl(ecosystemAssetKey);
+
+      // Aseguramos que el paciente está sincronizado antes de enviar el comando
+      syncSession();
 
       // Transmitir orden de generación y textura al visor Meta Quest / Pico
       transmit({
@@ -156,9 +160,14 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
 
       {sessionState === 'STANDBY' && (
         <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-          <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-            <Compass className="w-4 h-4" /> Configuración de Escenario Pericial e IA Generativa
-          </h3>
+          <div className="flex items-center justify-between">
+             <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+               <Compass className="w-4 h-4" /> Configuración de Escenario Pericial e IA Generativa
+             </h3>
+             <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
+                <Activity className="w-4 h-4" />{isConnected ? 'Visor Conectado' : 'Visor Desconectado'}
+             </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="space-y-1.5">
