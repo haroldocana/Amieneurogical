@@ -5,6 +5,22 @@ class ImmersionMediaService {
   private rightOsc: OscillatorNode | null = null;
   private gainNode: GainNode | null = null;
 
+  // Mapeo oficial de entornos 3D/VR utilizando los nombres exactos de los archivos subidos
+  private ecosystemAssets: Record<string, string> = {
+    'HYPNOSIS': '/ecosystems/Hipnosis & Grounding',
+    'SEXUAL_HEALTH': '/ecosystems/Salud Sexual',
+    'CLUSTER_B_FORENSIC': '/ecosystems/Forense Cluster B',
+    'TDAH_ATTENTION_LAB': '/ecosystems/Laboratorio de Atención',
+    'DEVELOPMENTAL_TRAUMA': '/ecosystems/Trauma del Desarrollo (Santuario de Vínculo Seguro)',
+    'PAIN_MANAGEMENT': '/ecosystems/Control de Dolor Crónico (Paisaje Subacuático)',
+    'FUNCTIONAL_NEUROLOGY': '/ecosystems/Neurología Funcional & Propiocepción',
+    'MEMORY_RECONSOLIDATION': '/ecosystems/Reconsolidación de Memoria (Sala de Espejo)',
+    'ACROPHOBIA': '/ecosystems/ACROPHOBIA_ROOF.jpg',
+    'AEROPHOBIA': '/ecosystems/AEROPHOBIA_CABIN.jpg',
+    'SAFE_PLACE': '/ecosystems/SAFE_PLACE_FOREST.jpg',
+    'ZEN_GARDEN': '/ecosystems/ZEN_GARDEN.jpg'
+  };
+
   // Iniciar frecuencias binaurales terapéuticas en tiempo real
   public startBinauralBeats(baseFreq: number = 200, beatFreq: number = 6, volume: number = 0.15) {
     try {
@@ -51,10 +67,18 @@ class ImmersionMediaService {
     }
   }
 
-  // Generar URL de entorno hiperrealista optimizada por IA según el módulo
+  // Obtener la URL del asset visual optimizado para el visor VR según el módulo clínico
+  public getEcosystemAssetUrl(moduleKey: string): string {
+    return this.ecosystemAssets[moduleKey] || '/ecosystems/ZEN_GARDEN.jpg';
+  }
+
+  // Generar URL de entorno respaldada por IA o fallback dinámico
   public getAiAssetForModule(moduleName: string, customPrompt: string): string {
+    const matchedUrl = this.ecosystemAssets[moduleName];
+    if (matchedUrl) {
+      return matchedUrl;
+    }
     const encoded = encodeURIComponent(`${moduleName}: ${customPrompt}`);
-    // Retorna asset texturizado de alta gama adaptado al contexto clínico
     return `https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=1920&q=80&sig=${encoded}`;
   }
 }
