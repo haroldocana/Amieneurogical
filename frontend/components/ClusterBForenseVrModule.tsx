@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { PatientRecord } from '../types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
@@ -19,6 +19,7 @@ import {
   Compass
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
+import { immersionMedia } from '../services/immersionMediaService';
 
 interface Props {
   patient: PatientRecord;
@@ -26,34 +27,21 @@ interface Props {
 }
 
 export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) => {
-  // Estado del Peritaje y del Avatar Cluster B (Narcisismo / TLP)
   const [sessionState, setSessionState] = useState<'STANDBY' | 'INTERROGATION' | 'DEVALUATION_PHASE'>('STANDBY');
   const [clusterBProfile, setClusterBProfile] = useState<'OVERT_NARCISSISM' | 'COVERT_NARCISSISM' | 'MALIGNANT_NARCISSISM' | 'BPD_SPLITTING'>('OVERT_NARCISSISM');
   
-  // Selección del Entorno Generado por IA
   const [selectedEnvironment, setSelectedEnvironment] = useState<'FORENSIC_COURTROOM' | 'CORPORATE_OFFICE' | 'MINIMALIST_ROOM'>('FORENSIC_COURTROOM');
   const [isGeneratingEnv, setIsGeneratingEnv] = useState(false);
   const [envPromptStatus, setEnvPromptStatus] = useState<string>('Entorno base en espera...');
 
-  // Configuración de Audio IA y Voz del Avatar
   const [avatarVoiceTone, setAvatarVoiceTone] = useState<'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE' | 'SMARM_CHARM'>('ARROGANT_COLD');
-  const [audioVolume, setAudioVolume] = useState(80);
-  const [isAiStreamingVoice, setIsAiStreamingVoice] = useState(false);
-
-  // Interacción y Diálogo Pericial
   const [doctorInterrogationText, setDoctorInterrogationText] = useState('');
   const [avatarResponseText, setAvatarResponseText] = useState('Doctor, dudo mucho que alguien aquí tenga la capacidad de comprender la magnitud de mis decisiones...');
   const [isAvatarThinking, setIsAvatarThinking] = useState(false);
-
-  // Telemetría del Terapeuta y del Visor
-  const [therapistWpm, setTherapistWpm] = useState(140); // Velocidad de habla (WPM)
-  const [aiAnalysisFeedback, setAiAnalysisFeedback] = useState<string>('Evaluando firmeza y neutralidad en el contrainterrogatorio...');
+  const [isAiStreamingVoice, setIsAiStreamingVoice] = useState(false);
 
   const { isConnected, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'ClusterBForensicVR');
 
-  // -------------------------------------------------------------------------
-  // COMUNICACIÓN CON GEMINI PARA ENTORNO VR Y VOZ DEL AVATAR
-  // -------------------------------------------------------------------------
   const handleGenerateAiEnvironmentAndSession = async () => {
     setIsGeneratingEnv(true);
     setEnvPromptStatus('Gemini compilando parámetros espaciales y lumínicos para el visor...');
@@ -64,23 +52,25 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-        const prompt = `
-Actúa como el motor de generación procedural de entornos y perfiles clínicos de AMIE Engine para VR.
-Configura los parámetros espaciales para el escenario: ${selectedEnvironment} bajo el perfil de paciente: ${clusterBProfile}.
-Devuelve una cadena corta de confirmación técnica para el visor (máximo 20 palabras).
-`;
+        const prompt = `Actúa como el motor de generación procedural de entornos y perfiles clínicos de AMIE Engine para VR. Configura los parámetros espaciales para el escenario: ${selectedEnvironment} bajo el perfil de paciente: ${clusterBProfile}.`;
         const result = await model.generateContent(prompt);
         setEnvPromptStatus(result.response.text() || 'Entorno procedural renderizado en GPU del visor.');
       } else {
         setEnvPromptStatus('Entorno VR cargado en modo local optimizado.');
       }
 
-      // Transmitir orden de generación procedural al visor Meta Quest 3S
+      // Mapeo del entorno forense hacia el asset oficial en /ecosystems/
+      const ecosystemAssetKey = selectedEnvironment === 'FORENSIC_COURTROOM' ? 'CLUSTER_B_FORENSIC' : 'ACROPHOBIA';
+      const resolvedTextureUrl = immersionMedia.getEcosystemAssetUrl(ecosystemAssetKey);
+
+      // Transmitir orden de generación y textura al visor Meta Quest / Pico
       transmit({
-        type: 'GENERATE_PROCEDURAL_ENVIRONMENT',
-        environmentType: selectedEnvironment,
+        type: 'LOAD_MODULE',
+        moduleName: 'CLUSTER_B_FORENSIC',
+        ecosystem: ecosystemAssetKey,
+        textureUrl: resolvedTextureUrl,
         profile: clusterBProfile,
-        lighting: selectedEnvironment === 'FORENSIC_COURTROOM' ? 'HIGH_CONTRAST_GRAY' : 'WARM_EXECUTIVE'
+        lighting: 'HIGH_CONTRAST_GRAY'
       });
 
       setSessionState('INTERROGATION');
@@ -91,7 +81,6 @@ Devuelve una cadena corta de confirmación técnica para el visor (máximo 20 pa
     }
   };
 
-  // Simulación de Respuesta del Avatar Narcisista con Audio y Video Sincronizado
   const handleSendInterrogation = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!doctorInterrogationText.trim() || isAvatarThinking) return;
@@ -107,16 +96,11 @@ Devuelve una cadena corta de confirmación técnica para el visor (máximo 20 pa
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-        const prompt = `
-Eres un simulador clínico forense experto en trastornos de la personalidad Cluster B (Específico: ${clusterBProfile}).
-El terapeuta te acaba de hacer el siguiente cuestionamiento pericial: "${query}".
-Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso, desvalorizador, manipulador o evasivo). No rompas el personaje. Máximo 45 palabras.
-`;
+        const prompt = `Eres un simulador clínico forense experto en trastornos de la personalidad Cluster B (${clusterBProfile}). Intervención del terapeuta: "${query}". Responde en primera persona, manteniendo un perfil ${avatarVoiceTone}. Máximo 45 palabras.`;
         const result = await model.generateContent(prompt);
         const reply = result.response.text() || 'Sus preguntas carecen de fundamento clínico real...';
         setAvatarResponseText(reply);
 
-        // Transmisión simultánea al visor: Video del avatar + Stream de Audio IA
         transmit({
           type: 'AVATAR_SPEAKING_STREAM',
           profile: clusterBProfile,
@@ -138,41 +122,11 @@ Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso
   const handleEndSession = async () => {
     setSessionState('STANDBY');
     transmit({ type: 'STOP_TEST' });
-
-    const sessionReport = {
-      patientId: patient?.id || 'PAC-8104',
-      sessionData: {
-        taskName: 'ClusterB_ForensicInterrogation_AI',
-        durationSeconds: 420,
-        metrics: {
-          profileTested: clusterBProfile,
-          environment: selectedEnvironment,
-          avgTherapistWpm: therapistWpm,
-          aiVoiceTone: avatarVoiceTone
-        },
-        aiLogs: [
-          `Peritaje forense Cluster B completado (${clusterBProfile}). Escenario: ${selectedEnvironment}.`,
-          `Última respuesta del avatar generada con tono: ${avatarVoiceTone}.`
-        ],
-        completedAt: new Date().toISOString()
-      }
-    };
-
-    try {
-      await fetch('/api/vr/telemetry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sessionReport)
-      });
-      if (onClose) onClose();
-    } catch (error) {
-      console.error("Error al guardar reporte forense:", error);
-    }
+    if (onClose) onClose();
   };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
-      {/* Encabezado */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-rose-600 via-purple-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-rose-600/30">
@@ -200,7 +154,6 @@ Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso
         )}
       </div>
 
-      {/* Selector de Perfil y Entorno Generativo por IA */}
       {sessionState === 'STANDBY' && (
         <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
           <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
@@ -231,22 +184,9 @@ Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso
               >
                 <option value="FORENSIC_COURTROOM">Sala de Audiencias / Tribunal Pericial</option>
                 <option value="CORPORATE_OFFICE">Oficina Ejecutiva Minimalista</option>
-                <option value="MINIMALIST_ROOM">Sala Neutra de Containterrogatorio</option>
+                <option value="MINIMALIST_ROOM">Sala Neutra de Contrainterrogatorio</option>
               </select>
             </div>
-          </div>
-
-          <div className="space-y-1.5 pt-2">
-            <label className="text-slate-400 font-semibold block">Tono de Voz del Avatar (Gemini Live TTS):</label>
-            <select
-              value={avatarVoiceTone}
-              onChange={(e) => setAvatarVoiceTone(e.target.value as any)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none font-mono text-xs"
-            >
-              <option value="ARROGANT_COLD">Frío, Calculador y Despreciativo</option>
-              <option value="DEFENSIVE_HOSTILE">Defensivo, Reactivo y Hostil</option>
-              <option value="SMARM_CHARM">Encanto Superficial (Smarm / Seductor)</option>
-            </select>
           </div>
 
           <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300">
@@ -268,7 +208,6 @@ Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso
         </div>
       )}
 
-      {/* Panel de Interrogatorio Activo */}
       {sessionState === 'INTERROGATION' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -286,7 +225,6 @@ Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso
             </div>
           </div>
 
-          {/* Visualizador de Interacción (Video del Avatar + Audio IA) */}
           <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
@@ -311,7 +249,6 @@ Responde en primera persona, manteniendo un perfil ${avatarVoiceTone} (grandioso
             </div>
           </div>
 
-          {/* Formulario de Contrainterrogatorio del Profesional */}
           <form onSubmit={handleSendInterrogation} className="flex gap-2">
             <input
               type="text"
