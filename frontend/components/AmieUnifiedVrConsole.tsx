@@ -13,7 +13,9 @@ import {
   Glasses,
   Monitor,
   Compass,
-  ShieldCheck
+  ShieldCheck,
+  Scale,
+  CloudRain
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
@@ -43,7 +45,9 @@ const AMIE_12_ENVIRONMENTS = [
 
 export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  const [appRole, setAppRole] = useState<AppRole>('SELECTING_ROLE');
+  
+  // INICIO DIRECTO EN VISTA DE TERAPEUTA (Se elimina el paso de selección de rol)
+  const [appRole, setAppRole] = useState<AppRole>('CLINICIAN_CONSOLE');
 
   const [vrMode, setVrMode] = useState<ClinicalVrMode>('SEXUAL_HEALTH_SES_SIS');
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('NEUTRAL_LIVING_ROOM');
@@ -55,46 +59,60 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
   );
   const [aiVoiceTone, setAiVoiceTone] = useState<'SOFT_WHISPER' | 'EMPATHIC_GUIDE' | 'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE'>('SOFT_WHISPER');
   
+  const [clusterBPattern, setClusterBPattern] = useState<'GASLIGHTING' | 'LOVE_BOMBING' | 'SILENT_TREATMENT'>('GASLIGHTING');
+  const [vretExposureStep, setVretExposureStep] = useState<number>(3);
   const [isAiAutoRegulationActive, setIsAiAutoRegulationActive] = useState<boolean>(true);
 
   const bridgeRole = appRole === 'PATIENT_VR_VIEWER' ? 'receiver' : 'sender';
   const { isConnected, transmit, liveData } = useVrTelemetryBridge(bridgeRole, patientId, `UnifiedVR_${vrMode}`);
 
-  const realHrv = liveData?.metrics?.hrvRmssdMs || patient?.multisensoryHardware?.vagalToneHrvIndex || 45;
-  const realGsr = liveData?.metrics?.gsrMicroSiemens || 2.4;
-
   const [sessionActive, setSessionActive] = useState(false);
-  const [tranceOrStressDepth, setTranceOrStressDepth] = useState(25);
   const [envStatusMsg, setEnvStatusMsg] = useState<string>('Motor generativo de IA (Gemini 3.8 Flash) en espera...');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
-  const [isAbreactionTriggered, setIsAbreactionTriggered] = useState(false);
-  const [abreactionReason, setAbreactionReason] = useState<string | null>(null);
-  const gsrBaselineRef = useRef<number>(2.4);
+  const handleModuleChange = (newMode: ClinicalVrMode) => {
+    setVrMode(newMode);
+    if (newMode === 'SEXUAL_HEALTH_SES_SIS') setSelectedEnvironment('NEUTRAL_LIVING_ROOM');
+    else if (newMode === 'CLUSTER_B_FORENSIC') setSelectedEnvironment('FORENSIC_COURTROOM');
+    else if (newMode === 'PHOBIA_VRET') setSelectedEnvironment('HEIGHTS_BALCONY');
+    else if (newMode === 'SYSTEMIC_COUPLE') setSelectedEnvironment('MIRROR_ROOM');
+    else if (newMode === 'HYPNOSIS') setSelectedEnvironment('ALPINE_SANCTUARY');
+  };
 
   const handleInitializeAndRenderEnvironment = async () => {
     setIsGeneratingAi(true);
     setEnvStatusMsg('Generando entorno y estímulo visual con Gemini 3.8 Flash...');
 
     try {
-      const apiKey = 
-        import.meta.env.VITE_GEMINI_API_KEY || 
-        import.meta.env.GEMINI_API_KEY || 
-        import.meta.env.VITE_API_KEY || 
-        '';
-
+      const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
+      const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ';
+      
       let generatedAssetUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80';
 
-      if (apiKey && apiKey.startsWith('AIza')) {
-        try {
-          const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
-          const promptText = `Describe visualmente en inglés y de forma fotorrealista esta escena para entorno clínico: "${customProfessionalPrompt}" (máx 15 palabras).`;
-          const result = await model.generateContent(promptText);
-          const queryTag = encodeURIComponent(result.response.text().trim());
+      const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.8-flash:generateContent`;
+      const proxyPayload = {
+        contents: [{ role: 'user', parts: [{ text: `[MÓDULO: ${vrMode}] Describe visualmente en inglés y de forma fotorrealista esta escena clínica: "${customProfessionalPrompt}" (máx 15 palabras).` }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
+      };
+
+      const response = await fetch(`${BACKEND_URL}/api-proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-proxy': PROXY_HEADER
+        },
+        body: JSON.stringify({
+          originalUrl: vertexEndpoint,
+          body: proxyPayload
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          const queryTag = encodeURIComponent(rawText.trim());
           generatedAssetUrl = `https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=1920&q=80&sig=${queryTag}`;
-        } catch (apiErr) {
-          console.warn("Aviso de API Gemini, usando motor procedural local:", apiErr);
         }
       } else {
         const encodedKeyword = encodeURIComponent(customProfessionalPrompt.slice(0, 20));
@@ -111,12 +129,14 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
         professionalPrompt: customProfessionalPrompt,
         aiGeneratedAssetUrl: generatedAssetUrl,
         autoRegulation: isAiAutoRegulationActive,
-        voiceStyle: aiVoiceTone
+        voiceStyle: aiVoiceTone,
+        clusterBPattern,
+        vretStep: vretExposureStep
       });
 
       setSessionActive(true);
-      setIsAbreactionTriggered(false);
     } catch (e) {
+      console.warn("Usando respaldo local:", e);
       setEnvStatusMsg('Entorno activo con parámetros predeterminados.');
       setSessionActive(true);
     } finally {
@@ -124,44 +144,11 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
     }
   };
 
-  const triggerSafetyGrounding = (reason: string) => {
-    setIsAbreactionTriggered(true);
-    setSessionActive(false);
-    setTranceOrStressDepth(0);
-    setAbreactionReason(reason);
-    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
-  };
-
   const handleEndSession = async () => {
     setSessionActive(false);
     transmit({ type: 'STOP_TEST' });
     if (onClose) onClose();
   };
-
-  if (appRole === 'SELECTING_ROLE') {
-    return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-slate-100 max-w-2xl w-full mx-auto space-y-6 text-center">
-        <div className="p-4 bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-xl w-16 h-16 mx-auto flex items-center justify-center">
-          <Glasses className="w-8 h-8" />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-black text-white tracking-tight">Consola AMIE • Generador de IA &amp; Visor VR</h2>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">Seleccione el modo operativo para la sesión clínica.</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-          <button onClick={() => setAppRole('CLINICIAN_CONSOLE')} className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-2xl text-left space-y-2 cursor-pointer">
-            <h3 className="text-xs font-bold text-cyan-400">Vista Terapeuta (Generación IA)</h3>
-            <p className="text-[10px] text-slate-400">Control de prompts y generación de assets.</p>
-          </button>
-          <button onClick={() => setAppRole('PATIENT_VR_VIEWER')} className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-2xl text-left space-y-2 cursor-pointer">
-            <h3 className="text-xs font-bold text-purple-400">Vista Visor Paciente</h3>
-            <p className="text-[10px] text-slate-400">Renderizado espacial WebXR.</p>
-          </button>
-        </div>
-        {onClose && <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-300 cursor-pointer">Cancelar</button>}
-      </div>
-    );
-  }
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
@@ -172,7 +159,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
           </div>
           <div>
             <h2 className="text-base font-black text-white tracking-tight">Consola Profesional • Generación Nativa con Gemini 3.8 Flash</h2>
-            <p className="text-xs text-slate-400">Paciente: {patientId} | <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-cyan-400 hover:underline cursor-pointer">Cambiar Rol</button></p>
+            <p className="text-xs text-slate-400">Paciente: {patientId} | <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-cyan-400 hover:underline cursor-pointer">Cambiar a Selector de Rol</button></p>
           </div>
         </div>
         {onClose && <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 cursor-pointer">✕</button>}
@@ -192,7 +179,7 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="space-y-1.5">
             <label className="text-slate-400 font-semibold block">Especialidad / Módulo Clínico:</label>
-            <select value={vrMode} onChange={(e) => setVrMode(e.target.value as ClinicalVrMode)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
+            <select value={vrMode} onChange={(e) => handleModuleChange(e.target.value as ClinicalVrMode)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
               <option value="SEXUAL_HEALTH_SES_SIS">💕 Salud Sexual &amp; Respuesta Sexual (SES / SIS)</option>
               <option value="SYSTEMIC_COUPLE">👥 Terapia de Pareja y Mediación Sistémica</option>
               <option value="HYPNOSIS">🧘 Neurohipnosis y Regulación (Grounding)</option>
@@ -230,6 +217,45 @@ export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
               placeholder="Describa el video o imagen fotorrealista que la IA debe generar para el paciente..."
               className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-rose-500 transition"
             />
+          </div>
+        )}
+
+        {vrMode === 'CLUSTER_B_FORENSIC' && (
+          <div className="p-4 bg-slate-900 rounded-xl border border-amber-500/30 space-y-3">
+            <span className="text-xs font-bold text-amber-300 flex items-center gap-2">
+              <Scale className="w-4 h-4 text-amber-400" /> Parámetros Periciales Cluster B:
+            </span>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-slate-400 block mb-1">Patrón de Manipulación:</label>
+                <select value={clusterBPattern} onChange={(e) => setClusterBPattern(e.target.value as any)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
+                  <option value="GASLIGHTING">Gaslighting / Distorsión</option>
+                  <option value="LOVE_BOMBING">Love Bombing / Idealización</option>
+                  <option value="SILENT_TREATMENT">Silent Treatment / Castigo</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-400 block mb-1">Tono Guía Virtual:</label>
+                <select value={aiVoiceTone} onChange={(e) => setAiVoiceTone(e.target.value as any)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
+                  <option value="ARROGANT_COLD">Frío / Desapegado</option>
+                  <option value="DEFENSIVE_HOSTILE">Defensivo / Hostil</option>
+                  <option value="EMPATHIC_GUIDE">Guía Neutro Pericial</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {vrMode === 'PHOBIA_VRET' && (
+          <div className="p-4 bg-slate-900 rounded-xl border border-indigo-500/30 space-y-3">
+            <span className="text-xs font-bold text-indigo-300 flex items-center gap-2">
+              <CloudRain className="w-4 h-4 text-indigo-400" /> Control de Exposición Gradual (VRET):
+            </span>
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-slate-400">Nivel de Exposición (1-10):</span>
+              <input type="range" min="1" max="10" value={vretExposureStep} onChange={(e) => setVretExposureStep(Number(e.target.value))} className="flex-1 accent-indigo-500 cursor-pointer" />
+              <span className="font-mono font-bold text-indigo-400 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">Nivel {vretExposureStep}</span>
+            </div>
           </div>
         )}
 
