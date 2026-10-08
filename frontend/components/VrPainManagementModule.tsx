@@ -53,12 +53,14 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { isConnected, transmit } = useVrTelemetryBridge('sender', patientId, 'AnalgesiaVR');
+  // CORRECCIÓN CLAVE: El nombre coincide con App.tsx ('PAIN_MANAGEMENT')
+  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patientId, 'PAIN_MANAGEMENT');
 
   // Transmisión en tiempo real al servidor
   useEffect(() => {
     if (sessionActive && !safetyTriggered) {
       transmit({
+        type: 'METRICS_UPDATE',
         gsr: Number(gsr.toFixed(2)),
         hrv: Math.floor(hrv),
         stressLevel: Number(currentPainLevel.toFixed(1)),
@@ -120,6 +122,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
         if (newGsr > 8.0) {
           setSafetyTriggered(true);
           setSessionActive(false);
+          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
           alert(`⚠️ ALERTA: Respuesta galvánica crítica (${newGsr.toFixed(1)} µS). Dolor refractario al bloqueo inmersivo.`);
         }
 
@@ -129,7 +132,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [sessionActive, aiAutoPilot, currentPainLevel, immersionLoadPct, gsr, hrv, deltaHz, safetyTriggered]);
+  }, [sessionActive, aiAutoPilot, currentPainLevel, immersionLoadPct, gsr, hrv, deltaHz, safetyTriggered, transmit]);
 
   const handleStartSession = () => {
     setSafetyTriggered(false);
@@ -142,18 +145,37 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
     setImmersionLoadPct(10);
     setDeltaHz(4.0);
     setAiLogs([`[SISTEMA] Iniciando Protocolo de Analgesia Inmersiva. Calibrando ancho de banda atencional...`]);
+    
+    syncSession();
+
+    // ORDENAMOS AL VISOR CARGAR LA METÁFORA VISUAL DE ANALGESIA
+    let assetKey = 'ICE_CAVE'; // default
+    if(visualMetaphor === 'GLACIAL_FRACTALS') assetKey = 'ICE_CAVE';
+    if(visualMetaphor === 'DEEP_OCEAN_ABYSS') assetKey = 'DEEP_OCEAN';
+    if(visualMetaphor === 'CRYSTAL_CAVE') assetKey = 'CRYSTAL_CAVE';
+    if(visualMetaphor === 'NEBULA_VOID') assetKey = 'COSMOS';
+
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      moduleName: 'PAIN_MANAGEMENT', 
+      ecosystem: assetKey 
+    });
+
+    transmit({ type: 'START_AIMA_PROTOCOL', targetHz: deltaHz });
   };
 
   const handleEmergencyEgress = () => {
     setSessionActive(false);
     setSafetyTriggered(true);
     setImmersionLoadPct(0);
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
     setAiLogs(prev => [`[EMERGENCIA] Desconexión manual. Suspendiendo bloqueo nociceptivo visual.`, ...prev]);
   };
 
   const handleEndSession = async () => {
     setSessionActive(false);
     setImmersionLoadPct(0);
+    transmit({ type: 'STOP_TEST' }); // Limpiamos el visor
     
     const painReductionPct = baselinePain > 0 
       ? Math.max(0, ((baselinePain - currentPainLevel) / baselinePain) * 100) 
@@ -341,7 +363,6 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Botón de Pantalla Completa */}
               <button
                 onClick={() => setIsFullscreenResults(!isFullscreenResults)}
                 className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 transition hover:bg-slate-700 cursor-pointer"
@@ -518,6 +539,10 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
             {aiAutoPilot ? 'AI Nociceptive Auto-Pilot Activo' : 'Control Analgésico Manual'}
           </button>
 
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
+            <Activity className="w-4 h-4" />{isConnected ? 'VR Enlazado (En Vivo)' : 'Sin Señal VR'}
+          </div>
+
           <button
             onClick={handleEmergencyEgress}
             className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
@@ -550,7 +575,7 @@ export const VrPainManagementModule: React.FC<Props> = ({ patient, onClose }) =>
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-cyan-500 outline-none disabled:opacity-50"
               >
                 <option value="PHANTOM_LIMB">Dolor de Miembro Fantasma</option>
-                <option value="FIBROMYALGIA">Fibromialgia / Dolor Generalizado</option>
+                <option value="FIBROMYALGIA">Fibromialgia / Dolor Crónico Generalizado</option>
                 <option value="ONCOLOGY_PAIN">Dolor Oncológico Refractario</option>
                 <option value="SEVERE_BURN">Manejo de Quemaduras Severas</option>
                 <option value="NEUROPATHY">Neuropatía Diabética / Periférica</option>
