@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
-import { Wifi, WifiOff, X, RefreshCw, Plus, ShieldAlert, Target, Sun } from 'lucide-react';
+import { Wifi, WifiOff, X, RefreshCw, ShieldAlert } from 'lucide-react';
 import { VRButton, XR, Controllers } from '@react-three/xr';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, Sphere, useVideoTexture } from '@react-three/drei';
@@ -12,7 +12,7 @@ interface Props { patientId?: string; onClose: () => void; initialModuleId?: str
 type EnvironmentType = 'IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT';
 
 export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', onClose, initialModuleId = 'TDAH_EXECUTIVE' }) => {
-  const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'HOLODECK_IDLE');
+  const { isConnected, liveData, syncSession } = useVrTelemetryBridge('sender', patientId, 'HOLODECK_IDLE');
 
   const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>(initialModuleId as EnvironmentType || 'IDLE');
   const [activeEcosystem, setActiveEcosystem] = useState<string>('ZEN_GARDEN');
@@ -38,7 +38,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   // 1. AUDIO INMERSIVO Y BINAURAL AUTOMÁTICO
   useEffect(() => {
     if (activeEnvironment === 'IDLE') return;
-    // Activamos frecuencias binaurales terapéuticas procedurales mediante Web Audio API
     immersionMedia.startBinauralBeats(200, 6, 0.12);
     return () => {
       immersionMedia.stopBinauralBeats();
@@ -62,10 +61,16 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     }
   }, [liveData]);
 
-  // Todos los módulos principales habilitan WebXR para proyectar el Skybox 360°
   const isWebXRModule = activeEnvironment !== 'IDLE';
   const currentAssetKey = getAssetKeyForEnvironment(activeEnvironment);
-  const texturePath = immersionMedia.getEcosystemAssetUrl(currentAssetKey);
+  
+  // Resolución segura de la textura con respaldo ante fallos
+  let texturePath = '/ecosystems/ZEN_GARDEN.jpg';
+  try {
+    texturePath = immersionMedia.getEcosystemAssetUrl(currentAssetKey) || '/ecosystems/ZEN_GARDEN.jpg';
+  } catch (err) {
+    console.warn('Error resolviendo textura, usando respaldo:', err);
+  }
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
@@ -73,17 +78,21 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
         <X className="w-8 h-8" />
       </button>
 
-      {/* RENDERIZADO WEBXR CON SKYBOX 360 Y ASSETS OFICIALES */}
+      {/* RENDERIZADO WEBXR BLINDADO CONTRA CRASHES */}
       {isWebXRModule && (
         <div className="absolute inset-0 z-[100]">
           <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
              <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
           </div>
-          <Canvas>
+          <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [0, 0, 0.1] }}>
             <XR>
               <Controllers />
-              <Suspense fallback={null}>
-                {isVideo ? <VideoSphere url={`/video/${activeEcosystem}.mp4`} /> : <Environment background={true} files={texturePath} />}
+              <Suspense fallback={<FallbackLoadingSphere />}>
+                {isVideo ? (
+                  <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
+                ) : (
+                  <Environment background={true} files={texturePath} />
+                )}
               </Suspense>
               {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
             </XR>
@@ -91,7 +100,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
         </div>
       )}
 
-      {/* RENDERIZADO 2D LEGACY DE RESPALDO */}
+      {/* RENDERIZADO 2D DE RESPALDO */}
       {!isWebXRModule && (
         <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />
       )}
@@ -110,9 +119,13 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   );
 };
 
-// ============================================================================
-// COMPONENTES SECUNDARIOS
-// ============================================================================
+// Componente de respaldo para evitar pantallazos rojos durante la carga en Suspense
+const FallbackLoadingSphere = () => (
+  <mesh>
+    <sphereGeometry args={[500, 32, 32]} />
+    <meshBasicMaterial color="#020617" side={THREE.BackSide} />
+  </mesh>
+);
 
 const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   const meshRef = useRef<THREE.Mesh>(null);
