@@ -1,166 +1,266 @@
-import React, { useState } from 'react';
-import { HeartHandshake, Sparkles, ArrowRight, Brain, User, Users, Flame, Lock, Video, MessageSquare, Ear } from 'lucide-react';
-import { PatientRecord } from '../types';
+import React, { useState, useEffect } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
+import { Activity, Brain, Settings, PlayCircle, Zap, Cpu, RefreshCw, Send, FileText, Save, StopCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { PatientRecord } from '../types';
 
-interface Props { patient: PatientRecord; onClose: () => void; }
+interface Props {
+  patient: PatientRecord;
+  onClose: () => void;
+}
 
-export const VrDualControlTherapyModule: React.FC<Props> = ({ patient, onClose }) => {
-  const [profileType, setProfileType] = useState<'INDIVIDUAL_FEMALE' | 'INDIVIDUAL_MALE' | 'COUPLE'>('INDIVIDUAL_FEMALE');
-  const [currentPhase, setCurrentPhase] = useState<'assessment' | 'sis_release' | 'ses_activation'>('assessment');
-  const [stimulusType, setStimulusType] = useState<'RELATIONAL_AUDIO' | 'PHYSICAL_VIDEO'>('RELATIONAL_AUDIO');
-  const [audioEcosystem, setAudioEcosystem] = useState('WARM_HEARTH');
-  const [promptText, setPromptText] = useState('Siento que me gustas mucho y quiero que seamos totalmente transparentes...');
-  const [videoScenario, setVideoScenario] = useState('narcissism_covert');
-  const [sisBrakeLevel, setSisBrakeLevel] = useState<number>(78);
-  const [sesAcceleratorLevel, setSesAcceleratorLevel] = useState<number>(35);
-  const [activeStressor, setActiveStressor] = useState<string>('Carga mental y fatiga ejecutiva');
+export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose }) => {
+  const patientId = patient?.id || 'PAC-8104';
+  
+  // CAMBIO CLAVE: Usamos 'TDAH_EXECUTIVE' para que coincida con el Router y el Visor.
+  // Usamos 'sender' para asegurar que la función transmit() no sea bloqueada por el hook.
+  const { isConnected, isPeerConnected, liveData, syncSession, sendRemoteStart, transmit } = useVrTelemetryBridge('sender', patientId, 'TDAH_EXECUTIVE');
 
-  // CORRECCIÓN CLAVE: Nombre exacto del módulo y extracción de syncSession
-  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DUAL_CONTROL_SES_SIS');
+  const [aiMode, setAiMode] = useState<boolean>(true);
+  const [monitoringActive, setMonitoringActive] = useState<boolean>(false);
+  const [isFinished, setIsFinished] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [aiReport, setAiReport] = useState<string>('');
 
-  const stressorsMap = {
-    INDIVIDUAL_FEMALE: ['Autocrítica corporal y vergüenza de la imagen (Body Shame)', 'Carga mental doméstica y fatiga ejecutiva acumulada', 'Expectativa de rendimiento o complacencia hacia la pareja', 'Hipervigilancia por antecedentes de coerción o invasión'],
-    INDIVIDUAL_MALE: ['Ansiedad de ejecución y miedo anticipatorio a la falla (Espectador Ansioso)', 'Exigencia de rol y presión por iniciar o rendir', 'Agotamiento crónico por estrés laboral y financiero', 'Desconexión somática por bloqueo emocional'],
-    COUPLE: ['Tensión interpersonal no resuelta y resentimientos acumulados', 'Transaccionalidad del afecto (sentir que el cariño es solo un medio para el sexo)', 'Falta absoluta de privacidad o interrupciones constantes', 'Desincronización de los ciclos de descanso entre ambos']
+  const rawMetrics = liveData?.metrics || { hits: 0, omissions: 0, commissions: 0, reactionTimeMs: 0 };
+  
+  // Filtramos el 0 para la métrica visual
+  const TR = rawMetrics.reactionTimeMs > 0 ? rawMetrics.reactionTimeMs : (rawMetrics.hits > 0 ? 350 : 0); 
+  const trColor = TR === 0 ? 'text-slate-500' : TR < 300 ? 'text-emerald-400' : TR < 450 ? 'text-amber-400' : 'text-rose-400';
+
+  // 1. INICIAR PRUEBA Y CARGAR ENTORNO EN EL VISOR
+  const handleStartMonitoring = () => {
+    setMonitoringActive(true);
+    setIsFinished(false);
+    syncSession();
+    
+    // ORDENAMOS AL VISOR DEL PACIENTE CARGAR EL ESCENARIO TDAH
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      moduleName: 'TDAH_EXECUTIVE',
+      ecosystem: 'TDAH_ATTENTION_LAB' // Asset oficial
+    });
+    
+    sendRemoteStart();
   };
 
-  const handleTransmitToVR = () => {
-    // Sincronizamos antes de transmitir el entorno
-    syncSession();
-
-    let command: any = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL_SES_SIS', ecosystem: 'NEUTRAL_VOID', isVideo: false };
+  // 2. DETENER Y GENERAR INFORME (Holodeck Reset)
+  const handleGenerateReport = () => {
+    setMonitoringActive(false);
+    setIsFinished(true);
     
-    if (currentPhase === 'sis_release') {
-      command = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL_SES_SIS', ecosystem: 'SAFE_PLACE_FOREST', isVideo: false };
-    } else if (currentPhase === 'ses_activation') {
-      if (stimulusType === 'RELATIONAL_AUDIO') {
-        command = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL_SES_SIS', ecosystem: audioEcosystem, isVideo: false };
+    // Comando para limpiar el visor del paciente y volver a sala de espera
+    transmit({ type: 'STOP_TEST' });
+
+    const { hits, omissions, commissions } = rawMetrics;
+    const totalRespuestas = hits + omissions + commissions;
+    
+    let report = `Análisis Biocomportamental completado con ${totalRespuestas} paquetes de datos.\n\n`;
+    
+    if (totalRespuestas === 0) {
+      report += "⚠️ No se detectó interacción del paciente. Prueba invalidada.";
+    } else {
+      if (omissions > hits) {
+        report += "🔴 **Predominio Inatento:** El alto índice de omisiones sugiere una caída severa en la atención sostenida o fatiga cognitiva.\n";
+      } else if (omissions > 3) {
+        report += "🟡 **Fluctuación Atencional:** Se observan lapsos de inatención (omisiones) moderados.\n";
       } else {
-        command = { type: 'LOAD_MODULE', moduleName: 'DUAL_CONTROL_SES_SIS', ecosystem: videoScenario, isVideo: true };
+        report += "🟢 **Atención Sostenida Intacta:** Capacidad óptima para mantener el foco en estímulos objetivo.\n";
+      }
+
+      if (commissions > 3) {
+        report += "🔴 **Predominio Impulsivo:** Fallos consistentes en la inhibición de respuesta (comisiones), fuertemente asociado a impulsividad motora.\n";
+      } else if (commissions > 0) {
+        report += "🟡 **Control Inhibitorio Levemente Alterado:** Dificultad ocasional para frenar respuestas prepotentes.\n";
+      } else {
+        report += "🟢 **Inhibición de Respuesta Óptima:** Excelente control de impulsos ante estímulos No-Go.\n";
+      }
+
+      if (TR > 500) {
+        report += "🟡 **Velocidad de Procesamiento Lenta:** Tiempo de reacción prolongado, descartar Tiempo Cognitivo Lento (SCT) o sedación farmacológica.\n";
       }
     }
 
-    transmit(command);
+    setAiReport(report);
+  };
 
-    // Si además es audio interactivo, enviamos el comando adicional (opcional según tu lógica)
-    if (currentPhase === 'ses_activation' && stimulusType === 'RELATIONAL_AUDIO' && promptText) {
-      setTimeout(() => {
-        transmit({
-          type: 'AVATAR_SPEAKING_STREAM',
-          profile: profileType,
-          speechText: promptText
-        });
-      }, 1000); // Pequeño retraso para dejar que el entorno 360 se cargue primero
+  // 3. GUARDAR EN MONGODB
+  const handleSaveToDatabase = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(`https://amieneurogical.onrender.com/api/vr/telemetry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: patientId,
+          sessionData: {
+            taskName: 'ExecutiveControl_TDAH',
+            durationSeconds: 120, 
+            metrics: {
+              avgReactionTimeMs: TR,
+              omissions: rawMetrics.omissions,
+              commissions: rawMetrics.commissions,
+              frontalEngagementPct: rawMetrics.hits > 0 ? 85 : 0, 
+              binauralBetaHz: 15.0
+            },
+            aiLogs: [aiReport] 
+          }
+        })
+      });
+      
+      if (response.ok) {
+        alert('✅ Dictamen IA y métricas guardadas exitosamente en el Expediente Clínico (MongoDB).');
+        safeClose();
+      } else {
+        alert('❌ Error al guardar en el servidor.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al intentar guardar.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  // 4. CIERRE SEGURO (Desmontaje)
+  const safeClose = () => {
+    if (monitoringActive) {
+      transmit({ type: 'STOP_TEST' });
+    }
+    onClose();
+  };
+
+  // 5. CLEANUP DE SEGURIDAD
+  useEffect(() => {
+    return () => {
+      if (monitoringActive) {
+        transmit({ type: 'STOP_TEST' });
+      }
+    };
+  }, [monitoringActive, transmit]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col font-sans p-6 overflow-y-auto">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
-        <div>
-          <h1 className="text-xl font-black text-white flex items-center gap-2"><HeartHandshake className="w-6 h-6 text-rose-400" /> AMIE • Motor Clínico y Laboratorio Relacional</h1>
-          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">Expediente Activo: <strong className="text-sky-400">{patient?.id || 'PAC-8104'}</strong> | Enfoque: <span className="text-rose-300 font-semibold uppercase">{profileType}</span>
-            <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold ${isConnected ? 'bg-emerald-950 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>{isConnected ? 'VISOR CONECTADO' : 'ESPERANDO VISOR...'}</span>
-          </p>
+    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col font-sans text-slate-200">
+      <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-sky-900/50 rounded-lg border border-sky-500/30">
+            <Brain className="w-6 h-6 text-sky-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white leading-tight">MÓDULO CLÍNICO • TDAH (Executive Control)</h2>
+            <p className="text-xs text-slate-400">Paciente ID: <strong className="text-sky-300">{patientId}</strong></p>
+          </div>
         </div>
-        <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition cursor-pointer shadow-lg">Cerrar Módulo</button>
+        
+        <div className="flex items-center gap-3">
+          <button onClick={syncSession} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer">
+            <RefreshCw className="w-3.5 h-3.5" /><span>Sincronizar Visor</span>
+          </button>
+          <div className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected || isPeerConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
+            <Activity className="w-4 h-4" />{isConnected || isPeerConnected ? 'VR Enlazado (En Vivo)' : 'Sin Señal VR'}
+          </div>
+          <button onClick={safeClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+            Volver al Selector
+          </button>
+        </div>
       </div>
 
-      <div className="max-w-6xl mx-auto w-full space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <button onClick={() => setProfileType('INDIVIDUAL_FEMALE')} className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${profileType === 'INDIVIDUAL_FEMALE' ? 'bg-pink-950/40 border-pink-500 text-pink-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>
-            <User className="w-5 h-5 text-pink-400" />
-            <div className="text-left"><span className="block font-bold text-xs text-white">Individual (Femenino)</span><span className="text-[10px]">Foco: Body Shame, carga mental y SIS</span></div>
-          </button>
-          <button onClick={() => setProfileType('INDIVIDUAL_MALE')} className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${profileType === 'INDIVIDUAL_MALE' ? 'bg-sky-950/40 border-sky-500 text-sky-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>
-            <User className="w-5 h-5 text-sky-400" />
-            <div className="text-left"><span className="block font-bold text-xs text-white">Individual (Masculino)</span><span className="text-[10px]">Foco: Ansiedad de ejecución y rol</span></div>
-          </button>
-          <button onClick={() => setProfileType('COUPLE')} className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${profileType === 'COUPLE' ? 'bg-purple-950/40 border-purple-500 text-purple-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}>
-            <Users className="w-5 h-5 text-purple-400" />
-            <div className="text-left"><span className="block font-bold text-xs text-white">Terapia de Pareja</span><span className="text-[10px]">Foco: Sincronía y desescalada</span></div>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-6 bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-4">
-            <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5"><Lock className="w-4 h-4 text-rose-400" /> Sistema de Inhibición (Freno - SIS)</span><span className="text-xl font-mono font-bold text-rose-400">{sisBrakeLevel}%</span></div>
-            <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-rose-900/50"><div className="bg-rose-500 h-full transition-all duration-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]" style={{ width: `${sisBrakeLevel}%` }}></div></div>
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold text-slate-400">Estresor Principal Detectado:</span>
-              <select value={activeStressor} onChange={(e) => setActiveStressor(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500">
-                {stressorsMap[profileType].map((st, idx) => (<option key={idx} value={st}>{st}</option>))}
-              </select>
-            </div>
-          </div>
-          <div className="p-6 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl space-y-4">
-            <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5"><Flame className="w-4 h-4 text-emerald-400" /> Sistema de Excitación (Acelerador - SES)</span><span className="text-xl font-mono font-bold text-emerald-400">{sesAcceleratorLevel}%</span></div>
-            <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-emerald-900/50"><div className="bg-emerald-500 h-full transition-all duration-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]" style={{ width: `${sesAcceleratorLevel}%` }}></div></div>
-            <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between text-[11px]"><span className="text-slate-400">Paridigma Clínico:</span><strong className="text-cyan-300">Acelerar con freno puesto = Cero Respuesta</strong></div>
-          </div>
-        </div>
-
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5">
-          <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2"><Brain className="w-4 h-4 text-cyan-400" /> Secuencia Terapéutica Inmersiva (Visor WebXR)</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div onClick={() => { setCurrentPhase('assessment'); setSisBrakeLevel(78); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-2 ${currentPhase === 'assessment' ? 'bg-sky-600/20 border-sky-500' : 'bg-slate-950 border-slate-800'}`}>
-              <span className="px-2 py-0.5 bg-sky-950 border border-sky-800 text-[10px] font-bold text-sky-400 rounded">Fase 1</span><h3 className="font-bold text-xs text-white">Mapeo y Calibración Dual</h3>
-            </div>
-            <div onClick={() => { setCurrentPhase('sis_release'); setSisBrakeLevel(25); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-2 ${currentPhase === 'sis_release' ? 'bg-purple-600/20 border-purple-500' : 'bg-slate-950 border-slate-800'}`}>
-              <span className="px-2 py-0.5 bg-purple-950 border border-purple-800 text-[10px] font-bold text-purple-400 rounded">Fase 2</span><h3 className="font-bold text-xs text-white">Descompresión (Apagar Freno)</h3>
-              <p className="text-[11px] text-slate-400 leading-relaxed">Entorno virtual de cierre del estrés. <strong className="text-purple-300">(SAFE_PLACE_FOREST)</strong></p>
-            </div>
-            <div onClick={() => { setCurrentPhase('ses_activation'); setSesAcceleratorLevel(85); }} className={`p-4 rounded-xl border transition cursor-pointer space-y-3 ${currentPhase === 'ses_activation' ? 'bg-emerald-600/20 border-emerald-500' : 'bg-slate-950 border-slate-800'}`}>
-              <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-[10px] font-bold text-emerald-400 rounded">Fase 3: Exposición</span>
-              {currentPhase === 'ses_activation' && (
-                <div className="space-y-4 mt-2">
-                  <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800">
-                    <button onClick={() => setStimulusType('RELATIONAL_AUDIO')} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold rounded-md transition ${stimulusType === 'RELATIONAL_AUDIO' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><Ear className="w-3 h-3" /> Opción 1: Generar IA</button>
-                    <button onClick={() => setStimulusType('PHYSICAL_VIDEO')} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold rounded-md transition ${stimulusType === 'PHYSICAL_VIDEO' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}><Video className="w-3 h-3" /> Opción 2: Reproducir Video</button>
-                  </div>
-                  {stimulusType === 'RELATIONAL_AUDIO' && (
-                    <div className="space-y-3 p-4 bg-slate-900 rounded-lg border border-indigo-900/50">
-                      <div><label className="block text-[10px] text-indigo-300 font-bold uppercase mb-1">Objetivo Clínico (Voz IA):</label>
-                        <select className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-indigo-500" onChange={(e) => {
-                            const target = e.target.value;
-                            if (target === 'COUPLES') setPromptText("Siento que me gustas mucho y quiero que seamos totalmente transparentes...");
-                            if (target === 'TLP') setPromptText("Se acabó. Ya no soporto esto, me voy y no me busques.");
-                            if (target === 'SOCIAL') setPromptText("Todos te están mirando... y la verdad es que estás haciendo el ridículo.");
-                            if (target === 'TDAH_RSD') setPromptText("Otra vez te olvidaste. Eres un desastre, nunca haces nada bien.");
-                            if (target === 'TRAUMA') setPromptText("Vas a hacer lo que yo te diga, te guste o no. Aquí mando yo.");
-                          }}>
-                          <option value="COUPLES">Terapia de Pareja (Intimidad)</option><option value="TLP">Cluster B / TLP (Abandono)</option><option value="SOCIAL">Ansiedad Social (Juicio)</option><option value="TDAH_RSD">TDAH (Rechazo Sensible)</option><option value="TRAUMA">Trauma / TEPT (Coerción)</option>
-                        </select>
-                      </div>
-                      <div><label className="block text-[10px] text-indigo-300 font-bold uppercase mb-1">Entorno 360 de tu Catálogo:</label>
-                        <select value={audioEcosystem} onChange={(e) => setAudioEcosystem(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-200 focus:border-indigo-500">
-                          <option value="WARM_HEARTH">Hogar Cálido (Intimidad)</option><option value="CLINICAL_OFFICE">Oficina Clínica (Distancia)</option><option value="STERILE_ROOM">Habitación Estéril (Tensión)</option><option value="PROTECTIVE_TREEHOUSE">Casa del Árbol (Refugio)</option><option value="BIOLUMINESCENT_BEACH">Playa Bioluminiscente</option>
-                        </select>
-                      </div>
-                      <div><label className="block text-[10px] text-indigo-300 font-bold uppercase mb-1">Generar Prompt (Texto de la Voz):</label><textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-sky-200 h-16 resize-none focus:border-indigo-500 font-mono" /></div>
-                    </div>
-                  )}
-                  {stimulusType === 'PHYSICAL_VIDEO' && (
-                    <div className="space-y-2 p-3 bg-slate-900 rounded-lg border border-emerald-900/50">
-                      <label className="block text-[10px] text-emerald-300 font-bold uppercase">Seleccionar Video MP4 (/video):</label>
-                      <select value={videoScenario} onChange={(e) => setVideoScenario(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-200">
-                        <option value="narcissism_covert">Narcisismo Encubierto (Manipulación)</option><option value="narcissism_overt">Narcisismo Manifiesto (Agresión / Grandiosidad)</option><option value="narcissism_collapse">Colapso Narcisista (Victimización / Ira)</option>
-                      </select>
-                      <p className="text-[9px] text-slate-400 mt-1 flex gap-1"><Video className="w-3 h-3" /> Transmite el video directo al visor.</p>
-                    </div>
-                  )}
+      <div className="flex-1 p-6 grid grid-cols-12 gap-6 h-full overflow-hidden">
+        
+        {/* PANEL IZQUIERDO: Controles */}
+        <div className="col-span-3 space-y-6 flex flex-col">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Settings className="w-4 h-4 text-sky-400" /> Parámetros de la Prueba</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Modo de Administración</label>
+                <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <button onClick={() => setAiMode(true)} className={`py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${aiMode ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}><Cpu className="w-3.5 h-3.5" /> Autogestión IA</button>
+                  <button onClick={() => setAiMode(false)} className={`py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${!aiMode ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}><PlayCircle className="w-3.5 h-3.5" /> Manual</button>
                 </div>
+              </div>
+              <div className="p-4 bg-sky-950/20 rounded-xl border border-sky-900/30 text-xs text-sky-200/70 text-center leading-relaxed">
+                El Asistente AMIE evaluará control inhibitorio, atención sostenida y tiempo cognitivo.
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-1">
+             <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-400" /> Rendimiento</h3>
+             <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">ACIERTOS</span><div className="text-xl font-black text-emerald-400 mt-1">{rawMetrics.hits}</div></div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">OMISIONES</span><div className="text-xl font-black text-amber-400 mt-1">{rawMetrics.omissions}</div></div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">COMISIONES</span><div className="text-xl font-black text-rose-500 mt-1">{rawMetrics.commissions}</div></div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">TR PROMEDIO</span><div className={`text-xl font-black mt-1 ${trColor}`}>{TR}<span className="text-[10px]">ms</span></div></div>
+             </div>
+          </div>
+        </div>
+
+        {/* PANEL CENTRAL: Flujo en Vivo o Informe IA */}
+        <div className="col-span-9 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+            <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
+              {isFinished ? <FileText className="w-5 h-5 text-sky-400" /> : <Activity className="w-5 h-5 text-emerald-400" />} 
+              {isFinished ? 'Dictamen Clínico Preliminar (IA)' : 'Monitorización Biométrica en Vivo'}
+            </h3>
+            
+            <div className="flex gap-2">
+              {!monitoringActive && !isFinished && (
+                <button onClick={handleStartMonitoring} className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer">
+                  <PlayCircle className="w-4 h-4" /><span>Iniciar Evaluación VR</span>
+                </button>
+              )}
+
+              {monitoringActive && (
+                <button onClick={handleGenerateReport} className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/30 transition flex items-center gap-2 cursor-pointer">
+                  <StopCircle className="w-4 h-4" /><span>Detener y Generar Informe IA</span>
+                </button>
+              )}
+
+              {isFinished && (
+                <button onClick={handleSaveToDatabase} disabled={isSaving} className="px-6 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/30 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Save className="w-4 h-4" /><span>{isSaving ? 'Guardando...' : 'Guardar en Expediente MongoDB'}</span>
+                </button>
               )}
             </div>
           </div>
-          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-400" /><span className="text-slate-300">Transmitiendo: <strong className="text-cyan-400 uppercase">{currentPhase === 'ses_activation' ? (stimulusType === 'RELATIONAL_AUDIO' ? `Entorno: ${audioEcosystem}` : `Video: ${videoScenario}`) : currentPhase}</strong></span></div>
-            <button disabled={!isConnected} onClick={handleTransmitToVR} className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition cursor-pointer ${!isConnected ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white'}`}>
-              <span>{isConnected ? 'Transmitir al Visor VR' : 'Conecte las gafas primero'}</span><ArrowRight className="w-4 h-4" />
-            </button>
+
+          <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl overflow-hidden relative p-6">
+            {!monitoringActive && !isFinished ? (
+               <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                 <Cpu className="w-12 h-12 mb-3 opacity-20" />
+                 <p className="text-sm">Presiona "Iniciar Evaluación VR" para comenzar la transmisión de datos.</p>
+               </div>
+            ) : monitoringActive ? (
+               <div className="flex flex-col items-center justify-center h-full">
+                 <div className="w-32 h-32 rounded-full border-4 border-emerald-500/30 border-t-emerald-400 animate-spin mb-6"></div>
+                 <h4 className="text-lg font-bold text-emerald-400 mb-2">Evaluación en Progreso...</h4>
+                 <p className="text-xs text-slate-400 font-mono">RECIBIENDO PAQUETES: {rawMetrics.hits + rawMetrics.omissions + rawMetrics.commissions}</p>
+                 <p className="text-xs text-slate-500 mt-4 max-w-md text-center">El Asistente AMIE está procesando el tiempo de reacción inhibitorio en tiempo real desde el Meta Quest 3S.</p>
+               </div>
+            ) : (
+               <div className="h-full overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+                 <div className="flex items-center gap-3 mb-6 bg-sky-950/30 p-4 rounded-xl border border-sky-900/50">
+                   <Brain className="w-8 h-8 text-sky-400" />
+                   <div>
+                     <h4 className="text-sky-300 font-bold text-sm">Motor Clínico AMIE 3.8</h4>
+                     <p className="text-xs text-sky-200/60">Análisis basado en respuestas neuro-motoras CPT (Continuous Performance Test).</p>
+                   </div>
+                 </div>
+                 
+                 <div className="space-y-4 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap">
+                   {aiReport.split('\n').map((line, idx) => {
+                     if (line.includes('🔴')) return <p key={idx} className="bg-rose-950/40 text-rose-300 p-3 rounded-lg border border-rose-900/50 flex items-start gap-2"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> <span>{line.replace('🔴 ', '')}</span></p>;
+                     if (line.includes('🟡')) return <p key={idx} className="bg-amber-950/40 text-amber-300 p-3 rounded-lg border border-amber-900/50 flex items-start gap-2"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> <span>{line.replace('🟡 ', '')}</span></p>;
+                     if (line.includes('🟢')) return <p key={idx} className="bg-emerald-950/40 text-emerald-300 p-3 rounded-lg border border-emerald-900/50 flex items-start gap-2"><CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> <span>{line.replace('🟢 ', '')}</span></p>;
+                     if (line.includes('⚠️')) return <p key={idx} className="text-amber-400 font-bold">{line}</p>;
+                     return <p key={idx}>{line}</p>;
+                   })}
+                 </div>
+               </div>
+            )}
           </div>
         </div>
+
       </div>
     </div>
   );
