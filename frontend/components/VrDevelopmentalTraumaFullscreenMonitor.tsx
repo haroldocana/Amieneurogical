@@ -31,6 +31,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
   const [sessionActive, setSessionActive] = useState(false);
   const [aiAutoPilot, setAiAutoPilot] = useState(true);
   const [emdrBilateralActive, setEmdrBilateralActive] = useState(true);
+  const [simulationPhase, setSimulationPhase] = useState<'CALIBRATION' | 'REGRESSION_INDUCTION' | 'SECURE_ATTACHMENT_REPAIR'>('CALIBRATION');
 
   // Métricas del Visor y Fisiología Subcortical
   const [binauralHz, setBinauralHz] = useState<number>(programConfig.recommendedBinauralHz);
@@ -54,12 +55,16 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
   // -------------------------------------------------------------------------
   // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
   // -------------------------------------------------------------------------
-  const { isConnected, syncSession, transmit } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DevelopmentalTrauma');
+  // CORRECCIÓN CLAVE: El nombre del módulo en el hook coincide con App.tsx ('DEVELOPMENTAL_TRAUMA')
+  const { isConnected, syncSession, transmit, liveData } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'DEVELOPMENTAL_TRAUMA');
+
+  const liveHrv = liveData?.metrics?.hrvRmssdMs || hrv;
 
   // Transmisión en vivo de fisiología subcortical y niveles de trance/DMN
   useEffect(() => {
     if (sessionActive && !safetyTriggered) {
       transmit({
+        type: 'METRICS_UPDATE',
         hrv: Math.floor(hrv),
         gsr: Number(gsr.toFixed(2)),
         stressLevel: Math.floor(tranceDepth), // Profundidad de trance (%)
@@ -95,6 +100,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
         if (gsr > programConfig.gsrSafetyThresholduS) {
           setSafetyTriggered(true);
           setSessionActive(false);
+          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
           const alertMsg = `⚠ ALERTA DE SEGURIDAD: Disparo de GSR (${gsr.toFixed(2)} µS) superó el límite permitido para la etapa ${programConfig.stageNameEs} (${programConfig.gsrSafetyThresholduS} µS). Iniciando desconexión inmediata.`;
           setAiLogs(prev => [`[${timeStr}] ${alertMsg}`, ...prev.slice(0, 9)]);
           alert(alertMsg);
@@ -136,17 +142,43 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [sessionActive, aiAutoPilot, gsr, binauralHz, programConfig, safetyTriggered, hrv, saccadicHz, dmnSuppressionPct]);
+  }, [sessionActive, aiAutoPilot, gsr, binauralHz, programConfig, safetyTriggered, hrv, saccadicHz, dmnSuppressionPct, transmit]);
 
+  // INICIAR SESIÓN Y CARGAR ENTORNO VR
   const handleStartSession = () => {
     setSafetyTriggered(false);
     setSessionActive(true);
+    setSimulationPhase('REGRESSION_INDUCTION');
     setTranceDepth(15);
     setDmnSuppressionPct(22);
     setAiLogs([`[SISTEMA] Sesión iniciada. Ecosistema VR cargado: ${getEcosystemName(ecosystem)}. Sincronización biométrica con visor establecida.`]);
+    
     syncSession();
-    transmit({ type: 'LOAD_MODULE', patientId: patient?.id, moduleName: 'DevelopmentalTrauma' });
-    transmit({ type: 'START_AIMA_PROTOCOL', ecosystem });
+    
+    // 1. CARGAMOS EL ENTORNO EXACTO EN LAS GAFAS DEL PACIENTE
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      moduleName: 'DEVELOPMENTAL_TRAUMA',
+      ecosystem: ecosystem // Carga la cueva, árbol, etc.
+    });
+    
+    // 2. ENVIAMOS LA ORDEN DE REPRODUCCIÓN AL MOTOR CLÍNICO
+    transmit({ type: 'START_TRAUMA_PROTOCOL', phase: 'REGRESSION_INDUCTION', targetHrv: 65 });
+  };
+
+  const handlePhaseChange = (phase: 'CALIBRATION' | 'REGRESSION_INDUCTION' | 'SECURE_ATTACHMENT_REPAIR') => {
+    setSimulationPhase(phase);
+    transmit({ type: 'UPDATE_TRAUMA_PHASE', newPhase: phase });
+    
+    // Si pasamos a reparación, forzamos un entorno seguro automáticamente
+    if(phase === 'SECURE_ATTACHMENT_REPAIR') {
+       transmit({ 
+         type: 'LOAD_MODULE', 
+         moduleName: 'DEVELOPMENTAL_TRAUMA',
+         ecosystem: 'SAFE_PLACE_FOREST'
+       });
+       setAiLogs(prev => [`[SISTEMA] Fase de reparación de apego segura. Las gafas han cambiado al Santuario Forestal.`, ...prev]);
+    }
   };
 
   const handleEmergencyEgress = () => {
@@ -155,7 +187,8 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
     setBinauralHz(12.0);
     setTranceDepth(0);
     setDmnSuppressionPct(0);
-    setAiLogs(prev => [`[EMERGENCIA] Interrupción manual por el clínico. Ancla de seguridad aplicada.`, ...prev]);
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
+    setAiLogs(prev => [`[EMERGENCIA] Interrupción manual por el clínico. Ancla de seguridad (Grounding) aplicada en el visor.`, ...prev]);
   };
 
   // -------------------------------------------------------------------------
@@ -165,6 +198,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
     setSessionActive(false);
     setTranceDepth(0);
     setDmnSuppressionPct(0);
+    transmit({ type: 'STOP_TEST' }); // Limpiamos el visor
     setAiLogs(prev => [`[SISTEMA] Sesión completada. Consolidando reporte de trauma evolutivo e hipnosis...`, ...prev]);
 
     const sessionReport = {
@@ -252,12 +286,12 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
 
           <button
             onClick={handleEmergencyEgress}
-            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95"
+            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
           >
             <ShieldAlert className="w-4 h-4" /> Abortar VR (Egress)
           </button>
 
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white">
+          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -408,6 +442,13 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
                     Ecosistema VR: {getEcosystemName(ecosystem)}
                   </p>
                 </div>
+
+                {/* Controles de Etapa Clínica en Centro */}
+                <div className="mt-8 flex justify-center gap-3">
+                  <button onClick={() => handlePhaseChange('CALIBRATION')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition ${simulationPhase === 'CALIBRATION' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Calibración</button>
+                  <button onClick={() => handlePhaseChange('REGRESSION_INDUCTION')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition ${simulationPhase === 'REGRESSION_INDUCTION' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Inducción</button>
+                  <button onClick={() => handlePhaseChange('SECURE_ATTACHMENT_REPAIR')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition ${simulationPhase === 'SECURE_ATTACHMENT_REPAIR' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Reparación</button>
+                </div>
               </div>
             ) : (
               <div className="text-center space-y-3 relative z-10">
@@ -476,7 +517,7 @@ export const VrDevelopmentalTraumaFullscreenMonitor: React.FC<Props> = ({ patien
               <button
                 disabled={!sessionActive}
                 onClick={() => setEmdrBilateralActive(!emdrBilateralActive)}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${emdrBilateralActive && sessionActive ? 'bg-cyan-500' : 'bg-slate-700'} disabled:opacity-50`}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${emdrBilateralActive && sessionActive ? 'bg-cyan-500' : 'bg-slate-700'} disabled:opacity-50 cursor-pointer`}
               >
                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${emdrBilateralActive && sessionActive ? 'translate-x-4' : 'translate-x-1'}`} />
               </button>
