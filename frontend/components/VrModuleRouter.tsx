@@ -11,6 +11,7 @@ import { VrDevelopmentalTraumaFullscreenMonitor } from './VrDevelopmentalTraumaF
 import { VrMemoryReconsolidationModule } from './VrMemoryReconsolidationModule';
 import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule';
 import { ClusterBForenseVrModule } from './ClusterBForenseVrModule';
+import { FullscreenTreatmentConsole } from './FullscreenTreatmentConsole';
 import { VrGammaInsightModule } from './VrGammaInsightModule';
 import { VrFunctionalNeurologyModule } from './VrFunctionalNeurologyModule';
 import { VrPainManagementModule } from './VrPainManagementModule';
@@ -32,6 +33,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
       case 'NEURO_HYPNOSIS': return 'HYPNOSIS';
       case 'DUAL_CONTROL_SES_SIS': return 'SEXUAL_HEALTH';
       case 'CLUSTER_B_FORENSIC': return 'CLUSTER_B_FORENSIC';
+      case 'TAG_ANXIETY': return 'SAFE_PLACE';
       case 'TDAH_EXECUTIVE': return 'TDAH_ATTENTION_LAB';
       case 'DEV_TRAUMA': return 'DEVELOPMENTAL_TRAUMA';
       case 'PAIN_MANAGEMENT': return 'PAIN_MANAGEMENT';
@@ -43,6 +45,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
 
   const availableModules = [
     { id: 'TDAH_EXECUTIVE', title: 'Función Ejecutiva (TDAH)' },
+    { id: 'TAG_ANXIETY', title: 'Reactividad y Fobias (TAG / VRET)' },
     { id: 'DUAL_CONTROL_SES_SIS', title: 'Laboratorio Relacional y Control Dual (AMIE)' },
     { id: 'DEV_TRAUMA', title: 'Trauma Evolutivo (AIMA)' },
     { id: 'EMDR_MEMORY', title: 'Memoria y Fobias (EMDR)' },
@@ -57,6 +60,8 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
     const handleBack = () => setActiveRole('NONE');
 
     switch (selectedModuleId) {
+      case 'TAG_ANXIETY':
+        return <FullscreenTreatmentConsole patient={patient} onClose={handleBack} />;
       case 'DUAL_CONTROL_SES_SIS':
         return <VrDualControlTherapyModule patient={patient} onClose={handleBack} />;
       case 'DEV_TRAUMA':
