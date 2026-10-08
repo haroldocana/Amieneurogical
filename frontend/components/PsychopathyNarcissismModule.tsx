@@ -110,10 +110,10 @@ const CLUSTER_B_PHENOTYPES: PhenotypeProfile[] = [
 export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
   
-  // PUENTE REAL A TELEMETRÍA VR
-  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'CLUSTER_B_FORENSIC');
+  // CORRECCIÓN CLAVE: Cambiado de 'receiver' a 'sender' para tener permisos de enviar comandos
+  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'CLUSTER_B_FORENSIC');
 
-  // Extracción de datos en vivo (previene errores si llega un array o un número)
+  // Extracción de datos en vivo
   const rawHrv = liveData?.metrics?.hrvRmssdMs;
   const currentHrv = Array.isArray(rawHrv) ? rawHrv[rawHrv.length - 1] : (rawHrv || '--');
 
@@ -141,13 +141,21 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
   const handleStartProvocation = () => {
     setIsProvocationActive(true);
     syncSession();
-    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'CLUSTER_B_FORENSIC' });
+    
+    // CORRECCIÓN: Agregado el "ecosystem" para que las gafas carguen la sala forense
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'CLUSTER_B_FORENSIC',
+      ecosystem: 'CLUSTER_B_FORENSIC' // La textura/sala pericial en el Visor
+    });
+    
     transmit({ type: 'START_PROVOCATION', phenotype: selectedPhenotypeKey });
   };
 
   const handleStopProvocation = async () => {
     setIsProvocationActive(false);
-    transmit({ type: 'STOP_TEST' });
+    transmit({ type: 'STOP_TEST' }); // Devuelve al paciente a la sala de espera inmersiva
     
     // Guardado silencioso en DB al detener la prueba con datos reales
     setIsSaving(true);
