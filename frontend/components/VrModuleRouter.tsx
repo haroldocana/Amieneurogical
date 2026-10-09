@@ -27,6 +27,12 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   const [activeRole, setActiveRole] = useState<'NONE' | 'DOCTOR' | 'PATIENT'>('NONE');
   const [selectedModuleId, setSelectedModuleId] = useState<string>(initialModuleId);
 
+  // REDIRECCIÓN DIRECTA AL VISOR VR (/visor) PARA EVITAR TECLEAR EN LAS GAFAS
+  const handleSelectPatientRole = () => {
+    const patientId = patient?.id || 'PAC-8104';
+    window.location.href = `/visor?paciente=${patientId}&modulo=${selectedModuleId}`;
+  };
+
   // Mapeo unificado hacia las claves de assets en el servicio multimedia
   const mapModuleToAssetKey = (modId: string): string => {
     switch (modId) {
@@ -85,9 +91,6 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   }
 
   if (activeRole === 'PATIENT') {
-    const assetKey = mapModuleToAssetKey(selectedModuleId);
-    const textureUrl = immersionMedia.getEcosystemAssetUrl(assetKey);
-
     return (
       <VrPatientExperience 
         patientId={patient?.id || 'PAC-8104'} 
@@ -117,7 +120,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
             <select
               value={selectedModuleId}
               onChange={(e) => setSelectedModuleId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-medium"
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-medium cursor-pointer"
             >
               {availableModules.map(mod => (
                 <option key={mod.id} value={mod.id}>{mod.title}</option>
@@ -128,6 +131,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           
+          {/* Opción Consola Doctor */}
           <div 
             onClick={() => setActiveRole('DOCTOR')}
             className="bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-sky-500/50 p-6 rounded-2xl cursor-pointer transition group flex flex-col justify-between space-y-6 shadow-lg"
@@ -147,8 +151,9 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
             </div>
           </div>
 
+          {/* Opción Visor Paciente (Redirecciona a /visor) */}
           <div 
-            onClick={() => setActiveRole('PATIENT')}
+            onClick={handleSelectPatientRole}
             className="bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/50 p-6 rounded-2xl cursor-pointer transition group flex flex-col justify-between space-y-6 shadow-lg"
           >
             <div className="space-y-4">
@@ -161,7 +166,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
               </div>
             </div>
             <div className="flex items-center text-xs font-bold text-emerald-400 gap-2">
-              <span>Iniciar Visor</span>
+              <span>Iniciar Visor Directo</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
