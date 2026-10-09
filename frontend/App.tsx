@@ -27,7 +27,7 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 
-// MÓDULOS VR Y CLÍNICOS ESPECIALIZADOS
+// TODOS LOS MÓDULOS CLÍNICOS Y VR RECUPERADOS
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
 import { VrModuleRouter } from './components/VrModuleRouter';
 import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
@@ -140,8 +140,7 @@ function DoctorWorkstation() {
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
   });
-  
-  // ANÁLISIS BLINDADO POR DEFECTO PARA EVITAR PANTALLAS EN BLANCO O CRASHES
+
   const [analysis, setAnalysis] = useState<AmieClinicalAnalysis>(() => ({
     dsmVCode: 'F32.9',
     dsmVDiagnosisName: 'Trastorno Depresivo Mayor (Provisional)',
@@ -178,7 +177,6 @@ function DoctorWorkstation() {
         setColegiadoNumber(Number(savedColegiado) || 749210);
         setIsAuthenticated(true);
       } else {
-        // Auto-autenticación temporal para pruebas si no hay token
         setIsAuthenticated(true);
       }
     } catch (e) {
@@ -274,7 +272,7 @@ function DoctorWorkstation() {
         onSyncPacient={handleSyncPacient} isSyncingPac={isSyncing} onLogout={handleLogout}
       />
 
-      {/* BARRA DE NAVEGACIÓN PRINCIPAL */}
+      {/* BARRA DE NAVEGACIÓN SUPERIOR CON TODAS LAS PESTAÑAS */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 flex-wrap py-1 font-sans w-full">
