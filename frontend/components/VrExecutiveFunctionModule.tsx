@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
-import { Activity, Brain, Settings, PlayCircle, Zap, Cpu, RefreshCw, Send, FileText, Save, StopCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Activity, Brain, Settings, PlayCircle, Zap, Cpu, RefreshCw, Save, StopCircle, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
 import { PatientRecord } from '../types';
 
 interface Props {
@@ -11,8 +11,7 @@ interface Props {
 export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
   
-  // CAMBIO CLAVE: Usamos 'TDAH_EXECUTIVE' para que coincida con el Router y el Visor.
-  // Usamos 'sender' para asegurar que la función transmit() no sea bloqueada por el hook.
+  // Usamos el rol 'sender' para transmitir comandos de control y recibir métricas del paciente
   const { isConnected, isPeerConnected, liveData, syncSession, sendRemoteStart, transmit } = useVrTelemetryBridge('sender', patientId, 'TDAH_EXECUTIVE');
 
   const [aiMode, setAiMode] = useState<boolean>(true);
@@ -23,7 +22,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
 
   const rawMetrics = liveData?.metrics || { hits: 0, omissions: 0, commissions: 0, reactionTimeMs: 0 };
   
-  // Filtramos el 0 para la métrica visual
+  // Filtrado de métrica visual para evitar valores en cero falsos
   const TR = rawMetrics.reactionTimeMs > 0 ? rawMetrics.reactionTimeMs : (rawMetrics.hits > 0 ? 350 : 0); 
   const trColor = TR === 0 ? 'text-slate-500' : TR < 300 ? 'text-emerald-400' : TR < 450 ? 'text-amber-400' : 'text-rose-400';
 
@@ -37,18 +36,18 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     transmit({ 
       type: 'LOAD_MODULE', 
       moduleName: 'TDAH_EXECUTIVE',
-      ecosystem: 'TDAH_ATTENTION_LAB' // Asset oficial
+      ecosystem: 'TDAH_EXECUTIVE'
     });
     
     sendRemoteStart();
   };
 
-  // 2. DETENER Y GENERAR INFORME (Holodeck Reset)
+  // 2. DETENER Y GENERAR INFORME
   const handleGenerateReport = () => {
     setMonitoringActive(false);
     setIsFinished(true);
     
-    // Comando para limpiar el visor del paciente y volver a sala de espera
+    // Comando para resetear el visor del paciente a la sala de espera
     transmit({ type: 'STOP_TEST' });
 
     const { hits, omissions, commissions } = rawMetrics;
@@ -57,7 +56,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     let report = `Análisis Biocomportamental completado con ${totalRespuestas} paquetes de datos.\n\n`;
     
     if (totalRespuestas === 0) {
-      report += "⚠️ No se detectó interacción del paciente. Prueba invalidada.";
+      report += "⚠️ No se detectó interacción del paciente. Prueba invalidada o sin sincronización de visor.";
     } else {
       if (omissions > hits) {
         report += "🔴 **Predominio Inatento:** El alto índice de omisiones sugiere una caída severa en la atención sostenida o fatiga cognitiva.\n";
@@ -87,7 +86,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
   const handleSaveToDatabase = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(`https://amieneurogical.onrender.com/api/vr/telemetry`, {
+      const response = await fetch(`https://amieneurological.onrender.com/api/vr/telemetry`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,12 +115,12 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     } catch (e) {
       console.error(e);
       alert('Error de red al intentar guardar.');
-    } finally {
+    } fontally {
       setIsSaving(false);
     }
   };
 
-  // 4. CIERRE SEGURO (Desmontaje)
+  // 4. CIERRE SEGURO
   const safeClose = () => {
     if (monitoringActive) {
       transmit({ type: 'STOP_TEST' });
@@ -140,6 +139,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col font-sans text-slate-200">
+      {/* Bar Superior */}
       <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-sky-900/50 rounded-lg border border-sky-500/30">
@@ -152,12 +152,22 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
         </div>
         
         <div className="flex items-center gap-3">
-          <button onClick={syncSession} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer">
-            <RefreshCw className="w-3.5 h-3.5" /><span>Sincronizar Visor</span>
+          <button 
+            onClick={() => {
+              syncSession();
+              transmit({ type: 'LOAD_MODULE', moduleName: 'TDAH_EXECUTIVE', ecosystem: 'TDAH_EXECUTIVE' });
+            }} 
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sincronizar Visor</span>
           </button>
-          <div className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected || isPeerConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
-            <Activity className="w-4 h-4" />{isConnected || isPeerConnected ? 'VR Enlazado (En Vivo)' : 'Sin Señal VR'}
+
+          <div className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 ${isPeerConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : isConnected ? 'bg-amber-950/80 border-amber-500/50 text-amber-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
+            <Activity className="w-4 h-4" />
+            {isPeerConnected ? 'VR Enlazado (En Vivo)' : isConnected ? 'Conectado / Buscando Visor...' : 'Sin Señal VR'}
           </div>
+
           <button onClick={safeClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
             Volver al Selector
           </button>
@@ -165,32 +175,52 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
       </div>
 
       <div className="flex-1 p-6 grid grid-cols-12 gap-6 h-full overflow-hidden">
-        
-        {/* PANEL IZQUIERDO: Controles */}
+        {/* PANEL IZQUIERDO: Controles y Métricas */}
         <div className="col-span-3 space-y-6 flex flex-col">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-            <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Settings className="w-4 h-4 text-sky-400" /> Parámetros de la Prueba</h3>
+            <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+              <Settings className="w-4 h-4 text-sky-400" /> 
+              Parámetros de la Prueba
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Modo de Administración</label>
                 <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                  <button onClick={() => setAiMode(true)} className={`py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${aiMode ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}><Cpu className="w-3.5 h-3.5" /> Autogestión IA</button>
-                  <button onClick={() => setAiMode(false)} className={`py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${!aiMode ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}><PlayCircle className="w-3.5 h-3.5" /> Manual</button>
+                  <button onClick={() => setAiMode(true)} className={`py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${aiMode ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}>
+                    <Cpu className="w-3.5 h-3.5" /> Autogestión IA
+                  </button>
+                  <button onClick={() => setAiMode(false)} className={`py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${!aiMode ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}>
+                    <PlayCircle className="w-3.5 h-3.5" /> Manual
+                  </button>
                 </div>
               </div>
               <div className="p-4 bg-sky-950/20 rounded-xl border border-sky-900/30 text-xs text-sky-200/70 text-center leading-relaxed">
-                El Asistente AMIE evaluará control inhibitorio, atención sostenida y tiempo cognitivo.
+                El Asistente AMIE evaluará control inhibitorio, atención sostenida y tiempo cognitivo Go/No-Go.
               </div>
             </div>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-1">
-             <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-400" /> Rendimiento</h3>
+             <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+               <Zap className="w-4 h-4 text-emerald-400" /> Rendimiento
+             </h3>
              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">ACIERTOS</span><div className="text-xl font-black text-emerald-400 mt-1">{rawMetrics.hits}</div></div>
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">OMISIONES</span><div className="text-xl font-black text-amber-400 mt-1">{rawMetrics.omissions}</div></div>
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">COMISIONES</span><div className="text-xl font-black text-rose-500 mt-1">{rawMetrics.commissions}</div></div>
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center"><span className="text-[10px] text-slate-500 font-bold">TR PROMEDIO</span><div className={`text-xl font-black mt-1 ${trColor}`}>{TR}<span className="text-[10px]">ms</span></div></div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center">
+                  <span className="text-[10px] text-slate-500 font-bold">ACIERTOS</span>
+                  <div className="text-xl font-black text-emerald-400 mt-1">{rawMetrics.hits}</div>
+                </div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center">
+                  <span className="text-[10px] text-slate-500 font-bold">OMISIONES</span>
+                  <div className="text-xl font-black text-amber-400 mt-1">{rawMetrics.omissions}</div>
+                </div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center">
+                  <span className="text-[10px] text-slate-500 font-bold">COMISIONES</span>
+                  <div className="text-xl font-black text-rose-500 mt-1">{rawMetrics.commissions}</div>
+                </div>
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-center">
+                  <span className="text-[10px] text-slate-500 font-bold">TR PROMEDIO</span>
+                  <div className={`text-xl font-black mt-1 ${trColor}`}>{TR}<span className="text-[10px]">ms</span></div>
+                </div>
              </div>
           </div>
         </div>
@@ -228,14 +258,14 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
             {!monitoringActive && !isFinished ? (
                <div className="flex flex-col items-center justify-center h-full text-slate-500">
                  <Cpu className="w-12 h-12 mb-3 opacity-20" />
-                 <p className="text-sm">Presiona "Iniciar Evaluación VR" para comenzar la transmisión de datos.</p>
+                 <p className="text-sm">Presiona "Iniciar Evaluación VR" para comenzar la transmisión de datos al visor.</p>
                </div>
             ) : monitoringActive ? (
                <div className="flex flex-col items-center justify-center h-full">
                  <div className="w-32 h-32 rounded-full border-4 border-emerald-500/30 border-t-emerald-400 animate-spin mb-6"></div>
                  <h4 className="text-lg font-bold text-emerald-400 mb-2">Evaluación en Progreso...</h4>
                  <p className="text-xs text-slate-400 font-mono">RECIBIENDO PAQUETES: {rawMetrics.hits + rawMetrics.omissions + rawMetrics.commissions}</p>
-                 <p className="text-xs text-slate-500 mt-4 max-w-md text-center">El Asistente AMIE está procesando el tiempo de reacción inhibitorio en tiempo real desde el Meta Quest 3S.</p>
+                 <p className="text-xs text-slate-500 mt-4 max-w-md text-center">El Asistente AMIE está procesando el tiempo de reacción inhibitorio en tiempo real desde el Meta Quest / Pico.</p>
                </div>
             ) : (
                <div className="h-full overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
