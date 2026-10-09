@@ -30,8 +30,8 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
             {this.state.error?.message || 'El archivo 360, video o textura no pudo cargarse.'}
           </p>
           <div className="flex gap-4">
-            <button onClick={() => this.setState({ hasError: false })} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition">Reintentar Carga</button>
-            <button onClick={this.props.onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition">Salir del Visor</button>
+            <button onClick={() => this.setState({ hasError: false })} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition cursor-pointer">Reintentar Carga</button>
+            <button onClick={this.props.onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition cursor-pointer">Salir del Visor</button>
           </div>
         </div>
       );
@@ -40,6 +40,70 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
   }
 }
 
+// ============================================================================
+// NORMALIZADOR DE ARCHIVOS ECOSYSTEM
+// ============================================================================
+const ECOSYSTEM_MAP: Record<string, string> = {
+  // Claves técnicas originales
+  'WARM_HEARTH': 'WARM_HEARTH.jpg',
+  'CLINICAL_OFFICE': 'CLINICAL_OFFICE.jpg',
+  'STERILE_ROOM': 'STERILE_ROOM.jpg',
+  'PROTECTIVE_TREEHOUSE': 'PROTECTIVE_TREEHOUSE.jpg',
+  'BIOLUMINESCENT_BEACH': 'BIOLUMINESCENT_BEACH.jpg',
+  'SAFE_PLACE_FOREST': 'SAFE_PLACE_FOREST.jpg',
+  'COSMIC_STARS': 'COSMIC_STARS.jpg',
+  'WOMB_LIKE_CAVE': 'WOMB_LIKE_CAVE.jpg',
+  'ZEN_GARDEN': 'ZEN_GARDEN.jpg',
+  'ACROPHOBIA_ROOF': 'ACROPHOBIA_ROOF.jpg',
+  'AEROPHOBIA_CABIN': 'AEROPHOBIA_CABIN.jpg',
+  
+  // Normalización de nombres de módulos nuevos con underscores
+  'DUAL_CONTROL': 'DUAL_CONTROL.jpg',
+  'PAIN_MANAGEMENT': 'PAIN_MANAGEMENT.jpg',
+  'NEURO_HYPNOSIS': 'NEURO_HYPNOSIS.jpg',
+  'DEV_TRAUMA': 'DEV_TRAUMA.jpg',
+  'EMDR_MEMORY': 'EMDR_MEMORY.jpg',
+  'CLUSTER_B_FORENSIC': 'CLUSTER_B_FORENSIC.jpg',
+  'TDAH_EXECUTIVE': 'TDAH_EXECUTIVE.jpg',
+  'FND_MIRROR': 'FND_MIRROR.jpg',
+
+  // Fallbacks de emergencia si llegan nombres viejos con espacios desde la consola
+  'Salud Sexual': 'DUAL_CONTROL.jpg',
+  'Hipnosis & Grounding': 'NEURO_HYPNOSIS.jpg',
+  'Laboratorio de Atención': 'TDAH_EXECUTIVE.jpg',
+  'Control de Dolor Crónico (Paisaje Subacuático)': 'PAIN_MANAGEMENT.jpg',
+  'Forense Cluster B': 'CLUSTER_B_FORENSIC.jpg',
+  'Neurología Funcional & Propiocepción': 'FND_MIRROR.jpg',
+  'Reconsolidación de Memoria (Sala de Espejo)': 'EMDR_MEMORY.jpg',
+  'Trauma del Desarrollo (Santuario de Vínculo Seguro)': 'DEV_TRAUMA.jpg'
+};
+
+const getSafeEcosystemFile = (ecosystemKey: string): string => {
+  // Si no hay key o es vacío, devolvemos un lugar seguro por defecto
+  if (!ecosystemKey || ecosystemKey === 'NEUTRAL_VOID') {
+    return '/ecosystems/SAFE_PLACE_FOREST.jpg';
+  }
+  
+  // Buscamos si la llave exacta existe en nuestro mapa
+  const mapped = ECOSYSTEM_MAP[ecosystemKey];
+  if (mapped) {
+    return `/ecosystems/${mapped}`;
+  }
+  
+  // Si nos mandan algo que no está en el mapa, limpiamos espacios y aseguramos que tenga .jpg
+  const sanitized = ecosystemKey.trim();
+  const fileExt = sanitized.toLowerCase();
+  
+  if (fileExt.endsWith('.jpg') || fileExt.endsWith('.jpeg') || fileExt.endsWith('.png')) {
+    return `/ecosystems/${sanitized}`;
+  }
+  
+  return `/ecosystems/${sanitized}.jpg`;
+};
+
+// ============================================================================
+// EXPERIENCIA PRINCIPAL DEL VISOR
+// ============================================================================
 export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', onClose }) => {
   // EL VISOR DEL PACIENTE DEBE SER SIEMPRE 'receiver'
   const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'HOLODECK_IDLE');
@@ -56,7 +120,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     
     try {
       const audio = new Audio(`/audio/${activeEcosystem}.mp3`);
-      audio.loop = true; audio.volume = 0.8;
+      audio.loop = true; 
+      audio.volume = 0.8;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch(error => console.warn(`Audio silenciado o no encontrado: /audio/${activeEcosystem}.mp3`, error));
@@ -89,7 +154,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
   return (
     <SafeVrWrapper onClose={onClose}>
       <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
-        <button onPointerDown={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md">
+        <button onPointerDown={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md transition">
           <X className="w-8 h-8" />
         </button>
 
@@ -103,7 +168,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
               <XR>
                 <Controllers />
                 <Suspense fallback={null}>
-                  {isVideo ? <VideoSphere url={`/video/${activeEcosystem}.mp4`} /> : <Environment background={true} files={`/ecosystems/${activeEcosystem}.jpg`} />}
+                  {isVideo ? (
+                    <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
+                  ) : (
+                    <Environment 
+                      background={true} 
+                      files={getSafeEcosystemFile(activeEcosystem)} 
+                    />
+                  )}
                 </Suspense>
                 {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
               </XR>
@@ -171,7 +243,7 @@ const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, s
           {isConnected ? <Wifi className="w-4 h-4 animate-pulse" /> : <WifiOff className="w-4 h-4" />}
           <span>{isConnected ? 'Sincronizado' : 'Buscando Red...'}</span>
         </div>
-        <button onPointerDown={syncSession} className="p-2 bg-slate-800 text-sky-400 rounded-full border border-slate-700 active:scale-95"><RefreshCw className="w-4 h-4" /></button>
+        <button onPointerDown={syncSession} className="p-2 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-full border border-slate-700 active:scale-95 transition cursor-pointer"><RefreshCw className="w-4 h-4" /></button>
       </div>
       <h1 className="text-2xl font-light tracking-wide text-slate-300">Sala de Reposo Inmersiva</h1>
       <p className="text-slate-500 text-sm">Aguarde un momento. El profesional cargará su entorno clínico en breve.</p>
