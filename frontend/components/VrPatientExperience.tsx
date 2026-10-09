@@ -3,7 +3,7 @@ import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Wifi, WifiOff, X, RefreshCw, Plus, ShieldAlert, Target, Sun, AlertTriangle } from 'lucide-react';
 import { VRButton, XR, Controllers } from '@react-three/xr';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, Sphere, useVideoTexture } from '@react-three/drei';
+import { Sphere, useVideoTexture, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface Props { 
@@ -29,7 +29,7 @@ type EnvironmentType =
   | 'FND_MIRROR';
 
 // ============================================================================
-// ESCUDO ANTIERRORES (Previene el pantallazo rojo y que te expulse de la app)
+// ESCUDO ANTIERRORES (Previene el pantallazo rojo y atrapa crashes)
 // ============================================================================
 class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void }, { hasError: boolean; error: Error | null }> {
   constructor(props: any) {
@@ -48,7 +48,7 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
             {this.state.error?.message || 'El archivo 360, video o textura no pudo cargarse.'}
           </p>
           <div className="flex gap-4">
-            <button onClick={() => this.setState({ hasError: false })} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition cursor-pointer">Reintentar Carga</button>
+            <button onClick={() => this.setState({ hasError: false, error: null })} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition cursor-pointer">Reintentar Carga</button>
             <button onClick={this.props.onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition cursor-pointer">Salir del Visor</button>
           </div>
         </div>
@@ -170,7 +170,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>(
     (urlModule || initialModuleId || 'IDLE') as EnvironmentType
   );
-  const [activeEcosystem, setActiveEcosystem] = useState<string>('SAFE_PLACE_FOREST');
+  const [activeEcosystem, setActiveEcosystem] = useState<string>('TDAH_EXECUTIVE');
   const [isVideo, setIsVideo] = useState<boolean>(false);
   const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
   const [emdrHz, setEmdrHz] = useState<number>(1.5);
@@ -248,10 +248,7 @@ export const VrPatientExperience: React.FC<Props> = ({
                   {isVideo ? (
                     <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
                   ) : (
-                    <Environment 
-                      background={true} 
-                      files={getSafeEcosystemFile(activeEcosystem)} 
-                    />
+                    <ImageSphere url={getSafeEcosystemFile(activeEcosystem)} />
                   )}
                 </Suspense>
                 {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
@@ -290,6 +287,17 @@ export const VrPatientExperience: React.FC<Props> = ({
 // ============================================================================
 // COMPONENTES SECUNDARIOS
 // ============================================================================
+
+// Esfera 360° para imágenes panorámicas JPG (Evita el error de shader onBuild en WebXR)
+const ImageSphere = ({ url }: { url: string }) => {
+  const texture = useTexture(url);
+  return (
+    <mesh>
+      <sphereGeometry args={[500, 60, 40]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} />
+    </mesh>
+  );
+};
 
 const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   const meshRef = useRef<THREE.Mesh>(null);
