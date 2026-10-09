@@ -36,10 +36,14 @@ const getSafeWsUrl = (): string => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return `${protocol}//${window.location.hostname}:5000`;
     }
+
+    // Dominio oficial de producción en Render
+    if (window.location.hostname.includes('onrender.com')) {
+      return 'wss://amieneurogical.onrender.com';
+    }
   }
 
-  // Backend oficial en Render (siempre wss:// en producción)
-  return 'wss://amieneurological-backend.onrender.com';
+  return 'wss://amieneurogical.onrender.com';
 };
 
 export const useVrTelemetryBridge = (
@@ -116,7 +120,7 @@ export const useVrTelemetryBridge = (
 
         ws.onerror = (err) => {
           if (!isMounted) return;
-          console.warn('Error de conexión WebSocket capturado de forma segura:', err);
+          console.warn('Conexión WebSocket en reintento:', err);
           setIsConnected(false);
           setIsPeerConnected(false);
         };
@@ -132,7 +136,7 @@ export const useVrTelemetryBridge = (
         if (isMounted) {
           setIsConnected(false);
           setIsPeerConnected(false);
-          reconnectTimerRef.current = setTimeout(connectWs, 5000);
+          reconnectTimerRef.current = setTimeout(connectWs, 4000);
         }
       }
     };
