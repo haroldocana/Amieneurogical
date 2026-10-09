@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
-import { Fingerprint, Map, Activity, PlayCircle, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, HandMetal, Network, Glasses } from 'lucide-react';
+import { Fingerprint, Map, Activity, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, HandMetal, Network } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
@@ -10,14 +10,13 @@ interface Props {
 
 export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'NEURO_DEGEN');
+  const { isConnected, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'NEURO_DEGEN');
 
   const [sessionPhase, setSessionPhase] = useState<'IDLE' | 'TREMOR_ANALYSIS' | 'SPATIAL_MAZE'>('IDLE');
   const [isFinished, setIsFinished] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [aiReport, setAiReport] = useState<string>('');
 
-  // Métricas Simuladas
   const [tremorAmplitudeMm, setTremorAmplitudeMm] = useState(0);
   const [navErrors, setNavErrors] = useState(0);
   const [pathEfficiency, setPathEfficiency] = useState(100);
@@ -143,7 +142,7 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
                 </button>
               )}
               {sessionPhase === 'TREMOR_ANALYSIS' && (
-                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 cursor-pointer">
+                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer">
 
 <Map className="w-5 h-5" />
 2. Navegación Espacial (Laberinto)
