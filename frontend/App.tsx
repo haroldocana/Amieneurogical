@@ -27,9 +27,20 @@ import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 
-// CONSOLA UNIFICADA Y ENRUTADOR VR
+// MÓDULOS VR Y CLÍNICOS ESPECIALIZADOS
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
 import { VrModuleRouter } from './components/VrModuleRouter';
+import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
+import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
+import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
+import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
+import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
+import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
+import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
+import { VrPainManagementModule } from './components/VrPainManagementModule';
+import { VrCognitiveDeclineModule } from './components/VrCognitiveDeclineModule';
+import { VrDepressionModule } from './components/VrDepressionModule';
+import { VrGammaInsightModule } from './components/VrGammaInsightModule';
 
 // OTROS MÓDULOS ESPECIALIZADOS
 import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
@@ -124,7 +135,6 @@ function DoctorWorkstation() {
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
-  const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
   const [activeAdvancedSubModule, setActiveAdvancedSubModule] = useState<string>('TDAH_ATTENTION_LAB');
 
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
@@ -139,21 +149,7 @@ function DoctorWorkstation() {
 
   const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
-  
-  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
-  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
-  const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
-  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
-  
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
-
-  const closeAllModals = () => {
-    setIsDsmModalOpen(false);
-    setIsFullscreenConsoleOpen(false);
-    setIsFullscreenDiagnosticOpen(false);
-    setIsFullscreenPhenotypeOpen(false);
-    setIsFullscreenUnifiedVrOpen(false);
-  };
 
   useEffect(() => {
     try {
@@ -237,7 +233,6 @@ function DoctorWorkstation() {
       localStorage.clear();
       sessionStorage.clear();
     } catch (e) {}
-    closeAllModals();
     setIsAuthenticated(false);
   };
 
@@ -291,34 +286,6 @@ function DoctorWorkstation() {
     }
   };
 
-  const handleUpdatePatientVrData = (telemetry: VrTelemetryData, report: VrTherapyReport) => {
-    setCurrentPatient(prev => ({ ...prev, vrTelemetryData: telemetry, vrTherapyReport: report }));
-    setSyncSuccessMsg('Métricas VR transferidas exitosamente a la Triangulación Global.');
-    setTimeout(() => setSyncSuccessMsg(null), 4500);
-  };
-
-  const handleAttachQeegToPatient = (biomarkers: QeegAttachmentPayload) => {
-    setCurrentPatient(prev => ({
-      ...prev,
-      qeegBiomarkers: {
-        recordingDate: biomarkers.recordingDate,
-        channelsCount: biomarkers.channelsCount,
-        samplingRateHz: biomarkers.samplingRateHz,
-        bandPowers: biomarkers.bandPowers,
-        regionalZScores: prev.qeegBiomarkers?.regionalZScores || {
-          frontal: { region: 'Frontal', deltaZ: 0.2, thetaZ: 1.8, alfaZ: -0.4, betaZ: 0.1, highBetaZ: 0.0 },
-          parietal: { region: 'Parietal', deltaZ: 0.1, thetaZ: 0.5, alfaZ: 0.2, betaZ: -0.1, highBetaZ: 0.0 },
-          temporal: { region: 'Temporal', deltaZ: 0.3, thetaZ: 0.8, alfaZ: -0.2, betaZ: 0.2, highBetaZ: 0.0 },
-          occipital: { region: 'Occipital', deltaZ: 0.0, thetaZ: 0.2, alfaZ: 1.1, betaZ: -0.3, highBetaZ: 0.0 }
-        }
-      }
-    }));
-    setSyncSuccessMsg('Estudio qEEG/Neurosensométrico vinculado al expediente activo.');
-    setTimeout(() => setSyncSuccessMsg(null), 4500);
-  };
-
-  const handlePrintIndividualReport = () => { /* Logic omitted for brevity */ };
-
   if (!isAuthenticated) return <LoginModal onSuccess={handleLoginSuccess} />;
 
   const safePatient: PatientRecord = {
@@ -351,67 +318,39 @@ function DoctorWorkstation() {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 flex-wrap py-1 font-sans w-full">
             
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Workstation Clínico" description="Núcleo de triaje y triangulación." clinicalUtility="Dictamen DSM-5." badge="Módulo 1">
-                <button onClick={() => setActiveTab('workstation')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'workstation' ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <LayoutDashboard className="w-3.5 h-3.5" /><span>Workstation</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('workstation')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'workstation' ? 'bg-sky-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <LayoutDashboard className="w-3.5 h-3.5" /><span>Workstation</span>
+            </button>
 
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Evaluador Científico" description="Scoring de afinidad bioclínica." clinicalUtility="Mapeo farmacológico." badge="Módulo 2">
-                <button onClick={() => setActiveTab('scientific_evaluator')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'scientific_evaluator' ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <Microscope className="w-3.5 h-3.5 text-teal-300" /><span>Evaluador Científico</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('scientific_evaluator')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'scientific_evaluator' ? 'bg-teal-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <Microscope className="w-3.5 h-3.5" /><span>Evaluador Científico</span>
+            </button>
 
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Corrientes APA & RCI" description="Interpretación por corrientes teóricas." clinicalUtility="Índice RCI." badge="Marco APA">
-                <button onClick={() => setActiveTab('apa_framework')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'apa_framework' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <BookOpen className="w-3.5 h-3.5 text-emerald-300" /><span>Corrientes APA</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('apa_framework')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'apa_framework' ? 'bg-emerald-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <BookOpen className="w-3.5 h-3.5" /><span>Corrientes APA</span>
+            </button>
 
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Cluster B & Perfilado" description="Caracterización forense." clinicalUtility="Análisis pericial." badge="Cluster B">
-                <button onClick={() => setActiveTab('cluster_b')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'cluster_b' ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <UserX className="w-3.5 h-3.5 text-purple-300" /><span>Cluster B & Perfilado</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('cluster_b')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'cluster_b' ? 'bg-purple-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <UserX className="w-3.5 h-3.5" /><span>Cluster B & Perfilado</span>
+            </button>
 
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Salud Sexual & SES/SIS" description="Tratamiento inmersivo." clinicalUtility="Mapeo sexual." badge="Sexualidad">
-                <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'sexual_health' ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <HeartHandshake className="w-3.5 h-3.5 text-rose-300" /><span>Salud Sexual</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'sexual_health' ? 'bg-rose-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <HeartHandshake className="w-3.5 h-3.5" /><span>Salud Sexual</span>
+            </button>
 
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Hipnosis & Bucle Cerrado" description="Neurohipnosis con telemetría." clinicalUtility="Grounding." badge="Hipnosis">
-                <button onClick={() => setActiveTab('hypnosis_closed_loop')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'hypnosis_closed_loop' ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /><span>Hipnosis Bucle Cerrado</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('hypnosis_closed_loop')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'hypnosis_closed_loop' ? 'bg-amber-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <Sparkles className="w-3.5 h-3.5" /><span>Hipnosis Bucle Cerrado</span>
+            </button>
 
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Módulos VR Avanzados" description="TDAH, Trauma, Dolor." clinicalUtility="Intervención inmersiva." badge="Submódulos">
-                <button onClick={() => setActiveTab('vr_advanced_hub')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'vr_advanced_hub' ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                  <Zap className="w-3.5 h-3.5 text-indigo-300" /><span>TDAH, Trauma & Dolor</span>
-                </button>
-              </HoverTooltip>
-            </div>
+            <button onClick={() => setActiveTab('vr_advanced_hub')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${activeTab === 'vr_advanced_hub' ? 'bg-indigo-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <Zap className="w-3.5 h-3.5" /><span>TDAH, Trauma & Dolor</span>
+            </button>
 
           </div>
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL */}
+      {/* CONTENIDO PRINCIPAL Y ENRUTADOR DE MÓDULOS */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
         
         {activeTab === 'workstation' && (
@@ -429,7 +368,7 @@ function DoctorWorkstation() {
                   </>
                 ) : (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex flex-col items-center justify-center h-full shadow-2xl">
-                    <button onClick={handleRunAnalysis} disabled={isAnalyzing} className="px-5 py-2.5 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white cursor-pointer">
+                    <button onClick={handleRunAnalysis} disabled={isAnalyzing} className="px-5 py-2.5 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shadow-lg">
                       Procesar Expediente Ahora
                     </button>
                   </div>
@@ -439,39 +378,49 @@ function DoctorWorkstation() {
           </div>
         )}
 
-        {/* ========== AQUI ESTÁ LA MAGIA: TODOS LOS MÓDULOS INVOCAN AL SELECTOR DUAL ========== */}
+        {/* ========== MÓDULOS CLÍNICOS VR INTEGRADOS ========== */}
 
         {activeTab === 'cluster_b' && (
           <div className="space-y-4">
-            <VrModuleRouter patient={safePatient} initialModuleId="CLUSTER_B_FORENSIC" onClose={() => setActiveTab('workstation')} />
+            <PsychopathyNarcissismModule patient={safePatient} onClose={() => setActiveTab('workstation')} />
           </div>
         )}
 
         {activeTab === 'sexual_health' && (
           <div className="space-y-4">
-            <VrModuleRouter patient={safePatient} initialModuleId="DUAL_CONTROL_SES_SIS" onClose={() => setActiveTab('workstation')} />
+            <VrDualControlTherapyModule patient={safePatient} onClose={() => setActiveTab('workstation')} />
           </div>
         )}
 
         {activeTab === 'hypnosis_closed_loop' && (
           <div className="space-y-4">
-            <VrModuleRouter patient={safePatient} initialModuleId="NEURO_HYPNOSIS" onClose={() => setActiveTab('workstation')} />
+            <VrClosedLoopHypnosisModule patient={safePatient} onClose={() => setActiveTab('workstation')} />
           </div>
         )}
 
         {activeTab === 'vr_advanced_hub' && (
           <div className="space-y-4">
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-indigo-300">Hub de Módulos Avanzados</h3>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-md">
+              <div className="text-xs font-bold text-slate-300">
+                Hub de Submódulos Inmersivos (Visor Conectado)
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={() => setActiveAdvancedSubModule('TDAH_ATTENTION_LAB')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'TDAH_ATTENTION_LAB' ? 'bg-indigo-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>TDAH</button>
-                <button onClick={() => setActiveAdvancedSubModule('DEVELOPMENTAL_TRAUMA')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'DEVELOPMENTAL_TRAUMA' ? 'bg-purple-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>Trauma</button>
-                <button onClick={() => setActiveAdvancedSubModule('TAG_ANXIETY')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'TAG_ANXIETY' ? 'bg-rose-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>Fobias (VRET)</button>
+                <button onClick={() => setActiveAdvancedSubModule('TDAH')} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${activeAdvancedSubModule === 'TDAH' ? 'bg-sky-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>TDAH</button>
+                <button onClick={() => setActiveAdvancedSubModule('TRAUMA')} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${activeAdvancedSubModule === 'TRAUMA' ? 'bg-purple-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>Trauma</button>
+                <button onClick={() => setActiveAdvancedSubModule('EMDR')} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${activeAdvancedSubModule === 'EMDR' ? 'bg-rose-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>EMDR</button>
+                <button onClick={() => setActiveAdvancedSubModule('NEURO')} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${activeAdvancedSubModule === 'NEURO' ? 'bg-cyan-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>Neurología</button>
+                <button onClick={() => setActiveAdvancedSubModule('DOLOR')} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${activeAdvancedSubModule === 'DOLOR' ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>Analgesia</button>
+                <button onClick={() => setActiveAdvancedSubModule('QEEG')} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${activeAdvancedSubModule === 'QEEG' ? 'bg-amber-600 text-white' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>qEEG</button>
               </div>
             </div>
-            <VrModuleRouter patient={safePatient} initialModuleId={activeAdvancedSubModule} onClose={() => setActiveTab('workstation')} />
+
+            {/* RENDERIZADO DEL SUBMÓDULO SELECCIONADO */}
+            {activeAdvancedSubModule === 'TDAH' && <VrExecutiveFunctionModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
+            {activeAdvancedSubModule === 'TRAUMA' && <VrDevelopmentalTraumaFullscreenMonitor patient={safePatient} onClose={() => setActiveTab('workstation')} />}
+            {activeAdvancedSubModule === 'EMDR' && <VrMemoryReconsolidationModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
+            {activeAdvancedSubModule === 'NEURO' && <VrFunctionalNeurologyModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
+            {activeAdvancedSubModule === 'DOLOR' && <VrPainManagementModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
+            {activeAdvancedSubModule === 'QEEG' && <VrGammaInsightModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
           </div>
         )}
 
@@ -483,15 +432,12 @@ function DoctorWorkstation() {
   );
 }
 
-// ========== ROUTER PRINCIPAL DE LA APP ==========
-// Al abrir en las gafas la URL /visor, cargará directamente la experiencia conectada WebXR.
 export default function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
-        {/* RUTA PARA LAS GAFAS META QUEST / PICO */}
         <Route path="/visor" element={<VrPatientExperience onClose={() => window.location.href = '/doctor'} />} />
       </Routes>
     </Router>
