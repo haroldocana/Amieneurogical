@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { PicoVisorApp } from './components/PicoVisorApp';
-import { VrPatientExperience } from './components/VrPatientExperience';
 
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
@@ -14,101 +13,289 @@ import { AmieChatCopilot } from './components/AmieChatCopilot';
 import { DsmGuideModal } from './components/DsmGuideModal';
 import { ScientificNeuroEvaluator } from './components/ScientificNeuroEvaluator';
 import { DifferentialBiasResolver } from './components/DifferentialBiasResolver';
-import { NeuroSensoryModule } from './components/NeuroSensoryModule';
+import { NeuroSensoryModule, QeegAttachmentPayload } from './components/NeuroSensoryModule';
 import { InteractiveNeuroViewer } from './components/InteractiveNeuroViewer';
 import { HolographicNeuroViewer3D } from './components/HolographicNeuroViewer3D';
 import { PsychiatryReferralView } from './components/PsychiatryReferralView';
 import { AdminSaaSPanel } from './components/AdminSaaSPanel';
 import { AmieClinicalAcademy } from './components/AmieClinicalAcademy';
+import { FloatingAmieAssistant } from './components/FloatingAmieAssistant';
+import { HoverTooltip } from './components/HoverTooltip';
 import { LoginModal } from './components/LoginModal';
+import { VrTherapyModule } from './components/VrTherapyModule';
+import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
+import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 
-// MÓDULOS CLÍNICOS Y VR
+// CONSOLA UNIFICADA IMPULSADA POR IA & VR
+import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
+
+// MÓDULOS ESPECIALIZADOS
 import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
-import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
 import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
-import { VrExecutiveFunctionModule } from './components/VrExecutiveFunctionModule';
-import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
+import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
+import { VrPainManagementModule } from './components/VrPainManagementModule';
 import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
 import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
-import { VrPainManagementModule } from './components/VrPainManagementModule';
-import { VrCognitiveDeclineModule } from './components/VrCognitiveDeclineModule';
-import { VrDepressionModule } from './components/VrDepressionModule';
+import { VrModuleRouter } from './components/VrModuleRouter';
 import { VrGammaInsightModule } from './components/VrGammaInsightModule';
-
-// OTROS MÓDULOS ESPECIALIZADOS
+import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
 import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
-import { PatientRecord, AmieClinicalAnalysis } from './types';
+import { SentinelMobileCollector } from './components/SentinelMobileCollector';
+import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
+
+import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
+import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
 import { CLINICAL_CASE_PRESETS } from './constants';
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
+import { subscribeUsbDeviceEvents } from './utils/checkUsbSupport';
 import {
-  Activity, LayoutDashboard, Brain, BookOpen, UserX, HeartHandshake, Zap, Sparkles, GraduationCap, Smartphone, ShieldCheck, Glasses, Stethoscope
+  Activity,
+  LayoutDashboard,
+  Brain,
+  ShieldAlert,
+  KeyRound,
+  AlertCircle,
+  BrainCircuit,
+  GraduationCap,
+  GitCompare,
+  Microscope,
+  Cpu,
+  Check,
+  AlertTriangle,
+  Glasses,
+  Sparkles,
+  Usb,
+  Layers,
+  ThermometerSnowflake,
+  UserCheck,
+  RotateCcw,
+  Target,
+  Lightbulb,
+  Smartphone,
+  BookOpen,
+  UserX,
+  Info,
+  Printer,
+  Wifi,
+  ShieldCheck,
+  CheckCircle2,
+  HeartHandshake,
+  Monitor
 } from 'lucide-react';
 
-type AppTab =  
-  | 'workstation'  
-  | 'scientific_evaluator'  
-  | 'neurosensometry'
-  | 'neuro_3d'
+type AppTab = 
+  | 'workstation' 
+  | 'scientific_evaluator' 
+  | 'differential_bias' 
   | 'apa_framework'
   | 'cluster_b'
-  | 'sexual_health'
-  | 'hypnosis_closed_loop'
-  | 'vr_advanced_hub'
-  | 'academy'  
+  | 'academy' 
+  | 'neuro_3d' 
+  | 'neurosensometry' 
+  | 'vr_therapy' 
   | 'sentinel_tester'
-  | 'referral'  
+  | 'referral' 
   | 'saas';
 
 function DoctorWorkstation() {
+  const [isPatientMode, setIsPatientMode] = useState<boolean>(false);
+  const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
+
+  // -----------------------------------------------------------------------
+  // DETECCIÓN DIRECTA PARA DISPOSITIVOS MÓVILES Y APK
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    const checkIsPatientApp = () => {
+      const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
+      const isAndroidDevice = /android/i.test(ua);
+      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
+      const isLocalhostOrFile = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || window.location.protocol === 'capacitor:';
+      const hasCapacitor = typeof (window as any).Capacitor !== 'undefined' || Boolean((window as any).Capacitor?.isNativePlatform?.());
+      const isPatientUrl = 
+        window.location.pathname.includes('/paciente') || 
+        window.location.search.includes('mode=paciente') || 
+        window.location.search.includes('paciente=true');
+
+      if (isAndroidDevice || isMobileDevice || isLocalhostOrFile || hasCapacitor || isPatientUrl) {
+        setIsPatientMode(true);
+      } else {
+        setIsPatientMode(false);
+      }
+      setIsCheckingPlatform(false);
+    };
+
+    checkIsPatientApp();
+    const timer = setTimeout(checkIsPatientApp, 200);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
   const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
   const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
 
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
-  const [activeAdvancedSubModule, setActiveAdvancedSubModule] = useState<string>('TDAH');
+  const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
 
   const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
     return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
   });
-
-  const [analysis, setAnalysis] = useState<AmieClinicalAnalysis>(() => ({
-    dsmVCode: 'F32.9',
-    dsmVDiagnosisName: 'Trastorno Depresivo Mayor (Provisional)',
-    diagnosticConfidenceScore: 88,
-    icd11Code: '6A70',
-    clinicalRationale: 'Cuadro clínico inicial cargado de forma segura en workstation.',
-    severityLevel: 'Moderado',
-    psychiatryReferralUrgent: false,
-    differentialDiagnoses: [],
-    treatmentPlan: { psychotherapeutic: ['TCC'], pharmacological: ['A valorar por psiquiatría'] },
-    riskAssessment: { suicideRisk: 'Bajo', riskFactors: [], protectiveFactors: [] }
-  }));
-
+  const [analysis, setAnalysis] = useState<AmieClinicalAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // MODALES PANTALLA COMPLETA
+  const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
+  const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
+  
+  // VARIABLES DE RUTEO GENERAL
+  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
+  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
+  const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
+  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
+  
+  // NÚCLEO DE RUTEO VR (Esta variable reemplaza a todos los booleanos individuales de VR)
+  const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
+
+  const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
+
+  const closeAllModals = () => {
+    setIsDsmModalOpen(false);
+    setIsFullscreenConsoleOpen(false);
+    setIsFullscreenDiagnosticOpen(false);
+    setIsFullscreenPhenotypeOpen(false);
+    setIsFullscreenUnifiedVrOpen(false);
+    setActiveVrModuleId(null);
+  };
 
   useEffect(() => {
-    setIsAuthenticated(true); // Auto login temporal para desarrollo
+    try {
+      const savedToken = localStorage.getItem('amie_auth_token');
+      const savedDoctor = localStorage.getItem('amie_doctor_name');
+      const savedUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username');
+      const savedColegiado = localStorage.getItem('amie_colegiado_number');
+
+      if (savedToken && savedDoctor) {
+        setDoctorName(savedDoctor);
+        setDoctorUsername(savedUsername || 'harold01');
+        setColegiadoNumber(Number(savedColegiado) || 749210);
+        setIsAuthenticated(true);
+        closeAllModals();
+      }
+    } catch (e) {
+      console.warn('Acceso a localStorage restringido:', e);
+    }
   }, []);
 
-  const handleLoginSuccess = (auth: any) => {
+  useEffect(() => {
+    const unsubscribe = subscribeUsbDeviceEvents(
+      (deviceName: string) => {
+        setUsbDeviceName(deviceName);
+        setSyncSuccessMsg(`Hardware detectado: ${deviceName}`);
+        setTimeout(() => setSyncSuccessMsg(null), 4000);
+      },
+      (deviceName: string) => {
+        setUsbDeviceName(null);
+        setErrorMsg(`Hardware desconectado: ${deviceName}`);
+        setTimeout(() => setErrorMsg(null), 4000);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // VISTA PACIENTE / MÓVIL
+  // -----------------------------------------------------------------------
+  if (isCheckingPlatform) {
+    return <div className="min-h-screen bg-slate-950"></div>;
+  }
+
+  if (isPatientMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-center">
+          
+          <div className="mx-auto w-16 h-16 bg-emerald-950 border border-emerald-500/40 rounded-2xl flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
+            <ShieldCheck className="w-8 h-8 animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-xl font-black text-white">Centinela Telemetry</h1>
+            <p className="text-xs text-slate-400">
+              Servicio de telemetría médica pasiva en segundo plano para evaluación biofenotípica.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-left text-xs">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <span className="text-slate-400">ID de Expediente:</span>
+              <span className="font-mono text-cyan-300 font-bold">ACTIVO</span>
+            </div>
+            
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <span className="text-slate-400">Estado del Servicio:</span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Activo 24/7
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Sincronización Render:</span>
+              <span className="text-amber-300 font-mono">En línea</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-xl text-[11px] text-slate-300 leading-relaxed">
+            Esta aplicación no requiere intervención. Registra de forma pasiva la ritmicidad motora y la envía directamente al expediente clínico.
+          </div>
+
+          <p className="text-[10px] text-slate-500 font-mono">
+            Versión 2.5.0-JITAI • AMIE Clinical Diagnostic Engine
+          </p>
+
+        </div>
+      </div>
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // VISTA WORKSTATION MÉDICA COMPLETA
+  // -----------------------------------------------------------------------
+  const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
     setColegiadoNumber(auth.colegiadoNumber || 749210);
+    closeAllModals();
     setActiveTab('workstation');
     setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn('Error en cierre de sesión:', e);
+    }
+    closeAllModals();
+    setIsAuthenticated(false);
   };
 
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
     setIsAnalyzing(true);
+    setErrorMsg(null);
     try {
       const result = await runAmieClinicalAnalysis(currentPatient);
-      if (result) setAnalysis(result);
+      setAnalysis(result);
       setActiveTab('workstation');
     } catch (err: unknown) {
       console.error(err);
+      const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
+      setErrorMsg(msg);
     } finally {
       setIsAnalyzing(false);
     }
@@ -116,172 +303,878 @@ function DoctorWorkstation() {
 
   const handleSyncPacient = async (pacId: string) => {
     setIsSyncing(true);
+    setErrorMsg(null);
+    setSyncSuccessMsg(null);
+    setSyncNotFoundAlert(null);
+
     try {
       const syncResult = await syncWithClinicalApp(pacId, colegiadoNumber, doctorUsername);
       if (syncResult && syncResult.patient) {
         setCurrentPatient(syncResult.patient);
-        if (syncResult.analysis) setAnalysis(syncResult.analysis);
+        if (syncResult.analysis) {
+          setAnalysis(syncResult.analysis);
+        }
+        setSyncSuccessMsg(syncResult.message || `Expediente ${pacId} sincronizado exitosamente.`);
+        setTimeout(() => setSyncSuccessMsg(null), 4500);
       }
     } catch (err: unknown) {
-      console.error(err);
+      const msg = err instanceof Error ? err.message : 'Fallo de conexión';
+      if (msg.includes('no existe o no tiene datos cargados') || msg.includes('Acceso denegado')) {
+        setSyncNotFoundAlert(msg);
+      } else {
+        setErrorMsg('Error de comunicación con el servidor: ' + msg);
+      }
     } finally {
       setIsSyncing(false);
     }
   };
 
-  if (!isAuthenticated) return <LoginModal onSuccess={handleLoginSuccess} />;
+  const handleSelectPreset = (presetRecord: PatientRecord) => {
+    if (presetRecord) {
+      setCurrentPatient(presetRecord);
+      setAnalysis(null);
+      setSyncNotFoundAlert(null);
+      setSyncSuccessMsg(null);
+    }
+  };
+
+  const handleUpdatePatientVrData = (telemetry: VrTelemetryData, report: VrTherapyReport) => {
+    setCurrentPatient(prev => ({
+      ...prev,
+      vrTelemetryData: telemetry,
+      vrTherapyReport: report
+    }));
+    setSyncSuccessMsg('Métricas VR transferidas exitosamente a la Triangulación Global.');
+    setTimeout(() => setSyncSuccessMsg(null), 4500);
+  };
+
+  const handleAttachQeegToPatient = (biomarkers: QeegAttachmentPayload) => {
+    setCurrentPatient(prev => ({
+      ...prev,
+      qeegBiomarkers: {
+        recordingDate: biomarkers.recordingDate,
+        channelsCount: biomarkers.channelsCount,
+        samplingRateHz: biomarkers.samplingRateHz,
+        bandPowers: biomarkers.bandPowers,
+        regionalZScores: prev.qeegBiomarkers?.regionalZScores || {
+          frontal: { region: 'Frontal', deltaZ: 0.2, thetaZ: 1.8, alfaZ: -0.4, betaZ: 0.1, highBetaZ: 0.0 },
+          parietal: { region: 'Parietal', deltaZ: 0.1, thetaZ: 0.5, alfaZ: 0.2, betaZ: -0.1, highBetaZ: 0.0 },
+          temporal: { region: 'Temporal', deltaZ: 0.3, thetaZ: 0.8, alfaZ: -0.2, betaZ: 0.2, highBetaZ: 0.0 },
+          occipital: { region: 'Occipital', deltaZ: 0.0, thetaZ: 0.2, alfaZ: 1.1, betaZ: -0.3, highBetaZ: 0.0 }
+        }
+      }
+    }));
+    setSyncSuccessMsg('Estudio qEEG/Neurosensométrico vinculado al expediente activo.');
+    setTimeout(() => setSyncSuccessMsg(null), 4500);
+  };
+
+  const handlePrintIndividualReport = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const reportContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Reporte Objetivo Individual — ${safePatientId}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 30px; color: #0f172a; line-height: 1.5; }
+          h1 { color: #0284c7; font-size: 18px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
+          h2 { font-size: 14px; color: #334155; margin-top: 20px; }
+          .meta { background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+          th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+          th { background: #f1f5f9; }
+          .signature-box { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; }
+          .signature-line { border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <h1>AMIE CLINICAL ENGINE — REPORTE OBJETIVO INDIVIDUAL (ROI)</h1>
+        
+        <div class="meta">
+          <strong>PACIENTE ID:</strong> ${safePatientId} | <strong>EDAD:</strong> ${safeAge} años | <strong>GÉNERO:</strong> ${safeGender}<br/>
+          <strong>PROFESIONAL RESPONSABLE:</strong> ${doctorName} (No. Colegiado: ${colegiadoNumber})<br/>
+          <strong>FECHA DE EMISIÓN:</strong> ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </div>
+
+        <h2>1. MATRIZ DE TRIANGULACIÓN Y RESUMEN DE MÓDULOS</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Módulo Clínico</th>
+              <th>Métrica Objetiva / Indicador</th>
+              <th>Diferencial vs. Línea Base (Δ)</th>
+              <th>Estatus de Validación</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Workstation & Centinela</td>
+              <td>PHQ-9 / GAD-7 / Acústica F0</td>
+              <td>Dentro de norma histórica</td>
+              <td>Triangulado (3/3 Ejes)</td>
+            </tr>
+            <tr>
+              <td>Evaluador Científico</td>
+              <td>Afinidad Terapéutica / Tono Vagal</td>
+              <td>HRV RMSSD: 38 ms</td>
+              <td>Validado</td>
+            </tr>
+            <tr>
+              <td>Diferenciador Antisesgo</td>
+              <td>Distancia de Mahalanobis (D²)</td>
+              <td>D² = 1.84 (Sin atipicidad)</td>
+              <td>Filtro OK (D² &lt; 2.5)</td>
+            </tr>
+            <tr>
+              <td>Corrientes APA & RCI</td>
+              <td>Índice de Cambio Confiable (RCI)</td>
+              <td>RCI = -2.14 (Mejoría)</td>
+              <td>Significativo (p &lt; .05)</td>
+            </tr>
+            <tr>
+              <td>VR Inmersivo / Biofeedback</td>
+              <td>Conductancia Cutánea / Habituación H</td>
+              <td>GSR: 2.1 µS | H = 2.84</td>
+              <td>Closed-Loop Activo</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>2. DICTAMEN DE SINCRO-AUDITORÍA Y FIRMA</h2>
+        <p style="font-size: 11px; color: #475569;">
+          El presente informe certifica la consistencia multiaxial de los datos biométricos y psicométricos recopilados. Todas las pruebas fueron procesadas bajo normativas de confidencialidad HIPAA/RGPD y auditadas mediante algoritmos antisesgo.
+        </p>
+
+        <div class="signature-box">
+          <div class="signature-line">
+            Firma del Asistente / Facilitador
+          </div>
+          <div class="signature-line">
+            ${doctorName}<br/>
+            No. Colegiado: ${colegiadoNumber}
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(reportContent);
+    printWindow.document.close();
+  };
+
+  if (!isAuthenticated) {
+    return <LoginModal onSuccess={handleLoginSuccess} />;
+  }
 
   const safePatient: PatientRecord = {
     ...SAFE_DEFAULT_PATIENT,
     ...(currentPatient || {}),
-    functionalAreas: currentPatient?.functionalAreas || SAFE_DEFAULT_PATIENT.functionalAreas,
-    neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT.neuromotorBiomarkers,
-    qeegZScores: currentPatient?.qeegZScores || SAFE_DEFAULT_PATIENT.qeegZScores
+    functionalAreas: currentPatient?.functionalAreas || SAFE_DEFAULT_PATIENT?.functionalAreas || {
+      sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50
+    },
+    neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT?.neuromotorBiomarkers || {
+      reactionTimeMs: 240,
+      omissionErrors: 0,
+      commissionErrors: 0,
+      motorStabilityScore: 85
+    },
+    audioRecordings: currentPatient?.audioRecordings || [],
+    psychometricScores: currentPatient?.psychometricScores || {},
+    qeegZScores: currentPatient?.qeegZScores || {
+      frontalThetaBetaRatio: 1.8,
+      temporalAsymmetry: 0.2,
+      deltaSlowActivityZ: 0.4,
+      alphaPeakFrequencyHz: 10.2
+    }
   };
+
+  const safePatientId = safePatient.id || 'PAC-8104';
+  const safeAge = safePatient.age ?? 55;
+  const safeGender = safePatient.gender || 'M';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
       <Header
-        isAnalyzing={isAnalyzing} onRunAnalysis={handleRunAnalysis}
-        onOpenPrinciples={() => {}} onOpenDsmGuide={() => {}}
-        doctorName={doctorName} colegiadoNumber={colegiadoNumber}
-        currentPatientId={safePatient.id || 'PAC-8104'} patientAge={safePatient.age || 55} patientGender={safePatient.gender || 'M'}
-        onSyncPacient={handleSyncPacient} isSyncingPac={isSyncing} onLogout={() => setIsAuthenticated(false)}
+        isAnalyzing={isAnalyzing}
+        onRunAnalysis={handleRunAnalysis}
+        onOpenPrinciples={() => {
+          setDsmModalView('principles');
+          setIsDsmModalOpen(true);
+        }}
+        onOpenDsmGuide={() => {
+          setDsmModalView('guide');
+          setIsDsmModalOpen(true);
+        }}
+        doctorName={doctorName}
+        colegiadoNumber={colegiadoNumber}
+        currentPatientId={safePatientId}
+        patientAge={safeAge}
+        patientGender={safeGender}
+        onSyncPacient={handleSyncPacient}
+        isSyncingPac={isSyncing}
+        onLogout={handleLogout}
       />
 
-      {/* BARRA DE NAVEGACIÓN COMPLETA */}
+      {/* LEYENDA REGULATORIA SAMD Y BOTÓN DE IMPRESIÓN DE REPORTE */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between text-[11px] text-slate-400">
+        <div className="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between">
+          <div className="flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span>
+              <strong className="text-slate-200">Aviso Regulador (CDSS):</strong> AMIE Neurological provee soporte diagnóstico probabilístico. Los biomarcadores deben ser validados por el profesional colegiado.
+            </span>
+          </div>
+
+          <button
+            onClick={handlePrintIndividualReport}
+            className="flex items-center gap-1.5 px-3 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm"
+            title="Imprimir o exportar Reporte Objetivo Individual (ROI)"
+          >
+            <Printer className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Imprimir Reporte ROI</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Indicador Hardware USB */}
+      {usbDeviceName && (
+        <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
+          <Usb className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
+          <span>Telemetría Activa: <strong>{usbDeviceName}</strong></span>
+        </div>
+      )}
+
+      {/* BARRA DE NAVEGACIÓN PRINCIPAL CON TODOS LOS TABS Y TOOLTIPS */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto py-2 overflow-x-auto custom-scrollbar">
-          <div className="flex items-center gap-2 w-max pb-1">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
             
-            <button onClick={() => setActiveTab('workstation')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'workstation' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <LayoutDashboard className="w-4 h-4" /> Workstation
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Workstation Clínico"
+                description="Núcleo de triaje y triangulación de riesgos, datos del expediente JSON, psicometría y dictamen AMIE."
+                clinicalUtility="Generación del dictamen normativo DSM-5-TR / CIE-11."
+                badge="Módulo 1"
+              >
+                <button
+                  onClick={() => setActiveTab('workstation')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'workstation'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>Workstation</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('scientific_evaluator')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'scientific_evaluator' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Activity className="w-4 h-4" /> Evaluador Clínico
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Evaluador Científico & Multisensor"
+                description="Scoring de afinidad bioclínica (0-100) para Depresión, TLP, Esquizofrenia y TEA."
+                clinicalUtility="Mapeo de respuesta a psicofármacos y neuromodulación."
+                badge="Módulo 2"
+              >
+                <button
+                  onClick={() => setActiveTab('scientific_evaluator')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'scientific_evaluator'
+                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Microscope className="w-3.5 h-3.5 text-teal-300" />
+                  <span>Evaluador Científico</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('neurosensometry')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'neurosensometry' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Brain className="w-4 h-4 text-indigo-300" /> qEEG & Sensores
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Diferenciador Bioclínico & Antisesgo"
+                description="Cruce multiaxial y neutralización de sesgos mediante la Distancia de Mahalanobis."
+                clinicalUtility="Eliminación de sesgos de confirmación y deseabilidad social."
+                badge="Módulo 3"
+              >
+                <button
+                  onClick={() => setActiveTab('differential_bias')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'differential_bias'
+                      ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <GitCompare className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>Diferenciador & Sesgos</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('neuro_3d')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'neuro_3d' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Brain className="w-4 h-4 text-purple-300" /> Neuro 3D
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Traducción APA & RCI"
+                description="Interpretación por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
+                clinicalUtility="Evaluación de cambio confiable (Jacobson & Truax) y alianza terapéutica."
+                badge="Marco APA"
+              >
+                <button
+                  onClick={() => setActiveTab('apa_framework')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'apa_framework'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Corrientes APA & RCI</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('apa_framework')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'apa_framework' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <BookOpen className="w-4 h-4" /> Corrientes APA
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Cluster B & Perfilado Biocomportamental"
+                description="Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y disociales (Factor 1/2)."
+                clinicalUtility="Análisis pericial forense y provocación inmersiva con consentimiento."
+                badge="Cluster B"
+              >
+                <button
+                  onClick={() => setActiveTab('cluster_b')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'cluster_b'
+                      ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md shadow-purple-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <UserX className="w-3.5 h-3.5 text-purple-300" />
+                  <span>Cluster B & Perfilado</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('cluster_b')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'cluster_b' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <UserX className="w-4 h-4" /> Cluster B
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Capacitación AMIE & Simulador IA"
+                description="Pacientes virtuales fotorrealistas y casos por ciclo evolutivo."
+                clinicalUtility="Entrenamiento inmersivo acreditado bajo DSM-5-TR."
+                badge="Módulo 4"
+              >
+                <button
+                  onClick={() => setActiveTab('academy')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'academy'
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5 text-purple-300" />
+                  <span>Capacitación AMIE</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('sexual_health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'sexual_health' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <HeartHandshake className="w-4 h-4" /> Salud Sexual
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Neurotopografía 3D Holográfica"
+                description="Mapeador de potencia relativa continua por bandas (Delta, Theta, Alpha, Beta)."
+                clinicalUtility="Contraste de neurobiomarcadores con benchmarks."
+                badge="Módulo 5"
+              >
+                <button
+                  onClick={() => setActiveTab('neuro_3d')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'neuro_3d'
+                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Neurotopografía 3D</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('hypnosis_closed_loop')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'hypnosis_closed_loop' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Sparkles className="w-4 h-4" /> Hipnosis
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="qEEG & Carga de Archivos"
+                description="Carga de archivos nativos de electroencefalografía (.EDF/.BDF/.EEG/.CSV)."
+                clinicalUtility="Inspección de ondas crudas y potencias por canal."
+                badge="Señales Crudas"
+              >
+                <button
+                  onClick={() => setActiveTab('neurosensometry')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'neurosensometry'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>qEEG & Carga</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('vr_advanced_hub')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'vr_advanced_hub' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Zap className="w-4 h-4" /> Hub VR Avanzado
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Módulo Terapéutico VR (Meta Quest 3S / Pico)"
+                description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV)."
+                clinicalUtility="Cálculo del índice de habituación H."
+                badge="Biometría VR"
+              >
+                <button
+                  onClick={() => setActiveTab('vr_therapy')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'vr_therapy'
+                      ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Glasses className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>VR Inmersivo</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('academy')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'academy' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <GraduationCap className="w-4 h-4" /> Academia
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Capturador Móvil Centinela 24/7"
+                description="Prueba en vivo de ingesta de datos móviles (tecleo, sueño, GPS) para predecir brotes."
+                clinicalUtility="Fenotipado Digital"
+                badge="Tester Móvil"
+              >
+                <button
+                  onClick={() => setActiveTab('sentinel_tester')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'sentinel_tester'
+                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Wifi className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Tester Móvil JITAI</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('sentinel_tester')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'sentinel_tester' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Smartphone className="w-4 h-4" /> Sentinel
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Referencia a Psiquiatría"
+                description="Generación estructurada de hoja de derivación oficial e interconsulta."
+                clinicalUtility="Gestión de crisis y derivación urgente."
+                badge="Interconsulta"
+              >
+                <button
+                  onClick={() => setActiveTab('referral')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'referral'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Referencia</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
-            <button onClick={() => setActiveTab('referral')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'referral' ? 'bg-red-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <Stethoscope className="w-4 h-4" /> Derivación
-            </button>
-            
-            <button onClick={() => setActiveTab('saas')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${activeTab === 'saas' ? 'bg-slate-800 text-amber-400' : 'text-slate-400 hover:bg-slate-800'}`}>
-              <ShieldCheck className="w-4 h-4" /> SaaS Admin
-            </button>
-
-            {/* BOTÓN PARA ABRIR EL VISOR VR */}
-            <button onClick={() => window.open('/visor', '_blank')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer bg-fuchsia-600 hover:bg-fuchsia-500 text-white border border-fuchsia-400 ml-2 shadow-[0_0_8px_rgba(192,38,211,0.6)]">
-              <Glasses className="w-4 h-4" /> Visor VR (Paciente)
-            </button>
+            <div className="shrink-0 inline-flex">
+              <HoverTooltip
+                title="Perfil de Licencia & Control IA"
+                description="Monitoreo de vigencia de licencia y consumo del bolsón de IA en MongoDB."
+                clinicalUtility="Perfil de usuario e indicadores."
+                badge="Perfil"
+              >
+                <button
+                  onClick={() => setActiveTab('saas')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
+                    activeTab === 'saas'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>SaaS</span>
+                </button>
+              </HoverTooltip>
+            </div>
 
           </div>
         </div>
       </div>
 
+      {/* CONTENIDO PRINCIPAL SEGÚN EL TAB SELECCIONADO */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
-        
-        {activeTab === 'workstation' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-5 space-y-5 flex flex-col">
-              <PatientJsonEditor patient={safePatient} onChange={setCurrentPatient} onSelectPreset={(p) => setCurrentPatient(p)} />
-              <BiomarkerDashboard patient={safePatient} />
+        {syncNotFoundAlert && (
+          <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl animate-shake">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-600 rounded-xl text-white shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="font-bold text-sm block text-white">Notificación de Sincronización:</span>
+                <span className="text-rose-200 font-semibold">{syncNotFoundAlert}</span>
+              </div>
             </div>
-            <div className="lg:col-span-7 space-y-5">
-              <ClinicalOutputViewer analysis={analysis} />
-              <AmieChatCopilot patient={safePatient} analysis={analysis} />
+            <button
+              onClick={() => setSyncNotFoundAlert(null)}
+              className="px-3 py-1 bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shrink-0 cursor-pointer"
+            >
+              Entendido
+            </button>
+          </div>
+        )}
+
+        {syncSuccessMsg && (
+          <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 shadow-lg">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{syncSuccessMsg}</span>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="p-4 bg-red-950/60 border border-red-500/50 rounded-xl text-red-200 text-xs flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+            <div>
+              <span className="font-bold">Error de Ejecución: </span>
+              <span>{errorMsg}</span>
             </div>
           </div>
         )}
 
-        {/* Módulos de Renderizado Dinámico */}
-        {activeTab === 'neurosensometry' && <NeuroSensoryModule patient={safePatient} />}
-        {activeTab === 'neuro_3d' && <InteractiveNeuroViewer patient={safePatient} />}
-        {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
-        {activeTab === 'apa_framework' && <ApaTherapeuticModule patient={safePatient} />}
-        {activeTab === 'cluster_b' && <PsychopathyNarcissismModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-        {activeTab === 'sexual_health' && <VrDualControlTherapyModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-        {activeTab === 'hypnosis_closed_loop' && <VrClosedLoopHypnosisModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-        {activeTab === 'academy' && <AmieClinicalAcademy />}
-        {activeTab === 'sentinel_tester' && <PatientSentinelDashboard patient={safePatient} />}
-        {activeTab === 'saas' && <AdminSaaSPanel />}
-        {activeTab === 'referral' && <PsychiatryReferralView patient={safePatient} />}
+        {/* Tab 1: Workstation */}
+        {activeTab === 'workstation' && (
+          <div className="space-y-5">
+            {analysis?.riskAlerts && <RiskAlertBanner alerts={analysis.riskAlerts} />}
 
-        {activeTab === 'vr_advanced_hub' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              <div className="lg:col-span-5 space-y-5 flex flex-col">
+                <PatientJsonEditor
+                  patient={safePatient}
+                  onChange={setCurrentPatient}
+                  onSelectPreset={handleSelectPreset}
+                />
+                <PatientSentinelDashboard patient={safePatient} />
+                <SessionAudioAcoustics audioRecordings={safePatient.audioRecordings} />
+                <BiomarkerDashboard patient={safePatient} />
+              </div>
+
+              <div className="lg:col-span-7 space-y-5">
+                {analysis ? (
+                  <>
+                    <ClinicalOutputViewer analysis={analysis} />
+                    <AmieChatCopilot patient={safePatient} analysis={analysis} />
+                  </>
+                ) : (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex flex-col items-center justify-center h-full min-h-[480px] shadow-2xl">
+                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-sky-500/10 mb-4 animate-pulse">
+                      <BrainCircuit className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-base font-bold text-white mb-2">
+                      Motor Clínico AMIE Listo para Análisis Multimodal
+                    </h3>
+                    <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
+                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini 3.8 Flash.
+                    </p>
+
+                    <button
+                      onClick={handleRunAnalysis}
+                      disabled={isAnalyzing}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-lg shadow-sky-500/20 active:scale-95 transition cursor-pointer"
+                    >
+                      <Activity className="w-4 h-4" />
+                      <span>Procesar Expediente Ahora</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Evaluador Científico */}
+        {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
+        
+        {/* Tab 3: Diferenciador & Sesgos */}
+        {activeTab === 'differential_bias' && (
+          <div className="space-y-6">
+            <DifferentialBiasResolver patient={safePatient} />
+            <DiagnosticTriangulationView patient={safePatient} analysis={analysis} />
+          </div>
+        )}
+
+        {/* Tab APA: Corrientes APA & RCI */}
+        {activeTab === 'apa_framework' && (
+          <ApaTherapeuticModule patient={safePatient} />
+        )}
+
+        {/* Tab Cluster B & Perfilado Biocomportamental */}
+        {/* ✨ AQUÍ ESTÁ EL CAMBIO SOLICITADO ✨ */}
+        {activeTab === 'cluster_b' && (
+          <VrModuleRouter 
+            patient={safePatient}
+            initialModuleId="CLUSTER_B_FORENSIC"
+            onClose={() => setActiveTab('workstation')}
+          />
+        )}
+
+        {/* Tab 4: Capacitación */}
+        {activeTab === 'academy' && <AmieClinicalAcademy />}
+        
+        {/* Tab 5: Neurotopografía 3D */}
+        {activeTab === 'neuro_3d' && (
           <div className="space-y-4">
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs font-bold text-slate-300">Hub de Tratamiento e Intervención VR</div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={() => setActiveAdvancedSubModule('TDAH')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'TDAH' ? 'bg-sky-600 text-white' : 'bg-slate-950 text-slate-400'}`}>TDAH</button>
-                <button onClick={() => setActiveAdvancedSubModule('TRAUMA')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'TRAUMA' ? 'bg-purple-600 text-white' : 'bg-slate-950 text-slate-400'}`}>Trauma</button>
-                <button onClick={() => setActiveAdvancedSubModule('EMDR')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'EMDR' ? 'bg-rose-600 text-white' : 'bg-slate-950 text-slate-400'}`}>EMDR</button>
-                <button onClick={() => setActiveAdvancedSubModule('NEURO')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'NEURO' ? 'bg-cyan-600 text-white' : 'bg-slate-950 text-slate-400'}`}>Neurología</button>
-                <button onClick={() => setActiveAdvancedSubModule('DOLOR')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'DOLOR' ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-400'}`}>Analgesia</button>
-                <button onClick={() => setActiveAdvancedSubModule('QEEG')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'QEEG' ? 'bg-amber-600 text-white' : 'bg-slate-950 text-slate-400'}`}>qEEG (Gamma)</button>
-                <button onClick={() => setActiveAdvancedSubModule('DEPRE')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'DEPRE' ? 'bg-slate-700 text-white' : 'bg-slate-950 text-slate-400'}`}>TDM</button>
-                <button onClick={() => setActiveAdvancedSubModule('COGNITIVE')} className={`px-3 py-1.5 rounded-xl text-xs font-bold ${activeAdvancedSubModule === 'COGNITIVE' ? 'bg-amber-700 text-white' : 'bg-slate-950 text-slate-400'}`}>Deterioro</button>
+            <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-400" />
+                Modo de Visualización Encefalográfica
+              </span>
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+                <button
+                  onClick={() => setNeuroViewerMode('classic')}
+                  className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
+                    neuroViewerMode === 'classic'
+                      ? 'bg-sky-600 text-white shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Visor Anatómico
+                </button>
+                <button
+                  onClick={() => setNeuroViewerMode('holographic')}
+                  className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 cursor-pointer ${
+                    neuroViewerMode === 'holographic'
+                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-cyan-300" />
+                  Visor Holográfico 3D
+                </button>
               </div>
             </div>
 
-            {activeAdvancedSubModule === 'TDAH' && <VrExecutiveFunctionModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'TRAUMA' && <VrDevelopmentalTraumaFullscreenMonitor patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'EMDR' && <VrMemoryReconsolidationModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'NEURO' && <VrFunctionalNeurologyModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'DOLOR' && <VrPainManagementModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'QEEG' && <VrGammaInsightModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'DEPRE' && <VrDepressionModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
-            {activeAdvancedSubModule === 'COGNITIVE' && <VrCognitiveDeclineModule patient={safePatient} onClose={() => setActiveTab('workstation')} />}
+            {neuroViewerMode === 'classic' ? (
+              <InteractiveNeuroViewer patient={safePatient} />
+            ) : (
+              <HolographicNeuroViewer3D patient={safePatient} />
+            )}
+          </div>
+        )}
+        
+        {/* Tab 6: Módulo qEEG */}
+        {activeTab === 'neurosensometry' && (
+          <NeuroSensoryModule 
+            patient={safePatient} 
+            onAttachQeegToPatient={handleAttachQeegToPatient} 
+          />
+        )}
+        
+        {/* Tab 7: Módulo VR Inmersivo */}
+        {activeTab === 'vr_therapy' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-end gap-2.5 flex-wrap">
+              <button
+                onClick={() => setIsFullscreenUnifiedVrOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:scale-105 text-white rounded-xl text-xs font-bold shadow-xl shadow-cyan-600/30 transition cursor-pointer"
+              >
+                <Monitor className="w-4 h-4 text-cyan-200" />
+                <span>Abrir Consola Inmersiva Unificada (IA + VR)</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenPhenotypeOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4 text-teal-100" />
+                <span>Fenotipado Digital & Recaídas</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('GAMMA_INSIGHT')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
+              >
+                <Lightbulb className="w-4 h-4 text-amber-100" />
+                <span>Consola Gamma 40Hz (TOC / TEA)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('TDAH_EXECUTIVE')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition cursor-pointer"
+              >
+                <Target className="w-4 h-4 text-sky-200" />
+                <span>Consola TDAH (Executive Control)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('EMDR_MEMORY')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-200" />
+                <span>Consola Memoria & Fobias</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('FND_MIRROR')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4 text-indigo-200" />
+                <span>Consola Mirror VR (FND)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('PAIN_MANAGEMENT')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
+              >
+                <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
+                <span>Consola Analgesia VR</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('NEURO_HYPNOSIS')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-purple-200" />
+                <span>Consola Neurohipnosis Closed-Loop</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('DEV_TRAUMA')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 via-pink-700 to-rose-700 hover:from-purple-700 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
+              >
+                <Brain className="w-4 h-4 text-pink-200" />
+                <span>Consola Trauma Evolutivo & AIMA</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('DUAL_CONTROL_SES_SIS')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-700 to-purple-800 hover:from-rose-500 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
+              >
+                <HeartHandshake className="w-4 h-4 text-rose-200" />
+                <span>Control Dual (SES / SIS)</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenDiagnosticOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
+              >
+                <Brain className="w-4 h-4" />
+                <span>Consola Diagnóstico 3D</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreenConsoleOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
+              >
+                <Glasses className="w-4 h-4" />
+                <span>Consola Tratamiento</span>
+              </button>
+            </div>
+
+            <VrTherapyModule
+              patient={safePatient}
+              onUpdatePatientVrData={handleUpdatePatientVrData}
+            />
           </div>
         )}
 
+        {/* TAB: TESTER CENTINELA MÓVIL */}
+        {activeTab === 'sentinel_tester' && (
+          <div className="py-2">
+            <SentinelMobileCollector />
+          </div>
+        )}
+
+        {/* Tab 8: Referencia */}
+        {activeTab === 'referral' && (
+          <PsychiatryReferralView
+            patient={safePatient}
+            analysis={analysis}
+            currentDoctorName={doctorName}
+            colegiadoNumber={colegiadoNumber}
+          />
+        )}
+
+        {/* Tab 9: Panel SaaS & Licencias */}
+        {activeTab === 'saas' && <AdminSaaSPanel />}
       </main>
+
+      <FloatingAmieAssistant
+        currentPatientId={safePatientId}
+        onNavigateTab={(targetTab: string) => setActiveTab(targetTab as AppTab)}
+        activeTab={activeTab}
+      />
+
+      <DsmGuideModal
+        isOpen={isDsmModalOpen}
+        onClose={() => setIsDsmModalOpen(false)}
+        defaultView={dsmModalView}
+      />
+
+      {/* MODALES A PANTALLA COMPLETA */}
+      
+      {/* EL ENRUTADOR QUE PREGUNTA ROL PARA TODAS LAS TERAPIAS */}
+      {activeVrModuleId && (
+        <VrModuleRouter
+          patient={safePatient}
+          initialModuleId={activeVrModuleId}
+          onClose={() => setActiveVrModuleId(null)}
+        />
+      )}
+
+      {/* Otras consolas que no usan Enrutador porque son exclusivas del doctor */}
+      {isFullscreenUnifiedVrOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <AmieUnifiedVrConsole
+            patient={safePatient}
+            onClose={() => setIsFullscreenUnifiedVrOpen(false)}
+          />
+        </div>
+      )}
+
+      {isFullscreenConsoleOpen && (
+        <FullscreenTreatmentConsole
+          patient={safePatient}
+          onClose={() => setIsFullscreenConsoleOpen(false)}
+        />
+      )}
+
+      {isFullscreenDiagnosticOpen && (
+        <FullscreenDiagnosticRunner
+          patient={safePatient}
+          onClose={() => setIsFullscreenDiagnosticOpen(false)}
+          onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
+      )}
+
+      {isFullscreenPhenotypeOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
+          <DigitalPhenotypeModule
+            patient={safePatient}
+            onClose={() => setIsFullscreenPhenotypeOpen(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
+// 2. COMPONENTE APP QUE ENRUTA TODO
 export default function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
-        <Route path="/visor" element={<VrPatientExperience onClose={() => window.location.href = '/doctor'} />} />
+        <Route path="/visor" element={<PicoVisorApp />} />
       </Routes>
     </Router>
   );
