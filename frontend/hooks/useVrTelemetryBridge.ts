@@ -26,8 +26,21 @@ export interface VrStreamPayload {
   [key: string]: any;
 }
 
-const BACKEND_DOMAIN = 'amieneurogical.onrender.com';
-const WS_URL = `wss://${BACKEND_DOMAIN}`;
+// Determinación dinámica y segura de la URL del WebSocket
+const getSafeWsUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const isHttps = window.location.protocol === 'https:';
+    const protocol = isHttps ? 'wss:' : 'ws:';
+
+    // Entorno de desarrollo local
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `${protocol}//${window.location.hostname}:5000`;
+    }
+  }
+
+  // Backend oficial en Render (siempre wss:// en producción)
+  return 'wss://amieneurological-backend.onrender.com';
+};
 
 export const useVrTelemetryBridge = (
   mode: 'sender' | 'receiver',
@@ -67,13 +80,18 @@ export const useVrTelemetryBridge = (
 
     const connectWs = () => {
       try {
-        const ws = new WebSocket(WS_URL);
+        const wsUrl = getSafeWsUrl();
+        const ws = new WebSocket(wsUrl);
         socketRef.current = ws;
 
         ws.onopen = () => {
           if (!isMounted) return;
           setIsConnected(true);
-          ws.send(JSON.stringify({ type: 'HANDSHAKE', patientId, role: mode, moduleName, timestamp: Date.now() }));
+          try {
+            ws.send(JSON.stringify({ type: 'HANDSHAKE', patientId, role: mode, moduleName, timestamp: Date.now() }));
+          } catch (e) {
+            console.warn('Error en handshake inicial:', e);
+          }
         };
 
         ws.onmessage = (event) => {
@@ -91,11 +109,14 @@ export const useVrTelemetryBridge = (
               setIsPeerConnected(true);
               setLiveData(normalizePacket(data));
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('Error al procesar paquete WS:', e);
+          }
         };
 
-        ws.onerror = () => {
+        ws.onerror = (err) => {
           if (!isMounted) return;
+          console.warn('Error de conexión WebSocket capturado de forma segura:', err);
           setIsConnected(false);
           setIsPeerConnected(false);
         };
@@ -107,8 +128,12 @@ export const useVrTelemetryBridge = (
           reconnectTimerRef.current = setTimeout(connectWs, 3000);
         };
       } catch (e) {
-        setIsConnected(false);
-        setIsPeerConnected(false);
+        console.error('Error al instanciar WebSocket:', e);
+        if (isMounted) {
+          setIsConnected(false);
+          setIsPeerConnected(false);
+          reconnectTimerRef.current = setTimeout(connectWs, 5000);
+        }
       }
     };
 
@@ -117,32 +142,46 @@ export const useVrTelemetryBridge = (
     return () => {
       isMounted = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      if (socketRef.current) socketRef.current.close();
+      if (socketRef.current) {
+        socketRef.current.onopen = null;
+        socketRef.current.onmessage = null;
+        socketRef.current.onerror = null;
+        socketRef.current.onclose = null;
+        socketRef.current.close();
+      }
     };
   }, [mode, patientId, moduleName]);
 
   const syncSession = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'HANDSHAKE', patientId, role: mode, moduleName, timestamp: Date.now() }));
+      try {
+        socketRef.current.send(JSON.stringify({ type: 'HANDSHAKE', patientId, role: mode, moduleName, timestamp: Date.now() }));
+      } catch (e) {
+        console.warn('Error en syncSession:', e);
+      }
     }
   }, [mode, patientId, moduleName]);
 
   const sendRemoteStart = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'START_TEST', patientId, moduleName, timestamp: Date.now() }));
+      try {
+        socketRef.current.send(JSON.stringify({ type: 'START_TEST', patientId, moduleName, timestamp: Date.now() }));
+      } catch (e) {
+        console.warn('Error en sendRemoteStart:', e);
+      }
     }
   }, [patientId, moduleName]);
 
   const transmit = useCallback(async (metricsData: VrMetrics | any) => {
-    // ⚠️ ELIMINADO: if (mode !== 'sender') return; 
-    // Ahora la consola del doctor TAMBIÉN puede enviar comandos (ej. LOAD_MODULE)
-    
     const metrics: VrMetrics = metricsData.metrics ? metricsData.metrics : metricsData;
     const payload: VrStreamPayload = normalizePacket({ patientId, moduleName, timestamp: Date.now(), type: 'METRICS', metrics, ...metricsData });
 
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(payload));
-      return;
+      try {
+        socketRef.current.send(JSON.stringify(payload));
+      } catch (e) {
+        console.warn('Error en transmit:', e);
+      }
     }
   }, [patientId, moduleName]);
 
