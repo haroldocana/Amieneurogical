@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
-import { Fingerprint, Map, Activity, PlayCircle, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, HandMetal, Network } from 'lucide-react';
+import { Fingerprint, Map, Activity, PlayCircle, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, HandMetal, Network, Glasses } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
@@ -10,8 +10,6 @@ interface Props {
 
 export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = patient?.id || 'PAC-8104';
-  
-  // CORRECCIÓN CLAVE: Cambiamos a 'sender' y unificamos el nombre del módulo con el enrutador ('NEURO_DEGEN')
   const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'NEURO_DEGEN');
 
   const [sessionPhase, setSessionPhase] = useState<'IDLE' | 'TREMOR_ANALYSIS' | 'SPATIAL_MAZE'>('IDLE');
@@ -29,13 +27,11 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
     
     const interval = setInterval(() => {
       if (sessionPhase === 'TREMOR_ANALYSIS') {
-        // Simulamos un temblor parkinsoniano de reposo (ej. 4 a 8 mm)
         setTremorAmplitudeMm(prev => {
           const base = prev === 0 ? 5 : prev;
           return Math.max(1, Math.min(12, base + (Math.random() * 2 - 1)));
         });
       } else if (sessionPhase === 'SPATIAL_MAZE') {
-        // Simulamos desorientación espacial (Alzheimer incipiente)
         if (Math.random() > 0.7) setNavErrors(prev => prev + 1);
         setPathEfficiency(prev => Math.max(30, prev - (Math.random() * 2)));
       }
@@ -49,36 +45,20 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
     setIsFinished(false);
     setTremorAmplitudeMm(0);
     syncSession();
-    
-    // ORDENAMOS AL VISOR CARGAR EL ENTORNO DE EVALUACIÓN NEURODEGENERATIVA
-    transmit({ 
-      type: 'LOAD_MODULE', 
-      patientId, 
-      moduleName: 'NEURO_DEGEN',
-      ecosystem: 'LOW_POLY_WHITE_ROOM' // Sala estéril de calibración motora
-    });
-
+    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'NEURO_DEGEN', ecosystem: 'LOW_POLY_WHITE_ROOM' });
     transmit({ type: 'START_TREMOR_TEST' });
   };
 
   const startSpatialMaze = () => {
     setSessionPhase('SPATIAL_MAZE');
-    
-    // Cambiamos el entorno en las gafas al laberinto espacial
-    transmit({ 
-      type: 'LOAD_MODULE', 
-      patientId, 
-      moduleName: 'NEURO_DEGEN',
-      ecosystem: 'ZEN_GARDEN' // O un laberinto virtual 3D
-    });
-
+    transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'NEURO_DEGEN', ecosystem: 'ZEN_GARDEN' });
     transmit({ type: 'START_MAZE_TEST' });
   };
 
   const handleGenerateReport = () => {
     setSessionPhase('IDLE');
     setIsFinished(true);
-    transmit({ type: 'STOP_TEST' }); // Devuelve al paciente a la sala de espera
+    transmit({ type: 'STOP_TEST' });
 
     let report = `Análisis de Marcadores Neurodegenerativos (Cinemática Hand-Tracking y Navegación 6DoF).\n\n`;
     
@@ -118,11 +98,10 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
           }
         })
       });
-      alert('✅ Evaluación Neurodegenerativa guardada exitosamente en el expediente.');
+      alert('✅ Evaluación Neurodegenerativa guardada.');
       onClose();
     } catch (e) {
       console.error(e);
-      alert('Error al intentar guardar en el servidor.');
     } finally {
       setIsSaving(false);
     }
@@ -142,12 +121,8 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
         </div>
         
         <div className="flex items-center gap-3">
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
-          </div>
-
-          <button onClick={syncSession} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer">
-            <RefreshCw className="w-3.5 h-3.5" /><span>Sincronizar</span>
+          <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+            <RefreshCw className="w-4 h-4" /> Sincronizar
           </button>
           <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Volver al Selector</button>
         </div>
@@ -162,13 +137,13 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
                 <button 
                   disabled={!isConnected}
                   onClick={startTremorAnalysis} 
-                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 ${!isConnected ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-500 text-white cursor-pointer'}`}
+                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer ${!isConnected ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
                 >
                   <HandMetal className="w-5 h-5" /> 1. Análisis de Temblor (Manos)
                 </button>
               )}
               {sessionPhase === 'TREMOR_ANALYSIS' && (
-                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer">
+                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 cursor-pointer">
 
 <Map className="w-5 h-5" />
 2. Navegación Espacial (Laberinto)
