@@ -115,7 +115,7 @@ export const VrExecutiveFunctionModule: React.FC<Props> = ({ patient, onClose })
     } catch (e) {
       console.error(e);
       alert('Error de red al intentar guardar.');
-    } fontally {
+    } finally {
       setIsSaving(false);
     }
   };
