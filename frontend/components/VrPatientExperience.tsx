@@ -6,9 +6,27 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Environment, Sphere, useVideoTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
-interface Props { patientId?: string; onClose: () => void; }
+interface Props { 
+  patientId?: string; 
+  initialModuleId?: string;
+  onClose: () => void; 
+}
 
-type EnvironmentType = 'IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT';
+type EnvironmentType = 
+  | 'IDLE' 
+  | 'HOLODECK_IDLE'
+  | 'TDAH_EXECUTIVE' 
+  | 'TEA_SOCIAL' 
+  | 'TDM_DEPRESSION' 
+  | 'TAG_ANXIETY' 
+  | 'NEURO_HYPNOSIS' 
+  | 'DUAL_CONTROL' 
+  | 'DEV_TRAUMA' 
+  | 'EMDR_MEMORY' 
+  | 'GAMMA_INSIGHT' 
+  | 'PAIN_MANAGEMENT'
+  | 'CLUSTER_B_FORENSIC'
+  | 'FND_MIRROR';
 
 // ============================================================================
 // ESCUDO ANTIERRORES (Previene el pantallazo rojo y que te expulse de la app)
@@ -41,10 +59,32 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
 }
 
 // ============================================================================
-// NORMALIZADOR DE ARCHIVOS ECOSYSTEM
+// NORMALIZADOR DE ARCHIVOS ECOSYSTEM CON FALLBACK GARANTIZADO
 // ============================================================================
+const KNOWN_JPG_FILES = new Set([
+  'ACROPHOBIA_ROOF.jpg',
+  'AEROPHOBIA_CABIN.jpg',
+  'BIOLUMINESCENT_BEACH.jpg',
+  'CLINICAL_OFFICE.jpg',
+  'CLUSTER_B_FORENSIC.jpg',
+  'COSMIC_STARS.jpg',
+  'DEV_TRAUMA.jpg',
+  'DUAL_CONTROL.jpg',
+  'EMDR_MEMORY.jpg',
+  'FND_MIRROR.jpg',
+  'NEURO_HYPNOSIS.jpg',
+  'PAIN_MANAGEMENT.jpg',
+  'PROTECTIVE_TREEHOUSE.jpg',
+  'SAFE_PLACE_FOREST.jpg',
+  'STERILE_ROOM.jpg',
+  'TDAH_EXECUTIVE.jpg',
+  'WARM_HEARTH.jpg',
+  'WOMB_LIKE_CAVE.jpg',
+  'ZEN_GARDEN.jpg'
+]);
+
 const ECOSYSTEM_MAP: Record<string, string> = {
-  // Claves técnicas originales
+  // Claves directas de archivos
   'WARM_HEARTH': 'WARM_HEARTH.jpg',
   'CLINICAL_OFFICE': 'CLINICAL_OFFICE.jpg',
   'STERILE_ROOM': 'STERILE_ROOM.jpg',
@@ -56,8 +96,6 @@ const ECOSYSTEM_MAP: Record<string, string> = {
   'ZEN_GARDEN': 'ZEN_GARDEN.jpg',
   'ACROPHOBIA_ROOF': 'ACROPHOBIA_ROOF.jpg',
   'AEROPHOBIA_CABIN': 'AEROPHOBIA_CABIN.jpg',
-  
-  // Normalización de nombres de módulos nuevos con underscores
   'DUAL_CONTROL': 'DUAL_CONTROL.jpg',
   'PAIN_MANAGEMENT': 'PAIN_MANAGEMENT.jpg',
   'NEURO_HYPNOSIS': 'NEURO_HYPNOSIS.jpg',
@@ -67,7 +105,17 @@ const ECOSYSTEM_MAP: Record<string, string> = {
   'TDAH_EXECUTIVE': 'TDAH_EXECUTIVE.jpg',
   'FND_MIRROR': 'FND_MIRROR.jpg',
 
-  // Fallbacks de emergencia si llegan nombres viejos con espacios desde la consola
+  // Aliases técnicos desde módulos
+  'TDAH_ATTENTION_LAB': 'TDAH_EXECUTIVE.jpg',
+  'ExecutiveControl': 'TDAH_EXECUTIVE.jpg',
+  'HYPNOSIS': 'NEURO_HYPNOSIS.jpg',
+  'SEXUAL_HEALTH': 'DUAL_CONTROL.jpg',
+  'DEVELOPMENTAL_TRAUMA': 'DEV_TRAUMA.jpg',
+  'MEMORY_RECONSOLIDATION': 'EMDR_MEMORY.jpg',
+  'FUNCTIONAL_NEUROLOGY': 'FND_MIRROR.jpg',
+  'SAFE_PLACE': 'SAFE_PLACE_FOREST.jpg',
+
+  // Fallbacks de nombres antiguos en español
   'Salud Sexual': 'DUAL_CONTROL.jpg',
   'Hipnosis & Grounding': 'NEURO_HYPNOSIS.jpg',
   'Laboratorio de Atención': 'TDAH_EXECUTIVE.jpg',
@@ -79,44 +127,57 @@ const ECOSYSTEM_MAP: Record<string, string> = {
 };
 
 const getSafeEcosystemFile = (ecosystemKey: string): string => {
-  // Si no hay key o es vacío, devolvemos un lugar seguro por defecto
   if (!ecosystemKey || ecosystemKey === 'NEUTRAL_VOID') {
     return '/ecosystems/SAFE_PLACE_FOREST.jpg';
   }
   
-  // Buscamos si la llave exacta existe en nuestro mapa
+  // 1. Buscar en el diccionario de mapeo
   const mapped = ECOSYSTEM_MAP[ecosystemKey];
-  if (mapped) {
+  if (mapped && KNOWN_JPG_FILES.has(mapped)) {
     return `/ecosystems/${mapped}`;
   }
   
-  // Si nos mandan algo que no está en el mapa, limpiamos espacios y aseguramos que tenga .jpg
+  // 2. Comprobar si el nombre recibido es un archivo existente
   const sanitized = ecosystemKey.trim();
-  const fileExt = sanitized.toLowerCase();
-  
-  if (fileExt.endsWith('.jpg') || fileExt.endsWith('.jpeg') || fileExt.endsWith('.png')) {
-    return `/ecosystems/${sanitized}`;
+  const withExt = (sanitized.endsWith('.jpg') || sanitized.endsWith('.jpeg')) 
+    ? sanitized 
+    : `${sanitized}.jpg`;
+
+  if (KNOWN_JPG_FILES.has(withExt)) {
+    return `/ecosystems/${withExt}`;
   }
   
-  return `/ecosystems/${sanitized}.jpg`;
+  // 3. Fallback seguro a imagen garantizada
+  return '/ecosystems/SAFE_PLACE_FOREST.jpg';
 };
 
 // ============================================================================
 // EXPERIENCIA PRINCIPAL DEL VISOR
 // ============================================================================
-export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', onClose }) => {
+export const VrPatientExperience: React.FC<Props> = ({ 
+  patientId: propPatientId, 
+  initialModuleId = 'HOLODECK_IDLE', 
+  onClose 
+}) => {
+  // Soporte para parámetros en URL (/visor?paciente=PAC-8104&modulo=TDAH_EXECUTIVE)
+  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const patientId = propPatientId || queryParams?.get('paciente') || 'PAC-8104';
+  const urlModule = queryParams?.get('modulo');
+
   // EL VISOR DEL PACIENTE DEBE SER SIEMPRE 'receiver'
   const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'HOLODECK_IDLE');
 
-  const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>('IDLE');
-  const [activeEcosystem, setActiveEcosystem] = useState<string>('NEUTRAL_VOID');
+  const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>(
+    (urlModule || initialModuleId || 'IDLE') as EnvironmentType
+  );
+  const [activeEcosystem, setActiveEcosystem] = useState<string>('SAFE_PLACE_FOREST');
   const [isVideo, setIsVideo] = useState<boolean>(false);
   const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
   const [emdrHz, setEmdrHz] = useState<number>(1.5);
 
   // 1. AUDIO INMERSIVO AUTOMÁTICO PROTEGIDO
   useEffect(() => {
-    if (!activeEcosystem || activeEcosystem === 'NEUTRAL_VOID' || activeEnvironment === 'IDLE') return;
+    if (!activeEcosystem || activeEcosystem === 'NEUTRAL_VOID' || activeEnvironment === 'IDLE' || activeEnvironment === 'HOLODECK_IDLE') return;
     
     try {
       const audio = new Audio(`/audio/${activeEcosystem}.mp3`);
@@ -124,20 +185,25 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
       audio.volume = 0.8;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.catch(error => console.warn(`Audio silenciado o no encontrado: /audio/${activeEcosystem}.mp3`, error));
+        playPromise.catch(error => console.warn(`Audio no encontrado o bloqueado: /audio/${activeEcosystem}.mp3`, error));
       }
       return () => { audio.pause(); audio.src = ''; };
     } catch (e) {
-      console.warn("Fallo general al intentar reproducir audio", e);
+      console.warn("Fallo al reproducir audio:", e);
     }
   }, [activeEcosystem, activeEnvironment]);
 
-  // 2. ENRUTADOR Y TELEMETRÍA
+  // 2. RECEPCIÓN DE TELEMETRÍA Y CAMBIO DE MÓDULO
   useEffect(() => {
     if (!liveData) return;
     if (liveData.type === 'LOAD_MODULE') {
-      setActiveEnvironment(liveData.moduleName as EnvironmentType);
-      if (liveData.ecosystem) { setActiveEcosystem(liveData.ecosystem); setIsVideo(!!liveData.isVideo); }
+      if (liveData.moduleName) {
+        setActiveEnvironment(liveData.moduleName as EnvironmentType);
+      }
+      if (liveData.ecosystem) { 
+        setActiveEcosystem(liveData.ecosystem); 
+        setIsVideo(!!liveData.isVideo); 
+      }
     } else if (liveData.type === 'START_AIMA_PROTOCOL') {
       if (liveData.ecosystem) { setActiveEcosystem(liveData.ecosystem); setIsVideo(false); }
     } else if (liveData.type === 'START_BILATERAL_STIMULATION') {
@@ -149,7 +215,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
     }
   }, [liveData]);
 
-  const isWebXRModule = ['DUAL_CONTROL', 'DEV_TRAUMA', 'EMDR_MEMORY', 'NEURO_HYPNOSIS', 'GAMMA_INSIGHT', 'PAIN_MANAGEMENT'].includes(activeEnvironment);
+  // Módulos que se renderizan en 3D WebXR Canvas
+  const isWebXRModule = [
+    'DUAL_CONTROL', 
+    'DEV_TRAUMA', 
+    'EMDR_MEMORY', 
+    'NEURO_HYPNOSIS', 
+    'GAMMA_INSIGHT', 
+    'PAIN_MANAGEMENT',
+    'TDAH_EXECUTIVE',
+    'CLUSTER_B_FORENSIC',
+    'FND_MIRROR'
+  ].includes(activeEnvironment);
 
   return (
     <SafeVrWrapper onClose={onClose}>
@@ -186,8 +263,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId = 'PAC-8104', o
         {/* RENDERIZADO 2D LEGACY */}
         {!isWebXRModule && (
           <>
-            {activeEnvironment === 'IDLE' && <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />}
-            {activeEnvironment === 'TDAH_EXECUTIVE' && <AdhdExecutiveEnvironment remoteCommand={remoteCommand} transmit={transmit} />}
+            {(activeEnvironment === 'IDLE' || activeEnvironment === 'HOLODECK_IDLE') && (
+              <IdleWaitingRoom isConnected={isConnected} syncSession={syncSession} />
+            )}
             {activeEnvironment === 'TAG_ANXIETY' && <ExposureAnxietyEnvironment liveData={liveData} />}
             {activeEnvironment === 'TEA_SOCIAL' && <SocialCognitionEnvironment liveData={liveData} />}
             {activeEnvironment === 'TDM_DEPRESSION' && <DepressionEnvironment liveData={liveData} transmit={transmit} />}
