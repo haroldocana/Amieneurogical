@@ -1,19 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Wifi, WifiOff, X, RefreshCw, Plus, ShieldAlert, Target, Sun, AlertTriangle } from 'lucide-react';
-import { VRButton, XR, Controllers } from '@react-three/xr';
+import { VRButton, XR } from '@react-three/xr'; // ELIMINADO: Controllers
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Sphere } from '@react-three/drei';
 import * as THREE from 'three';
-
-// ============================================================================
-// 1. PARCHE GLOBAL ANTI-CRASH PARA WEBXR (Previene K.onBuild is not a function)
-// ============================================================================
-if (typeof THREE.Material !== 'undefined') {
-  if (typeof (THREE.Material.prototype as any).onBuild === 'undefined') {
-    (THREE.Material.prototype as any).onBuild = function () {};
-  }
-}
 
 interface Props { 
   patientId?: string; 
@@ -22,6 +13,15 @@ interface Props {
 }
 
 type EnvironmentType = 'IDLE' | 'HOLODECK_IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT' | 'CLUSTER_B_FORENSIC' | 'FND_MIRROR';
+
+// ============================================================================
+// PARCHE MAESTRO ANTI-CRASH (Inyecta onBuild directo a la memoria gráfica)
+// ============================================================================
+const applySafeMaterial = (mat: any) => {
+  if (mat && typeof mat.onBuild !== 'function') {
+    mat.onBuild = function() {};
+  }
+};
 
 // ============================================================================
 // ESCUDO ANTIERRORES
@@ -38,12 +38,12 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
       return (
         <div className="fixed inset-0 z-[10000] bg-red-950 flex flex-col items-center justify-center p-6 text-white text-center">
           <AlertTriangle className="w-20 h-20 text-red-500 mb-6 animate-pulse" />
-          <h2 className="text-3xl font-black mb-4">Error Crítico Interceptado</h2>
+          <h2 className="text-3xl font-black mb-4">Error Interceptado por AMIE Shield</h2>
           <p className="text-red-200 mb-6 max-w-xl font-mono text-xs bg-red-900/50 p-4 rounded-xl border border-red-800 break-all">
             {this.state.error?.message || 'Carga fallida'}
           </p>
           <div className="flex gap-4">
-            <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition">Limpiar Caché y Reiniciar App</button>
+            <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition">Recargar App</button>
             <button onClick={this.props.onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition">Salir</button>
           </div>
         </div>
@@ -54,9 +54,8 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
 }
 
 // ============================================================================
-// CARGADORES DE ESFERAS SIN SUSPENSE (Evitan congelamiento de WebXR)
+// CARGADORES DE ESFERAS 100% ESTABLES (Sin bloqueos de promesas)
 // ============================================================================
-
 const ImageSphere = ({ url }: { url: string }) => {
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
@@ -64,30 +63,24 @@ const ImageSphere = ({ url }: { url: string }) => {
     let isMounted = true;
     const loader = new THREE.TextureLoader();
     loader.load(url, (loaded) => {
-      // Aplicar sRGB de manera compatible con todas las versiones
       if ('colorSpace' in loaded) {
-        loaded.colorSpace = (THREE as any).SRGBColorSpace;
+        loaded.colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
       } else {
-        (loaded as any).encoding = 3001;
+        (loaded as any).encoding = 3001; // Soportar versiones legacy
       }
       if (isMounted) setTexture(loaded);
     });
     return () => { isMounted = false; };
   }, [url]);
 
-  if (!texture) {
-    return (
-      <mesh>
-        <sphereGeometry args={[50, 16, 16]} />
-        <meshBasicMaterial color="#020617" side={THREE.BackSide} />
-      </mesh>
-    );
-  }
+  // Si no hay textura, no renderizamos nada, evitando pantallas negras o fallos
+  if (!texture) return null;
 
   return (
     <mesh>
       <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} />
+      {/* onUpdate inyecta el parche milisegundos antes de que WebXR lo procese */}
+      <meshBasicMaterial map={texture} side={THREE.BackSide} onUpdate={applySafeMaterial} />
     </mesh>
   );
 };
@@ -103,11 +96,11 @@ const VideoSphere = ({ url }: { url: string }) => {
     video.loop = true;
     video.muted = false;
     video.playsInline = true;
-    video.play().catch(() => console.warn("Autoplay bloqueado. Requiere clic."));
+    video.play().catch(() => console.warn("Autoplay bloqueado. Requiere interacción manual."));
 
     const texture = new THREE.VideoTexture(video);
     if ('colorSpace' in texture) {
-      texture.colorSpace = (THREE as any).SRGBColorSpace;
+      texture.colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
     } else {
       (texture as any).encoding = 3001;
     }
@@ -122,20 +115,25 @@ const VideoSphere = ({ url }: { url: string }) => {
     };
   }, [url]);
 
-  if (!videoTexture) {
-    return (
-      <mesh>
-        <sphereGeometry args={[50, 16, 16]} />
-        <meshBasicMaterial color="#020617" side={THREE.BackSide} />
-      </mesh>
-    );
-  }
+  if (!videoTexture) return null;
 
   return (
     <mesh>
       <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={videoTexture} side={THREE.BackSide} />
+      <meshBasicMaterial map={videoTexture} side={THREE.BackSide} onUpdate={applySafeMaterial} />
     </mesh>
+  );
+};
+
+const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (meshRef.current) meshRef.current.position.x = Math.sin(clock.getElapsedTime() * Math.PI * hz) * 3;
+  });
+  return (
+    <Sphere ref={meshRef} args={[0.15, 32, 32]} position={[0, 1.5, -4]}>
+      <meshBasicMaterial color="#a855f7" onUpdate={applySafeMaterial} />
+    </Sphere>
   );
 };
 
@@ -159,16 +157,11 @@ const ECOSYSTEM_MAP: Record<string, string> = {
 
 const getSafeEcosystemFile = (ecosystemKey: string): string => {
   if (!ecosystemKey || ecosystemKey === 'NEUTRAL_VOID') return '/ecosystems/SAFE_PLACE_FOREST.jpg';
-  
   const mapped = ECOSYSTEM_MAP[ecosystemKey];
   if (mapped && KNOWN_JPG_FILES.has(mapped)) return `/ecosystems/${mapped}`;
-  
   const sanitized = ecosystemKey.trim();
   const withExt = (sanitized.endsWith('.jpg') || sanitized.endsWith('.jpeg')) ? sanitized : `${sanitized}.jpg`;
-  
   if (KNOWN_JPG_FILES.has(withExt)) return `/ecosystems/${withExt}`;
-  if (KNOWN_JPG_FILES.has(sanitized)) return `/ecosystems/${sanitized}`;
-  
   return '/ecosystems/SAFE_PLACE_FOREST.jpg';
 };
 
@@ -240,11 +233,9 @@ export const VrPatientExperience: React.FC<Props> = ({
             <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
               <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
             </div>
-            
-            {/* ELIMINAMOS SUSPENSE QUE ERA EL CAUSANTE DE LA CONGELACIÓN */}
             <Canvas>
+              {/* YA NO HAY <Controllers />, SE ELIMINA LA CAUSA DEL CRASH */}
               <XR>
-                <Controllers />
                 {isVideo ? (
                   <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
                 ) : (
@@ -282,20 +273,8 @@ export const VrPatientExperience: React.FC<Props> = ({
 };
 
 // ============================================================================
-// COMPONENTES SECUNDARIOS EXTRA
+// COMPONENTES SECUNDARIOS
 // ============================================================================
-const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    if (meshRef.current) meshRef.current.position.x = Math.sin(clock.getElapsedTime() * Math.PI * hz) * 3;
-  });
-  return (
-    <Sphere ref={meshRef} args={[0.15, 32, 32]} position={[0, 1.5, -4]}>
-      <meshBasicMaterial color="#a855f7" />
-    </Sphere>
-  );
-};
-
 const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, syncSession: () => void }) => (
   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black flex flex-col items-center justify-center">
     <div className="text-center space-y-6 max-w-xl p-8 bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-800/50 shadow-2xl">
