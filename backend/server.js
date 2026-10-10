@@ -1,9 +1,9 @@
-import express from 'express';
-import http from 'http';
-import WebSocket, { WebSocketServer } from 'ws'; 
-import cors from 'cors';
-import dotenv from 'dotenv';
-import mongoose from 'mongoose';
+const express = require('express');
+const http = require('http');
+const { WebSocketServer, WebSocket } = require('ws');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const mongoose = require('mongoose');
 
 dotenv.config();
 
@@ -12,208 +12,153 @@ const server = http.createServer(app);
 
 // 1. MIDDLEWARES & CORS
 app.use(cors({
-  origin: '*', 
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-user-id', 'Accept']
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 2. MONGODB ATLAS & ESQUEMAS
+// 2. CONEXIÓN A MONGODB ATLAS
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:amie2026@cluster0.mongodb.net/amie_clinical_db?retryWrites=true&w=majority';
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB Conectada'))
-  .catch(err => console.error('❌ Error MongoDB:', err.message));
+  .then(() => console.log('✅ MongoDB Conectada con éxito'))
+  .catch(err => console.error('❌ Error de conexión a MongoDB:', err.message));
 
-const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  name: { type: String, default: 'Dr. Alejandro Morales Rivera' },
-  aiTokensTotal: { type: Number, default: 100 },
-  aiTokensUsed: { type: Number, default: 0 },
-}, { timestamps: true });
-const User = mongoose.model('User', userSchema);
+// 3. RUTAS DE COMPROBACIÓN DE SALUD (HEALTH CHECK)
+app.get('/health', (req, res) => {
+  return res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 
-const vrSessionSchema = new mongoose.Schema({
-  patientId: { type: String, required: true, index: true },
-  taskName: { type: String, required: true },
-  durationSeconds: { type: Number, default: 0 },
-  metrics: { type: mongoose.Schema.Types.Mixed, default: {} }, 
-  telemetryLog: [{ type: mongoose.Schema.Types.Mixed }],
-  aiLogs: [{ type: String }],
-  completedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
-const VrSession = mongoose.model('VrSession', vrSessionSchema);
+app.get('/status', (req, res) => {
+  return res.status(200).json({
+    success: true,
+    engine: 'AMIE Gemini 3.8 Flash',
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    services: {
+      clinicalAnalysis: 'operational',
+      jitaiSentinel: 'operational',
+      vrTelemetry: 'operational'
+    }
+  });
+});
 
-const vrLiveStreams = new Map();
-
-// 3. RUTAS HTTP API
-app.get('/api/saas/profile', async (req, res) => {
+// 4. IMPORTAR Y REGISTRAR RUTAS
+try {
+  const vrTelemetryRouter = require('./routes/vrTelemetry');
+  app.use('/api/vr', vrTelemetryRouter);
+} catch (e) {
   try {
-    const userId = req.query.userId || req.headers['x-user-id'] || 'harold01';
-    let user = await User.findOne({ username: userId });
-    if (!user) user = await User.create({ username: userId });
-    return res.status(200).json({ success: true, data: user });
-  } catch (err) { 
-    return res.status(500).json({ success: false, error: err.message }); 
+    const vrTelemetryRouter = require('./server/routes/vrTelemetry');
+    app.use('/api/vr', vrTelemetryRouter);
+  } catch (err) {
+    console.warn('⚠️ No se pudo cargar módulo externo de vrTelemetry, usando integrado');
   }
-});
+}
 
-app.post('/api/vr/stream', (req, res) => {
-  try {
-    const payload = req.body;
-    const patientId = payload.patientId || 'PAC-8104';
-    vrLiveStreams.set(patientId, payload);
-    broadcastToClients({ type: 'VR_LIVE_STREAM', ...payload });
-    return res.status(200).json({ success: true, message: 'OK' });
-  } catch (err) { 
-    return res.status(500).json({ success: false, error: err.message }); 
-  }
-});
-
-app.get('/api/vr/stream', (req, res) => {
-  const patientId = req.query.patientId || 'PAC-8104';
-  const currentStream = vrLiveStreams.get(patientId);
-  if (currentStream) return res.status(200).json(currentStream);
-  return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
-});
-
-// 🔥 ADAPTACIÓN HÍBRIDA EN TELEMETRÍA (ACEPTA TANTO 'sessionData' COMO FORMATO DIRECTO 'kpis/telemetryLog')
+// Endpoint de respaldo para /api/vr/telemetry (soporta formato directo y sessionData)
 app.post('/api/vr/telemetry', async (req, res) => {
   try {
     const { patientId, moduleId, taskName, kpis, telemetryLog, sessionData } = req.body;
     const targetPatient = patientId || 'PAC-8104';
+    const activeTask = moduleId || taskName || sessionData?.taskName || 'VR_MODULE';
 
-    vrLiveStreams.delete(targetPatient);
+    const VrSessionSchema = new mongoose.Schema({
+      patientId: String,
+      taskName: String,
+      metrics: mongoose.Schema.Types.Mixed,
+      telemetryLog: [mongoose.Schema.Types.Mixed]
+    }, { timestamps: true });
 
-    const activeTaskName = moduleId || taskName || sessionData?.taskName || 'VR_CLINICAL_MODULE';
-    const activeMetrics = kpis || sessionData?.metrics || {};
-    const activeLog = telemetryLog || sessionData?.telemetryLog || [];
+    const VrSession = mongoose.models.VrSession || mongoose.model('VrSession', VrSessionSchema);
 
-    const savedSession = await VrSession.create({
+    const saved = await VrSession.create({
       patientId: targetPatient,
-      taskName: activeTaskName,
-      durationSeconds: sessionData?.durationSeconds || Math.round((activeLog.length * 100) / 1000),
-      metrics: activeMetrics, 
-      telemetryLog: activeLog,
-      aiLogs: sessionData?.aiLogs || [],
-      completedAt: new Date()
+      taskName: activeTask,
+      metrics: kpis || sessionData?.metrics || {},
+      telemetryLog: telemetryLog || sessionData?.telemetryLog || []
     });
 
-    broadcastToClients({
-      type: 'VR_SESSION_COMPLETED',
-      patientId: targetPatient,
-      session: savedSession
-    });
-
-    console.log(`✅ [MongoDB Success] Sesión VR persistida para paciente: ${targetPatient} (${activeTaskName})`);
-
-    return res.status(200).json({
-      success: true,
-      message: 'Reporte y telemetría guardados exitosamente en MongoDB.',
-      sessionId: savedSession._id
-    });
+    console.log(`[MongoDB] Telemetría guardada para: ${targetPatient}`);
+    return res.status(200).json({ success: true, sessionId: saved._id });
   } catch (err) {
-    console.error('❌ Error guardando reporte VR en MongoDB:', err);
+    console.error('Error guardando telemetría VR:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.get('/health', (req, res) => { res.status(200).json({ status: 'OK' }); });
-
-// 4. PROXY SHIM PARA VERTEX AI (REST API)
+// Proxy Shim para Vertex AI
 app.post('/api-proxy', async (req, res) => {
   if (req.headers['x-app-proxy'] !== 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ') {
     return res.status(401).json({ error: 'Acceso denegado: Proxy no autorizado' });
   }
-
   try {
     const { originalUrl, method, headers, body } = req.body;
-    const finalUrl = originalUrl;
-
-    console.log(`[API Proxy] Redirigiendo a: ${finalUrl}`);
-
-    const response = await fetch(finalUrl, {
+    const response = await fetch(originalUrl, {
       method: method || 'POST',
-      headers: {
-        ...headers,
-        'Host': new URL(finalUrl).host,
-        'Origin': '',
-        'Referer': ''
-      },
+      headers: { ...headers, 'Host': new URL(originalUrl).host, 'Origin': '', 'Referer': '' },
       body: typeof body === 'object' ? JSON.stringify(body) : body
     });
-
     const data = await response.text();
     res.status(response.status).send(data);
-
   } catch (error) {
-    console.error('[API Proxy] Error:', error);
     res.status(500).json({ error: 'Proxy Request Failed', details: error.message });
   }
 });
 
-// 5. WEBSOCKET SERVER GLOBAL (VR TELEMETRY + GEMINI PROXY)
+// 5. SERVIDOR WEBSOCKET GLOBAL (PICO 3 <-> CHROMEBOOK)
 const wss = new WebSocketServer({ server });
 const connectedClients = new Set();
 
 wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-  // INTERCEPTOR: PROXY HACIA GEMINI LIVE API
+  // Interceptor Proxy Gemini Live WS
   if (url.pathname === '/ws-proxy') {
     const target = url.searchParams.get('target');
     if (!target) return ws.close();
 
-    console.log(`[WS Proxy] Puente con Vertex AI establecido: ${target}`);
     const targetWs = new WebSocket(target);
-
-    ws.on('message', (msg) => {
-      if (targetWs.readyState === WebSocket.OPEN) targetWs.send(msg);
-    });
-
-    targetWs.on('message', (msg) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-    });
-
+    ws.on('message', (msg) => { if (targetWs.readyState === WebSocket.OPEN) targetWs.send(msg); });
+    targetWs.on('message', (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(msg); });
     targetWs.on('close', () => ws.close());
     ws.on('close', () => targetWs.close());
-    targetWs.on('error', (err) => console.error('[WS Proxy Target Error]', err));
-    ws.on('error', (err) => console.error('[WS Proxy Client Error]', err));
     return;
   }
 
-  // FLUJO NORMAL: TELEMETRÍA AMIE VR
+  // Telemetría VR AMIE
   connectedClients.add(ws);
+  console.log('🔌 Cliente conectado al WebSocket VR Bridge');
+
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message.toString());
       const patientId = data.patientId || 'PAC-8104';
-      if (data && data.metrics) vrLiveStreams.set(patientId, data);
-      
+
       if (data.type === 'HANDSHAKE' || data.type === 'JOIN_ROOM') {
         ws.send(JSON.stringify({ type: 'HANDSHAKE_ACK', patientId }));
       }
-      broadcastToClients(data, ws);
-    } catch (e) { 
-      console.error('Error WSS Telemetría:', e); 
+
+      // Rebotar paquetes a los demás clientes conectados
+      connectedClients.forEach(client => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(data));
+        }
+      });
+    } catch (e) {
+      console.error('Error procesando mensaje WS:', e);
     }
   });
-  
-  ws.on('close', () => { connectedClients.delete(ws); });
+
+  ws.on('close', () => {
+    connectedClients.delete(ws);
+    console.log('❌ Cliente desconectado del WebSocket');
+  });
 });
 
-function broadcastToClients(data, senderWs = null) {
-  const payload = JSON.stringify(data);
-  connectedClients.forEach(client => {
-    if (client !== senderWs && client.readyState === 1) { 
-      client.send(payload);
-    }
-  });
-}
-
-// 6. INICIO DE SERVIDOR
+// 6. INICIAR PUERTO
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`🚀 Backend corriendo en puerto ${PORT}`);
-  console.log(`📡 WebSocket endpoint listo`);
+  console.log(`🚀 Backend AMIE listo y corriendo en puerto ${PORT}`);
 });
