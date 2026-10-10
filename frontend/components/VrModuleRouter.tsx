@@ -33,9 +33,10 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
     window.location.href = `/visor?paciente=${patientId}&modulo=${selectedModuleId}`;
   };
 
-  // Mapeo unificado hacia las claves de assets en el servicio multimedia
+  // Mapeo unificado hacia las claves de assets en el servicio multimedia (JPG y MP4)
   const mapModuleToAssetKey = (modId: string): string => {
     switch (modId) {
+      case 'NARCISSISM_CLUSTER_B': return 'narcissism_covert'; // Video MP4 de Narcisismo
       case 'NEURO_HYPNOSIS': return 'HYPNOSIS';
       case 'DUAL_CONTROL_SES_SIS': return 'SEXUAL_HEALTH';
       case 'CLUSTER_B_FORENSIC': return 'CLUSTER_B_FORENSIC';
@@ -51,6 +52,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
 
   const availableModules = [
     { id: 'TDAH_EXECUTIVE', title: 'Función Ejecutiva (TDAH)' },
+    { id: 'NARCISSISM_CLUSTER_B', title: 'Narcisismo y Cluster B (Videos MP4 360°)' },
     { id: 'TAG_ANXIETY', title: 'Reactividad y Fobias (TAG / VRET)' },
     { id: 'DUAL_CONTROL_SES_SIS', title: 'Laboratorio Relacional y Control Dual (AMIE)' },
     { id: 'DEV_TRAUMA', title: 'Trauma Evolutivo (AIMA)' },
@@ -66,6 +68,8 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
     const handleBack = () => setActiveRole('NONE');
 
     switch (selectedModuleId) {
+      case 'NARCISSISM_CLUSTER_B':
+        return <PsychopathyNarcissismModule patient={patient} onClose={handleBack} />;
       case 'TAG_ANXIETY':
         return <FullscreenTreatmentConsole patient={patient} onClose={handleBack} />;
       case 'DUAL_CONTROL_SES_SIS':
