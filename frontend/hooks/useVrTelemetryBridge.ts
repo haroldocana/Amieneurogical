@@ -31,19 +31,17 @@ export interface VrStreamPayload {
   [key: string]: any;
 }
 
-// Determinación dinámica y segura de la URL del WebSocket apuntando al BACKEND
+// Determinación fija de la URL del WebSocket hacia el BACKEND de Render
 const getSafeWsUrl = (): string => {
   if (typeof window !== 'undefined') {
     const isHttps = window.location.protocol === 'https:';
     const protocol = isHttps ? 'wss:' : 'ws:';
 
-    // Entorno de desarrollo local
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return `${protocol}//${window.location.hostname}:10000`;
     }
 
-    // URL EXACTA DEL BACKEND DE WEBSOCKETS EN RENDER
-    // Se fuerza el dominio del backend para evitar conectar al host del frontend
+    // Apunta directamente al Backend en Render (evita el host del frontend)
     return 'wss://amieneurogical.onrender.com';
   }
 
@@ -121,11 +119,9 @@ export const useVrTelemetryBridge = (
               return;
             }
 
-            // Actualizar comandos remotos sin bloquear la actualización de liveData
             if (data.type === 'START_TEST') setRemoteCommand('START_TEST');
             if (data.type === 'STOP_TEST') setRemoteCommand('STOP_TEST');
 
-            // Filtrar y propagar paquetes para el paciente actual
             if (data && (data.patientId === patientId || !data.patientId)) {
               setIsPeerConnected(true);
               setLiveData(normalizePacket(data));
