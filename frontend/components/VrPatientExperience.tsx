@@ -1,10 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense, Component, ReactNode } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Wifi, WifiOff, X, RefreshCw, Plus, ShieldAlert, Target, Sun, AlertTriangle } from 'lucide-react';
 import { VRButton, XR, Controllers } from '@react-three/xr';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Sphere, useVideoTexture, useTexture } from '@react-three/drei';
+import { Sphere } from '@react-three/drei';
 import * as THREE from 'three';
+
+// ============================================================================
+// 1. PARCHE GLOBAL ANTI-CRASH PARA WEBXR (Previene K.onBuild is not a function)
+// ============================================================================
+if (typeof THREE.Material !== 'undefined') {
+  if (typeof (THREE.Material.prototype as any).onBuild === 'undefined') {
+    (THREE.Material.prototype as any).onBuild = function () {};
+  }
+}
 
 interface Props { 
   patientId?: string; 
@@ -12,24 +21,10 @@ interface Props {
   onClose: () => void; 
 }
 
-type EnvironmentType = 
-  | 'IDLE' 
-  | 'HOLODECK_IDLE'
-  | 'TDAH_EXECUTIVE' 
-  | 'TEA_SOCIAL' 
-  | 'TDM_DEPRESSION' 
-  | 'TAG_ANXIETY' 
-  | 'NEURO_HYPNOSIS' 
-  | 'DUAL_CONTROL' 
-  | 'DEV_TRAUMA' 
-  | 'EMDR_MEMORY' 
-  | 'GAMMA_INSIGHT' 
-  | 'PAIN_MANAGEMENT'
-  | 'CLUSTER_B_FORENSIC'
-  | 'FND_MIRROR';
+type EnvironmentType = 'IDLE' | 'HOLODECK_IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT' | 'CLUSTER_B_FORENSIC' | 'FND_MIRROR';
 
 // ============================================================================
-// ESCUDO ANTIERRORES (Previene el pantallazo rojo y atrapa crashes)
+// ESCUDO ANTIERRORES
 // ============================================================================
 class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void }, { hasError: boolean; error: Error | null }> {
   constructor(props: any) {
@@ -43,13 +38,13 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
       return (
         <div className="fixed inset-0 z-[10000] bg-red-950 flex flex-col items-center justify-center p-6 text-white text-center">
           <AlertTriangle className="w-20 h-20 text-red-500 mb-6 animate-pulse" />
-          <h2 className="text-3xl font-black mb-4">Error Crítico en el Entorno 3D</h2>
-          <p className="text-red-200 mb-6 max-w-xl font-mono text-sm bg-red-900/50 p-4 rounded-xl border border-red-800">
-            {this.state.error?.message || 'El archivo 360, video o textura no pudo cargarse.'}
+          <h2 className="text-3xl font-black mb-4">Error Crítico Interceptado</h2>
+          <p className="text-red-200 mb-6 max-w-xl font-mono text-xs bg-red-900/50 p-4 rounded-xl border border-red-800 break-all">
+            {this.state.error?.message || 'Carga fallida'}
           </p>
           <div className="flex gap-4">
-            <button onClick={() => this.setState({ hasError: false, error: null })} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition cursor-pointer">Reintentar Carga</button>
-            <button onClick={this.props.onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition cursor-pointer">Salir del Visor</button>
+            <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition">Limpiar Caché y Reiniciar App</button>
+            <button onClick={this.props.onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition">Salir</button>
           </div>
         </div>
       );
@@ -59,95 +54,121 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
 }
 
 // ============================================================================
-// NORMALIZADOR DE ARCHIVOS ECOSYSTEM CON FALLBACK GARANTIZADO
+// CARGADORES DE ESFERAS SIN SUSPENSE (Evitan congelamiento de WebXR)
+// ============================================================================
+
+const ImageSphere = ({ url }: { url: string }) => {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loader = new THREE.TextureLoader();
+    loader.load(url, (loaded) => {
+      // Aplicar sRGB de manera compatible con todas las versiones
+      if ('colorSpace' in loaded) {
+        loaded.colorSpace = (THREE as any).SRGBColorSpace;
+      } else {
+        (loaded as any).encoding = 3001;
+      }
+      if (isMounted) setTexture(loaded);
+    });
+    return () => { isMounted = false; };
+  }, [url]);
+
+  if (!texture) {
+    return (
+      <mesh>
+        <sphereGeometry args={[50, 16, 16]} />
+        <meshBasicMaterial color="#020617" side={THREE.BackSide} />
+      </mesh>
+    );
+  }
+
+  return (
+    <mesh>
+      <sphereGeometry args={[500, 60, 40]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} />
+    </mesh>
+  );
+};
+
+const VideoSphere = ({ url }: { url: string }) => {
+  const [videoTexture, setVideoTexture] = useState<THREE.VideoTexture | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const video = document.createElement('video');
+    video.src = url;
+    video.crossOrigin = 'Anonymous';
+    video.loop = true;
+    video.muted = false;
+    video.playsInline = true;
+    video.play().catch(() => console.warn("Autoplay bloqueado. Requiere clic."));
+
+    const texture = new THREE.VideoTexture(video);
+    if ('colorSpace' in texture) {
+      texture.colorSpace = (THREE as any).SRGBColorSpace;
+    } else {
+      (texture as any).encoding = 3001;
+    }
+
+    if (isMounted) setVideoTexture(texture);
+
+    return () => {
+      isMounted = false;
+      video.pause();
+      video.src = '';
+      texture.dispose();
+    };
+  }, [url]);
+
+  if (!videoTexture) {
+    return (
+      <mesh>
+        <sphereGeometry args={[50, 16, 16]} />
+        <meshBasicMaterial color="#020617" side={THREE.BackSide} />
+      </mesh>
+    );
+  }
+
+  return (
+    <mesh>
+      <sphereGeometry args={[500, 60, 40]} />
+      <meshBasicMaterial map={videoTexture} side={THREE.BackSide} />
+    </mesh>
+  );
+};
+
+// ============================================================================
+// NORMALIZADOR DE ARCHIVOS Y RUTAS
 // ============================================================================
 const KNOWN_JPG_FILES = new Set([
-  'ACROPHOBIA_ROOF.jpg',
-  'AEROPHOBIA_CABIN.jpg',
-  'BIOLUMINESCENT_BEACH.jpg',
-  'CLINICAL_OFFICE.jpg',
-  'CLUSTER_B_FORENSIC.jpg',
-  'COSMIC_STARS.jpg',
-  'DEV_TRAUMA.jpg',
-  'DUAL_CONTROL.jpg',
-  'EMDR_MEMORY.jpg',
-  'FND_MIRROR.jpg',
-  'NEURO_HYPNOSIS.jpg',
-  'PAIN_MANAGEMENT.jpg',
-  'PROTECTIVE_TREEHOUSE.jpg',
-  'SAFE_PLACE_FOREST.jpg',
-  'STERILE_ROOM.jpg',
-  'TDAH_EXECUTIVE.jpg',
-  'WARM_HEARTH.jpg',
-  'WOMB_LIKE_CAVE.jpg',
-  'ZEN_GARDEN.jpg'
+  'ACROPHOBIA_ROOF.jpg', 'AEROPHOBIA_CABIN.jpg', 'BIOLUMINESCENT_BEACH.jpg', 'CLINICAL_OFFICE.jpg',
+  'CLUSTER_B_FORENSIC.jpg', 'COSMIC_STARS.jpg', 'DEV_TRAUMA.jpg', 'DUAL_CONTROL.jpg',
+  'EMDR_MEMORY.jpg', 'FND_MIRROR.jpg', 'NEURO_HYPNOSIS.jpg', 'PAIN_MANAGEMENT.jpg',
+  'PROTECTIVE_TREEHOUSE.jpg', 'SAFE_PLACE_FOREST.jpg', 'STERILE_ROOM.jpg',
+  'TDAH_EXECUTIVE.jpg', 'WARM_HEARTH.jpg', 'WOMB_LIKE_CAVE.jpg', 'ZEN_GARDEN.jpg'
 ]);
 
 const ECOSYSTEM_MAP: Record<string, string> = {
-  // Claves directas de archivos
-  'WARM_HEARTH': 'WARM_HEARTH.jpg',
-  'CLINICAL_OFFICE': 'CLINICAL_OFFICE.jpg',
-  'STERILE_ROOM': 'STERILE_ROOM.jpg',
-  'PROTECTIVE_TREEHOUSE': 'PROTECTIVE_TREEHOUSE.jpg',
-  'BIOLUMINESCENT_BEACH': 'BIOLUMINESCENT_BEACH.jpg',
-  'SAFE_PLACE_FOREST': 'SAFE_PLACE_FOREST.jpg',
-  'COSMIC_STARS': 'COSMIC_STARS.jpg',
-  'WOMB_LIKE_CAVE': 'WOMB_LIKE_CAVE.jpg',
-  'ZEN_GARDEN': 'ZEN_GARDEN.jpg',
-  'ACROPHOBIA_ROOF': 'ACROPHOBIA_ROOF.jpg',
-  'AEROPHOBIA_CABIN': 'AEROPHOBIA_CABIN.jpg',
-  'DUAL_CONTROL': 'DUAL_CONTROL.jpg',
-  'PAIN_MANAGEMENT': 'PAIN_MANAGEMENT.jpg',
-  'NEURO_HYPNOSIS': 'NEURO_HYPNOSIS.jpg',
-  'DEV_TRAUMA': 'DEV_TRAUMA.jpg',
-  'EMDR_MEMORY': 'EMDR_MEMORY.jpg',
-  'CLUSTER_B_FORENSIC': 'CLUSTER_B_FORENSIC.jpg',
-  'TDAH_EXECUTIVE': 'TDAH_EXECUTIVE.jpg',
-  'FND_MIRROR': 'FND_MIRROR.jpg',
-
-  // Aliases técnicos desde módulos
-  'TDAH_ATTENTION_LAB': 'TDAH_EXECUTIVE.jpg',
-  'ExecutiveControl': 'TDAH_EXECUTIVE.jpg',
-  'HYPNOSIS': 'NEURO_HYPNOSIS.jpg',
-  'SEXUAL_HEALTH': 'DUAL_CONTROL.jpg',
-  'DEVELOPMENTAL_TRAUMA': 'DEV_TRAUMA.jpg',
-  'MEMORY_RECONSOLIDATION': 'EMDR_MEMORY.jpg',
-  'FUNCTIONAL_NEUROLOGY': 'FND_MIRROR.jpg',
-  'SAFE_PLACE': 'SAFE_PLACE_FOREST.jpg',
-
-  // Fallbacks de nombres antiguos en español
-  'Salud Sexual': 'DUAL_CONTROL.jpg',
-  'Hipnosis & Grounding': 'NEURO_HYPNOSIS.jpg',
-  'Laboratorio de Atención': 'TDAH_EXECUTIVE.jpg',
-  'Control de Dolor Crónico (Paisaje Subacuático)': 'PAIN_MANAGEMENT.jpg',
-  'Forense Cluster B': 'CLUSTER_B_FORENSIC.jpg',
-  'Neurología Funcional & Propiocepción': 'FND_MIRROR.jpg',
-  'Reconsolidación de Memoria (Sala de Espejo)': 'EMDR_MEMORY.jpg',
-  'Trauma del Desarrollo (Santuario de Vínculo Seguro)': 'DEV_TRAUMA.jpg'
+  'TDAH_ATTENTION_LAB': 'TDAH_EXECUTIVE.jpg', 'ExecutiveControl': 'TDAH_EXECUTIVE.jpg',
+  'HYPNOSIS': 'NEURO_HYPNOSIS.jpg', 'SEXUAL_HEALTH': 'DUAL_CONTROL.jpg',
+  'DEVELOPMENTAL_TRAUMA': 'DEV_TRAUMA.jpg', 'MEMORY_RECONSOLIDATION': 'EMDR_MEMORY.jpg',
+  'FUNCTIONAL_NEUROLOGY': 'FND_MIRROR.jpg', 'SAFE_PLACE': 'SAFE_PLACE_FOREST.jpg'
 };
 
 const getSafeEcosystemFile = (ecosystemKey: string): string => {
-  if (!ecosystemKey || ecosystemKey === 'NEUTRAL_VOID') {
-    return '/ecosystems/SAFE_PLACE_FOREST.jpg';
-  }
+  if (!ecosystemKey || ecosystemKey === 'NEUTRAL_VOID') return '/ecosystems/SAFE_PLACE_FOREST.jpg';
   
-  // 1. Buscar en el diccionario de mapeo
   const mapped = ECOSYSTEM_MAP[ecosystemKey];
-  if (mapped && KNOWN_JPG_FILES.has(mapped)) {
-    return `/ecosystems/${mapped}`;
-  }
+  if (mapped && KNOWN_JPG_FILES.has(mapped)) return `/ecosystems/${mapped}`;
   
-  // 2. Comprobar si el nombre recibido es un archivo existente
   const sanitized = ecosystemKey.trim();
-  const withExt = (sanitized.endsWith('.jpg') || sanitized.endsWith('.jpeg')) 
-    ? sanitized 
-    : `${sanitized}.jpg`;
-
-  if (KNOWN_JPG_FILES.has(withExt)) {
-    return `/ecosystems/${withExt}`;
-  }
+  const withExt = (sanitized.endsWith('.jpg') || sanitized.endsWith('.jpeg')) ? sanitized : `${sanitized}.jpg`;
   
-  // 3. Fallback seguro a imagen garantizada
+  if (KNOWN_JPG_FILES.has(withExt)) return `/ecosystems/${withExt}`;
+  if (KNOWN_JPG_FILES.has(sanitized)) return `/ecosystems/${sanitized}`;
+  
   return '/ecosystems/SAFE_PLACE_FOREST.jpg';
 };
 
@@ -159,12 +180,10 @@ export const VrPatientExperience: React.FC<Props> = ({
   initialModuleId = 'HOLODECK_IDLE', 
   onClose 
 }) => {
-  // Soporte para parámetros en URL (/visor?paciente=PAC-8104&modulo=TDAH_EXECUTIVE)
   const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const patientId = propPatientId || queryParams?.get('paciente') || 'PAC-8104';
   const urlModule = queryParams?.get('modulo');
 
-  // EL VISOR DEL PACIENTE DEBE SER SIEMPRE 'receiver'
   const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'HOLODECK_IDLE');
 
   const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>(
@@ -175,35 +194,23 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
   const [emdrHz, setEmdrHz] = useState<number>(1.5);
 
-  // 1. AUDIO INMERSIVO AUTOMÁTICO PROTEGIDO
   useEffect(() => {
     if (!activeEcosystem || activeEcosystem === 'NEUTRAL_VOID' || activeEnvironment === 'IDLE' || activeEnvironment === 'HOLODECK_IDLE') return;
-    
     try {
       const audio = new Audio(`/audio/${activeEcosystem}.mp3`);
       audio.loop = true; 
       audio.volume = 0.8;
       const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => console.warn(`Audio no encontrado o bloqueado: /audio/${activeEcosystem}.mp3`, error));
-      }
+      if (playPromise !== undefined) playPromise.catch(() => {});
       return () => { audio.pause(); audio.src = ''; };
-    } catch (e) {
-      console.warn("Fallo al reproducir audio:", e);
-    }
+    } catch (e) {}
   }, [activeEcosystem, activeEnvironment]);
 
-  // 2. RECEPCIÓN DE TELEMETRÍA Y CAMBIO DE MÓDULO
   useEffect(() => {
     if (!liveData) return;
     if (liveData.type === 'LOAD_MODULE') {
-      if (liveData.moduleName) {
-        setActiveEnvironment(liveData.moduleName as EnvironmentType);
-      }
-      if (liveData.ecosystem) { 
-        setActiveEcosystem(liveData.ecosystem); 
-        setIsVideo(!!liveData.isVideo); 
-      }
+      if (liveData.moduleName) setActiveEnvironment(liveData.moduleName as EnvironmentType);
+      if (liveData.ecosystem) { setActiveEcosystem(liveData.ecosystem); setIsVideo(!!liveData.isVideo); }
     } else if (liveData.type === 'START_AIMA_PROTOCOL') {
       if (liveData.ecosystem) { setActiveEcosystem(liveData.ecosystem); setIsVideo(false); }
     } else if (liveData.type === 'START_BILATERAL_STIMULATION') {
@@ -215,17 +222,10 @@ export const VrPatientExperience: React.FC<Props> = ({
     }
   }, [liveData]);
 
-  // Módulos que se renderizan en 3D WebXR Canvas
   const isWebXRModule = [
-    'DUAL_CONTROL', 
-    'DEV_TRAUMA', 
-    'EMDR_MEMORY', 
-    'NEURO_HYPNOSIS', 
-    'GAMMA_INSIGHT', 
-    'PAIN_MANAGEMENT',
-    'TDAH_EXECUTIVE',
-    'CLUSTER_B_FORENSIC',
-    'FND_MIRROR'
+    'DUAL_CONTROL', 'DEV_TRAUMA', 'EMDR_MEMORY', 'NEURO_HYPNOSIS', 
+    'GAMMA_INSIGHT', 'PAIN_MANAGEMENT', 'TDAH_EXECUTIVE',
+    'CLUSTER_B_FORENSIC', 'FND_MIRROR'
   ].includes(activeEnvironment);
 
   return (
@@ -235,29 +235,27 @@ export const VrPatientExperience: React.FC<Props> = ({
           <X className="w-8 h-8" />
         </button>
 
-        {/* RENDERIZADO WEBXR PROTEGIDO POR SUSPENSE Y ERROR BOUNDARY */}
         {isWebXRModule && (
           <div className="absolute inset-0 z-[100]">
             <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
               <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
             </div>
+            
+            {/* ELIMINAMOS SUSPENSE QUE ERA EL CAUSANTE DE LA CONGELACIÓN */}
             <Canvas>
               <XR>
                 <Controllers />
-                <Suspense fallback={null}>
-                  {isVideo ? (
-                    <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
-                  ) : (
-                    <ImageSphere url={getSafeEcosystemFile(activeEcosystem)} />
-                  )}
-                </Suspense>
+                {isVideo ? (
+                  <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
+                ) : (
+                  <ImageSphere url={getSafeEcosystemFile(activeEcosystem)} />
+                )}
                 {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
               </XR>
             </Canvas>
           </div>
         )}
 
-        {/* RENDERIZADO 2D LEGACY */}
         {!isWebXRModule && (
           <>
             {(activeEnvironment === 'IDLE' || activeEnvironment === 'HOLODECK_IDLE') && (
@@ -269,7 +267,6 @@ export const VrPatientExperience: React.FC<Props> = ({
           </>
         )}
         
-        {/* OVERLAY SEGURIDAD */}
         {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
           <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
             <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
@@ -285,20 +282,8 @@ export const VrPatientExperience: React.FC<Props> = ({
 };
 
 // ============================================================================
-// COMPONENTES SECUNDARIOS
+// COMPONENTES SECUNDARIOS EXTRA
 // ============================================================================
-
-// Esfera 360° para imágenes panorámicas JPG (Evita el error de shader onBuild en WebXR)
-const ImageSphere = ({ url }: { url: string }) => {
-  const texture = useTexture(url);
-  return (
-    <mesh>
-      <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} />
-    </mesh>
-  );
-};
-
 const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -311,18 +296,8 @@ const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   );
 };
 
-const VideoSphere = ({ url }: { url: string }) => {
-  const texture = useVideoTexture(url);
-  return (
-    <mesh>
-      <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} />
-    </mesh>
-  );
-};
-
 const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, syncSession: () => void }) => (
-  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black flex flex-col items-center justify-center transition-colors duration-1000">
+  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black flex flex-col items-center justify-center">
     <div className="text-center space-y-6 max-w-xl p-8 bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-800/50 shadow-2xl">
       <div className="flex justify-center items-center gap-3">
         <div className={`px-4 py-1.5 rounded-full border text-xs font-mono font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border-rose-500/50 text-rose-300'}`}>
@@ -337,78 +312,23 @@ const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, s
   </div>
 );
 
-const AdhdExecutiveEnvironment = ({ remoteCommand, transmit }: any) => {
-  const [stimulus, setStimulus] = useState<'NONE' | 'GO' | 'NOGO'>('NONE');
-  const [flash, setFlash] = useState(false);
-  const stats = useRef({ hits: 0, omissions: 0, commissions: 0, lastReaction: 0 });
-  const showTime = useRef<number>(0);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const scheduleNext = useCallback(() => {
-    setStimulus('NONE');
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      const isGo = Math.random() > 0.25;
-      setStimulus(isGo ? 'GO' : 'NOGO');
-      showTime.current = Date.now();
-      timeoutRef.current = setTimeout(() => {
-        if (isGo) { stats.current.omissions++; transmit({ ...stats.current, reactionTimeMs: stats.current.lastReaction }); }
-        scheduleNext();
-      }, 1500);
-    }, Math.random() * 1500 + 1000);
-  }, [transmit]);
-
-  useEffect(() => {
-    if (remoteCommand === 'START_TEST') scheduleNext();
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [remoteCommand, scheduleNext]);
-
-  const handleInteract = () => {
-    setFlash(true); setTimeout(() => setFlash(false), 100);
-    if (stimulus === 'NONE') return;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    const rt = Date.now() - showTime.current;
-    setStimulus('NONE');
-    if (stimulus === 'GO') { stats.current.hits++; stats.current.lastReaction = rt; } else { stats.current.commissions++; }
-    transmit({ ...stats.current, reactionTimeMs: stats.current.lastReaction });
-    scheduleNext();
-  };
-
-  return (
-    <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center cursor-crosshair" onPointerDown={handleInteract}>
-      {flash && <div className="absolute inset-0 bg-white/10 z-0"></div>}
-      {stimulus === 'NONE' && <Plus className="w-16 h-16 text-slate-600 opacity-50" strokeWidth={1} />}
-      {stimulus === 'GO' && <div className="w-80 h-80 bg-emerald-500 rounded-full shadow-[0_0_150px_rgba(16,185,129,0.9)] animate-in zoom-in-50 duration-75"></div>}
-      {stimulus === 'NOGO' && <div className="w-80 h-80 bg-rose-600 rounded-full shadow-[0_0_150px_rgba(225,29,72,0.9)] animate-in zoom-in-50 duration-75"></div>}
-    </div>
-  );
-};
-
 const SocialCognitionEnvironment = ({ liveData }: any) => {
   const [phase, setPhase] = useState<'IDLE' | 'FACES' | 'OVERSTIMULATION'>('IDLE');
-
   useEffect(() => {
     if (liveData?.type === 'START_FACES') setPhase('FACES');
     if (liveData?.type === 'START_OVERSTIMULATION') setPhase('OVERSTIMULATION');
   }, [liveData]);
-
   return (
     <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all ${phase === 'OVERSTIMULATION' ? 'bg-slate-800' : 'bg-slate-950'}`}>
       {phase !== 'IDLE' && (
         <div className={`relative flex flex-col items-center ${phase === 'OVERSTIMULATION' ? 'animate-shake' : ''}`}>
           <div className="w-64 h-80 bg-slate-800 rounded-full border-4 border-slate-700 flex flex-col items-center pt-24 relative overflow-hidden shadow-2xl">
             <div className="flex gap-8 mb-12 z-10">
-              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
-                 <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
-              </div>
-              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}>
-                 <div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div>
-              </div>
+              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}><div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div></div>
+              <div className={`w-10 h-10 rounded-full ${phase === 'OVERSTIMULATION' ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`}><div className="w-4 h-4 bg-black rounded-full ml-3 mt-3"></div></div>
             </div>
             <div className="w-16 h-2 bg-slate-600 rounded-full z-10"></div>
-            {phase === 'OVERSTIMULATION' && <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-50 mix-blend-overlay"></div>}
           </div>
-          <p className="mt-8 text-slate-500 font-mono tracking-widest text-sm">{phase === 'FACES' ? 'FASE 1: FIJACIÓN OCULAR' : 'FASE 2: RUIDO AMBIENTAL'}</p>
         </div>
       )}
     </div>
@@ -418,32 +338,27 @@ const SocialCognitionEnvironment = ({ liveData }: any) => {
 const DepressionEnvironment = ({ liveData, transmit }: any) => {
   const [phase, setPhase] = useState<'IDLE' | 'MOTOR' | 'REWARD'>('IDLE');
   const [targetPos, setTargetPos] = useState({ top: '50%', left: '50%' });
-
   useEffect(() => {
     if (liveData?.type === 'START_MOTOR_TRACKING') setPhase('MOTOR');
     if (liveData?.type === 'START_REWARD_STIMULUS') setPhase('REWARD');
   }, [liveData]);
-
   const handleTouchTarget = () => {
     transmit({ type: 'MOTOR_TARGET_HIT', timestamp: Date.now() });
     setTargetPos({ top: `${Math.random() * 60 + 20}%`, left: `${Math.random() * 60 + 20}%` });
   };
-
   return (
     <div className="absolute inset-0 bg-slate-950">
       {phase === 'MOTOR' && (
         <div className="absolute inset-0" onPointerDown={handleTouchTarget}>
-          <div className="absolute text-slate-500 font-mono text-center w-full top-20">ESTIRE SU BRAZO Y TOQUE LA ESFERA</div>
-          <div className="absolute w-24 h-24 bg-indigo-500 rounded-full shadow-[0_0_50px_rgba(99,102,241,0.5)] flex items-center justify-center cursor-pointer transition-all duration-1000 ease-out" style={{ top: targetPos.top, left: targetPos.left, transform: 'translate(-50%, -50%)' }}>
+          <div className="absolute text-slate-500 font-mono text-center w-full top-20">TOQUE LA ESFERA</div>
+          <div className="absolute w-24 h-24 bg-indigo-500 rounded-full shadow-[0_0_50px_rgba(99,102,241,0.5)] flex items-center justify-center cursor-pointer transition-all duration-1000" style={{ top: targetPos.top, left: targetPos.left, transform: 'translate(-50%, -50%)' }}>
             <Target className="w-12 h-12 text-white opacity-80" />
           </div>
         </div>
       )}
       {phase === 'REWARD' && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-sky-900 to-slate-950">
-          <div className="w-[500px] h-[500px] bg-yellow-400/20 rounded-full blur-[100px] absolute animate-pulse"></div>
           <Sun className="w-48 h-48 text-yellow-300 animate-[spin_20s_linear_infinite]" />
-          <div className="absolute text-xl font-light tracking-widest text-sky-100 mt-64">EVALUANDO REACTIVIDAD AFECTIVA</div>
         </div>
       )}
     </div>
@@ -454,20 +369,14 @@ const ExposureAnxietyEnvironment = ({ liveData }: any) => {
   const [level, setLevel] = useState(1);
   useEffect(() => { if (liveData?.type === 'START_EXPOSURE' || liveData?.type === 'UPDATE_EXPOSURE_LEVEL') setLevel(liveData.level || 1); }, [liveData]);
   const tunnelScale = 1 - (level * 0.15);
-  const vignetteOpacity = level * 0.2;
   const colorIntensity = level > 3 ? 'border-rose-900' : 'border-slate-800';
-
   return (
     <div className="absolute inset-0 bg-slate-950 flex items-center justify-center overflow-hidden">
       <div className={`w-[1000px] h-[1000px] border-[100px] ${colorIntensity} rounded-full transition-all duration-1000 flex items-center justify-center`} style={{ transform: `scale(${tunnelScale})` }}>
         <div className={`w-[800px] h-[800px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-80`}>
-          <div className={`w-[600px] h-[600px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-60`}>
-            {level > 4 && <div className="text-rose-500 font-mono tracking-widest animate-pulse">MANTENGA LA RESPIRACIÓN</div>}
-          </div>
+          <div className={`w-[600px] h-[600px] border-[100px] ${colorIntensity} rounded-full flex items-center justify-center opacity-60`}></div>
         </div>
       </div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_100%)] pointer-events-none" style={{ opacity: vignetteOpacity }}></div>
-      <div className="absolute top-10 left-10 text-slate-500 font-mono text-sm">INTENSIDAD FÓBICA: NIVEL {level}</div>
     </div>
   );
 };
