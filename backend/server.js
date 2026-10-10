@@ -38,6 +38,7 @@ const vrSessionSchema = new mongoose.Schema({
   taskName: { type: String, required: true },
   durationSeconds: { type: Number, default: 0 },
   metrics: { type: mongoose.Schema.Types.Mixed, default: {} }, 
+  telemetryLog: [{ type: mongoose.Schema.Types.Mixed }],
   aiLogs: [{ type: String }],
   completedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
@@ -76,18 +77,24 @@ app.get('/api/vr/stream', (req, res) => {
   return res.status(200).json({ patientId, status: 'WAITING_STREAM' });
 });
 
+// 🔥 ADAPTACIÓN HÍBRIDA EN TELEMETRÍA (ACEPTA TANTO 'sessionData' COMO FORMATO DIRECTO 'kpis/telemetryLog')
 app.post('/api/vr/telemetry', async (req, res) => {
   try {
-    const { patientId, sessionData } = req.body;
+    const { patientId, moduleId, taskName, kpis, telemetryLog, sessionData } = req.body;
     const targetPatient = patientId || 'PAC-8104';
 
     vrLiveStreams.delete(targetPatient);
 
+    const activeTaskName = moduleId || taskName || sessionData?.taskName || 'VR_CLINICAL_MODULE';
+    const activeMetrics = kpis || sessionData?.metrics || {};
+    const activeLog = telemetryLog || sessionData?.telemetryLog || [];
+
     const savedSession = await VrSession.create({
       patientId: targetPatient,
-      taskName: sessionData?.taskName || 'Unspecified_Task',
-      durationSeconds: sessionData?.durationSeconds || 0,
-      metrics: sessionData?.metrics || {}, 
+      taskName: activeTaskName,
+      durationSeconds: sessionData?.durationSeconds || Math.round((activeLog.length * 100) / 1000),
+      metrics: activeMetrics, 
+      telemetryLog: activeLog,
       aiLogs: sessionData?.aiLogs || [],
       completedAt: new Date()
     });
@@ -98,22 +105,22 @@ app.post('/api/vr/telemetry', async (req, res) => {
       session: savedSession
     });
 
+    console.log(`✅ [MongoDB Success] Sesión VR persistida para paciente: ${targetPatient} (${activeTaskName})`);
+
     return res.status(200).json({
       success: true,
-      message: 'Reporte guardado exitosamente.',
+      message: 'Reporte y telemetría guardados exitosamente en MongoDB.',
       sessionId: savedSession._id
     });
   } catch (err) {
-    console.error('Error guardando reporte VR:', err);
+    console.error('❌ Error guardando reporte VR en MongoDB:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.get('/health', (req, res) => { res.status(200).json({ status: 'OK' }); });
 
-// ============================================================================
-// 🔥 4. PROXY SHIM PARA VERTEX AI (REST API) - ¡Agregado!
-// ============================================================================
+// 4. PROXY SHIM PARA VERTEX AI (REST API)
 app.post('/api-proxy', async (req, res) => {
   if (req.headers['x-app-proxy'] !== 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ') {
     return res.status(401).json({ error: 'Acceso denegado: Proxy no autorizado' });
@@ -145,17 +152,14 @@ app.post('/api-proxy', async (req, res) => {
   }
 });
 
-// ============================================================================
 // 5. WEBSOCKET SERVER GLOBAL (VR TELEMETRY + GEMINI PROXY)
-// ============================================================================
 const wss = new WebSocketServer({ server });
 const connectedClients = new Set();
 
-// 🔥 CAMBIO: Añadimos 'req' para poder leer la ruta de la conexión entrante
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  // ---> A) INTERCEPTOR: PROXY HACIA GEMINI LIVE API
+  // INTERCEPTOR: PROXY HACIA GEMINI LIVE API
   if (url.pathname === '/ws-proxy') {
     const target = url.searchParams.get('target');
     if (!target) return ws.close();
@@ -163,12 +167,10 @@ wss.on('connection', (ws, req) => {
     console.log(`[WS Proxy] Puente con Vertex AI establecido: ${target}`);
     const targetWs = new WebSocket(target);
 
-    // Frontend -> Backend -> Google
     ws.on('message', (msg) => {
       if (targetWs.readyState === WebSocket.OPEN) targetWs.send(msg);
     });
 
-    // Google -> Backend -> Frontend
     targetWs.on('message', (msg) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
     });
@@ -180,7 +182,7 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  // ---> B) FLUJO NORMAL: TELEMETRÍA AMIE VR
+  // FLUJO NORMAL: TELEMETRÍA AMIE VR
   connectedClients.add(ws);
   ws.on('message', (message) => {
     try {
