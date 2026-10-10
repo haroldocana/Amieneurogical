@@ -9,6 +9,9 @@ export interface VrMetrics {
   stressLevel?: number;
   habituationIndex?: number;
   hits?: number;
+  headYaw?: number;
+  headPitch?: number;
+  attentionIndex?: number;
 }
 
 export interface VrStreamPayload {
@@ -17,6 +20,8 @@ export interface VrStreamPayload {
   timestamp: number;
   type?: string;
   ecosystem?: string;
+  isVideo?: boolean;
+  initialHz?: number;
   metrics?: VrMetrics;
   reactionTimeMs?: number;
   omissions?: number;
@@ -37,10 +42,8 @@ const getSafeWsUrl = (): string => {
       return `${protocol}//${window.location.hostname}:5000`;
     }
 
-    // Dominio oficial de producción en Render
-    if (window.location.hostname.includes('onrender.com')) {
-      return 'wss://amieneurogical.onrender.com';
-    }
+    // Dominio dinámico de producción (Usa el host actual sin hardcode)
+    return `${protocol}//${window.location.host}`;
   }
 
   return 'wss://amieneurogical.onrender.com';
@@ -59,7 +62,7 @@ export const useVrTelemetryBridge = (
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const normalizePacket = (raw: any): VrStreamPayload => {
+  const normalizePacket = useCallback((raw: any): VrStreamPayload => {
     const metrics = raw.metrics || {};
     return {
       ...raw,
@@ -73,10 +76,13 @@ export const useVrTelemetryBridge = (
         omissions: raw.omissions ?? metrics.omissions ?? 0,
         commissions: raw.commissions ?? metrics.commissions ?? 0,
         habituationIndex: raw.habituationIndex ?? metrics.habituationIndex ?? 0,
-        hits: raw.hits ?? metrics.hits ?? 0
+        hits: raw.hits ?? metrics.hits ?? 0,
+        gsr: raw.gsr ?? metrics.gsr ?? 3.5,
+        hrv: raw.hrv ?? metrics.hrv ?? 70,
+        attentionIndex: raw.attentionIndex ?? metrics.attentionIndex ?? 85
       }
     };
-  };
+  }, [patientId, moduleName]);
 
   useEffect(() => {
     if (!patientId) return;
@@ -92,7 +98,13 @@ export const useVrTelemetryBridge = (
           if (!isMounted) return;
           setIsConnected(true);
           try {
-            ws.send(JSON.stringify({ type: 'HANDSHAKE', patientId, role: mode, moduleName, timestamp: Date.now() }));
+            ws.send(JSON.stringify({ 
+              type: 'HANDSHAKE', 
+              patientId, 
+              role: mode, 
+              moduleName, 
+              timestamp: Date.now() 
+            }));
           } catch (e) {
             console.warn('Error en handshake inicial:', e);
           }
@@ -102,13 +114,17 @@ export const useVrTelemetryBridge = (
           if (!isMounted) return;
           try {
             const data = JSON.parse(event.data);
+
             if (data.type === 'HANDSHAKE_ACK' || data.type === 'PEER_CONNECTED') {
               setIsPeerConnected(true);
               return;
             }
-            if (data.type === 'START_TEST') return setRemoteCommand('START_TEST');
-            if (data.type === 'STOP_TEST') return setRemoteCommand('STOP_TEST');
 
+            // Actualizar comandos remotos sin bloquear la actualización de liveData
+            if (data.type === 'START_TEST') setRemoteCommand('START_TEST');
+            if (data.type === 'STOP_TEST') setRemoteCommand('STOP_TEST');
+
+            // Filtrar y propagar paquetes para el paciente actual
             if (data && (data.patientId === patientId || !data.patientId)) {
               setIsPeerConnected(true);
               setLiveData(normalizePacket(data));
@@ -154,12 +170,18 @@ export const useVrTelemetryBridge = (
         socketRef.current.close();
       }
     };
-  }, [mode, patientId, moduleName]);
+  }, [mode, patientId, moduleName, normalizePacket]);
 
   const syncSession = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       try {
-        socketRef.current.send(JSON.stringify({ type: 'HANDSHAKE', patientId, role: mode, moduleName, timestamp: Date.now() }));
+        socketRef.current.send(JSON.stringify({ 
+          type: 'HANDSHAKE', 
+          patientId, 
+          role: mode, 
+          moduleName, 
+          timestamp: Date.now() 
+        }));
       } catch (e) {
         console.warn('Error en syncSession:', e);
       }
@@ -169,7 +191,12 @@ export const useVrTelemetryBridge = (
   const sendRemoteStart = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       try {
-        socketRef.current.send(JSON.stringify({ type: 'START_TEST', patientId, moduleName, timestamp: Date.now() }));
+        socketRef.current.send(JSON.stringify({ 
+          type: 'START_TEST', 
+          patientId, 
+          moduleName, 
+          timestamp: Date.now() 
+        }));
       } catch (e) {
         console.warn('Error en sendRemoteStart:', e);
       }
@@ -177,8 +204,18 @@ export const useVrTelemetryBridge = (
   }, [patientId, moduleName]);
 
   const transmit = useCallback(async (metricsData: VrMetrics | any) => {
-    const metrics: VrMetrics = metricsData.metrics ? metricsData.metrics : metricsData;
-    const payload: VrStreamPayload = normalizePacket({ patientId, moduleName, timestamp: Date.now(), type: 'METRICS', metrics, ...metricsData });
+    const isObject = typeof metricsData === 'object' && metricsData !== null;
+    const packetType = isObject && metricsData.type ? metricsData.type : 'METRICS';
+    const metrics: VrMetrics = isObject && metricsData.metrics ? metricsData.metrics : metricsData;
+
+    const payload: VrStreamPayload = normalizePacket({
+      patientId,
+      moduleName,
+      timestamp: Date.now(),
+      ...metricsData,
+      type: packetType,
+      metrics
+    });
 
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       try {
@@ -187,7 +224,7 @@ export const useVrTelemetryBridge = (
         console.warn('Error en transmit:', e);
       }
     }
-  }, [patientId, moduleName]);
+  }, [patientId, moduleName, normalizePacket]);
 
   return { 
     isConnected, 
