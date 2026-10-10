@@ -31,7 +31,7 @@ export interface VrStreamPayload {
   [key: string]: any;
 }
 
-// Determinación dinámica y segura de la URL del WebSocket
+// Determinación dinámica y segura de la URL del WebSocket apuntando al BACKEND
 const getSafeWsUrl = (): string => {
   if (typeof window !== 'undefined') {
     const isHttps = window.location.protocol === 'https:';
@@ -39,11 +39,12 @@ const getSafeWsUrl = (): string => {
 
     // Entorno de desarrollo local
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return `${protocol}//${window.location.hostname}:5000`;
+      return `${protocol}//${window.location.hostname}:10000`;
     }
 
-    // Dominio dinámico de producción (Usa el host actual sin hardcode)
-    return `${protocol}//${window.location.host}`;
+    // URL EXACTA DEL BACKEND DE WEBSOCKETS EN RENDER
+    // Se fuerza el dominio del backend para evitar conectar al host del frontend
+    return 'wss://amieneurogical.onrender.com';
   }
 
   return 'wss://amieneurogical.onrender.com';
