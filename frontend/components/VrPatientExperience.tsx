@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef, Component, ReactNode, useMemo } from 'react';
+import React, { useState, useEffect, useRef, Component, ReactNode } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Wifi, WifiOff, X, RefreshCw, ShieldAlert, Target, Sun, AlertTriangle } from 'lucide-react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 
@@ -12,7 +10,21 @@ interface Props {
   onClose: () => void; 
 }
 
-type EnvironmentType = 'IDLE' | 'HOLODECK_IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT' | 'CLUSTER_B_FORENSIC' | 'FND_MIRROR';
+type EnvironmentType = 
+  | 'IDLE' 
+  | 'HOLODECK_IDLE'
+  | 'TDAH_EXECUTIVE' 
+  | 'TEA_SOCIAL' 
+  | 'TDM_DEPRESSION' 
+  | 'TAG_ANXIETY' 
+  | 'NEURO_HYPNOSIS' 
+  | 'DUAL_CONTROL' 
+  | 'DEV_TRAUMA' 
+  | 'EMDR_MEMORY' 
+  | 'GAMMA_INSIGHT' 
+  | 'PAIN_MANAGEMENT'
+  | 'CLUSTER_B_FORENSIC'
+  | 'FND_MIRROR';
 
 // ============================================================================
 // ESCUDO ANTIERRORES
@@ -31,7 +43,7 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
           <AlertTriangle className="w-20 h-20 text-red-500 mb-6 animate-pulse" />
           <h2 className="text-3xl font-black mb-4">Error Interceptado por AMIE Shield</h2>
           <p className="text-red-200 mb-6 max-w-xl font-mono text-xs bg-red-900/50 p-4 rounded-xl border border-red-800 break-all">
-            {this.state.error?.message || 'Carga fallida'}
+            {this.state.error?.message || 'Error de visualización 3D'}
           </p>
           <div className="flex gap-4">
             <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition cursor-pointer">Recargar Visor</button>
@@ -45,138 +57,7 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
 }
 
 // ============================================================================
-// CONFIGURADOR NATIVO WEBXR (Inicia VR sin dependencias externas)
-// ============================================================================
-const VrSetup = () => {
-  const { gl } = useThree();
-  useEffect(() => {
-    if (!gl) return;
-    gl.xr.enabled = true;
-    try {
-      const button = VRButton.createButton(gl);
-      button.style.position = 'absolute';
-      button.style.bottom = '30px';
-      button.style.left = '50%';
-      button.style.transform = 'translateX(-50%)';
-      button.style.zIndex = '10000';
-      button.style.background = '#9333ea';
-      button.style.color = '#ffffff';
-      button.style.fontSize = '14px';
-      button.style.fontWeight = 'bold';
-      button.style.padding = '14px 28px';
-      button.style.borderRadius = '16px';
-      button.style.border = '1px solid rgba(255,255,255,0.2)';
-      button.style.boxShadow = '0 0 25px rgba(147, 51, 234, 0.6)';
-      button.style.cursor = 'pointer';
-      document.body.appendChild(button);
-      return () => { if (button && button.parentNode) button.parentNode.removeChild(button); };
-    } catch (e) {
-      console.warn("Error creando botón VR nativo:", e);
-    }
-  }, [gl]);
-  return null;
-};
-
-// ============================================================================
-// MATERIALES FABRICADOS A MANO (Elimina el 100% de los crashes onBuild)
-// ============================================================================
-const ImageSphere = ({ url }: { url: string }) => {
-  // 1. Fabricamos el material a mano e inyectamos el parche directamente a la instancia
-  const safeMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, color: '#0f172a' }); // Azul oscuro por defecto
-    (mat as any).onBuild = function() {}; // <--- EL PARCHE DEFINITIVO
-    return mat;
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-    const loader = new THREE.TextureLoader();
-    
-    loader.load(url, (loaded) => {
-      if (!isMounted) return;
-      loaded.mapping = THREE.EquirectangularReflectionMapping;
-      if ('colorSpace' in loaded) {
-        (loaded as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-      }
-      // Aplicamos la textura al material fabricado a mano
-      safeMaterial.map = loaded;
-      safeMaterial.color.set('#ffffff'); // Quitamos el tinte azul cuando carga la imagen
-      safeMaterial.needsUpdate = true;
-    });
-
-    return () => { isMounted = false; };
-  }, [url, safeMaterial]);
-
-  return (
-    <mesh scale={[-1, 1, 1]} material={safeMaterial}>
-      <sphereGeometry args={[500, 60, 40]} />
-    </mesh>
-  );
-};
-
-const VideoSphere = ({ url }: { url: string }) => {
-  const safeMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, color: '#020617' });
-    (mat as any).onBuild = function() {}; // <--- EL PARCHE DEFINITIVO
-    return mat;
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-    const video = document.createElement('video');
-    video.src = url;
-    video.crossOrigin = 'Anonymous';
-    video.loop = true;
-    video.muted = true; // REQUISITO OBLIGATORIO PARA VR AUTOPLAY
-    video.playsInline = true;
-    
-    video.play().then(() => {
-      if (!isMounted) return;
-      const texture = new THREE.VideoTexture(video);
-      if ('colorSpace' in texture) {
-        (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-      }
-      safeMaterial.map = texture;
-      safeMaterial.color.set('#ffffff');
-      safeMaterial.needsUpdate = true;
-    }).catch(console.warn);
-
-    return () => {
-      isMounted = false;
-      video.pause();
-      video.src = '';
-    };
-  }, [url, safeMaterial]);
-
-  return (
-    <mesh scale={[-1, 1, 1]} material={safeMaterial}>
-      <sphereGeometry args={[500, 60, 40]} />
-    </mesh>
-  );
-};
-
-const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  
-  const safeMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({ color: '#a855f7' });
-    (mat as any).onBuild = function() {}; // <--- EL PARCHE DEFINITIVO
-    return mat;
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (meshRef.current) meshRef.current.position.x = Math.sin(clock.getElapsedTime() * Math.PI * hz) * 3;
-  });
-
-  return (
-    <mesh ref={meshRef} position={[0, 1.5, -4]} material={safeMaterial}>
-      <sphereGeometry args={[0.15, 32, 32]} />
-    </mesh>
-  );
-};
-
-// ============================================================================
-// NORMALIZADOR
+// MAPEO DE ARCHIVOS MULTIMEDIA 360 Y FALLBACKS
 // ============================================================================
 const KNOWN_JPG_FILES = new Set([
   'ACROPHOBIA_ROOF.jpg', 'AEROPHOBIA_CABIN.jpg', 'BIOLUMINESCENT_BEACH.jpg', 'CLINICAL_OFFICE.jpg',
@@ -204,6 +85,179 @@ const getSafeEcosystemFile = (ecosystemKey: string): string => {
 };
 
 // ============================================================================
+// MOTOR NATIVO THREE.JS WEBXR (SIN REACT-THREE-FIBER / SIN ERRORES)
+// ============================================================================
+const NativeThreeVrViewer = ({ 
+  ecosystemKey, 
+  isVideo, 
+  isEmdrActive, 
+  emdrHz 
+}: { 
+  ecosystemKey: string; 
+  isVideo: boolean; 
+  isEmdrActive: boolean; 
+  emdrHz: number;
+}) => {
+  const mountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mountRef.current) return;
+    const container = mountRef.current;
+
+    // 1. ESCENA Y CÁMARA
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0, 0.1);
+
+    // 2. RENDERIZADOR GL
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.xr.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // 3. BOTÓN VR NATIVO ESTILIZADO
+    let vrBtn: HTMLElement | null = null;
+    if (VRButton && VRButton.createButton) {
+      vrBtn = VRButton.createButton(renderer);
+      vrBtn.style.position = 'absolute';
+      vrBtn.style.bottom = '32px';
+      vrBtn.style.left = '50%';
+      vrBtn.style.transform = 'translateX(-50%)';
+      vrBtn.style.padding = '14px 28px';
+      vrBtn.style.borderRadius = '16px';
+      vrBtn.style.background = 'rgba(147, 51, 234, 0.9)';
+      vrBtn.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+      vrBtn.style.color = '#ffffff';
+      vrBtn.style.fontFamily = 'sans-serif';
+      vrBtn.style.fontSize = '14px';
+      vrBtn.style.fontWeight = 'bold';
+      vrBtn.style.letterSpacing = '1px';
+      vrBtn.style.textTransform = 'uppercase';
+      vrBtn.style.boxShadow = '0 0 25px rgba(147, 51, 234, 0.6)';
+      vrBtn.style.cursor = 'pointer';
+      vrBtn.style.zIndex = '10000';
+      container.appendChild(vrBtn);
+    }
+
+    // 4. ESFERA 360° INVERTIDA
+    const geometry = new THREE.SphereGeometry(500, 60, 40);
+    geometry.scale(-1, 1, 1); // Invierte la geometría para proyectar hacia el interior
+
+    const material = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.DoubleSide });
+    const sphereMesh = new THREE.Mesh(geometry, material);
+    scene.add(sphereMesh);
+
+    // Carga de Textura o Video
+    if (isVideo) {
+      const video = document.createElement('video');
+      video.src = `/video/${ecosystemKey}.mp4`;
+      video.crossOrigin = 'Anonymous';
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.play().then(() => {
+        const videoTexture = new THREE.VideoTexture(video);
+        if ('colorSpace' in videoTexture) videoTexture.colorSpace = THREE.SRGBColorSpace;
+        material.map = videoTexture;
+        material.color.setHex(0xffffff);
+        material.needsUpdate = true;
+      }).catch((e) => console.warn("Autoplay video:", e));
+    } else {
+      const textureLoader = new THREE.TextureLoader();
+      const safeUrl = getSafeEcosystemFile(ecosystemKey);
+      textureLoader.load(safeUrl, (texture) => {
+        if ('colorSpace' in texture) texture.colorSpace = THREE.SRGBColorSpace;
+        material.map = texture;
+        material.color.setHex(0xffffff);
+        material.needsUpdate = true;
+      });
+    }
+
+    // 5. ESTÍMULO EMDR OPCIONAL
+    let emdrMesh: THREE.Mesh | null = null;
+    if (isEmdrActive) {
+      const emdrGeo = new THREE.SphereGeometry(0.15, 32, 32);
+      const emdrMat = new THREE.MeshBasicMaterial({ color: 0xa855f7 });
+      emdrMesh = new THREE.Mesh(emdrGeo, emdrMat);
+      emdrMesh.position.set(0, 1.5, -4);
+      scene.add(emdrMesh);
+    }
+
+    // 6. CONTROLES ARRASTRE TÁCTIL / RATÓN PARA DIRECT WEB
+    let isPointerDown = false;
+    let lon = 0, lat = 0;
+    let onPointerDownLon = 0, onPointerDownLat = 0;
+    let onPointerDownPointerX = 0, onPointerDownPointerY = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      isPointerDown = true;
+      onPointerDownPointerX = e.clientX;
+      onPointerDownPointerY = e.clientY;
+      onPointerDownLon = lon;
+      onPointerDownLat = lat;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isPointerDown) return;
+      lon = (onPointerDownPointerX - e.clientX) * 0.1 + onPointerDownLon;
+      lat = (e.clientY - onPointerDownPointerY) * 0.1 + onPointerDownLat;
+    };
+
+    const onPointerUp = () => { isPointerDown = false; };
+
+    container.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    // 7. BUCLE DE ANIMACIÓN
+    renderer.setAnimationLoop((time) => {
+      if (!renderer.xr.isPresenting) {
+        lat = Math.max(-85, Math.min(85, lat));
+        const phi = THREE.MathUtils.degToRad(90 - lat);
+        const theta = THREE.MathUtils.degToRad(lon);
+
+        const x = 500 * Math.sin(phi) * Math.cos(theta);
+        const y = 500 * Math.cos(phi);
+        const z = 500 * Math.sin(phi) * Math.sin(theta);
+
+        camera.lookAt(x, y, z);
+      }
+
+      if (emdrMesh) {
+        const clockTime = time * 0.001;
+        emdrMesh.position.x = Math.sin(clockTime * Math.PI * emdrHz) * 3;
+      }
+
+      renderer.render(scene, camera);
+    });
+
+    // 8. REDIMENSIONADO DE VENTANA
+    const handleResize = () => {
+      if (!container) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // CLEANUP
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      container.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      renderer.setAnimationLoop(null);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+      if (vrBtn && container.contains(vrBtn)) container.removeChild(vrBtn);
+    };
+  }, [ecosystemKey, isVideo, isEmdrActive, emdrHz]);
+
+  return <div ref={mountRef} className="w-full h-full relative cursor-grab active:cursor-grabbing" />;
+};
+
+// ============================================================================
 // EXPERIENCIA PRINCIPAL DEL VISOR
 // ============================================================================
 export const VrPatientExperience: React.FC<Props> = ({ 
@@ -225,6 +279,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
   const [emdrHz, setEmdrHz] = useState<number>(1.5);
 
+  // Reproductor de Audio Clínico de Fondo
   useEffect(() => {
     if (!activeEcosystem || activeEcosystem === 'NEUTRAL_VOID' || activeEnvironment === 'IDLE' || activeEnvironment === 'HOLODECK_IDLE') return;
     try {
@@ -237,6 +292,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     } catch (e) {}
   }, [activeEcosystem, activeEnvironment]);
 
+  // Manejo de Comandos desde la Consola del Doctor por WebSockets
   useEffect(() => {
     if (!liveData) return;
     if (liveData.type === 'LOAD_MODULE') {
@@ -262,27 +318,24 @@ export const VrPatientExperience: React.FC<Props> = ({
   return (
     <SafeVrWrapper onClose={onClose}>
       <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
+        {/* BOTÓN SALIR */}
         <button onPointerDown={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md transition">
           <X className="w-8 h-8" />
         </button>
 
+        {/* MÓDULOS INMERSIVOS NATIVOS 3D / VR */}
         {isWebXRModule && (
           <div className="absolute inset-0 z-[100]">
-            <Canvas camera={{ position: [0, 0, 0.1] }}>
-              <VrSetup />
-              <OrbitControls enableZoom={false} reverseOrbit={true} rotateSpeed={-0.5} />
-              
-              {isVideo ? (
-                <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
-              ) : (
-                <ImageSphere url={getSafeEcosystemFile(activeEcosystem)} />
-              )}
-              {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
-              
-            </Canvas>
+            <NativeThreeVrViewer 
+              ecosystemKey={activeEcosystem} 
+              isVideo={isVideo} 
+              isEmdrActive={isEmdrActive} 
+              emdrHz={emdrHz} 
+            />
           </div>
         )}
 
+        {/* MÓDULOS 2D LEGACY */}
         {!isWebXRModule && (
           <>
             {(activeEnvironment === 'IDLE' || activeEnvironment === 'HOLODECK_IDLE') && (
@@ -294,6 +347,7 @@ export const VrPatientExperience: React.FC<Props> = ({
           </>
         )}
         
+        {/* SOBRECAPA DE PROTOCOLO DE ANCLAJE Y SEGURIDAD */}
         {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
           <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
             <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
@@ -309,7 +363,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 };
 
 // ============================================================================
-// COMPONENTES SECUNDARIOS
+// COMPONENTES SECUNDARIOS DE SALA DE ESPERA Y DUMMIES 2D
 // ============================================================================
 const IdleWaitingRoom = ({ isConnected, syncSession }: { isConnected: boolean, syncSession: () => void }) => (
   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black flex flex-col items-center justify-center">
