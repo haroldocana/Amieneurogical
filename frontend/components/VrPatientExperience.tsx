@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, Component, ReactNode } from 'react';
+import React, { useState, useEffect, useRef, Component, ReactNode, useMemo } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Wifi, WifiOff, X, RefreshCw, ShieldAlert, Target, Sun, AlertTriangle } from 'lucide-react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Sphere } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 
@@ -15,7 +15,7 @@ interface Props {
 type EnvironmentType = 'IDLE' | 'HOLODECK_IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT' | 'CLUSTER_B_FORENSIC' | 'FND_MIRROR';
 
 // ============================================================================
-// ESCUDO ANTIERRORES (Mantiene la app viva ante imprevistos)
+// ESCUDO ANTIERRORES
 // ============================================================================
 class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void }, { hasError: boolean; error: Error | null }> {
   constructor(props: any) {
@@ -45,17 +45,13 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
 }
 
 // ============================================================================
-// CONTROLADOR NATIVO WEBXR (Inyecta el VRButton oficial de Three.js)
+// CONFIGURADOR NATIVO WEBXR (Inicia VR sin dependencias externas)
 // ============================================================================
 const VrSetup = () => {
   const { gl } = useThree();
-
   useEffect(() => {
     if (!gl) return;
-    
-    // Activa la capacidad de Realidad Virtual en Three.js
     gl.xr.enabled = true;
-
     try {
       const button = VRButton.createButton(gl);
       button.style.position = 'absolute';
@@ -72,59 +68,58 @@ const VrSetup = () => {
       button.style.border = '1px solid rgba(255,255,255,0.2)';
       button.style.boxShadow = '0 0 25px rgba(147, 51, 234, 0.6)';
       button.style.cursor = 'pointer';
-
       document.body.appendChild(button);
-
-      return () => {
-        if (button && button.parentNode) {
-          button.parentNode.removeChild(button);
-        }
-      };
+      return () => { if (button && button.parentNode) button.parentNode.removeChild(button); };
     } catch (e) {
-      console.warn("No se pudo crear el botón VR nativo:", e);
+      console.warn("Error creando botón VR nativo:", e);
     }
   }, [gl]);
-
   return null;
 };
 
 // ============================================================================
-// CARGADORES DE ESFERAS 100% NATIVOS (DIRECT WEB + PICO / QUEST)
+// MATERIALES FABRICADOS A MANO (Elimina el 100% de los crashes onBuild)
 // ============================================================================
 const ImageSphere = ({ url }: { url: string }) => {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  // 1. Fabricamos el material a mano e inyectamos el parche directamente a la instancia
+  const safeMaterial = useMemo(() => {
+    const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, color: '#0f172a' }); // Azul oscuro por defecto
+    (mat as any).onBuild = function() {}; // <--- EL PARCHE DEFINITIVO
+    return mat;
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
     const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (!isMounted) return;
-        loaded.mapping = THREE.EquirectangularReflectionMapping;
-        if ('colorSpace' in loaded) {
-          (loaded as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-        }
-        setTexture(loaded);
-      },
-      undefined,
-      (err) => console.warn("Error cargando textura 360:", err)
-    );
-    return () => { isMounted = false; };
-  }, [url]);
+    
+    loader.load(url, (loaded) => {
+      if (!isMounted) return;
+      loaded.mapping = THREE.EquirectangularReflectionMapping;
+      if ('colorSpace' in loaded) {
+        (loaded as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+      }
+      // Aplicamos la textura al material fabricado a mano
+      safeMaterial.map = loaded;
+      safeMaterial.color.set('#ffffff'); // Quitamos el tinte azul cuando carga la imagen
+      safeMaterial.needsUpdate = true;
+    });
 
-  if (!texture) return null;
+    return () => { isMounted = false; };
+  }, [url, safeMaterial]);
 
   return (
-    <mesh scale={[-1, 1, 1]}>
+    <mesh scale={[-1, 1, 1]} material={safeMaterial}>
       <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
     </mesh>
   );
 };
 
 const VideoSphere = ({ url }: { url: string }) => {
-  const [videoTexture, setVideoTexture] = useState<THREE.VideoTexture | null>(null);
+  const safeMaterial = useMemo(() => {
+    const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, color: '#020617' });
+    (mat as any).onBuild = function() {}; // <--- EL PARCHE DEFINITIVO
+    return mat;
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -132,49 +127,56 @@ const VideoSphere = ({ url }: { url: string }) => {
     video.src = url;
     video.crossOrigin = 'Anonymous';
     video.loop = true;
-    video.muted = true;
+    video.muted = true; // REQUISITO OBLIGATORIO PARA VR AUTOPLAY
     video.playsInline = true;
-    video.play().catch(() => console.warn("Autoplay bloqueado."));
-
-    const texture = new THREE.VideoTexture(video);
-    if ('colorSpace' in texture) {
-      (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-    }
-
-    if (isMounted) setVideoTexture(texture);
+    
+    video.play().then(() => {
+      if (!isMounted) return;
+      const texture = new THREE.VideoTexture(video);
+      if ('colorSpace' in texture) {
+        (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+      }
+      safeMaterial.map = texture;
+      safeMaterial.color.set('#ffffff');
+      safeMaterial.needsUpdate = true;
+    }).catch(console.warn);
 
     return () => {
       isMounted = false;
       video.pause();
       video.src = '';
-      texture.dispose();
     };
-  }, [url]);
-
-  if (!videoTexture) return null;
+  }, [url, safeMaterial]);
 
   return (
-    <mesh scale={[-1, 1, 1]}>
+    <mesh scale={[-1, 1, 1]} material={safeMaterial}>
       <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial map={videoTexture} side={THREE.DoubleSide} />
     </mesh>
   );
 };
 
 const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
   const meshRef = useRef<THREE.Mesh>(null);
+  
+  const safeMaterial = useMemo(() => {
+    const mat = new THREE.MeshBasicMaterial({ color: '#a855f7' });
+    (mat as any).onBuild = function() {}; // <--- EL PARCHE DEFINITIVO
+    return mat;
+  }, []);
+
   useFrame(({ clock }) => {
     if (meshRef.current) meshRef.current.position.x = Math.sin(clock.getElapsedTime() * Math.PI * hz) * 3;
   });
+
   return (
-    <Sphere ref={meshRef} args={[0.15, 32, 32]} position={[0, 1.5, -4]}>
-      <meshBasicMaterial color="#a855f7" />
-    </Sphere>
+    <mesh ref={meshRef} position={[0, 1.5, -4]} material={safeMaterial}>
+      <sphereGeometry args={[0.15, 32, 32]} />
+    </mesh>
   );
 };
 
 // ============================================================================
-// NORMALIZADOR DE ARCHIVOS Y RUTAS
+// NORMALIZADOR
 // ============================================================================
 const KNOWN_JPG_FILES = new Set([
   'ACROPHOBIA_ROOF.jpg', 'AEROPHOBIA_CABIN.jpg', 'BIOLUMINESCENT_BEACH.jpg', 'CLINICAL_OFFICE.jpg',
@@ -213,7 +215,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const patientId = propPatientId || queryParams?.get('paciente') || 'PAC-8104';
   const urlModule = queryParams?.get('modulo');
 
-  const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'HOLODECK_IDLE');
+  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'HOLODECK_IDLE');
 
   const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>(
     (urlModule || initialModuleId || 'IDLE') as EnvironmentType
@@ -267,15 +269,16 @@ export const VrPatientExperience: React.FC<Props> = ({
         {isWebXRModule && (
           <div className="absolute inset-0 z-[100]">
             <Canvas camera={{ position: [0, 0, 0.1] }}>
-              {/* Sincronizador WebXR Nativo sin paquetes problemáticos */}
               <VrSetup />
               <OrbitControls enableZoom={false} reverseOrbit={true} rotateSpeed={-0.5} />
+              
               {isVideo ? (
                 <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
               ) : (
                 <ImageSphere url={getSafeEcosystemFile(activeEcosystem)} />
               )}
               {isEmdrActive && <WebXrEmdrTarget hz={emdrHz} />}
+              
             </Canvas>
           </div>
         )}
