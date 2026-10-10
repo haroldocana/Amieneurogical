@@ -1,9 +1,8 @@
-import { Router, Request, Response } from 'express';
-import mongoose from 'mongoose';
+const express = require('express');
+const router = express.Router();
+const mongoose = require('mongoose');
 
-const router = Router();
-
-// ESQUEMA MONGOOSE PARA SESIONES VR Y TELEMETRÍA
+// ESQUEMA MONGOOSE PARA SESIONES VR
 const VrSessionSchema = new mongoose.Schema({
   patientId: { type: String, required: true, index: true },
   moduleId: { type: String, required: true },
@@ -27,8 +26,8 @@ const VrSessionSchema = new mongoose.Schema({
 
 const VrSession = mongoose.models.VrSession || mongoose.model('VrSession', VrSessionSchema);
 
-// POST /api/vr/telemetry - Guardar datos de sesión al terminar la prueba
-router.post('/telemetry', async (req: Request, res: Response) => {
+// POST /api/vr/telemetry - Guardar datos de sesión
+router.post('/telemetry', async (req, res) => {
   try {
     const { patientId, moduleId, kpis, telemetryLog } = req.body;
 
@@ -51,8 +50,8 @@ router.post('/telemetry', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/vr/patient/:patientId - Consultar el historial de pruebas de un paciente
-router.get('/patient/:patientId', async (req: Request, res: Response) => {
+// GET /api/vr/patient/:patientId - Consultar historial
+router.get('/patient/:patientId', async (req, res) => {
   try {
     const sessions = await VrSession.find({ patientId: req.params.patientId }).sort({ createdAt: -1 });
     return res.json({ success: true, count: sessions.length, sessions });
@@ -61,5 +60,4 @@ router.get('/patient/:patientId', async (req: Request, res: Response) => {
   }
 });
 
-// EXPORTACIÓN ESM CORRECTA (Reemplaza a module.exports)
-export default router;
+module.exports = router;
