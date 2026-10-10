@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Monitor, Glasses, ArrowRight, X } from 'lucide-react';
 import { PatientRecord } from '../types';
-import { immersionMedia } from '../services/immersionMediaService';
 
 // IMPORTACIÓN DE MÓDULOS DE CONSOLA MÉDICA
 import { VrExecutiveFunctionModule } from './VrExecutiveFunctionModule';
@@ -27,27 +26,30 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
   const [activeRole, setActiveRole] = useState<'NONE' | 'DOCTOR' | 'PATIENT'>('NONE');
   const [selectedModuleId, setSelectedModuleId] = useState<string>(initialModuleId);
 
-  // REDIRECCIÓN DIRECTA AL VISOR VR (/visor) PARA EVITAR TECLEAR EN LAS GAFAS
-  const handleSelectPatientRole = () => {
-    const patientId = patient?.id || 'PAC-8104';
-    window.location.href = `/visor?paciente=${patientId}&modulo=${selectedModuleId}`;
-  };
-
-  // Mapeo unificado hacia las claves de assets en el servicio multimedia (JPG y MP4)
+  // Mapeo unificado hacia las claves de archivos en el catálogo (JPG y MP4)
   const mapModuleToAssetKey = (modId: string): string => {
     switch (modId) {
-      case 'NARCISSISM_CLUSTER_B': return 'narcissism_covert'; // Video MP4 de Narcisismo
+      case 'NARCISSISM_CLUSTER_B': return 'narcissism_covert';
       case 'NEURO_HYPNOSIS': return 'HYPNOSIS';
       case 'DUAL_CONTROL_SES_SIS': return 'SEXUAL_HEALTH';
       case 'CLUSTER_B_FORENSIC': return 'CLUSTER_B_FORENSIC';
-      case 'TAG_ANXIETY': return 'SAFE_PLACE';
-      case 'TDAH_EXECUTIVE': return 'TDAH_ATTENTION_LAB';
-      case 'DEV_TRAUMA': return 'DEVELOPMENTAL_TRAUMA';
+      case 'TAG_ANXIETY': return 'SAFE_PLACE_FOREST';
+      case 'TDAH_EXECUTIVE': return 'TDAH_EXECUTIVE';
+      case 'DEV_TRAUMA': return 'DEV_TRAUMA';
       case 'PAIN_MANAGEMENT': return 'PAIN_MANAGEMENT';
-      case 'FND_MIRROR': return 'FUNCTIONAL_NEUROLOGY';
-      case 'EMDR_MEMORY': return 'MEMORY_RECONSOLIDATION';
-      default: return 'ZEN_GARDEN';
+      case 'FND_MIRROR': return 'FND_MIRROR';
+      case 'EMDR_MEMORY': return 'EMDR_MEMORY';
+      default: return 'SAFE_PLACE_FOREST';
     }
+  };
+
+  // REDIRECCIÓN DIRECTA AL VISOR VR CON ASSET Y TIPO DE MEDIO
+  const handleSelectPatientRole = () => {
+    const patientId = patient?.id || 'PAC-8104';
+    const assetKey = mapModuleToAssetKey(selectedModuleId);
+    const isVideo = selectedModuleId === 'NARCISSISM_CLUSTER_B';
+    
+    window.location.href = `/visor?paciente=${patientId}&modulo=${selectedModuleId}&ecosystem=${assetKey}&isVideo=${isVideo}`;
   };
 
   const availableModules = [
@@ -155,7 +157,7 @@ export const VrModuleRouter: React.FC<Props> = ({ patient, onClose, initialModul
             </div>
           </div>
 
-          {/* Opción Visor Paciente (Redirecciona a /visor) */}
+          {/* Opción Visor Paciente */}
           <div 
             onClick={handleSelectPatientRole}
             className="bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/50 p-6 rounded-2xl cursor-pointer transition group flex flex-col justify-between space-y-6 shadow-lg"
