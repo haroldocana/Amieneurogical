@@ -1,13 +1,21 @@
 import React, { useState, useEffect, useRef, Component, ReactNode } from 'react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { Wifi, WifiOff, X, RefreshCw, ShieldAlert, Target, Sun, AlertTriangle } from 'lucide-react';
-import { VRButton } from '@react-three/xr';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
+import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+
+interface Props { 
+  patientId?: string; 
+  initialModuleId?: string;
+  onClose: () => void; 
+}
+
+type EnvironmentType = 'IDLE' | 'HOLODECK_IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT' | 'CLUSTER_B_FORENSIC' | 'FND_MIRROR';
 
 // ============================================================================
-// ESCUDO ANTIERRORES
+// ESCUDO ANTIERRORES (Mantiene la app viva ante imprevistos)
 // ============================================================================
 class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void }, { hasError: boolean; error: Error | null }> {
   constructor(props: any) {
@@ -23,7 +31,7 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
           <AlertTriangle className="w-20 h-20 text-red-500 mb-6 animate-pulse" />
           <h2 className="text-3xl font-black mb-4">Error Interceptado por AMIE Shield</h2>
           <p className="text-red-200 mb-6 max-w-xl font-mono text-xs bg-red-900/50 p-4 rounded-xl border border-red-800 break-all">
-            {this.state.error?.message || 'Fallo de Renderizado 3D'}
+            {this.state.error?.message || 'Carga fallida'}
           </p>
           <div className="flex gap-4">
             <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold transition cursor-pointer">Recargar Visor</button>
@@ -37,7 +45,51 @@ class SafeVrWrapper extends Component<{ children: ReactNode; onClose: () => void
 }
 
 // ============================================================================
-// MATERIAL CUSTOMIZADO PARA WEBXR (Previene el error onBuild 100%)
+// CONTROLADOR NATIVO WEBXR (Inyecta el VRButton oficial de Three.js)
+// ============================================================================
+const VrSetup = () => {
+  const { gl } = useThree();
+
+  useEffect(() => {
+    if (!gl) return;
+    
+    // Activa la capacidad de Realidad Virtual en Three.js
+    gl.xr.enabled = true;
+
+    try {
+      const button = VRButton.createButton(gl);
+      button.style.position = 'absolute';
+      button.style.bottom = '30px';
+      button.style.left = '50%';
+      button.style.transform = 'translateX(-50%)';
+      button.style.zIndex = '10000';
+      button.style.background = '#9333ea';
+      button.style.color = '#ffffff';
+      button.style.fontSize = '14px';
+      button.style.fontWeight = 'bold';
+      button.style.padding = '14px 28px';
+      button.style.borderRadius = '16px';
+      button.style.border = '1px solid rgba(255,255,255,0.2)';
+      button.style.boxShadow = '0 0 25px rgba(147, 51, 234, 0.6)';
+      button.style.cursor = 'pointer';
+
+      document.body.appendChild(button);
+
+      return () => {
+        if (button && button.parentNode) {
+          button.parentNode.removeChild(button);
+        }
+      };
+    } catch (e) {
+      console.warn("No se pudo crear el botón VR nativo:", e);
+    }
+  }, [gl]);
+
+  return null;
+};
+
+// ============================================================================
+// CARGADORES DE ESFERAS 100% NATIVOS (DIRECT WEB + PICO / QUEST)
 // ============================================================================
 const ImageSphere = ({ url }: { url: string }) => {
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
@@ -45,19 +97,19 @@ const ImageSphere = ({ url }: { url: string }) => {
   useEffect(() => {
     let isMounted = true;
     const loader = new THREE.TextureLoader();
-    loader.load(url, (loaded) => {
-      if (!isMounted) return;
-      loaded.mapping = THREE.EquirectangularReflectionMapping;
-      
-      // Asignar colorSpace / encoding dependiendo de la versión de R3F
-      if ('colorSpace' in loaded) {
-        loaded.colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-      } else {
-        (loaded as any).encoding = 3001; 
-      }
-      
-      setTexture(loaded);
-    });
+    loader.load(
+      url,
+      (loaded) => {
+        if (!isMounted) return;
+        loaded.mapping = THREE.EquirectangularReflectionMapping;
+        if ('colorSpace' in loaded) {
+          (loaded as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+        }
+        setTexture(loaded);
+      },
+      undefined,
+      (err) => console.warn("Error cargando textura 360:", err)
+    );
     return () => { isMounted = false; };
   }, [url]);
 
@@ -66,21 +118,7 @@ const ImageSphere = ({ url }: { url: string }) => {
   return (
     <mesh scale={[-1, 1, 1]}>
       <sphereGeometry args={[500, 60, 40]} />
-      {/* 
-        El uso de un material directamente instanciado con onBeforeCompile evita 
-        el procesamiento interno de PMREM que causa "K.onBuild is not a function" 
-      */}
-      <meshBasicMaterial 
-        map={texture} 
-        side={THREE.DoubleSide} 
-        onBeforeCompile={(shader) => {
-          // Inyección fantasma para calmar al motor de ThreeJS en entornos VR antiguos
-          shader.vertexShader = shader.vertexShader.replace(
-            'void main() {',
-            'void main() {'
-          );
-        }}
-      />
+      <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
     </mesh>
   );
 };
@@ -94,15 +132,13 @@ const VideoSphere = ({ url }: { url: string }) => {
     video.src = url;
     video.crossOrigin = 'Anonymous';
     video.loop = true;
-    video.muted = true; // El muted debe estar en true para autoplay en VR
+    video.muted = true;
     video.playsInline = true;
     video.play().catch(() => console.warn("Autoplay bloqueado."));
 
     const texture = new THREE.VideoTexture(video);
     if ('colorSpace' in texture) {
-      texture.colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-    } else {
-      (texture as any).encoding = 3001;
+      (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
     }
 
     if (isMounted) setVideoTexture(texture);
@@ -120,10 +156,7 @@ const VideoSphere = ({ url }: { url: string }) => {
   return (
     <mesh scale={[-1, 1, 1]}>
       <sphereGeometry args={[500, 60, 40]} />
-      <meshBasicMaterial 
-        map={videoTexture} 
-        side={THREE.DoubleSide}
-      />
+      <meshBasicMaterial map={videoTexture} side={THREE.DoubleSide} />
     </mesh>
   );
 };
@@ -141,7 +174,7 @@ const WebXrEmdrTarget = ({ hz }: { hz: number }) => {
 };
 
 // ============================================================================
-// NORMALIZADOR
+// NORMALIZADOR DE ARCHIVOS Y RUTAS
 // ============================================================================
 const KNOWN_JPG_FILES = new Set([
   'ACROPHOBIA_ROOF.jpg', 'AEROPHOBIA_CABIN.jpg', 'BIOLUMINESCENT_BEACH.jpg', 'CLINICAL_OFFICE.jpg',
@@ -169,7 +202,7 @@ const getSafeEcosystemFile = (ecosystemKey: string): string => {
 };
 
 // ============================================================================
-// EXPERIENCIA VR
+// EXPERIENCIA PRINCIPAL DEL VISOR
 // ============================================================================
 export const VrPatientExperience: React.FC<Props> = ({ 
   patientId: propPatientId, 
@@ -182,13 +215,9 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const { isConnected, remoteCommand, liveData, syncSession, transmit } = useVrTelemetryBridge('receiver', patientId, 'HOLODECK_IDLE');
 
-  type EnvironmentType = 'IDLE' | 'HOLODECK_IDLE' | 'TDAH_EXECUTIVE' | 'TEA_SOCIAL' | 'TDM_DEPRESSION' | 'TAG_ANXIETY' | 'NEURO_HYPNOSIS' | 'DUAL_CONTROL' | 'DEV_TRAUMA' | 'EMDR_MEMORY' | 'GAMMA_INSIGHT' | 'PAIN_MANAGEMENT' | 'CLUSTER_B_FORENSIC' | 'FND_MIRROR';
-
   const [activeEnvironment, setActiveEnvironment] = useState<EnvironmentType>(
     (urlModule || initialModuleId || 'IDLE') as EnvironmentType
   );
-  
-  // Establecer siempre TDAH_EXECUTIVE como imagen inicial por defecto
   const [activeEcosystem, setActiveEcosystem] = useState<string>('TDAH_EXECUTIVE');
   const [isVideo, setIsVideo] = useState<boolean>(false);
   const [isEmdrActive, setIsEmdrActive] = useState<boolean>(false);
@@ -231,23 +260,16 @@ export const VrPatientExperience: React.FC<Props> = ({
   return (
     <SafeVrWrapper onClose={onClose}>
       <div className="fixed inset-0 z-[9999] bg-black text-white select-none touch-none overflow-hidden">
-        
-        {/* BOTÓN SALIR */}
         <button onPointerDown={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 p-4 bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-2xl border border-slate-800 z-[10000] cursor-pointer backdrop-blur-md transition">
           <X className="w-8 h-8" />
         </button>
 
         {isWebXRModule && (
           <div className="absolute inset-0 z-[100]">
-            <div className="absolute z-10 bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
-              <VRButton className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.5)] transition uppercase tracking-widest cursor-pointer" />
-            </div>
-
             <Canvas camera={{ position: [0, 0, 0.1] }}>
+              {/* Sincronizador WebXR Nativo sin paquetes problemáticos */}
+              <VrSetup />
               <OrbitControls enableZoom={false} reverseOrbit={true} rotateSpeed={-0.5} />
-              
-              <ambientLight intensity={1} />
-              
               {isVideo ? (
                 <VideoSphere url={`/video/${activeEcosystem}.mp4`} />
               ) : (
@@ -267,6 +289,16 @@ export const VrPatientExperience: React.FC<Props> = ({
             {activeEnvironment === 'TEA_SOCIAL' && <SocialCognitionEnvironment liveData={liveData} />}
             {activeEnvironment === 'TDM_DEPRESSION' && <DepressionEnvironment liveData={liveData} transmit={transmit} />}
           </>
+        )}
+        
+        {liveData?.type === 'TRIGGER_GROUNDING_PROTOCOL' && (
+          <div className="absolute inset-0 bg-slate-900 z-[9000] flex flex-col items-center justify-center animate-in fade-in duration-500">
+            <ShieldAlert className="w-24 h-24 text-sky-400 mb-8 animate-bounce" />
+            <h1 className="text-5xl font-black text-white tracking-widest mb-4">RESPIRA LENTAMENTE</h1>
+            <div className="flex items-center gap-4 text-2xl text-slate-300 font-mono bg-slate-950 px-8 py-4 rounded-2xl border border-slate-800">
+              <span>INHALA (4s)</span> <span className="animate-pulse text-sky-400">---</span> <span>EXHALA (6s)</span>
+            </div>
+          </div>
         )}
       </div>
     </SafeVrWrapper>
