@@ -56,7 +56,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     activeEcosystemRef.current = activeEcosystem;
   }, [activeEcosystem]);
 
-  // CONTADORES DE TELEMETRÍA Y CONDUCTA
+  // CONTADORES DE TELEMETRÍA
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
@@ -66,12 +66,11 @@ export const VrPatientExperience: React.FC<Props> = ({
   const distressMarkersRef = useRef<number>(0);
 
   // =====================================================================
-  // 1. CONFIGURADOR CLÍNICO Y MAPEO DE ARCHIVOS REALES
+  // 1. CONFIGURADOR CLÍNICO Y MAPEO DE RECURSOS
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase();
     
-    // DIAGNÓSTICOS
     if (up.includes('TDAH') || up.includes('EXECUTIVE') || up.includes('CPT')) {
       return { 
         key: 'TDAH_EXECUTIVE', 
@@ -114,7 +113,6 @@ export const VrPatientExperience: React.FC<Props> = ({
       };
     }
 
-    // TRATAMIENTOS
     if (up.includes('EMDR') || up.includes('MEMORY') || up.includes('RECONSOLIDATION')) {
       return { 
         key: 'EMDR_MEMORY', 
@@ -179,7 +177,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const currentConfig = getClinicalConfig(activeEcosystemRef.current);
 
   // =====================================================================
-  // 2. WEBSOCKET PERSISTENTE CON JSON ESTRUCTURADO EN LA RAÍZ
+  // 2. WEBSOCKET PERSISTENTE Y TELEMETRÍA EN RAÍZ
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -217,13 +215,11 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // TRANSMISIÓN CONTINUA DE PAQUETES PLANOS A LA CHROMEBOOK (300 MS)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
         const config = getClinicalConfig(activeEcosystemRef.current);
 
-        // Estructura plana de variables para compatibilidad con la consola del doctor
         const rootPayload = {
           patientId: activePatientId,
           moduleId: config.key,
@@ -243,7 +239,6 @@ export const VrPatientExperience: React.FC<Props> = ({
           safetyMarkers: distressMarkersRef.current
         };
 
-        // Enviar evento multiprotocolo para actualizar contadores
         wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'VR_TELEMETRY_FRAME' }));
         wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'TDAH_TELEMETRY' }));
         wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'TDAH_METRICS' }));
@@ -260,7 +255,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. MOTOR THREE.JS Y RESPUESTA DEL MANDO
+  // 3. ESCENA THREE.JS Y EVENTO DEL MANDO VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -373,7 +368,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. GENERADOR PROCEDURAL 360 Y SUPERPOSICIÓN DE FOTO/VIDEO
+  // 4. CARGADOR CON ORIENTACIÓN CORRECTA Y TEXTURA DIRECTA
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -390,7 +385,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     setMediaType('loading');
     const config = getClinicalConfig(activeEcosystem);
 
-    // GENERAR CANVAS PROCEDURAL EN MEMORIA (0 MS - ELIMINA LA ESFERA AZUL)
+    // 🔥 GENERACIÓN PROCEDURAL CON ORIENTACIÓN CORREGIDA (NO ESPEJO) 🔥
     const drawProceduralRoom = () => {
       const canvas = document.createElement('canvas');
       canvas.width = 2048;
@@ -417,6 +412,10 @@ export const VrPatientExperience: React.FC<Props> = ({
         ctx.fillText(`AMIE CLINICAL ENGINE • ${config.name}`, 1024, 460);
 
         const canvasTex = new THREE.CanvasTexture(canvas);
+        // CORRECCIÓN DE ESPEJO
+        canvasTex.wrapS = THREE.RepeatWrapping;
+        canvasTex.repeat.x = -1;
+
         mat.map = canvasTex;
         mat.color.setHex(0xffffff);
         mat.needsUpdate = true;
@@ -439,7 +438,10 @@ export const VrPatientExperience: React.FC<Props> = ({
       video.setAttribute('webkit-playsinline', 'webkit-playsinline');
 
       const vTex = new THREE.VideoTexture(video);
+      vTex.wrapS = THREE.RepeatWrapping;
+      vTex.repeat.x = -1; // Inversión horizontal para video
       if ('colorSpace' in vTex) (vTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+      
       videoTextureRef.current = vTex;
       videoElementRef.current = video;
 
@@ -452,24 +454,26 @@ export const VrPatientExperience: React.FC<Props> = ({
       video.load();
     } else {
       setStatusMessage(`Descargando: ${config.name}...`);
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 2048;
-        canvas.height = 1024;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, 2048, 1024);
-          const canvasTex = new THREE.CanvasTexture(canvas);
-          mat.map = canvasTex;
+      const loader = new THREE.TextureLoader();
+      
+      loader.load(
+        fullPath,
+        (texture) => {
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.repeat.x = -1; // CORRECCIÓN DE ESPEJO PARA FOTOS
+          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          
+          mat.map = texture;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
           setMediaType('image');
           setStatusMessage(`En Ejecución: ${config.name}`);
+        },
+        undefined,
+        (err) => {
+          console.warn('Error al cargar imagen estática, manteniendo procedural.');
         }
-      };
-      img.src = fullPath;
+      );
     }
 
   }, [activeEcosystem]);
