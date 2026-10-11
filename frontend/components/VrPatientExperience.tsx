@@ -119,9 +119,8 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0x0f172a); // Slate oscuro permanente de fondo
+    scene.background = new THREE.Color(0x0f172a);
 
-    // Iluminación para asegurar visibilidad dentro de la gafa
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
     scene.add(ambientLight);
 
@@ -134,19 +133,16 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Rejilla de Suelo 3D (Garantiza que SIEMPRE haya una referencia espacial en VR)
     const gridHelper = new THREE.GridHelper(60, 60, 0x38bdf8, 0x334155);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Esfera 360 Inmersiva
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // Botón VR WebXR Nativo
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
@@ -165,4 +161,220 @@ export const VrPatientExperience: React.FC<Props> = ({
       vrBtn.style.textTransform = 'uppercase';
       vrBtn.style.boxShadow = '0 0 30px rgba(59, 130, 246, 0.5)';
       vrBtn.style.cursor = 'pointer';
-      vrBtn.style.
+      vrBtn.style.zIndex = '10000';
+      container.appendChild(vrBtn);
+    } catch (e) {
+      console.warn('VRButton no disponible:', e);
+    }
+
+    let isPointerDown = false;
+    let lon = 0, lat = 0;
+    let pointerX = 0, pointerY = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      isPointerDown = true;
+      pointerX = e.clientX;
+      pointerY = e.clientY;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isPointerDown) return;
+      lon += (pointerX - e.clientX) * 0.1;
+      lat += (e.clientY - pointerY) * 0.1;
+      pointerX = e.clientX;
+      pointerY = e.clientY;
+    };
+
+    const onPointerUp = () => { isPointerDown = false; };
+
+    container.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    renderer.setAnimationLoop(() => {
+      if (videoTextureRef.current) {
+        videoTextureRef.current.needsUpdate = true;
+      }
+
+      if (!renderer.xr.isPresenting) {
+        lat = Math.max(-85, Math.min(85, lat));
+        const phi = THREE.MathUtils.degToRad(90 - lat);
+        const theta = THREE.MathUtils.degToRad(lon);
+        camera.lookAt(100 * Math.sin(phi) * Math.cos(theta), 100 * Math.cos(phi), 100 * Math.sin(phi) * Math.sin(theta));
+      }
+
+      renderer.render(scene, camera);
+    });
+
+    const handleResize = () => {
+      if (!container) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      container.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+
+      renderer.setAnimationLoop(null);
+      envGeo.dispose();
+      envMat.dispose();
+      renderer.dispose();
+
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+      if (vrBtn && container.contains(vrBtn)) container.removeChild(vrBtn);
+    };
+  }, []);
+
+  // =====================================================================
+  // 3. CARGA SEGURA DE TEXTURAS Y VIDEOS (CON CONTROL DE EVENTOS)
+  // =====================================================================
+  useEffect(() => {
+    if (!envMeshRef.current) return;
+    const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
+
+    if (videoElementRef.current) {
+      videoElementRef.current.pause();
+      videoElementRef.current.src = '';
+      videoElementRef.current.removeAttribute('src');
+      videoElementRef.current.load();
+      videoElementRef.current = null;
+    }
+    if (videoTextureRef.current) {
+      videoTextureRef.current.dispose();
+      videoTextureRef.current = null;
+    }
+
+    mat.map = null;
+    mat.color.setHex(0x0284c7);
+    mat.needsUpdate = true;
+
+    const mapEcosystemKey = (rawName: string): string => {
+      if (rawName.includes('07') || rawName.includes('SES/SIS')) return 'SEXUAL_HEALTH_SYSTEMIC';
+      if (rawName.includes('NARCISSISM') || rawName.includes('Narcisismo')) return 'NARCISSISM_COVERT';
+      if (rawName.includes('TDAH')) return 'TDAH_EXECUTIVE';
+      return rawName;
+    };
+
+    const safeKey = mapEcosystemKey(activeEcosystem);
+
+    if (isVideo) {
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.src = customImageUrl || `/video/${safeKey}.mp4`;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      videoElementRef.current = video;
+
+      video.addEventListener('loadeddata', () => {
+        const texture = new THREE.VideoTexture(video);
+        if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+        videoTextureRef.current = texture;
+        
+        mat.map = texture;
+        mat.color.setHex(0xffffff);
+        mat.needsUpdate = true;
+        setStatusMessage('Video 360° Activo');
+
+        video.play().catch((e) => {
+          console.warn('Bloqueo de autoplay en gafa:', e);
+        });
+      });
+
+      video.addEventListener('error', () => {
+        console.warn(`Video /video/${safeKey}.mp4 no disponible. Intentando textura JPG de respaldo...`);
+        setStatusMessage('Cargando textura de respaldo...');
+
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(
+          `/ecosystems/${safeKey}.jpg`,
+          (fallbackTex) => {
+            if ('colorSpace' in fallbackTex) (fallbackTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+            mat.map = fallbackTex;
+            mat.color.setHex(0xffffff);
+            mat.needsUpdate = true;
+            setStatusMessage('Entorno 360° (Imagen)');
+          },
+          undefined,
+          () => {
+            mat.map = null;
+            mat.color.setHex(0x0284c7);
+            mat.needsUpdate = true;
+            setStatusMessage('Entorno Procedural 3D');
+          }
+        );
+      });
+
+      video.load();
+
+    } else {
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      const targetUrl = customImageUrl || `/ecosystems/${safeKey}.jpg`;
+
+      loader.load(
+        targetUrl,
+        (texture) => {
+          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          mat.map = texture;
+          mat.color.setHex(0xffffff);
+          mat.needsUpdate = true;
+          setStatusMessage('Entorno Renderizado');
+        },
+        undefined,
+        (err) => {
+          console.warn(`Textura no encontrada (${targetUrl}). Aplicando color base seguro:`, err);
+          mat.map = null;
+          mat.color.setHex(0x0284c7);
+          mat.needsUpdate = true;
+          setStatusMessage('Entorno Procedural 3D');
+        }
+      );
+    }
+  }, [activeEcosystem, isVideo, customImageUrl]);
+
+  return (
+    <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
+      {onClose && (
+        <button 
+          onClick={onClose} 
+          className="absolute top-6 right-6 p-4 bg-slate-900/60 hover:bg-slate-800 rounded-2xl border border-slate-800 z-[10000] cursor-pointer text-slate-300 hover:text-white backdrop-blur-md transition"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      )}
+
+      <div className="absolute z-10 bottom-24 flex flex-col items-center gap-3 pointer-events-none">
+        <div className="text-center space-y-1 bg-slate-950/90 p-4 rounded-2xl border border-slate-800/90 backdrop-blur-md shadow-2xl">
+          <h1 className="text-slate-200 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-cyan-400" /> VISOR CLÍNICO AMIE • WEBXR
+          </h1>
+          <p className="text-[11px] text-slate-400 font-mono">
+            Paciente: <strong className="text-cyan-300">{patientId}</strong>
+          </p>
+          <p className="text-[10px] text-slate-500 font-mono">{statusMessage}</p>
+          
+          <div className={`mt-2 px-3 py-1 rounded-full border text-[10px] font-bold inline-flex items-center gap-1.5 ${
+            isConnected 
+              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400' 
+              : 'bg-rose-950/80 border-rose-500 text-rose-400'
+          }`}>
+            {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <WifiOff className="w-3 h-3" />}
+            <span>{isConnected ? '🟢 Sincronizado con Servidor' : '🔴 Buscando Red...'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div ref={mountRef} className="w-full h-full absolute inset-0 bg-slate-950 cursor-grab active:cursor-grabbing" />
+    </div>
+  );
+};
+
+export default VrPatientExperience;
