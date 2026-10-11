@@ -37,30 +37,43 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const lastRtRef = useRef<number>(280);
 
   // =====================================================================
-  // 1. DICCIONARIO DE MÓDULOS (DIAGNÓSTICO Y TRATAMIENTO)
+  // 1. DICCIONARIO CLÍNICO DE PRUEBAS Y TRATAMIENTOS
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
     
-    // VIDEOS FORENSES CLUSTER B
-    if (up.includes('COLLAPSE') || up.includes('COLAPSO')) return { key: 'narcissism_collapse', protocol: 'CLUSTER_B_FORENSIC', isVideo: true, path: '/video/narcissism_collapse.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense (Colapso Narcisista)' };
-    if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI') || up.includes('COVERT')) return { key: 'narcissism_covert', protocol: 'CLUSTER_B_FORENSIC', isVideo: true, path: '/video/narcissism_covert.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense (Narcisismo Encubierto)' };
+    // --- PRUEBAS DIAGNÓSTICAS CLUSTER B (VIDEOS DE PROVOCACIÓN) ---
+    if (up.includes('OVERT') || up.includes('GRANDIOSO') || up.includes('EXHIBICIONISTA')) {
+      return { key: 'overt_provocation', protocol: 'OVERT_EGO_THREAT', isVideo: true, path: '/video/overt_provocation.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Ensayo Overt: Amenaza al Ego' };
+    }
+    if (up.includes('COVERT') || up.includes('VULNERABLE') || up.includes('ENCUBIERTO')) {
+      return { key: 'covert_rejection', protocol: 'COVERT_SHAME_REJECTION', isVideo: true, path: '/video/covert_rejection.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Ensayo Covert: Rechazo Social' };
+    }
+    if (up.includes('ANTISOCIAL') || up.includes('PCLR') || up.includes('PSICOPATIA') || up.includes('FACTOR1')) {
+      return { key: 'antisocial_distress', protocol: 'ANTISOCIAL_EMPATHY_FLAT', isVideo: true, path: '/video/antisocial_distress.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Ensayo PCL-R: Aplanamiento Empático' };
+    }
+    if (up.includes('COLLAPSE') || up.includes('COLAPSO')) {
+      return { key: 'narcissism_collapse', protocol: 'CLUSTER_B_GENERIC', isVideo: true, path: '/video/narcissism_collapse.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense: Colapso Narcisista' };
+    }
+    if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) {
+      return { key: 'narcissism_covert', protocol: 'CLUSTER_B_GENERIC', isVideo: true, path: '/video/narcissism_covert.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense: Perfilado General' };
+    }
 
-    // IMÁGENES DIAGNÓSTICO
+    // --- MÓDULOS DIAGNÓSTICOS EN IMAGEN ---
     if (up.includes('TDAH') || up.includes('EXECUTIVE')) return { key: 'TDAH_EXECUTIVE', protocol: 'TDAH_CPT', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'TDAH Control Ejecutivo' };
     if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return { key: 'DEV_TRAUMA', protocol: 'TRAUMA_AIMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Trauma Evolutivo' };
     if (up.includes('ACROPHOBIA')) return { key: 'ACROPHOBIA_ROOF', protocol: 'PHOBIA_BASE', isVideo: false, path: '/ecosystems/ACROPHOBIA_ROOF.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Acrofobia (Azotea)' };
     if (up.includes('AEROPHOBIA')) return { key: 'AEROPHOBIA_CABIN', protocol: 'PHOBIA_BASE', isVideo: false, path: '/ecosystems/AEROPHOBIA_CABIN.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Aerofobia (Cabina)' };
     if (up.includes('STERILE')) return { key: 'STERILE_ROOM', protocol: 'ISOLATION', isVideo: false, path: '/ecosystems/STERILE_ROOM.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Cuarto Estéril' };
 
-    // IMÁGENES TRATAMIENTO
+    // --- MÓDULOS DE TRATAMIENTO Y NEUROMODULACIÓN ---
     if (up.includes('EMDR') || up.includes('MEMORY')) return { key: 'EMDR_MEMORY', protocol: 'EMDR_RECON', isVideo: false, path: '/ecosystems/EMDR_MEMORY.jpg', category: 'TREATMENT' as ModuleCategory, name: 'EMDR Reconsolidación' };
     if (up.includes('PAIN') || up.includes('ANALGESIA')) return { key: 'PAIN_MANAGEMENT', protocol: 'PAIN_MGMT', isVideo: false, path: '/ecosystems/PAIN_MANAGEMENT.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Analgesia Inmersiva' };
     if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) return { key: 'NEURO_HYPNOSIS', protocol: 'HYPNOSIS_LOOP', isVideo: false, path: '/ecosystems/NEURO_HYPNOSIS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Neurohipnosis' };
     if (up.includes('FND') || up.includes('MIRROR')) return { key: 'FND_MIRROR', protocol: 'FND_MIRROR', isVideo: false, path: '/ecosystems/FND_MIRROR.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espejo Neurofuncional' };
     if (up.includes('DUAL_CONTROL') || up.includes('SES')) return { key: 'DUAL_CONTROL', protocol: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Regulador Dual' };
 
-    // SANTUARIOS
+    // --- SANTUARIOS DE AUTORREGULACIÓN ---
     if (up.includes('SAFE_PLACE') || up.includes('FOREST')) return { key: 'SAFE_PLACE_FOREST', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/SAFE_PLACE_FOREST.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Bosque Seguro' };
     if (up.includes('BIOLUMINESCENT') || up.includes('BEACH')) return { key: 'BIOLUMINESCENT_BEACH', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/BIOLUMINESCENT_BEACH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Playa Bioluminiscente' };
     if (up.includes('ZEN') || up.includes('GARDEN')) return { key: 'ZEN_GARDEN', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/ZEN_GARDEN.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Jardín Zen' };
@@ -75,75 +88,93 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const currentConfig = getClinicalConfig(activeEcosystem);
 
   // =====================================================================
-  // 2. WEBSOCKET MULTIPROTOCOLO A CHROMEBOOK
+  // 2. CONEXIÓN WEBSOCKET Y MATRIZ DE TELEMETRÍA BIOMÉTRICA
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
+
     const connect = () => {
       try {
         const ws = new WebSocket('wss://amieneurogical.onrender.com');
         wsRef.current = ws;
-        ws.onopen = () => { if (isMounted) setIsConnected(true); ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId })); };
-        ws.onmessage = (event) => { if (isMounted) { try { const data = JSON.parse(event.data); const targetEnv = data.environment || data.ecosystem || data.moduleId; if (targetEnv) setActiveEcosystem(targetEnv); } catch (error) {} } };
-        ws.onclose = () => { if (isMounted) setIsConnected(false); reconnectTimer = setTimeout(connect, 3000); };
+
+        ws.onopen = () => {
+          if (isMounted) setIsConnected(true);
+          ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
+        };
+
+        ws.onmessage = (event) => {
+          if (isMounted) {
+            try {
+              const data = JSON.parse(event.data);
+              const targetEnv = data.environment || data.ecosystem || data.moduleId;
+              if (targetEnv) setActiveEcosystem(targetEnv);
+            } catch (error) {}
+          }
+        };
+
+        ws.onclose = () => {
+          if (isMounted) setIsConnected(false);
+          reconnectTimer = setTimeout(connect, 3000);
+        };
       } catch (e) {}
     };
+
     connect();
 
+    // Bucle de envío biométrico continuo (300 ms)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
         const config = getClinicalConfig(activeEcosystemRef.current);
-        
-        // Simulación de biometría clínica
-        const simulatedHrv = Math.floor(62 + Math.random() * 18);
-        const simulatedGsr = Number((2.1 + Math.random() * 0.9).toFixed(2));
-        
-        // 🟢 CEREBRO MULTIPROTOCOLO: Generar la telemetría según el protocolo activo
+
+        // Simulador de firmas biométricas avanzadas según la prueba activa
+        let simulatedHrv = Math.floor(65 + Math.random() * 10);
+        let simulatedGsr = Number((2.0 + Math.random() * 0.5).toFixed(2));
+
+        if (config.protocol === 'OVERT_EGO_THREAT') {
+          // Reacción Adrenérgica Alta (Ira y ataque al ego)
+          simulatedGsr = Number((6.8 + Math.random() * 2.2).toFixed(2));
+          simulatedHrv = Math.floor(50 + Math.random() * 12);
+        } else if (config.protocol === 'COVERT_SHAME_REJECTION') {
+          // Colapso Vagal (Vergüenza internalizada y ansiedad)
+          simulatedHrv = Math.floor(35 + Math.random() * 18);
+          simulatedGsr = Number((4.1 + Math.random() * 1.8).toFixed(2));
+        } else if (config.protocol === 'ANTISOCIAL_EMPATHY_FLAT') {
+          // Aplanamiento Afectivo (Cero reactividad autonómica ante aflicción ajena)
+          simulatedHrv = 62;
+          simulatedGsr = 1.85;
+        }
+
         const basePayload = {
           patientId: activePatientId,
           moduleId: config.key,
+          protocol: config.protocol,
           category: config.category,
           packetCount: packetCountRef.current,
           reactionTimeMs: lastRtRef.current,
           hrvBpm: simulatedHrv,
-          gsrValue: simulatedGsr
+          gsrValue: simulatedGsr,
+          hits: hitsRef.current
         };
 
-        if (config.protocol === 'CLUSTER_B_FORENSIC') {
-          // Formato específico que espera la consola de Forense
-          wsRef.current.send(JSON.stringify({ 
-            ...basePayload, 
-            type: 'CLUSTER_B_TELEMETRY',
-            emotionalValence: Math.floor(30 + Math.random() * 40),
-            arousalIndex: simulatedGsr,
-            vagalTone: simulatedHrv,
-            hits: hitsRef.current 
-          }));
-        } 
-        else if (config.protocol === 'TDAH_CPT') {
-          // Formato específico que espera la consola de TDAH
-          wsRef.current.send(JSON.stringify({ 
-            ...basePayload, 
-            type: 'TDAH_METRICS',
-            hits: hitsRef.current,
-            commissions: commissionsRef.current,
-            omissions: omissionsRef.current 
-          }));
-        } 
-        else {
-          // Formato universal para Santuarios, Fobias y otros tratamientos
-          wsRef.current.send(JSON.stringify({ 
-            ...basePayload, 
-            type: 'VR_TELEMETRY_FRAME',
-            sudsLevel: 50,
-            stressMarkers: 0
-          }));
+        if (config.protocol.startsWith('OVERT') || config.protocol.startsWith('COVERT') || config.protocol.startsWith('ANTISOCIAL') || config.protocol.startsWith('CLUSTER_B')) {
+          wsRef.current.send(JSON.stringify({ ...basePayload, type: 'CLUSTER_B_TELEMETRY', emotionalValence: Math.floor(30 + Math.random() * 40), arousalIndex: simulatedGsr, vagalTone: simulatedHrv }));
+        } else if (config.protocol === 'TDAH_CPT') {
+          wsRef.current.send(JSON.stringify({ ...basePayload, type: 'TDAH_METRICS', commissions: commissionsRef.current, omissions: omissionsRef.current }));
+        } else {
+          wsRef.current.send(JSON.stringify({ ...basePayload, type: 'VR_TELEMETRY_FRAME', sudsLevel: 45 }));
         }
       }
     }, 300);
-    return () => { isMounted = false; clearInterval(telemetryInterval); if (reconnectTimer) clearTimeout(reconnectTimer); if (wsRef.current) wsRef.current.close(); };
+
+    return () => {
+      isMounted = false;
+      clearInterval(telemetryInterval);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (wsRef.current) wsRef.current.close();
+    };
   }, [activePatientId]);
 
   // =====================================================================
@@ -155,46 +186,63 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
 
-    const scene = new THREE.Scene(); sceneRef.current = scene;
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5); scene.add(ambientLight);
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000); cameraRef.current = camera; scene.add(camera);
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
+    scene.add(ambientLight);
+
+    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    cameraRef.current = camera;
+    scene.add(camera);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(width, height); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.xr.enabled = true;
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    envGeo.scale(-1, 1, 1); 
-    
+    envGeo.scale(-1, 1, 1); // Evita efecto espejo
+
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-    const envMesh = new THREE.Mesh(envGeo, envMat); scene.add(envMesh); envMeshRef.current = envMesh;
+    const envMesh = new THREE.Mesh(envGeo, envMat);
+    scene.add(envMesh);
+    envMeshRef.current = envMesh;
 
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
-    const cursor = new THREE.Mesh(ringGeo, ringMat); scene.add(cursor); cursorRef.current = cursor;
+    const cursor = new THREE.Mesh(ringGeo, ringMat);
+    scene.add(cursor);
+    cursorRef.current = cursor;
 
+    // Escuchar el gatillo del mando Pico 3 (Pulsación e interacción)
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
       lastRtRef.current = Math.floor(210 + Math.random() * 80);
 
       if (videoElementRef.current && videoElementRef.current.paused) {
-         videoElementRef.current.play().catch(() => {});
+        videoElementRef.current.play().catch(() => {});
       }
 
       if (cursorRef.current) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x10b981);
-        setTimeout(() => { if (cursorRef.current) (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0xffffff); }, 200);
+        setTimeout(() => {
+          if (cursorRef.current) (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0xffffff);
+        }, 200);
       }
+
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         const config = getClinicalConfig(activeEcosystemRef.current);
-        wsRef.current.send(JSON.stringify({ 
-          type: 'INTERACTION_HIT', 
-          patientId: activePatientId, 
+        wsRef.current.send(JSON.stringify({
+          type: 'CLINICAL_TEST_INTERACTION',
+          patientId: activePatientId,
+          moduleId: config.key,
           protocol: config.protocol,
-          hits: hitsRef.current, 
-          reactionTimeMs: lastRtRef.current, 
-          isHit: true 
+          category: config.category,
+          hits: hitsRef.current,
+          reactionTimeMs: lastRtRef.current,
+          timestamp: Date.now()
         }));
       }
     });
@@ -203,24 +251,30 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
-      vrBtn.style.position = 'absolute'; vrBtn.style.bottom = '25px'; vrBtn.style.left = '50%'; vrBtn.style.transform = 'translateX(-50%)'; vrBtn.style.zIndex = '100000';
+      vrBtn.style.position = 'absolute';
+      vrBtn.style.bottom = '25px';
+      vrBtn.style.left = '50%';
+      vrBtn.style.transform = 'translateX(-50%)';
+      vrBtn.style.zIndex = '100000';
       container.appendChild(vrBtn);
     } catch (e) {}
 
     renderer.setAnimationLoop(() => {
       if (cursorRef.current && cameraRef.current) {
         const pCam = renderer.xr.isPresenting ? renderer.xr.getCamera() : cameraRef.current;
-        const dir = new THREE.Vector3(); pCam.getWorldDirection(dir);
+        const dir = new THREE.Vector3();
+        pCam.getWorldDirection(dir);
         cursorRef.current.position.copy(pCam.position).add(dir.multiplyScalar(1.5));
         cursorRef.current.lookAt(pCam.position);
       }
+
       if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
         const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
         if (videoElementRef.current.readyState >= 3) {
-          if (mat.map !== videoTextureRef.current) { 
-            mat.map = videoTextureRef.current; 
-            mat.color.setHex(0xd0d0d0); 
-            mat.needsUpdate = true; 
+          if (mat.map !== videoTextureRef.current) {
+            mat.map = videoTextureRef.current;
+            mat.color.setHex(0xd0d0d0); // Corrección de exposición
+            mat.needsUpdate = true;
           }
           videoTextureRef.current.needsUpdate = true;
         }
@@ -229,46 +283,69 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     });
 
     return () => {
-      renderer.setAnimationLoop(null); envGeo.dispose(); envMat.dispose(); ringGeo.dispose(); ringMat.dispose(); renderer.dispose();
+      renderer.setAnimationLoop(null);
+      envGeo.dispose();
+      envMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      renderer.dispose();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       if (vrBtn && container.contains(vrBtn)) container.removeChild(vrBtn);
     };
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGADOR CON COLORSPACE CORREGIDO Y ADAPTACIÓN DE CANVAS
+  // 4. GESTOR DE MEDIOS (VIDEO Y REDIMENSIONADOR DE IMÁGENES)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
     if (videoElementRef.current) {
-      videoElementRef.current.pause(); videoElementRef.current.removeAttribute('src'); videoElementRef.current.load();
+      videoElementRef.current.pause();
+      videoElementRef.current.removeAttribute('src');
+      videoElementRef.current.load();
     }
-    videoElementRef.current = null; videoTextureRef.current = null;
+    videoElementRef.current = null;
+    videoTextureRef.current = null;
     setMediaType('loading');
 
     const config = getClinicalConfig(activeEcosystem);
 
     const drawProceduralRoom = () => {
-      const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 512;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         const grad = ctx.createLinearGradient(0, 0, 0, 512);
-        grad.addColorStop(0, '#0369a1'); grad.addColorStop(0.5, '#0f172a'); grad.addColorStop(1, '#020617');
-        ctx.fillStyle = grad; ctx.fillRect(0, 0, 1024, 512);
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 256); ctx.lineTo(1024, 256); ctx.stroke();
-        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+        grad.addColorStop(0, '#0369a1');
+        grad.addColorStop(0.5, '#0f172a');
+        grad.addColorStop(1, '#020617');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 1024, 512);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 256);
+        ctx.lineTo(1024, 256);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.textAlign = 'center';
         ctx.fillText(`AMIE CLINICAL VR • ${config.name}`, 512, 230);
-        
+
         const canvasTex = new THREE.CanvasTexture(canvas);
-        mat.map = canvasTex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
+        mat.map = canvasTex;
+        mat.color.setHex(0xffffff);
+        mat.needsUpdate = true;
       }
     };
     drawProceduralRoom();
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
+    // Adaptador de lienzo de 2048x1024 para imágenes de IA
     const loadBulletproofImage = (imgPath: string, name: string) => {
       setStatusMessage(`Adaptando Imagen: ${name}...`);
       const img = new Image();
@@ -283,7 +360,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           canvasTex.generateMipmaps = false;
           canvasTex.minFilter = THREE.LinearFilter;
           if ('colorSpace' in canvasTex) (canvasTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          
+
           mat.map = canvasTex;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
@@ -300,18 +377,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     if (config.isVideo) {
       setStatusMessage(`Conectando Video: ${config.name}...`);
-      
+
       const video = document.createElement('video');
       video.src = `${origin}${config.path}`;
-      video.loop = true; 
+      video.loop = true;
       video.muted = true;
       video.playsInline = true;
       video.setAttribute('webkit-playsinline', 'webkit-playsinline');
 
       const vTex = new THREE.VideoTexture(video);
-      vTex.generateMipmaps = false; 
+      vTex.generateMipmaps = false;
       vTex.minFilter = THREE.LinearFilter;
-      
+
       if ('colorSpace' in vTex) {
         (vTex as any).colorSpace = (THREE as any).LinearSRGBColorSpace || 'linear';
       }
@@ -323,7 +400,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       video.addEventListener('canplay', () => {
         setMediaType('video');
         setStatusMessage(`Presiona el gatillo para iniciar`);
-        video.play().then(() => { isPlaying = true; setStatusMessage(`Activo: ${config.name}`); }).catch(() => {});
+        video.play().then(() => {
+          isPlaying = true;
+          setStatusMessage(`Activo: ${config.name}`);
+        }).catch(() => {});
       }, { once: true });
 
       video.addEventListener('error', () => {
@@ -332,6 +412,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
       video.load();
 
+      // Temporizador de seguridad
       setTimeout(() => {
         if (!isPlaying && video.readyState < 3 && config.fallbackImg) {
           videoElementRef.current = null;
