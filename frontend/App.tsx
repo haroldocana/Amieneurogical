@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { PicoVisorApp } from './components/PicoVisorApp';
+
+// ARCHIVO CORRECTO DEL VISOR
+import { VrPatientExperience } from './components/VrPatientExperience';
 
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
@@ -101,9 +103,6 @@ function DoctorWorkstation() {
   const [isPatientMode, setIsPatientMode] = useState<boolean>(false);
   const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
 
-  // -----------------------------------------------------------------------
-  // DETECCIÓN DIRECTA PARA DISPOSITIVOS MÓVILES Y APK
-  // -----------------------------------------------------------------------
   useEffect(() => {
     const checkIsPatientApp = () => {
       const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
@@ -147,19 +146,15 @@ function DoctorWorkstation() {
   const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // MODALES PANTALLA COMPLETA
   const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   
-  // VARIABLES DE RUTEO GENERAL
   const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
   const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
   const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
   
-  // NÚCLEO DE RUTEO VR (Esta variable reemplaza a todos los booleanos individuales de VR)
   const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
-
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
 
   const closeAllModals = () => {
@@ -206,9 +201,6 @@ function DoctorWorkstation() {
     return () => unsubscribe();
   }, []);
 
-  // -----------------------------------------------------------------------
-  // VISTA PACIENTE / MÓVIL
-  // -----------------------------------------------------------------------
   if (isCheckingPlatform) {
     return <div className="min-h-screen bg-slate-950"></div>;
   }
@@ -217,7 +209,6 @@ function DoctorWorkstation() {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
         <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-center">
-          
           <div className="mx-auto w-16 h-16 bg-emerald-950 border border-emerald-500/40 rounded-2xl flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
             <ShieldCheck className="w-8 h-8 animate-pulse" />
           </div>
@@ -255,15 +246,11 @@ function DoctorWorkstation() {
           <p className="text-[10px] text-slate-500 font-mono">
             Versión 2.5.0-JITAI • AMIE Clinical Diagnostic Engine
           </p>
-
         </div>
       </div>
     );
   }
 
-  // -----------------------------------------------------------------------
-  // VISTA WORKSTATION MÉDICA COMPLETA
-  // -----------------------------------------------------------------------
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -521,7 +508,6 @@ function DoctorWorkstation() {
         onLogout={handleLogout}
       />
 
-      {/* LEYENDA REGULATORIA SAMD Y BOTÓN DE IMPRESIÓN DE REPORTE */}
       <div className="bg-slate-900 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between text-[11px] text-slate-400">
         <div className="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between">
           <div className="flex items-center gap-2">
@@ -542,7 +528,6 @@ function DoctorWorkstation() {
         </div>
       </div>
 
-      {/* Indicador Hardware USB */}
       {usbDeviceName && (
         <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
           <Usb className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
@@ -550,7 +535,6 @@ function DoctorWorkstation() {
         </div>
       )}
 
-      {/* BARRA DE NAVEGACIÓN PRINCIPAL CON TODOS LOS TABS Y TOOLTIPS */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
@@ -811,7 +795,6 @@ function DoctorWorkstation() {
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL SEGÚN EL TAB SELECCIONADO */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
         {syncNotFoundAlert && (
           <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl animate-shake">
@@ -850,7 +833,6 @@ function DoctorWorkstation() {
           </div>
         )}
 
-        {/* Tab 1: Workstation */}
         {activeTab === 'workstation' && (
           <div className="space-y-5">
             {analysis?.riskAlerts && <RiskAlertBanner alerts={analysis.riskAlerts} />}
@@ -900,10 +882,8 @@ function DoctorWorkstation() {
           </div>
         )}
 
-        {/* Tab 2: Evaluador Científico */}
         {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
         
-        {/* Tab 3: Diferenciador & Sesgos */}
         {activeTab === 'differential_bias' && (
           <div className="space-y-6">
             <DifferentialBiasResolver patient={safePatient} />
@@ -911,13 +891,10 @@ function DoctorWorkstation() {
           </div>
         )}
 
-        {/* Tab APA: Corrientes APA & RCI */}
         {activeTab === 'apa_framework' && (
           <ApaTherapeuticModule patient={safePatient} />
         )}
 
-        {/* Tab Cluster B & Perfilado Biocomportamental */}
-        {/* ✨ AQUÍ ESTÁ EL CAMBIO SOLICITADO ✨ */}
         {activeTab === 'cluster_b' && (
           <VrModuleRouter 
             patient={safePatient}
@@ -926,10 +903,8 @@ function DoctorWorkstation() {
           />
         )}
 
-        {/* Tab 4: Capacitación */}
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         
-        {/* Tab 5: Neurotopografía 3D */}
         {activeTab === 'neuro_3d' && (
           <div className="space-y-4">
             <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
@@ -970,7 +945,6 @@ function DoctorWorkstation() {
           </div>
         )}
         
-        {/* Tab 6: Módulo qEEG */}
         {activeTab === 'neurosensometry' && (
           <NeuroSensoryModule 
             patient={safePatient} 
@@ -978,7 +952,6 @@ function DoctorWorkstation() {
           />
         )}
         
-        {/* Tab 7: Módulo VR Inmersivo */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
@@ -1086,14 +1059,12 @@ function DoctorWorkstation() {
           </div>
         )}
 
-        {/* TAB: TESTER CENTINELA MÓVIL */}
         {activeTab === 'sentinel_tester' && (
           <div className="py-2">
             <SentinelMobileCollector />
           </div>
         )}
 
-        {/* Tab 8: Referencia */}
         {activeTab === 'referral' && (
           <PsychiatryReferralView
             patient={safePatient}
@@ -1103,7 +1074,6 @@ function DoctorWorkstation() {
           />
         )}
 
-        {/* Tab 9: Panel SaaS & Licencias */}
         {activeTab === 'saas' && <AdminSaaSPanel />}
       </main>
 
@@ -1119,9 +1089,6 @@ function DoctorWorkstation() {
         defaultView={dsmModalView}
       />
 
-      {/* MODALES A PANTALLA COMPLETA */}
-      
-      {/* EL ENRUTADOR QUE PREGUNTA ROL PARA TODAS LAS TERAPIAS */}
       {activeVrModuleId && (
         <VrModuleRouter
           patient={safePatient}
@@ -1130,7 +1097,6 @@ function DoctorWorkstation() {
         />
       )}
 
-      {/* Otras consolas que no usan Enrutador porque son exclusivas del doctor */}
       {isFullscreenUnifiedVrOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <AmieUnifiedVrConsole
@@ -1167,14 +1133,14 @@ function DoctorWorkstation() {
   );
 }
 
-// 2. COMPONENTE APP QUE ENRUTA TODO
+// 2. ENRUTADOR PRINCIPAL: RUTA /visor APUNTA AL COMPONENTE ACTUALIZADO
 export default function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
-        <Route path="/visor" element={<PicoVisorApp />} />
+        <Route path="/visor" element={<VrPatientExperience />} />
       </Routes>
     </Router>
   );
