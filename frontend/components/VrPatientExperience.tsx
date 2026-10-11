@@ -27,15 +27,15 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
-  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno...');
+  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno 360°...');
 
+  // Referencias Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
   const cursorRef = useRef<THREE.Mesh | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Referencia persistente del módulo activo para no reiniciar el WebSocket
   const activeEcosystemRef = useRef(activeEcosystem);
   useEffect(() => {
     activeEcosystemRef.current = activeEcosystem;
@@ -46,7 +46,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const lastRtRef = useRef<number>(350);
 
   // =====================================================================
-  // 1. WEBSOCKET PERSISTENTE (CONEXIÓN CONTINUA SIN REINICIOS)
+  // 1. WEBSOCKET PERSISTENTE (ENVÍO CONTINUO DE METRICAS A LA CHROMEBOOK)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -92,7 +92,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // Bucle continuo de emisión de paquetes biométricos
+    // Bucle continuo de transmisión biométrica (3 veces por segundo)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
@@ -113,11 +113,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         };
 
         wsRef.current.send(JSON.stringify(payload));
-
-        wsRef.current.send(JSON.stringify({
-          ...payload,
-          type: 'TDAH_TELEMETRY'
-        }));
+        wsRef.current.send(JSON.stringify({ ...payload, type: 'TDAH_TELEMETRY' }));
       }
     }, 300);
 
@@ -130,7 +126,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 2. MOTOR THREE.JS (FONDO OSCURO ANTI-CEGUERA)
+  // 2. ESCENA THREE.JS Y RESTAURACIÓN DEL BOTÓN "ENTER VR" ESTILIZADO
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -160,13 +156,14 @@ export const VrPatientExperience: React.FC<Props> = ({
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Fondo inicial slate oscuro por seguridad
+    // Esfera 360 con fondo oscuro slate inicial (evita ceguera blanca)
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
+    // Retículo visual
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
     const cursor = new THREE.Mesh(ringGeo, ringMat);
@@ -199,14 +196,27 @@ export const VrPatientExperience: React.FC<Props> = ({
     });
     scene.add(xrController);
 
+    // 🔥 CREACIÓN Y ESTILIZACIÓN VISIBLE DEL BOTÓN "ENTER VR"
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
       vrBtn.style.position = 'absolute';
-      vrBtn.style.bottom = '40px';
+      vrBtn.style.bottom = '25px';
       vrBtn.style.left = '50%';
       vrBtn.style.transform = 'translateX(-50%)';
-      vrBtn.style.zIndex = '10000';
+      vrBtn.style.padding = '14px 32px';
+      vrBtn.style.borderRadius = '16px';
+      vrBtn.style.background = 'linear-gradient(135deg, #2563eb, #4f46e5)';
+      vrBtn.style.border = '2px solid rgba(255, 255, 255, 0.4)';
+      vrBtn.style.color = '#ffffff';
+      vrBtn.style.fontFamily = 'sans-serif';
+      vrBtn.style.fontSize = '13px';
+      vrBtn.style.fontWeight = 'bold';
+      vrBtn.style.letterSpacing = '1px';
+      vrBtn.style.textTransform = 'uppercase';
+      vrBtn.style.boxShadow = '0 0 25px rgba(37, 99, 235, 0.8)';
+      vrBtn.style.cursor = 'pointer';
+      vrBtn.style.zIndex = '100000';
       container.appendChild(vrBtn);
     } catch (e) {}
 
@@ -233,7 +243,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. CARGADOR DE TEXTURA RESILIENTE
+  // 3. CARGADOR DE IMAGEN 360° (SOLO CAMBIA A BLANCO AL TENER TEXTURA)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -256,6 +266,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     const textureLoader = new THREE.TextureLoader();
     textureLoader.setCrossOrigin('anonymous');
 
+    // Mantener el color oscuro de la bóveda mientras carga
     mat.map = null;
     mat.color.setHex(0x0f172a);
     mat.needsUpdate = true;
@@ -268,6 +279,7 @@ export const VrPatientExperience: React.FC<Props> = ({
       (texture) => {
         if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
         mat.map = texture;
+        // Solo ahora que la imagen está lista, restaurar iluminación limpia
         mat.color.setHex(0xffffff);
         mat.needsUpdate = true;
         setStatusMessage(`Cargado: ${safeKey}`);
@@ -288,7 +300,8 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
-      <div className="absolute z-10 bottom-24 flex flex-col items-center gap-3 pointer-events-none">
+      {/* Panel Flotante elevado para dar espacio al botón ENTER VR */}
+      <div className="absolute z-10 bottom-36 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-1.5 bg-slate-950/90 p-5 rounded-2xl border border-slate-800/90 shadow-2xl max-w-sm">
           <h1 className="text-slate-200 font-black text-sm uppercase flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-cyan-400" /> VISOR CLÍNICO AMIE • WEBXR
