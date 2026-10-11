@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, WifiOff, X, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Wifi, WifiOff, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -27,40 +27,32 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
-  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno 360°...');
+  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno...');
 
-  // Referencias Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
   const cursorRef = useRef<THREE.Mesh | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Contadores TDAH Go/No-Go
+  // Referencia persistente del módulo activo para no reiniciar el WebSocket
+  const activeEcosystemRef = useRef(activeEcosystem);
+  useEffect(() => {
+    activeEcosystemRef.current = activeEcosystem;
+  }, [activeEcosystem]);
+
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
-  const commissionsRef = useRef<number>(0);
-  const omissionsRef = useRef<number>(0);
   const lastRtRef = useRef<number>(350);
 
   // =====================================================================
-  // 1. WEBSOCKET - TRANSMISIÓN CONTINUA DE TELEMETRÍA (CHROMEBOOK)
+  // 1. WEBSOCKET PERSISTENTE (CONEXIÓN CONTINUA SIN REINICIOS)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
 
-    const connectWithHealthCheck = async () => {
-      setStatusMessage('Conectando a Red AMIE...');
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        await fetch('https://amieneurogical.onrender.com/health', { signal: controller.signal, mode: 'cors' });
-        clearTimeout(timeoutId);
-      } catch (e) {}
-
-      if (!isMounted) return;
-
+    const connect = () => {
       const wsUrl = 'wss://amieneurogical.onrender.com';
       try {
         const ws = new WebSocket(wsUrl);
@@ -70,7 +62,11 @@ export const VrPatientExperience: React.FC<Props> = ({
           if (!isMounted) return;
           setIsConnected(true);
           setStatusMessage('🟢 ENLAZADO Y EMITIENDO');
-          ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
+          ws.send(JSON.stringify({ 
+            type: 'HANDSHAKE', 
+            role: 'receiver', 
+            patientId: activePatientId 
+          }));
         };
 
         ws.onmessage = (event) => {
@@ -89,50 +85,38 @@ export const VrPatientExperience: React.FC<Props> = ({
           if (!isMounted) return;
           setIsConnected(false);
           setStatusMessage('Reconectando...');
-          reconnectTimer = setTimeout(connectWithHealthCheck, 3000);
+          reconnectTimer = setTimeout(connect, 3000);
         };
       } catch (e) {}
     };
 
-    connectWithHealthCheck();
+    connect();
 
-    // BUCLE DE TELEMETRÍA EN TIEMPO REAL (ACTIVA GRÁFICAS DE LA CHROMEBOOK)
+    // Bucle continuo de emisión de paquetes biométricos
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
+        const currentEnv = activeEcosystemRef.current;
 
-        wsRef.current.send(JSON.stringify({
+        const payload = {
           type: 'VR_TELEMETRY_FRAME',
           patientId: activePatientId,
-          moduleId: activeEcosystem,
+          moduleId: currentEnv,
           packetCount: packetCountRef.current,
           hrvBpm: Math.floor(65 + Math.random() * 15),
           gsrValue: Number((2.1 + Math.random() * 0.8).toFixed(2)),
           attentionIndex: Math.floor(75 + Math.random() * 20),
           hits: hitsRef.current,
-          commissions: commissionsRef.current,
-          omissions: omissionsRef.current,
+          omissions: 0,
+          commissions: 0,
           reactionTimeMs: lastRtRef.current
-        }));
+        };
+
+        wsRef.current.send(JSON.stringify(payload));
 
         wsRef.current.send(JSON.stringify({
-          type: 'TDAH_TELEMETRY',
-          patientId: activePatientId,
-          moduleId: activeEcosystem,
-          packetCount: packetCountRef.current,
-          hits: hitsRef.current,
-          commissions: commissionsRef.current,
-          omissions: omissionsRef.current,
-          reactionTimeMs: lastRtRef.current,
-          focusScore: Math.floor(80 + Math.random() * 15)
-        }));
-
-        wsRef.current.send(JSON.stringify({
-          type: 'TDAH_METRICS',
-          patientId: activePatientId,
-          packetCount: packetCountRef.current,
-          hits: hitsRef.current,
-          rtMs: lastRtRef.current
+          ...payload,
+          type: 'TDAH_TELEMETRY'
         }));
       }
     }, 300);
@@ -143,10 +127,10 @@ export const VrPatientExperience: React.FC<Props> = ({
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [activePatientId, activeEcosystem]);
+  }, [activePatientId]);
 
   // =====================================================================
-  // 2. MOTOR GRAPHIC THREE.JS & WEBXR
+  // 2. MOTOR THREE.JS (FONDO OSCURO ANTI-CEGUERA)
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -158,7 +142,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     sceneRef.current = scene;
     scene.background = new THREE.Color(0x020617);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 3.0);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
     scene.add(ambientLight);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
@@ -176,25 +160,24 @@ export const VrPatientExperience: React.FC<Props> = ({
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Esfera 360 Inmersiva
+    // Fondo inicial slate oscuro por seguridad
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    const envMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide });
+    const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // Retículo Visual
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
     const cursor = new THREE.Mesh(ringGeo, ringMat);
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // Evento del Mando VR (Gatillo)
+    // Disparo del mando VR
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
-      lastRtRef.current = Math.floor(220 + Math.random() * 90);
+      lastRtRef.current = Math.floor(210 + Math.random() * 80);
 
       if (cursorRef.current) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x10b981);
@@ -207,7 +190,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         wsRef.current.send(JSON.stringify({
           type: 'INTERACTION_HIT',
           patientId: activePatientId,
-          moduleId: activeEcosystem,
+          moduleId: activeEcosystemRef.current,
           hits: hitsRef.current,
           reactionTimeMs: lastRtRef.current,
           isHit: true
@@ -247,10 +230,10 @@ export const VrPatientExperience: React.FC<Props> = ({
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       if (vrBtn && container.contains(vrBtn)) container.removeChild(vrBtn);
     };
-  }, [activePatientId, activeEcosystem]);
+  }, [activePatientId]);
 
   // =====================================================================
-  // 3. PIPELINE DE TEXTURAS 2048x1024 PARA SNAPDRAGON / PICO 3
+  // 3. CARGADOR DE TEXTURA RESILIENTE
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -266,64 +249,40 @@ export const VrPatientExperience: React.FC<Props> = ({
       if (up.includes('FND') || up.includes('MIRROR')) return 'FND_MIRROR';
       if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) return 'NEURO_HYPNOSIS';
       if (up.includes('PAIN') || up.includes('ANALGESIA')) return 'PAIN_MANAGEMENT';
-      if (up.includes('ACROPHOBIA')) return 'ACROPHOBIA_ROOF';
-      if (up.includes('AEROPHOBIA')) return 'AEROPHOBIA_CABIN';
       return rawName;
     };
 
     const safeKey = mapEcosystemKey(activeEcosystem);
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const imgUrl = `${origin}/ecosystems/${safeKey}.jpg`;
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.setCrossOrigin('anonymous');
 
-    setStatusMessage(`Cargando Imagen: ${safeKey}.jpg...`);
+    mat.map = null;
+    mat.color.setHex(0x0f172a);
+    mat.needsUpdate = true;
 
-    // Pre-Cargador HTML5 para forzar la decodificación antes de WebGL
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
+    const imgPath = `/ecosystems/${safeKey}.jpg`;
+    setStatusMessage(`Cargando: ${safeKey}.jpg`);
 
-    img.onload = () => {
-      // Crear Canvas de resolución 2048x1024 (Power-of-Two nativo para Adreno GPU)
-      const canvas = document.createElement('canvas');
-      canvas.width = 2048;
-      canvas.height = 1024;
-      const ctx = canvas.getContext('2d');
-
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, 2048, 1024);
-        
-        const texture = new THREE.CanvasTexture(canvas);
+    textureLoader.load(
+      imgPath,
+      (texture) => {
         if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-        
         mat.map = texture;
-        mat.color.setHex(0xffffff); // Blanco puro sin tinte azul
+        mat.color.setHex(0xffffff);
         mat.needsUpdate = true;
-        setStatusMessage(`Escenario Proyectado: ${safeKey}`);
-      }
-    };
-
-    img.onerror = () => {
-      console.warn(`Error al cargar ${imgUrl}. Intentando alternativa...`);
-      // Cargar imagen de respaldo (CLINICAL_OFFICE)
-      const fallbackImg = new Image();
-      fallbackImg.crossOrigin = 'anonymous';
-      fallbackImg.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 2048;
-        canvas.height = 1024;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(fallbackImg, 0, 0, 2048, 1024);
-          const texture = new THREE.CanvasTexture(canvas);
-          mat.map = texture;
+        setStatusMessage(`Cargado: ${safeKey}`);
+      },
+      undefined,
+      (err) => {
+        console.warn(`Error al cargar ${imgPath}, usando respaldo...`, err);
+        textureLoader.load('/ecosystems/CLINICAL_OFFICE.jpg', (fallbackTex) => {
+          mat.map = fallbackTex;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
-          setStatusMessage('Entorno Clínico 360°');
-        }
-      };
-      fallbackImg.src = `${origin}/ecosystems/CLINICAL_OFFICE.jpg`;
-    };
-
-    img.src = imgUrl;
+          setStatusMessage('Oficina Clínica 3D');
+        });
+      }
+    );
 
   }, [activeEcosystem]);
 
