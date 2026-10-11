@@ -32,13 +32,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
-  const commissionsRef = useRef<number>(0);
-  const omissionsRef = useRef<number>(0);
   const lastRtRef = useRef<number>(280);
-  const sudsLevelRef = useRef<number>(50);
-  const distressMarkersRef = useRef<number>(0);
 
-  // 1. DICCIONARIO DE MÓDULOS
+  // =====================================================================
+  // 1. DICCIONARIO DE RUTAS (USANDO RUTAS RELATIVAS DIRECTAS DE VITE)
+  // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
     if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense Cluster B' };
@@ -66,9 +64,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return { key: 'CLINICAL_OFFICE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Consultorio Base' };
   };
 
-  const currentConfig = getClinicalConfig(activeEcosystemRef.current);
-
-  // 2. WEBSOCKET - TELEMETRÍA PLANA
+  // =====================================================================
+  // 2. WEBSOCKET - TELEMETRÍA PLANA A CHROMEBOOK
+  // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
@@ -101,7 +99,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return () => { isMounted = false; clearInterval(telemetryInterval); if (reconnectTimer) clearTimeout(reconnectTimer); if (wsRef.current) wsRef.current.close(); };
   }, [activePatientId]);
 
+  // =====================================================================
   // 3. MOTOR THREE.JS Y EVENTO DE DISPARO
+  // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -116,8 +116,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     renderer.setSize(width, height); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
+    // Esfera Invertida (Corrije efecto espejo sin dañar texturas)
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide });
+    envGeo.scale(-1, 1, 1); 
+    
+    const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
     const envMesh = new THREE.Mesh(envGeo, envMat); scene.add(envMesh); envMeshRef.current = envMesh;
 
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
@@ -128,6 +131,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
       lastRtRef.current = Math.floor(210 + Math.random() * 80);
+
+      // Gatillo desbloquea el video si está pausado
+      if (videoElementRef.current && videoElementRef.current.paused) {
+         videoElementRef.current.play().catch(e => console.error("Error reproduciendo:", e));
+      }
+
       if (cursorRef.current) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x10b981);
         setTimeout(() => { if (cursorRef.current) (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0xffffff); }, 200);
@@ -169,7 +178,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
   }, [activePatientId]);
 
-  // 4. CARGADOR CON ESCALADO (IMÁGENES) Y SALVAVIDAS (VIDEOS)
+  // =====================================================================
+  // 4. CARGADOR LIBRE DE CORS (100% COMPATIBLE CON PICO 3)
+  // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
@@ -182,81 +193,82 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     const config = getClinicalConfig(activeEcosystem);
 
-    // Procedural Inmediato
     const drawProceduralRoom = () => {
-      const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 1024;
+      const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        const grad = ctx.createLinearGradient(0, 0, 0, 1024);
+        const grad = ctx.createLinearGradient(0, 0, 0, 512);
         grad.addColorStop(0, '#0369a1'); grad.addColorStop(0.5, '#0f172a'); grad.addColorStop(1, '#020617');
-        ctx.fillStyle = grad; ctx.fillRect(0, 0, 2048, 1024);
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 512); ctx.lineTo(2048, 512); ctx.stroke();
-        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 44px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`Cargando...`, 1024, 460);
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, 1024, 512);
+        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 256); ctx.lineTo(1024, 256); ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`Cargando: ${config.name}`, 512, 230);
+        
         const canvasTex = new THREE.CanvasTexture(canvas);
-        canvasTex.wrapS = THREE.RepeatWrapping; canvasTex.repeat.x = -1; // Corregir Espejo
         mat.map = canvasTex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
       }
     };
     drawProceduralRoom();
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-
-    // FUNCIÓN PARA CARGAR CUALQUIER IMAGEN JPG EN LA GAFA (100% COMPATIBLE)
-    const loadImageSafe = (imgPath: string, name: string) => {
-      setStatusMessage(`Descargando imagen: ${name}`);
-      const img = new Image();
-      // ¡ELIMINADO CROSSORIGIN PARA ARCHIVOS LOCALES EN RENDER!
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 2048; canvas.height = 1024; // Fija el tamaño a potencia de dos (Requisito de Pico 3)
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, 2048, 1024);
-          const canvasTex = new THREE.CanvasTexture(canvas);
-          canvasTex.wrapS = THREE.RepeatWrapping; canvasTex.repeat.x = -1; // Corregir Espejo
-          if ('colorSpace' in canvasTex) (canvasTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          mat.map = canvasTex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
-          setMediaType('image'); setStatusMessage(`Cargado: ${name}`);
+    // 🔴 NOTA CLAVE: SE ELIMINÓ TODO RASTRO DE "crossOrigin='anonymous'"
+    // Ahora WebGL confía ciegamente en los archivos porque vienen de la misma carpeta raíz del servidor.
+    const loadTextureNative = (imgPath: string, name: string) => {
+      setStatusMessage(`Abriendo textura: ${name}...`);
+      
+      const textureLoader = new THREE.TextureLoader();
+      
+      textureLoader.load(
+        imgPath,
+        (texture) => {
+          texture.generateMipmaps = false; // Desactiva la regla estricta de "Potencia de 2" de WebGL
+          texture.minFilter = THREE.LinearFilter;
+          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          
+          mat.map = texture;
+          mat.color.setHex(0xffffff);
+          mat.needsUpdate = true;
+          setMediaType('image');
+          setStatusMessage(`Activo: ${name}`);
+        },
+        undefined,
+        (error) => {
+          console.error("Error cargando imagen:", error);
+          setStatusMessage(`Fallo al cargar imagen`);
         }
-      };
-      img.onerror = () => setStatusMessage('Error en la imagen JPG');
-      img.src = `${origin}${imgPath}`;
+      );
     };
 
     if (config.isVideo) {
-      setStatusMessage(`Iniciando Video...`);
+      setStatusMessage(`Preparando Video...`);
       const video = document.createElement('video');
-      video.src = `${origin}${config.path}`;
-      video.loop = true; video.muted = true; video.playsInline = true;
+      video.src = config.path; // Ruta directa relativa, sin CrossOrigin
+      video.loop = true; video.playsInline = true;
 
       const vTex = new THREE.VideoTexture(video);
-      vTex.wrapS = THREE.RepeatWrapping; vTex.repeat.x = -1;
-      videoTextureRef.current = vTex; videoElementRef.current = video;
+      vTex.generateMipmaps = false; vTex.minFilter = THREE.LinearFilter;
+      videoTextureRef.current = vTex;
+      videoElementRef.current = video;
 
       let isVideoPlaying = false;
-
       video.addEventListener('canplay', () => {
         setMediaType('video');
-        video.play().then(() => { isVideoPlaying = true; setStatusMessage(`Reproduciendo: ${config.name}`); }).catch(() => {});
+        setStatusMessage(`Gatillo para Iniciar Video`);
+        video.play().then(() => { isVideoPlaying = true; setStatusMessage(`Activo: ${config.name}`); }).catch(() => {});
       }, { once: true });
 
       video.load();
 
-      // SALVAVIDAS: Si el video no arranca en 3.5 segundos, ¡CARGA LA IMAGEN DE RESPALDO!
       setTimeout(() => {
         if (!isVideoPlaying && config.fallbackImg) {
-          console.log("Video bloqueado, cargando imagen de respaldo...");
           videoElementRef.current = null;
-          loadImageSafe(config.fallbackImg, config.name + ' (Imagen)');
+          loadTextureNative(config.fallbackImg, config.name + " (Respaldo JPG)");
         }
-      }, 3500);
+      }, 4000);
 
     } else {
-      // SI ES TDAH, TRAUMA, BOSQUE SEGURO, ETC. CARGA LA IMAGEN DIRECTO.
-      loadImageSafe(config.path, config.name);
+      // Usamos la ruta local directamente (e.g. "/ecosystems/TDAH_EXECUTIVE.jpg")
+      loadTextureNative(config.path, config.name);
     }
-
   }, [activeEcosystem]);
 
   return (
