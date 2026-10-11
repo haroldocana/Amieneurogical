@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, WifiOff, X, CheckCircle2, Video, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Wifi, WifiOff, X, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -27,18 +27,16 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
-  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno...');
+  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno 360°...');
 
   // Referencias Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
-  const videoElementRef = useRef<HTMLVideoElement | null>(null);
-  const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
   const cursorRef = useRef<THREE.Mesh | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Contadores TDAH
+  // Contadores TDAH Go/No-Go
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
@@ -46,14 +44,14 @@ export const VrPatientExperience: React.FC<Props> = ({
   const lastRtRef = useRef<number>(350);
 
   // =====================================================================
-  // 1. WEBSOCKET - TELEMETRÍA EN TIEMPO REAL
+  // 1. WEBSOCKET - TRANSMISIÓN CONTINUA DE TELEMETRÍA (CHROMEBOOK)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
 
     const connectWithHealthCheck = async () => {
-      setStatusMessage('Conectando con Servidor...');
+      setStatusMessage('Conectando a Red AMIE...');
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -80,7 +78,6 @@ export const VrPatientExperience: React.FC<Props> = ({
           try {
             const data = JSON.parse(event.data);
             const targetEnv = data.environment || data.ecosystem || data.scenario || data.moduleId || data.selectedModule;
-
             if (targetEnv) {
               setActiveEcosystem(targetEnv);
             }
@@ -99,6 +96,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connectWithHealthCheck();
 
+    // BUCLE DE TELEMETRÍA EN TIEMPO REAL (ACTIVA GRÁFICAS DE LA CHROMEBOOK)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
@@ -148,7 +146,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId, activeEcosystem]);
 
   // =====================================================================
-  // 2. MOTOR THREE.JS Y INTERACCIÓN VR
+  // 2. MOTOR GRAPHIC THREE.JS & WEBXR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -160,7 +158,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     sceneRef.current = scene;
     scene.background = new THREE.Color(0x020617);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 3.0);
     scene.add(ambientLight);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
@@ -178,19 +176,21 @@ export const VrPatientExperience: React.FC<Props> = ({
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
+    // Esfera 360 Inmersiva
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    const envMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.BackSide });
+    const envMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
+    // Retículo Visual
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
     const cursor = new THREE.Mesh(ringGeo, ringMat);
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // EVENTO DEL MANDO VR (TRIGGER)
+    // Evento del Mando VR (Gatillo)
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
@@ -238,18 +238,6 @@ export const VrPatientExperience: React.FC<Props> = ({
         cursorRef.current.lookAt(pCam.position);
       }
 
-      if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
-        const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
-        if (videoElementRef.current.readyState >= 3) {
-          if (mat.map !== videoTextureRef.current) {
-            mat.map = videoTextureRef.current;
-            mat.color.setHex(0xffffff);
-            mat.needsUpdate = true;
-          }
-          videoTextureRef.current.needsUpdate = true;
-        }
-      }
-
       renderer.render(scene, camera);
     });
 
@@ -262,26 +250,11 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId, activeEcosystem]);
 
   // =====================================================================
-  // 3. CARGADOR DE RUTAS ABSOLUTAS (GARANTIZA RESOLUCIÓN EN ANDROID VR)
+  // 3. PIPELINE DE TEXTURAS 2048x1024 PARA SNAPDRAGON / PICO 3
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
-
-    if (videoElementRef.current) {
-      videoElementRef.current.pause();
-      videoElementRef.current.src = '';
-      videoElementRef.current.load();
-      videoElementRef.current = null;
-    }
-    if (videoTextureRef.current) {
-      videoTextureRef.current.dispose();
-      videoTextureRef.current = null;
-    }
-
-    mat.map = null;
-    mat.color.setHex(0x0284c7); 
-    mat.needsUpdate = true;
 
     const mapEcosystemKey = (rawName: string): string => {
       const up = rawName.toUpperCase();
@@ -300,34 +273,58 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     const safeKey = mapEcosystemKey(activeEcosystem);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const absoluteJpgUrl = `${origin}/ecosystems/${safeKey}.jpg`;
+    const imgUrl = `${origin}/ecosystems/${safeKey}.jpg`;
 
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
+    setStatusMessage(`Cargando Imagen: ${safeKey}.jpg...`);
 
-    // Carga mediante Ruta Absoluta Fija
-    loader.load(
-      absoluteJpgUrl,
-      (texture) => {
+    // Pre-Cargador HTML5 para forzar la decodificación antes de WebGL
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      // Crear Canvas de resolución 2048x1024 (Power-of-Two nativo para Adreno GPU)
+      const canvas = document.createElement('canvas');
+      canvas.width = 2048;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, 2048, 1024);
+        
+        const texture = new THREE.CanvasTexture(canvas);
         if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+        
         mat.map = texture;
-        mat.color.setHex(0xffffff);
+        mat.color.setHex(0xffffff); // Blanco puro sin tinte azul
         mat.needsUpdate = true;
-        setStatusMessage(`Entorno Cargar: ${safeKey}`);
-      },
-      undefined,
-      (err) => {
-        console.warn(`No se pudo cargar la imagen ${absoluteJpgUrl}, cargando backup...`, err);
-        const fallbackUrl = `${origin}/ecosystems/CLINICAL_OFFICE.jpg`;
-        loader.load(fallbackUrl, (fallbackTex) => {
-          if ('colorSpace' in fallbackTex) (fallbackTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          mat.map = fallbackTex;
+        setStatusMessage(`Escenario Proyectado: ${safeKey}`);
+      }
+    };
+
+    img.onerror = () => {
+      console.warn(`Error al cargar ${imgUrl}. Intentando alternativa...`);
+      // Cargar imagen de respaldo (CLINICAL_OFFICE)
+      const fallbackImg = new Image();
+      fallbackImg.crossOrigin = 'anonymous';
+      fallbackImg.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2048;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(fallbackImg, 0, 0, 2048, 1024);
+          const texture = new THREE.CanvasTexture(canvas);
+          mat.map = texture;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
-          setStatusMessage('Oficina Clínica 3D');
-        });
-      }
-    );
+          setStatusMessage('Entorno Clínico 360°');
+        }
+      };
+      fallbackImg.src = `${origin}/ecosystems/CLINICAL_OFFICE.jpg`;
+    };
+
+    img.src = imgUrl;
+
   }, [activeEcosystem]);
 
   return (
