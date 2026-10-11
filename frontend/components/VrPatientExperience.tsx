@@ -44,7 +44,6 @@ export const VrPatientExperience: React.FC<Props> = ({
     activeEcosystemRef.current = activeEcosystem;
   }, [activeEcosystem]);
 
-  // Contadores de rendimiento y telemetría
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
@@ -52,7 +51,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const lastRtRef = useRef<number>(320);
 
   // =====================================================================
-  // 1. WEBSOCKET PERSISTENTE (TRANSMISIÓN CONTINUA A CHROMEBOOK)
+  // 1. WEBSOCKET CONTINUO (TELEMETRÍA HACIA CHROMEBOOK)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,7 +89,6 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // Emisión continua de paquetes
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
@@ -140,7 +138,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 2. MOTOR THREE.JS Y EVENTO DE DISPARO DEL MANDO VR
+  // 2. MOTOR THREE.JS Y INTERACCIÓN VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -170,21 +168,19 @@ export const VrPatientExperience: React.FC<Props> = ({
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Fondo slate oscuro para la esfera (Evita ceguera por blanco)
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // Retículo visual
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
     const cursor = new THREE.Mesh(ringGeo, ringMat);
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // Acción del gatillo del mando Pico 3
+    // Disparo del mando VR
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
@@ -238,7 +234,6 @@ export const VrPatientExperience: React.FC<Props> = ({
         cursorRef.current.lookAt(pCam.position);
       }
 
-      // Actualizar fotogramas de video solo si está listo en GPU
       if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
         const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
         if (videoElementRef.current.readyState >= 3) {
@@ -263,7 +258,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. CARGADOR Y GENERADOR DE PROCEDURAL ANTI-BLANCO
+  // 3. GENERADOR DE ESCENARIOS 360 Y CARGADOR RESILIENTE
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -277,51 +272,42 @@ export const VrPatientExperience: React.FC<Props> = ({
     videoElementRef.current = null;
     videoTextureRef.current = null;
 
-    mat.map = null;
-    mat.color.setHex(0x0f172a); // Mantener oscuro por seguridad
-    mat.needsUpdate = true;
-    setMediaType('loading');
-
-    // Generador de entorno procedural si las imágenes fallan o tardan
-    const applyProceduralFallback = (title: string) => {
+    // GENERADOR PROCEDURAL INMEDIATO (EVITA PANTALLA BLANCA SIEMPRE)
+    const setProceduralEnvironment = (title: string) => {
       const canvas = document.createElement('canvas');
-      canvas.width = 1024;
-      canvas.height = 512;
+      canvas.width = 2048;
+      canvas.height = 1024;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
-        gradient.addColorStop(0, '#0284c7');
-        gradient.addColorStop(0.5, '#0f172a');
-        gradient.addColorStop(1, '#020617');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 1024, 512);
+        const grad = ctx.createLinearGradient(0, 0, 0, 1024);
+        grad.addColorStop(0, '#0369a1');
+        grad.addColorStop(0.5, '#0f172a');
+        grad.addColorStop(1, '#020617');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 2048, 1024);
 
-        // Estrellas / Puntos de anclaje visual
-        ctx.fillStyle = '#38bdf8';
-        for (let i = 0; i < 150; i++) {
-          const x = Math.random() * 1024;
-          const y = Math.random() * 512;
-          ctx.beginPath();
-          ctx.arc(x, y, Math.random() * 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 512);
+        ctx.lineTo(2048, 512);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 44px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`AMIE CLINICAL VR • ${title}`, 1024, 460);
 
         const canvasTex = new THREE.CanvasTexture(canvas);
         mat.map = canvasTex;
         mat.color.setHex(0xffffff);
         mat.needsUpdate = true;
-        setMediaType('image');
-        setStatusMessage(`Procedural: ${title}`);
       }
     };
 
     const getModuleConfig = (rawName: string) => {
       const up = rawName.toUpperCase();
-      
-      if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) {
-        return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4' };
-      }
-      
+      if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4' };
       if (up.includes('TDAH') || up.includes('EXECUTIVE')) return { key: 'TDAH_EXECUTIVE', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg' };
       if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return { key: 'DEV_TRAUMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg' };
       if (up.includes('DUAL_CONTROL') || up.includes('SES')) return { key: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg' };
@@ -336,43 +322,39 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
 
     const config = getModuleConfig(activeEcosystem);
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    setProceduralEnvironment(config.key); // Carga el entorno visual en 0 milisegundos
 
-    const loadStaticImage = (path: string, name: string) => {
-      setStatusMessage(`Cargando Escenario: ${name}`);
-      const loader = new THREE.TextureLoader();
-      loader.setCrossOrigin('anonymous');
-      
-      loader.load(
-        `${origin}${path}`,
-        (texture) => {
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          mat.map = texture;
-          mat.color.setHex(0xffffff); // Aplica la luz solo al tener la textura decodificada
+    // CARGA DE FOTO REAL EN SEGUNDO PLANO
+    if (!config.isVideo) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2048;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 2048, 1024);
+          const canvasTex = new THREE.CanvasTexture(canvas);
+          mat.map = canvasTex;
+          mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
           setMediaType('image');
-          setStatusMessage(`Escenario Activo: ${name}`);
-        },
-        undefined,
-        () => {
-          console.warn(`Textura en ${path} no encontrada. Aplicando entorno procedural.`);
-          applyProceduralFallback(name);
+          setStatusMessage(`Escenario Activo: ${config.key}`);
         }
-      );
-    };
-
-    if (config.isVideo) {
-      setStatusMessage('Cargando Video 360°...');
+      };
+      img.src = config.path;
+    } else {
+      // CARGA DE VIDEO REAL EN SEGUNDO PLANO
       const video = document.createElement('video');
       video.crossOrigin = 'anonymous';
-      video.src = `${origin}${config.path}`;
+      video.src = config.path;
       video.loop = true;
       video.muted = true;
       video.playsInline = true;
       video.setAttribute('webkit-playsinline', 'webkit-playsinline');
 
       const vTex = new THREE.VideoTexture(video);
-      if ('colorSpace' in vTex) (vTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
       videoTextureRef.current = vTex;
       videoElementRef.current = video;
 
@@ -382,15 +364,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         video.play().catch(() => {});
       }, { once: true });
 
-      video.addEventListener('error', () => {
-        console.warn(`Video no encontrado en ${config.path}, pasando a imagen de respaldo.`);
-        videoElementRef.current = null;
-        loadStaticImage('/ecosystems/CLUSTER_B_FORENSIC.jpg', 'Forense Respaldo');
-      });
-
       video.load();
-    } else {
-      loadStaticImage(config.path, config.key);
     }
 
   }, [activeEcosystem]);
