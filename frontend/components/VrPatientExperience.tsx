@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, WifiOff, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -27,14 +27,17 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
-  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno 360°...');
+  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno...');
+  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading'>('loading');
 
-  // Referencias Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
   const cursorRef = useRef<THREE.Mesh | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
 
   const activeEcosystemRef = useRef(activeEcosystem);
   useEffect(() => {
@@ -46,7 +49,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const lastRtRef = useRef<number>(350);
 
   // =====================================================================
-  // 1. WEBSOCKET PERSISTENTE (ENVÍO CONTINUO DE METRICAS A LA CHROMEBOOK)
+  // 1. WEBSOCKET PERSISTENTE
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -61,12 +64,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         ws.onopen = () => {
           if (!isMounted) return;
           setIsConnected(true);
-          setStatusMessage('🟢 ENLAZADO Y EMITIENDO');
-          ws.send(JSON.stringify({ 
-            type: 'HANDSHAKE', 
-            role: 'receiver', 
-            patientId: activePatientId 
-          }));
+          ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
         };
 
         ws.onmessage = (event) => {
@@ -74,9 +72,7 @@ export const VrPatientExperience: React.FC<Props> = ({
           try {
             const data = JSON.parse(event.data);
             const targetEnv = data.environment || data.ecosystem || data.scenario || data.moduleId || data.selectedModule;
-            if (targetEnv) {
-              setActiveEcosystem(targetEnv);
-            }
+            if (targetEnv) setActiveEcosystem(targetEnv);
           } catch (error) {}
         };
 
@@ -84,7 +80,6 @@ export const VrPatientExperience: React.FC<Props> = ({
         ws.onclose = () => {
           if (!isMounted) return;
           setIsConnected(false);
-          setStatusMessage('Reconectando...');
           reconnectTimer = setTimeout(connect, 3000);
         };
       } catch (e) {}
@@ -92,7 +87,6 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // Bucle continuo de transmisión biométrica (3 veces por segundo)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
@@ -114,6 +108,13 @@ export const VrPatientExperience: React.FC<Props> = ({
 
         wsRef.current.send(JSON.stringify(payload));
         wsRef.current.send(JSON.stringify({ ...payload, type: 'TDAH_TELEMETRY' }));
+        wsRef.current.send(JSON.stringify({
+          type: 'TDAH_METRICS',
+          patientId: activePatientId,
+          packetCount: packetCountRef.current,
+          hits: hitsRef.current,
+          rtMs: lastRtRef.current
+        }));
       }
     }, 300);
 
@@ -126,7 +127,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 2. ESCENA THREE.JS Y RESTAURACIÓN DEL BOTÓN "ENTER VR" ESTILIZADO
+  // 2. MOTOR THREE.JS Y EVENTO DEL MANDO VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -156,21 +157,18 @@ export const VrPatientExperience: React.FC<Props> = ({
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Esfera 360 con fondo oscuro slate inicial (evita ceguera blanca)
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // Retículo visual
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
     const cursor = new THREE.Mesh(ringGeo, ringMat);
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // Disparo del mando VR
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
@@ -196,7 +194,6 @@ export const VrPatientExperience: React.FC<Props> = ({
     });
     scene.add(xrController);
 
-    // 🔥 CREACIÓN Y ESTILIZACIÓN VISIBLE DEL BOTÓN "ENTER VR"
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
@@ -209,13 +206,7 @@ export const VrPatientExperience: React.FC<Props> = ({
       vrBtn.style.background = 'linear-gradient(135deg, #2563eb, #4f46e5)';
       vrBtn.style.border = '2px solid rgba(255, 255, 255, 0.4)';
       vrBtn.style.color = '#ffffff';
-      vrBtn.style.fontFamily = 'sans-serif';
-      vrBtn.style.fontSize = '13px';
       vrBtn.style.fontWeight = 'bold';
-      vrBtn.style.letterSpacing = '1px';
-      vrBtn.style.textTransform = 'uppercase';
-      vrBtn.style.boxShadow = '0 0 25px rgba(37, 99, 235, 0.8)';
-      vrBtn.style.cursor = 'pointer';
       vrBtn.style.zIndex = '100000';
       container.appendChild(vrBtn);
     } catch (e) {}
@@ -231,6 +222,18 @@ export const VrPatientExperience: React.FC<Props> = ({
         cursorRef.current.lookAt(pCam.position);
       }
 
+      if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
+        const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
+        if (videoElementRef.current.readyState >= 3) {
+          if (mat.map !== videoTextureRef.current) {
+            mat.map = videoTextureRef.current;
+            mat.color.setHex(0xffffff);
+            mat.needsUpdate = true;
+          }
+          videoTextureRef.current.needsUpdate = true;
+        }
+      }
+
       renderer.render(scene, camera);
     });
 
@@ -243,71 +246,133 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. CARGADOR DE IMAGEN 360° (SOLO CAMBIA A BLANCO AL TENER TEXTURA)
+  // 3. ENRUTADOR INTELIGENTE (REDIMENSIONADOR CANVAS PARA GPU ANDROID)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
-    const mapEcosystemKey = (rawName: string): string => {
+    if (videoElementRef.current) {
+      videoElementRef.current.pause();
+      videoElementRef.current.removeAttribute('src');
+      videoElementRef.current.load();
+    }
+    videoElementRef.current = null;
+    videoTextureRef.current = null;
+
+    mat.map = null;
+    mat.color.setHex(0x0f172a); // Vuelve a color oscuro seguro al cambiar
+    mat.needsUpdate = true;
+    setMediaType('loading');
+
+    const getModuleConfig = (rawName: string) => {
       const up = rawName.toUpperCase();
-      if (up.includes('TDAH') || up.includes('EXECUTIVE')) return 'TDAH_EXECUTIVE';
-      if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) return 'CLUSTER_B_FORENSIC';
-      if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return 'DEV_TRAUMA';
-      if (up.includes('DUAL_CONTROL') || up.includes('SES')) return 'DUAL_CONTROL';
-      if (up.includes('EMDR') || up.includes('MEMORY')) return 'EMDR_MEMORY';
-      if (up.includes('FND') || up.includes('MIRROR')) return 'FND_MIRROR';
-      if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) return 'NEURO_HYPNOSIS';
-      if (up.includes('PAIN') || up.includes('ANALGESIA')) return 'PAIN_MANAGEMENT';
-      return rawName;
+      
+      // VIDEOS
+      if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4' };
+      
+      // IMÁGENES
+      if (up.includes('TDAH') || up.includes('EXECUTIVE')) return { key: 'TDAH_EXECUTIVE', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg' };
+      if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return { key: 'DEV_TRAUMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg' };
+      if (up.includes('DUAL_CONTROL') || up.includes('SES')) return { key: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg' };
+      if (up.includes('EMDR') || up.includes('MEMORY')) return { key: 'EMDR_MEMORY', isVideo: false, path: '/ecosystems/EMDR_MEMORY.jpg' };
+      if (up.includes('FND') || up.includes('MIRROR')) return { key: 'FND_MIRROR', isVideo: false, path: '/ecosystems/FND_MIRROR.jpg' };
+      if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) return { key: 'NEURO_HYPNOSIS', isVideo: false, path: '/ecosystems/NEURO_HYPNOSIS.jpg' };
+      if (up.includes('PAIN') || up.includes('ANALGESIA')) return { key: 'PAIN_MANAGEMENT', isVideo: false, path: '/ecosystems/PAIN_MANAGEMENT.jpg' };
+      if (up.includes('ACROPHOBIA')) return { key: 'ACROPHOBIA_ROOF', isVideo: false, path: '/ecosystems/ACROPHOBIA_ROOF.jpg' };
+      if (up.includes('AEROPHOBIA')) return { key: 'AEROPHOBIA_CABIN', isVideo: false, path: '/ecosystems/AEROPHOBIA_CABIN.jpg' };
+      
+      return { key: 'CLINICAL_OFFICE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg' };
     };
 
-    const safeKey = mapEcosystemKey(activeEcosystem);
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.setCrossOrigin('anonymous');
-
-    // Mantener el color oscuro de la bóveda mientras carga
-    mat.map = null;
-    mat.color.setHex(0x0f172a);
-    mat.needsUpdate = true;
-
-    const imgPath = `/ecosystems/${safeKey}.jpg`;
-    setStatusMessage(`Cargando: ${safeKey}.jpg`);
-
-    textureLoader.load(
-      imgPath,
-      (texture) => {
-        if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-        mat.map = texture;
-        // Solo ahora que la imagen está lista, restaurar iluminación limpia
-        mat.color.setHex(0xffffff);
-        mat.needsUpdate = true;
-        setStatusMessage(`Cargado: ${safeKey}`);
-      },
-      undefined,
-      (err) => {
-        console.warn(`Error al cargar ${imgPath}, usando respaldo...`, err);
-        textureLoader.load('/ecosystems/CLINICAL_OFFICE.jpg', (fallbackTex) => {
-          mat.map = fallbackTex;
-          mat.color.setHex(0xffffff);
+    const config = getModuleConfig(activeEcosystem);
+    
+    // 🔥 FUNCIÓN DE CARGA POR CANVAS (100% COMPATIBLE CON PICO 3) 🔥
+    const loadStaticImageViaCanvas = (imagePath: string, displayName: string) => {
+      setStatusMessage(`Procesando imagen: ${displayName}...`);
+      
+      const img = new Image();
+      img.crossOrigin = 'anonymous'; // Vital para evitar bloqueos CORS
+      
+      img.onload = () => {
+        // Creamos un Canvas virtual de 2048x1024 (Medida perfecta "Power of Two")
+        const canvas = document.createElement('canvas');
+        canvas.width = 2048;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          // Dibujamos la imagen original escalada a 2048x1024
+          ctx.drawImage(img, 0, 0, 2048, 1024);
+          
+          // Generamos la textura desde el canvas ya adaptado
+          const canvasTexture = new THREE.CanvasTexture(canvas);
+          if ('colorSpace' in canvasTexture) (canvasTexture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          
+          mat.map = canvasTexture;
+          mat.color.setHex(0xffffff); // Ilumina la escena
           mat.needsUpdate = true;
-          setStatusMessage('Oficina Clínica 3D');
-        });
-      }
-    );
+          
+          setMediaType('image');
+          setStatusMessage(`Escenario: ${displayName}`);
+        }
+      };
+
+      img.onerror = () => {
+        console.warn(`Error al cargar ${imagePath}`);
+        setStatusMessage('Error: Usando fondo seguro');
+      };
+      
+      // Iniciamos la descarga asíncrona de la ruta
+      img.src = imagePath;
+    };
+
+    if (config.isVideo) {
+      setStatusMessage('Iniciando Video 360°...');
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.src = config.path;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('webkit-playsinline', 'webkit-playsinline');
+
+      const vTex = new THREE.VideoTexture(video);
+      if ('colorSpace' in vTex) (vTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+      videoTextureRef.current = vTex;
+      videoElementRef.current = video;
+
+      video.addEventListener('canplay', () => {
+        setMediaType('video');
+        setStatusMessage(`Reproduciendo: ${config.key}`);
+        video.play().catch(() => {});
+      }, { once: true });
+
+      video.addEventListener('error', () => {
+        console.warn(`Video ${config.path} no encontrado, cargando imagen de respaldo...`);
+        videoElementRef.current = null;
+        loadStaticImageViaCanvas('/ecosystems/CLUSTER_B_FORENSIC.jpg', 'Forense Respaldo');
+      });
+
+      video.load();
+    } else {
+      setStatusMessage('Renderizando Catálogo 3D...');
+      loadStaticImageViaCanvas(config.path, config.key);
+    }
 
   }, [activeEcosystem]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
-      {/* Panel Flotante elevado para dar espacio al botón ENTER VR */}
-      <div className="absolute z-10 bottom-36 flex flex-col items-center gap-3 pointer-events-none">
+      <div className="absolute z-10 bottom-40 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-1.5 bg-slate-950/90 p-5 rounded-2xl border border-slate-800/90 shadow-2xl max-w-sm">
           <h1 className="text-slate-200 font-black text-sm uppercase flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-cyan-400" /> VISOR CLÍNICO AMIE • WEBXR
           </h1>
           <p className="text-[11px] text-slate-400">Paciente: <strong className="text-cyan-300">{activePatientId}</strong></p>
           <p className="text-[10px] text-slate-300 font-mono flex items-center justify-center gap-1">
+            {mediaType === 'video' && <Video className="w-3 h-3 text-purple-400" />}
+            {mediaType === 'image' && <ImageIcon className="w-3 h-3 text-amber-400" />}
             {statusMessage}
           </p>
           <div className={`mt-2 px-3 py-1 rounded-full border text-[10px] font-bold inline-flex items-center gap-1.5 ${
