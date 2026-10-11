@@ -10,33 +10,43 @@ interface Props {
 }
 
 export const VrPatientExperience: React.FC<Props> = ({ 
-  patientId = 'PAC-8104', 
-  moduleId = 'NARCISSISM_CLUSTER_B',
+  patientId: propsPatientId, 
+  moduleId: propsModuleId,
   onClose 
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  // Estados de la aplicación
-  const [isConnected, setIsConnected] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState('NARCISSISM_CLUSTER_B');
-  const [statusMessage, setStatusMessage] = useState('Entorno Clínico Bio-VR Activo');
+  // 1. EXTRAER PACIENTE Y MÓDULO DIRECTAMENTE DE LA URL O PROPS
+  const getUrlParam = (paramName: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get(paramName);
+  };
 
-  // Referencias Three.js & WebSocket
+  const activePatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
+  const activeModuleId = propsModuleId || getUrlParam('modulo') || getUrlParam('moduleId') || 'NARCISSISM_CLUSTER_B';
+
+  // Estados
+  const [isConnected, setIsConnected] = useState(false);
+  const [activeEcosystem, setActiveEcosystem] = useState(activeModuleId);
+  const [treatmentStage, setTreatmentStage] = useState('EVALUACIÓN_INICIAL');
+  const [statusMessage, setStatusMessage] = useState('Conectando a Consola Clínica...');
+
+  // Referencias Three.js y WebSocket
   const sceneRef = useRef<THREE.Scene | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // =====================================================================
-  // GENERADOR PROCEDURAL DE TEXTURA 360° (GARANTIZA NUNCA PANTALLA NEGRA)
+  // GENERADOR PROCEDURAL 360° (NUNCA PANTALLA NEGRA)
   // =====================================================================
-  const createProcedural360Texture = (title: string, subtitle: string) => {
+  const createProcedural360Texture = (title: string, subtitle: string, stage: string) => {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 1024;
     const ctx = canvas.getContext('2d');
 
     if (ctx) {
-      // Fondo Gradiente Inmersivo
       const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
       grad.addColorStop(0, '#020617');
       grad.addColorStop(0.5, '#0f172a');
@@ -44,7 +54,6 @@ export const VrPatientExperience: React.FC<Props> = ({
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Cuadrícula Espacial 360
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 2;
       for (let x = 0; x < canvas.width; x += 64) {
@@ -54,7 +63,6 @@ export const VrPatientExperience: React.FC<Props> = ({
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
       }
 
-      // Línea de Horizonte Clínico Neón
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 6;
       ctx.shadowColor = '#0284c7';
@@ -64,17 +72,20 @@ export const VrPatientExperience: React.FC<Props> = ({
       ctx.lineTo(canvas.width, canvas.height / 2);
       ctx.stroke();
 
-      // Textos proyectados en la esfera
       ctx.shadowBlur = 12;
       ctx.shadowColor = '#38bdf8';
       ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 64px sans-serif';
+      ctx.font = 'bold 60px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(title.toUpperCase(), canvas.width / 2, canvas.height / 2 - 50);
+      ctx.fillText(title.toUpperCase(), canvas.width / 2, canvas.height / 2 - 60);
 
       ctx.fillStyle = '#38bdf8';
       ctx.font = '36px monospace';
-      ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 40);
+      ctx.fillText(`FASE: ${stage}`, canvas.width / 2, canvas.height / 2 + 20);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '28px sans-serif';
+      ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 80);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -83,7 +94,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   };
 
   // =====================================================================
-  // 1. WEBSOCKET - CONEXIÓN CON BACKEND Y TELEMETRÍA BIOMÉTRICA EN VIVO
+  // 2. WEBSOCKET MULTI-MÓDULO Y EMISIÓN DE TELEMETRÍA BIOMÉTRICA
   // =====================================================================
   useEffect(() => {
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
@@ -99,30 +110,40 @@ export const VrPatientExperience: React.FC<Props> = ({
 
         ws.onopen = () => {
           setIsConnected(true);
-          setStatusMessage('🟢 Enlazado a Consola Forense');
+          setStatusMessage(`🟢 Enlazado: ${activePatientId}`);
           ws.send(JSON.stringify({ 
             type: 'HANDSHAKE', 
             role: 'receiver', 
-            patientId,
-            moduleId 
+            patientId: activePatientId,
+            moduleId: activeEcosystem 
           }));
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.type === 'START_FORENSIC_BIO_VR' || data.type === 'START_TEST' || data.environment || data.ecosystem) {
-              const env = data.environment || data.ecosystem || data.moduleId || 'FORENSIC_CLUSTER_B';
-              setActiveEcosystem(env);
-              setStatusMessage(`Ensayo Activo: ${env}`);
+
+            // ACEPTAR CUALQUIER ORDEN DE CAMBIO DE ESCENARIO/TRASTORNO/TRATAMIENTO
+            const targetEnv = data.environment || data.ecosystem || data.scenario || data.moduleId || data.selectedModule;
+            if (targetEnv) {
+              setActiveEcosystem(targetEnv);
+            }
+
+            if (data.stage || data.treatmentStage) {
+              setTreatmentStage(data.stage || data.treatmentStage);
+            }
+
+            if (data.type === 'START_TEST' || data.type === 'START_FORENSIC_BIO_VR' || data.type === 'START_VRET_EXPOSURE') {
+              setStatusMessage(`Prueba Activa: ${data.type}`);
             }
 
             if (data.type === 'STOP_TEST' || data.type === 'STOP_FORENSIC_BIO_VR') {
               setActiveEcosystem('NEUTRAL_LIVING_ROOM');
-              setStatusMessage('Ensayo Finalizado');
+              setTreatmentStage('REPOSO');
+              setStatusMessage('Evaluación Detenida');
             }
           } catch (error) {
-            console.error('Error procesando mensaje WS:', error);
+            console.error('Error parseando mensaje WS:', error);
           }
         };
 
@@ -139,29 +160,31 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // Bucle de emisión de telemetría hacia la Chromebook (HRV y GSR)
+    // EMISIÓN CONTINUA DE TELEMETRÍA PARA HACER AVANZAR LOS DIAGNÓSTICOS EN LA CHROMEBOOK
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'VR_TELEMETRY_FRAME',
-          patientId,
+          patientId: activePatientId,
           moduleId: activeEcosystem,
-          hrvBpm: Math.floor(45 + Math.random() * 12),
-          gsrValue: Number((2.1 + Math.random() * 0.8).toFixed(2)),
-          attentionIndex: Math.floor(80 + Math.random() * 15)
+          treatmentStage,
+          hrvBpm: Math.floor(42 + Math.random() * 15),
+          gsrValue: Number((2.2 + Math.random() * 0.9).toFixed(2)),
+          attentionIndex: Math.floor(75 + Math.random() * 20),
+          reactionTimeMs: Math.floor(280 + Math.random() * 60)
         }));
       }
-    }, 500);
+    }, 400);
 
     return () => {
       clearInterval(telemetryInterval);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [patientId, moduleId, activeEcosystem]);
+  }, [activePatientId, activeEcosystem, treatmentStage]);
 
   // =====================================================================
-  // 2. MOTOR GRAPHIC WEBXR PROTEGIDO
+  // 3. MOTOR THREE.JS Y WEBXR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -186,20 +209,17 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Rejilla 3D permanente de suelo
     const gridHelper = new THREE.GridHelper(60, 60, 0x38bdf8, 0x1e293b);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Esfera 360 Inmersiva con Textura Procedural Base
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    const initialTexture = createProcedural360Texture('Módulo Forense • Cluster B', 'Provocación Inmersiva Activa');
+    const initialTexture = createProcedural360Texture(activeEcosystem, activePatientId, treatmentStage);
     const envMat = new THREE.MeshBasicMaterial({ map: initialTexture, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // Botón VR WebXR Nativo
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
@@ -224,7 +244,6 @@ export const VrPatientExperience: React.FC<Props> = ({
       console.warn('VRButton no disponible:', e);
     }
 
-    // Controles de puntero en 2D
     let isPointerDown = false;
     let lon = 0, lat = 0, pointerX = 0, pointerY = 0;
 
@@ -241,7 +260,6 @@ export const VrPatientExperience: React.FC<Props> = ({
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
 
-    // Bucle de Renderizado WebXR
     renderer.setAnimationLoop(() => {
       if (!renderer.xr.isPresenting) {
         lat = Math.max(-85, Math.min(85, lat));
@@ -273,21 +291,20 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, []);
 
   // =====================================================================
-  // 3. ACTUALIZACIÓN DE TEXTURAS SEGÚN EL MÓDULO SELECCIONADO
+  // 4. CAMBIO DE TEXTURAS SEGÚN EL MÓDULO O FASE ACTIVA
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
-    // Asignar textura procedural de forma inmediata
     const proceduralTex = createProcedural360Texture(
       activeEcosystem.replace(/_/g, ' '),
-      'Simulación Bio-VR Sincronizada'
+      `Paciente: ${activePatientId}`,
+      treatmentStage
     );
     mat.map = proceduralTex;
     mat.needsUpdate = true;
 
-    // Intentar reemplazar por la imagen JPG del servidor si está disponible
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin('anonymous');
     loader.load(
@@ -299,11 +316,10 @@ export const VrPatientExperience: React.FC<Props> = ({
       },
       undefined,
       () => {
-        // Si no existe el archivo JPG, se mantiene la textura procedural sin colapsar en negro
         console.log(`Usando entorno procedural para: ${activeEcosystem}`);
       }
     );
-  }, [activeEcosystem]);
+  }, [activeEcosystem, activePatientId, treatmentStage]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
@@ -316,14 +332,14 @@ export const VrPatientExperience: React.FC<Props> = ({
         </button>
       )}
 
-      {/* Interfaz de Estado Flotante */}
+      {/* Interfaz Flotante */}
       <div className="absolute z-10 bottom-24 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-1 bg-slate-950/90 p-4 rounded-2xl border border-slate-800/90 backdrop-blur-md shadow-2xl">
           <h1 className="text-slate-200 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-cyan-400" /> VISOR CLÍNICO AMIE • WEBXR
           </h1>
           <p className="text-[11px] text-slate-400 font-mono">
-            Paciente: <strong className="text-cyan-300">{patientId}</strong>
+            Paciente: <strong className="text-cyan-300">{activePatientId}</strong> | Módulo: <strong className="text-slate-200">{activeEcosystem}</strong>
           </p>
           <p className="text-[10px] text-slate-500 font-mono">{statusMessage}</p>
           
