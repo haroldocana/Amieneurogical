@@ -59,21 +59,25 @@ export const VrPatientExperience: React.FC<Props> = ({
           try {
             const data = JSON.parse(event.data);
 
+            // Capturar payloads de Forense, Cluster B, IA o Cambio de Entorno
             if (data.type === 'RENDER_SPATIAL_ENVIRONMENT_WITH_MEDIA' || data.aiGeneratedAssetUrl) {
               if (data.aiGeneratedAssetUrl) {
                 setCustomImageUrl(data.aiGeneratedAssetUrl);
                 setStatusMessage('Cargando recurso de IA...');
               }
-              if (data.environment || data.ecosystem) setActiveEcosystem(data.environment || data.ecosystem);
+              if (data.environment || data.ecosystem || data.moduleId) {
+                setActiveEcosystem(data.environment || data.ecosystem || data.moduleId);
+              }
               if (data.isVideo !== undefined) setIsVideo(!!data.isVideo);
-            } else if (data.environment || data.ecosystem) {
+            } else if (data.environment || data.ecosystem || data.type === 'START_FORENSIC_BIO_VR' || data.type === 'START_TEST') {
               setCustomImageUrl(null);
-              setActiveEcosystem(data.environment || data.ecosystem);
+              const env = data.environment || data.ecosystem || data.moduleId || 'NARCISSISM_COVERT';
+              setActiveEcosystem(env);
               if (data.isVideo !== undefined) setIsVideo(!!data.isVideo);
-              setStatusMessage(`Entorno: ${data.environment || data.ecosystem}`);
+              setStatusMessage(`Ensayo Activo: ${env}`);
             }
 
-            if (data.type === 'STOP_TEST') {
+            if (data.type === 'STOP_TEST' || data.type === 'STOP_FORENSIC_BIO_VR') {
               setActiveEcosystem('NEUTRAL_LIVING_ROOM');
               setCustomImageUrl(null);
               setIsVideo(false);
@@ -108,7 +112,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [patientId, moduleId]);
 
   // =====================================================================
-  // 2. MOTOR GRAPHIC WEBXR PROTEGIDO (RECONSTRUCCIÓN DE ESCENA)
+  // 2. MOTOR GRAPHIC WEBXR PROTEGIDO (NUNCA NEGRO EN STEREO FRAMEBUFFER)
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -119,10 +123,14 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0x0f172a);
+    scene.background = new THREE.Color(0x020617); // Azul medianoche profundo
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
     scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
+    dirLight.position.set(0, 10, 0);
+    scene.add(dirLight);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     camera.position.set(0, 1.6, 0.1);
@@ -133,16 +141,25 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    const gridHelper = new THREE.GridHelper(60, 60, 0x38bdf8, 0x334155);
+    // Rejilla de Suelo 3D de Respaldo Permanente (Evita fotograma negro en VR)
+    const gridHelper = new THREE.GridHelper(60, 60, 0x38bdf8, 0x1e293b);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
+    // Habitación/Caja 3D de respaldo con luz
+    const boxGeo = new THREE.BoxGeometry(30, 15, 30);
+    const boxMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide, wireframe: false });
+    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+    scene.add(boxMesh);
+
+    // Esfera 360 Inmersiva principal
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
+    // Botón VR WebXR Nativo
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
@@ -224,6 +241,8 @@ export const VrPatientExperience: React.FC<Props> = ({
       renderer.setAnimationLoop(null);
       envGeo.dispose();
       envMat.dispose();
+      boxGeo.dispose();
+      boxMat.dispose();
       renderer.dispose();
 
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
@@ -232,12 +251,13 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, []);
 
   // =====================================================================
-  // 3. CARGA SEGURA DE TEXTURAS Y VIDEOS (CON CONTROL DE EVENTOS)
+  // 3. CARGA PROTEGIDA DE RECURSOS (MAPEO EXPANDIDO Y CONTROL DE ERRORES)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
+    // Limpieza de videos anteriores
     if (videoElementRef.current) {
       videoElementRef.current.pause();
       videoElementRef.current.src = '';
@@ -250,14 +270,26 @@ export const VrPatientExperience: React.FC<Props> = ({
       videoTextureRef.current = null;
     }
 
+    // Color base seguro mientras se realiza la carga
     mat.map = null;
     mat.color.setHex(0x0284c7);
     mat.needsUpdate = true;
 
+    // Mapeo exhaustivo de claves de módulos (Forense, Cluster B, Fobias, TDAH, etc.)
     const mapEcosystemKey = (rawName: string): string => {
-      if (rawName.includes('07') || rawName.includes('SES/SIS')) return 'SEXUAL_HEALTH_SYSTEMIC';
-      if (rawName.includes('NARCISSISM') || rawName.includes('Narcisismo')) return 'NARCISSISM_COVERT';
-      if (rawName.includes('TDAH')) return 'TDAH_EXECUTIVE';
+      const upper = rawName.toUpperCase();
+      if (upper.includes('NARCISS') || upper.includes('CLUSTER') || upper.includes('FORENSI') || upper.includes('PSICOPAT') || upper.includes('OVERT') || upper.includes('COVERT')) {
+        return 'NARCISSISM_COVERT';
+      }
+      if (upper.includes('07') || upper.includes('SES') || upper.includes('SIS') || upper.includes('SEXUAL')) {
+        return 'SEXUAL_HEALTH_SYSTEMIC';
+      }
+      if (upper.includes('TDAH') || upper.includes('EXECUTIVE')) {
+        return 'TDAH_EXECUTIVE';
+      }
+      if (upper.includes('TAG') || upper.includes('FOBIA') || upper.includes('VRET') || upper.includes('EXPOSICION')) {
+        return 'NEUTRAL_LIVING_ROOM';
+      }
       return rawName;
     };
 
@@ -272,23 +304,28 @@ export const VrPatientExperience: React.FC<Props> = ({
       video.playsInline = true;
       videoElementRef.current = video;
 
-      video.addEventListener('loadeddata', () => {
-        const texture = new THREE.VideoTexture(video);
-        if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-        videoTextureRef.current = texture;
-        
-        mat.map = texture;
-        mat.color.setHex(0xffffff);
-        mat.needsUpdate = true;
-        setStatusMessage('Video 360° Activo');
+      // Asignar textura ÚNICAMENTE cuando el video esté listo para reproducirse
+      const handleCanPlay = () => {
+        try {
+          const texture = new THREE.VideoTexture(video);
+          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          videoTextureRef.current = texture;
+          
+          mat.map = texture;
+          mat.color.setHex(0xffffff);
+          mat.needsUpdate = true;
+          setStatusMessage('Video 360° Activo');
 
-        video.play().catch((e) => {
-          console.warn('Bloqueo de autoplay en gafa:', e);
-        });
-      });
+          video.play().catch((e) => console.warn('Autoplay retenido:', e));
+        } catch (err) {
+          console.error('Error asignando VideoTexture:', err);
+        }
+      };
+
+      video.addEventListener('canplay', handleCanPlay, { once: true });
 
       video.addEventListener('error', () => {
-        console.warn(`Video /video/${safeKey}.mp4 no disponible. Intentando textura JPG de respaldo...`);
+        console.warn(`Video /video/${safeKey}.mp4 no encontrado. Fallback a imagen JPG...`);
         setStatusMessage('Cargando textura de respaldo...');
 
         const loader = new THREE.TextureLoader();
@@ -307,7 +344,7 @@ export const VrPatientExperience: React.FC<Props> = ({
             mat.map = null;
             mat.color.setHex(0x0284c7);
             mat.needsUpdate = true;
-            setStatusMessage('Entorno Procedural 3D');
+            setStatusMessage('Entorno 3D Procedural');
           }
         );
       });
@@ -330,11 +367,23 @@ export const VrPatientExperience: React.FC<Props> = ({
         },
         undefined,
         (err) => {
-          console.warn(`Textura no encontrada (${targetUrl}). Aplicando color base seguro:`, err);
-          mat.map = null;
-          mat.color.setHex(0x0284c7);
-          mat.needsUpdate = true;
-          setStatusMessage('Entorno Procedural 3D');
+          console.warn(`Textura no encontrada (${targetUrl}). Intentando imagen por defecto...`, err);
+          loader.load(
+            '/ecosystems/NEUTRAL_LIVING_ROOM.jpg',
+            (fallbackTex) => {
+              mat.map = fallbackTex;
+              mat.color.setHex(0xffffff);
+              mat.needsUpdate = true;
+              setStatusMessage('Entorno Base 360°');
+            },
+            undefined,
+            () => {
+              mat.map = null;
+              mat.color.setHex(0x0284c7);
+              mat.needsUpdate = true;
+              setStatusMessage('Entorno 3D Procedural');
+            }
+          );
         }
       );
     }
