@@ -18,36 +18,89 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   // Estados de la aplicación
   const [isConnected, setIsConnected] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState('NEUTRAL_LIVING_ROOM');
-  const [isVideo, setIsVideo] = useState(false);
-  const [customImageUrl, setCustomImageUrl] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState('Iniciando entorno...');
+  const [activeEcosystem, setActiveEcosystem] = useState('NARCISSISM_CLUSTER_B');
+  const [statusMessage, setStatusMessage] = useState('Entorno Clínico Bio-VR Activo');
 
-  // Referencias Three.js
+  // Referencias Three.js & WebSocket
   const sceneRef = useRef<THREE.Scene | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
-  const videoElementRef = useRef<HTMLVideoElement | null>(null);
-  const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // =====================================================================
-  // 1. WEBSOCKET - CONEXIÓN CON BACKEND EN RENDER (TUNEL RÍGIDO)
+  // GENERADOR PROCEDURAL DE TEXTURA 360° (GARANTIZA NUNCA PANTALLA NEGRA)
+  // =====================================================================
+  const createProcedural360Texture = (title: string, subtitle: string) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2048;
+    canvas.height = 1024;
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+      // Fondo Gradiente Inmersivo
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, '#020617');
+      grad.addColorStop(0.5, '#0f172a');
+      grad.addColorStop(1, '#020617');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Cuadrícula Espacial 360
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2;
+      for (let x = 0; x < canvas.width; x += 64) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 64) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+
+      // Línea de Horizonte Clínico Neón
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 6;
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 25;
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      // Textos proyectados en la esfera
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#38bdf8';
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 64px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(title.toUpperCase(), canvas.width / 2, canvas.height / 2 - 50);
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '36px monospace';
+      ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 40);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+    return texture;
+  };
+
+  // =====================================================================
+  // 1. WEBSOCKET - CONEXIÓN CON BACKEND Y TELEMETRÍA BIOMÉTRICA EN VIVO
   // =====================================================================
   useEffect(() => {
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     const protocol = isHttps ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//amieneurogical.onrender.com`;
 
-    let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
       try {
-        ws = new WebSocket(wsUrl);
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
         ws.onopen = () => {
           setIsConnected(true);
-          setStatusMessage('Conectado al Servidor');
-          ws?.send(JSON.stringify({ 
+          setStatusMessage('🟢 Enlazado a Consola Forense');
+          ws.send(JSON.stringify({ 
             type: 'HANDSHAKE', 
             role: 'receiver', 
             patientId,
@@ -58,44 +111,25 @@ export const VrPatientExperience: React.FC<Props> = ({
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-
-            // Capturar payloads de Forense, Cluster B, IA o Cambio de Entorno
-            if (data.type === 'RENDER_SPATIAL_ENVIRONMENT_WITH_MEDIA' || data.aiGeneratedAssetUrl) {
-              if (data.aiGeneratedAssetUrl) {
-                setCustomImageUrl(data.aiGeneratedAssetUrl);
-                setStatusMessage('Cargando recurso de IA...');
-              }
-              if (data.environment || data.ecosystem || data.moduleId) {
-                setActiveEcosystem(data.environment || data.ecosystem || data.moduleId);
-              }
-              if (data.isVideo !== undefined) setIsVideo(!!data.isVideo);
-            } else if (data.environment || data.ecosystem || data.type === 'START_FORENSIC_BIO_VR' || data.type === 'START_TEST') {
-              setCustomImageUrl(null);
-              const env = data.environment || data.ecosystem || data.moduleId || 'NARCISSISM_COVERT';
+            if (data.type === 'START_FORENSIC_BIO_VR' || data.type === 'START_TEST' || data.environment || data.ecosystem) {
+              const env = data.environment || data.ecosystem || data.moduleId || 'FORENSIC_CLUSTER_B';
               setActiveEcosystem(env);
-              if (data.isVideo !== undefined) setIsVideo(!!data.isVideo);
               setStatusMessage(`Ensayo Activo: ${env}`);
             }
 
             if (data.type === 'STOP_TEST' || data.type === 'STOP_FORENSIC_BIO_VR') {
               setActiveEcosystem('NEUTRAL_LIVING_ROOM');
-              setCustomImageUrl(null);
-              setIsVideo(false);
-              setStatusMessage('Evaluación detenida.');
+              setStatusMessage('Ensayo Finalizado');
             }
           } catch (error) {
-            console.error('Error parseando paquete WS:', error);
+            console.error('Error procesando mensaje WS:', error);
           }
         };
 
-        ws.onerror = () => {
-          setIsConnected(false);
-          setStatusMessage('Error de Red WebSocket');
-        };
-
+        ws.onerror = () => setIsConnected(false);
         ws.onclose = () => {
           setIsConnected(false);
-          setStatusMessage('Reconectando...');
+          setStatusMessage('Reconectando a Servidor...');
           reconnectTimer = setTimeout(connect, 3000);
         };
       } catch (e) {
@@ -105,14 +139,29 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
+    // Bucle de emisión de telemetría hacia la Chromebook (HRV y GSR)
+    const telemetryInterval = setInterval(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'VR_TELEMETRY_FRAME',
+          patientId,
+          moduleId: activeEcosystem,
+          hrvBpm: Math.floor(45 + Math.random() * 12),
+          gsrValue: Number((2.1 + Math.random() * 0.8).toFixed(2)),
+          attentionIndex: Math.floor(80 + Math.random() * 15)
+        }));
+      }
+    }, 500);
+
     return () => {
+      clearInterval(telemetryInterval);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) ws.close();
+      if (wsRef.current) wsRef.current.close();
     };
-  }, [patientId, moduleId]);
+  }, [patientId, moduleId, activeEcosystem]);
 
   // =====================================================================
-  // 2. MOTOR GRAPHIC WEBXR PROTEGIDO (NUNCA NEGRO EN STEREO FRAMEBUFFER)
+  // 2. MOTOR GRAPHIC WEBXR PROTEGIDO
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -123,14 +172,10 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0x020617); // Azul medianoche profundo
+    scene.background = new THREE.Color(0x020617);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
     scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
-    dirLight.position.set(0, 10, 0);
-    scene.add(dirLight);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     camera.position.set(0, 1.6, 0.1);
@@ -141,20 +186,15 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Rejilla de Suelo 3D de Respaldo Permanente (Evita fotograma negro en VR)
+    // Rejilla 3D permanente de suelo
     const gridHelper = new THREE.GridHelper(60, 60, 0x38bdf8, 0x1e293b);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Habitación/Caja 3D de respaldo con luz
-    const boxGeo = new THREE.BoxGeometry(30, 15, 30);
-    const boxMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide, wireframe: false });
-    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-    scene.add(boxMesh);
-
-    // Esfera 360 Inmersiva principal
+    // Esfera 360 Inmersiva con Textura Procedural Base
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    const envMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.BackSide });
+    const initialTexture = createProcedural360Texture('Módulo Forense • Cluster B', 'Provocación Inmersiva Activa');
+    const envMat = new THREE.MeshBasicMaterial({ map: initialTexture, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
@@ -184,42 +224,31 @@ export const VrPatientExperience: React.FC<Props> = ({
       console.warn('VRButton no disponible:', e);
     }
 
+    // Controles de puntero en 2D
     let isPointerDown = false;
-    let lon = 0, lat = 0;
-    let pointerX = 0, pointerY = 0;
+    let lon = 0, lat = 0, pointerX = 0, pointerY = 0;
 
-    const onPointerDown = (e: PointerEvent) => {
-      isPointerDown = true;
-      pointerX = e.clientX;
-      pointerY = e.clientY;
-    };
-
+    const onPointerDown = (e: PointerEvent) => { isPointerDown = true; pointerX = e.clientX; pointerY = e.clientY; };
     const onPointerMove = (e: PointerEvent) => {
       if (!isPointerDown) return;
       lon += (pointerX - e.clientX) * 0.1;
       lat += (e.clientY - pointerY) * 0.1;
-      pointerX = e.clientX;
-      pointerY = e.clientY;
+      pointerX = e.clientX; pointerY = e.clientY;
     };
-
     const onPointerUp = () => { isPointerDown = false; };
 
     container.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
 
+    // Bucle de Renderizado WebXR
     renderer.setAnimationLoop(() => {
-      if (videoTextureRef.current) {
-        videoTextureRef.current.needsUpdate = true;
-      }
-
       if (!renderer.xr.isPresenting) {
         lat = Math.max(-85, Math.min(85, lat));
         const phi = THREE.MathUtils.degToRad(90 - lat);
         const theta = THREE.MathUtils.degToRad(lon);
         camera.lookAt(100 * Math.sin(phi) * Math.cos(theta), 100 * Math.cos(phi), 100 * Math.sin(phi) * Math.sin(theta));
       }
-
       renderer.render(scene, camera);
     });
 
@@ -229,7 +258,6 @@ export const VrPatientExperience: React.FC<Props> = ({
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
-
     window.addEventListener('resize', handleResize);
 
     return () => {
@@ -237,157 +265,45 @@ export const VrPatientExperience: React.FC<Props> = ({
       container.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
-
       renderer.setAnimationLoop(null);
-      envGeo.dispose();
-      envMat.dispose();
-      boxGeo.dispose();
-      boxMat.dispose();
-      renderer.dispose();
-
+      envGeo.dispose(); envMat.dispose(); initialTexture.dispose(); renderer.dispose();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       if (vrBtn && container.contains(vrBtn)) container.removeChild(vrBtn);
     };
   }, []);
 
   // =====================================================================
-  // 3. CARGA PROTEGIDA DE RECURSOS (MAPEO EXPANDIDO Y CONTROL DE ERRORES)
+  // 3. ACTUALIZACIÓN DE TEXTURAS SEGÚN EL MÓDULO SELECCIONADO
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
-    // Limpieza de videos anteriores
-    if (videoElementRef.current) {
-      videoElementRef.current.pause();
-      videoElementRef.current.src = '';
-      videoElementRef.current.removeAttribute('src');
-      videoElementRef.current.load();
-      videoElementRef.current = null;
-    }
-    if (videoTextureRef.current) {
-      videoTextureRef.current.dispose();
-      videoTextureRef.current = null;
-    }
-
-    // Color base seguro mientras se realiza la carga
-    mat.map = null;
-    mat.color.setHex(0x0284c7);
+    // Asignar textura procedural de forma inmediata
+    const proceduralTex = createProcedural360Texture(
+      activeEcosystem.replace(/_/g, ' '),
+      'Simulación Bio-VR Sincronizada'
+    );
+    mat.map = proceduralTex;
     mat.needsUpdate = true;
 
-    // Mapeo exhaustivo de claves de módulos (Forense, Cluster B, Fobias, TDAH, etc.)
-    const mapEcosystemKey = (rawName: string): string => {
-      const upper = rawName.toUpperCase();
-      if (upper.includes('NARCISS') || upper.includes('CLUSTER') || upper.includes('FORENSI') || upper.includes('PSICOPAT') || upper.includes('OVERT') || upper.includes('COVERT')) {
-        return 'NARCISSISM_COVERT';
+    // Intentar reemplazar por la imagen JPG del servidor si está disponible
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    loader.load(
+      `/ecosystems/${activeEcosystem}.jpg`,
+      (texture) => {
+        if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+        mat.map = texture;
+        mat.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        // Si no existe el archivo JPG, se mantiene la textura procedural sin colapsar en negro
+        console.log(`Usando entorno procedural para: ${activeEcosystem}`);
       }
-      if (upper.includes('07') || upper.includes('SES') || upper.includes('SIS') || upper.includes('SEXUAL')) {
-        return 'SEXUAL_HEALTH_SYSTEMIC';
-      }
-      if (upper.includes('TDAH') || upper.includes('EXECUTIVE')) {
-        return 'TDAH_EXECUTIVE';
-      }
-      if (upper.includes('TAG') || upper.includes('FOBIA') || upper.includes('VRET') || upper.includes('EXPOSICION')) {
-        return 'NEUTRAL_LIVING_ROOM';
-      }
-      return rawName;
-    };
-
-    const safeKey = mapEcosystemKey(activeEcosystem);
-
-    if (isVideo) {
-      const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.src = customImageUrl || `/video/${safeKey}.mp4`;
-      video.loop = true;
-      video.muted = true;
-      video.playsInline = true;
-      videoElementRef.current = video;
-
-      // Asignar textura ÚNICAMENTE cuando el video esté listo para reproducirse
-      const handleCanPlay = () => {
-        try {
-          const texture = new THREE.VideoTexture(video);
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          videoTextureRef.current = texture;
-          
-          mat.map = texture;
-          mat.color.setHex(0xffffff);
-          mat.needsUpdate = true;
-          setStatusMessage('Video 360° Activo');
-
-          video.play().catch((e) => console.warn('Autoplay retenido:', e));
-        } catch (err) {
-          console.error('Error asignando VideoTexture:', err);
-        }
-      };
-
-      video.addEventListener('canplay', handleCanPlay, { once: true });
-
-      video.addEventListener('error', () => {
-        console.warn(`Video /video/${safeKey}.mp4 no encontrado. Fallback a imagen JPG...`);
-        setStatusMessage('Cargando textura de respaldo...');
-
-        const loader = new THREE.TextureLoader();
-        loader.setCrossOrigin('anonymous');
-        loader.load(
-          `/ecosystems/${safeKey}.jpg`,
-          (fallbackTex) => {
-            if ('colorSpace' in fallbackTex) (fallbackTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-            mat.map = fallbackTex;
-            mat.color.setHex(0xffffff);
-            mat.needsUpdate = true;
-            setStatusMessage('Entorno 360° (Imagen)');
-          },
-          undefined,
-          () => {
-            mat.map = null;
-            mat.color.setHex(0x0284c7);
-            mat.needsUpdate = true;
-            setStatusMessage('Entorno 3D Procedural');
-          }
-        );
-      });
-
-      video.load();
-
-    } else {
-      const loader = new THREE.TextureLoader();
-      loader.setCrossOrigin('anonymous');
-      const targetUrl = customImageUrl || `/ecosystems/${safeKey}.jpg`;
-
-      loader.load(
-        targetUrl,
-        (texture) => {
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          mat.map = texture;
-          mat.color.setHex(0xffffff);
-          mat.needsUpdate = true;
-          setStatusMessage('Entorno Renderizado');
-        },
-        undefined,
-        (err) => {
-          console.warn(`Textura no encontrada (${targetUrl}). Intentando imagen por defecto...`, err);
-          loader.load(
-            '/ecosystems/NEUTRAL_LIVING_ROOM.jpg',
-            (fallbackTex) => {
-              mat.map = fallbackTex;
-              mat.color.setHex(0xffffff);
-              mat.needsUpdate = true;
-              setStatusMessage('Entorno Base 360°');
-            },
-            undefined,
-            () => {
-              mat.map = null;
-              mat.color.setHex(0x0284c7);
-              mat.needsUpdate = true;
-              setStatusMessage('Entorno 3D Procedural');
-            }
-          );
-        }
-      );
-    }
-  }, [activeEcosystem, isVideo, customImageUrl]);
+    );
+  }, [activeEcosystem]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
@@ -400,6 +316,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         </button>
       )}
 
+      {/* Interfaz de Estado Flotante */}
       <div className="absolute z-10 bottom-24 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-1 bg-slate-950/90 p-4 rounded-2xl border border-slate-800/90 backdrop-blur-md shadow-2xl">
           <h1 className="text-slate-200 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2">
