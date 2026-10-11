@@ -32,42 +32,50 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
+  const commissionsRef = useRef<number>(0);
+  const omissionsRef = useRef<number>(0);
   const lastRtRef = useRef<number>(280);
 
   // =====================================================================
-  // 1. DICCIONARIO DE MÓDULOS
+  // 1. DICCIONARIO DE MÓDULOS (DIAGNÓSTICO Y TRATAMIENTO)
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
-    if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense Cluster B' };
     
-    if (up.includes('TDAH') || up.includes('EXECUTIVE')) return { key: 'TDAH_EXECUTIVE', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'TDAH Control Ejecutivo' };
-    if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return { key: 'DEV_TRAUMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Trauma Evolutivo' };
-    if (up.includes('ACROPHOBIA')) return { key: 'ACROPHOBIA_ROOF', isVideo: false, path: '/ecosystems/ACROPHOBIA_ROOF.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Acrofobia (Azotea)' };
-    if (up.includes('AEROPHOBIA')) return { key: 'AEROPHOBIA_CABIN', isVideo: false, path: '/ecosystems/AEROPHOBIA_CABIN.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Aerofobia (Cabina)' };
-    if (up.includes('STERILE')) return { key: 'STERILE_ROOM', isVideo: false, path: '/ecosystems/STERILE_ROOM.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Cuarto Estéril' };
+    // VIDEOS FORENSES CLUSTER B
+    if (up.includes('COLLAPSE') || up.includes('COLAPSO')) return { key: 'narcissism_collapse', protocol: 'CLUSTER_B_FORENSIC', isVideo: true, path: '/video/narcissism_collapse.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense (Colapso Narcisista)' };
+    if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI') || up.includes('COVERT')) return { key: 'narcissism_covert', protocol: 'CLUSTER_B_FORENSIC', isVideo: true, path: '/video/narcissism_covert.mp4', fallbackImg: '/ecosystems/CLUSTER_B_FORENSIC.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Forense (Narcisismo Encubierto)' };
 
-    if (up.includes('EMDR') || up.includes('MEMORY')) return { key: 'EMDR_MEMORY', isVideo: false, path: '/ecosystems/EMDR_MEMORY.jpg', category: 'TREATMENT' as ModuleCategory, name: 'EMDR Reconsolidación' };
-    if (up.includes('PAIN') || up.includes('ANALGESIA')) return { key: 'PAIN_MANAGEMENT', isVideo: false, path: '/ecosystems/PAIN_MANAGEMENT.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Analgesia Inmersiva' };
-    if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) return { key: 'NEURO_HYPNOSIS', isVideo: false, path: '/ecosystems/NEURO_HYPNOSIS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Neurohipnosis' };
-    if (up.includes('FND') || up.includes('MIRROR')) return { key: 'FND_MIRROR', isVideo: false, path: '/ecosystems/FND_MIRROR.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espejo Neurofuncional' };
-    if (up.includes('DUAL_CONTROL') || up.includes('SES')) return { key: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Regulador Dual' };
+    // IMÁGENES DIAGNÓSTICO
+    if (up.includes('TDAH') || up.includes('EXECUTIVE')) return { key: 'TDAH_EXECUTIVE', protocol: 'TDAH_CPT', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'TDAH Control Ejecutivo' };
+    if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return { key: 'DEV_TRAUMA', protocol: 'TRAUMA_AIMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Trauma Evolutivo' };
+    if (up.includes('ACROPHOBIA')) return { key: 'ACROPHOBIA_ROOF', protocol: 'PHOBIA_BASE', isVideo: false, path: '/ecosystems/ACROPHOBIA_ROOF.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Acrofobia (Azotea)' };
+    if (up.includes('AEROPHOBIA')) return { key: 'AEROPHOBIA_CABIN', protocol: 'PHOBIA_BASE', isVideo: false, path: '/ecosystems/AEROPHOBIA_CABIN.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Aerofobia (Cabina)' };
+    if (up.includes('STERILE')) return { key: 'STERILE_ROOM', protocol: 'ISOLATION', isVideo: false, path: '/ecosystems/STERILE_ROOM.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Cuarto Estéril' };
 
-    if (up.includes('SAFE_PLACE') || up.includes('FOREST')) return { key: 'SAFE_PLACE_FOREST', isVideo: false, path: '/ecosystems/SAFE_PLACE_FOREST.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Bosque Seguro' };
-    if (up.includes('BIOLUMINESCENT') || up.includes('BEACH')) return { key: 'BIOLUMINESCENT_BEACH', isVideo: false, path: '/ecosystems/BIOLUMINESCENT_BEACH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Playa Bioluminiscente' };
-    if (up.includes('ZEN') || up.includes('GARDEN')) return { key: 'ZEN_GARDEN', isVideo: false, path: '/ecosystems/ZEN_GARDEN.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Jardín Zen' };
-    if (up.includes('COSMIC') || up.includes('STARS')) return { key: 'COSMIC_STARS', isVideo: false, path: '/ecosystems/COSMIC_STARS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espacio Cósmico' };
-    if (up.includes('WARM') || up.includes('HEARTH')) return { key: 'WARM_HEARTH', isVideo: false, path: '/ecosystems/WARM_HEARTH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Hogar Cálido' };
-    if (up.includes('TREEHOUSE') || up.includes('PROTECTIVE')) return { key: 'PROTECTIVE_TREEHOUSE', isVideo: false, path: '/ecosystems/PROTECTIVE_TREEHOUSE.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Casa del Árbol' };
-    if (up.includes('WOMB') || up.includes('CAVE')) return { key: 'WOMB_LIKE_CAVE', isVideo: false, path: '/ecosystems/WOMB_LIKE_CAVE.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Cueva Receptáculo' };
+    // IMÁGENES TRATAMIENTO
+    if (up.includes('EMDR') || up.includes('MEMORY')) return { key: 'EMDR_MEMORY', protocol: 'EMDR_RECON', isVideo: false, path: '/ecosystems/EMDR_MEMORY.jpg', category: 'TREATMENT' as ModuleCategory, name: 'EMDR Reconsolidación' };
+    if (up.includes('PAIN') || up.includes('ANALGESIA')) return { key: 'PAIN_MANAGEMENT', protocol: 'PAIN_MGMT', isVideo: false, path: '/ecosystems/PAIN_MANAGEMENT.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Analgesia Inmersiva' };
+    if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) return { key: 'NEURO_HYPNOSIS', protocol: 'HYPNOSIS_LOOP', isVideo: false, path: '/ecosystems/NEURO_HYPNOSIS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Neurohipnosis' };
+    if (up.includes('FND') || up.includes('MIRROR')) return { key: 'FND_MIRROR', protocol: 'FND_MIRROR', isVideo: false, path: '/ecosystems/FND_MIRROR.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espejo Neurofuncional' };
+    if (up.includes('DUAL_CONTROL') || up.includes('SES')) return { key: 'DUAL_CONTROL', protocol: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Regulador Dual' };
 
-    return { key: 'CLINICAL_OFFICE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Consultorio Base' };
+    // SANTUARIOS
+    if (up.includes('SAFE_PLACE') || up.includes('FOREST')) return { key: 'SAFE_PLACE_FOREST', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/SAFE_PLACE_FOREST.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Bosque Seguro' };
+    if (up.includes('BIOLUMINESCENT') || up.includes('BEACH')) return { key: 'BIOLUMINESCENT_BEACH', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/BIOLUMINESCENT_BEACH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Playa Bioluminiscente' };
+    if (up.includes('ZEN') || up.includes('GARDEN')) return { key: 'ZEN_GARDEN', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/ZEN_GARDEN.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Jardín Zen' };
+    if (up.includes('COSMIC') || up.includes('STARS')) return { key: 'COSMIC_STARS', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/COSMIC_STARS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espacio Cósmico' };
+    if (up.includes('WARM') || up.includes('HEARTH')) return { key: 'WARM_HEARTH', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/WARM_HEARTH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Hogar Cálido' };
+    if (up.includes('TREEHOUSE') || up.includes('PROTECTIVE')) return { key: 'PROTECTIVE_TREEHOUSE', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/PROTECTIVE_TREEHOUSE.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Casa del Árbol' };
+    if (up.includes('WOMB') || up.includes('CAVE')) return { key: 'WOMB_LIKE_CAVE', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/WOMB_LIKE_CAVE.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Cueva Receptáculo' };
+
+    return { key: 'CLINICAL_OFFICE', protocol: 'BASE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Consultorio Base' };
   };
 
   const currentConfig = getClinicalConfig(activeEcosystem);
 
   // =====================================================================
-  // 2. WEBSOCKET - TELEMETRÍA PLANA A CHROMEBOOK
+  // 2. WEBSOCKET MULTIPROTOCOLO A CHROMEBOOK
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,15 +95,52 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
         const config = getClinicalConfig(activeEcosystemRef.current);
-        const rootPayload = {
-          patientId: activePatientId, moduleId: config.key, category: config.category,
-          packetCount: packetCountRef.current, hits: hitsRef.current, reactionTimeMs: lastRtRef.current,
-          hrvBpm: Math.floor(62 + Math.random() * 18), gsrValue: Number((2.1 + Math.random() * 0.9).toFixed(2))
+        
+        // Simulación de biometría clínica
+        const simulatedHrv = Math.floor(62 + Math.random() * 18);
+        const simulatedGsr = Number((2.1 + Math.random() * 0.9).toFixed(2));
+        
+        // 🟢 CEREBRO MULTIPROTOCOLO: Generar la telemetría según el protocolo activo
+        const basePayload = {
+          patientId: activePatientId,
+          moduleId: config.key,
+          category: config.category,
+          packetCount: packetCountRef.current,
+          reactionTimeMs: lastRtRef.current,
+          hrvBpm: simulatedHrv,
+          gsrValue: simulatedGsr
         };
-        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'VR_TELEMETRY_FRAME' }));
-        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'TDAH_TELEMETRY' }));
-        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'TDAH_METRICS' }));
-        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'CLUSTER_B_TELEMETRY' }));
+
+        if (config.protocol === 'CLUSTER_B_FORENSIC') {
+          // Formato específico que espera la consola de Forense
+          wsRef.current.send(JSON.stringify({ 
+            ...basePayload, 
+            type: 'CLUSTER_B_TELEMETRY',
+            emotionalValence: Math.floor(30 + Math.random() * 40),
+            arousalIndex: simulatedGsr,
+            vagalTone: simulatedHrv,
+            hits: hitsRef.current 
+          }));
+        } 
+        else if (config.protocol === 'TDAH_CPT') {
+          // Formato específico que espera la consola de TDAH
+          wsRef.current.send(JSON.stringify({ 
+            ...basePayload, 
+            type: 'TDAH_METRICS',
+            hits: hitsRef.current,
+            commissions: commissionsRef.current,
+            omissions: omissionsRef.current 
+          }));
+        } 
+        else {
+          // Formato universal para Santuarios, Fobias y otros tratamientos
+          wsRef.current.send(JSON.stringify({ 
+            ...basePayload, 
+            type: 'VR_TELEMETRY_FRAME',
+            sudsLevel: 50,
+            stressMarkers: 0
+          }));
+        }
       }
     }, 300);
     return () => { isMounted = false; clearInterval(telemetryInterval); if (reconnectTimer) clearTimeout(reconnectTimer); if (wsRef.current) wsRef.current.close(); };
@@ -119,7 +164,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     container.appendChild(renderer.domElement);
 
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    envGeo.scale(-1, 1, 1); // Evita efecto espejo
+    envGeo.scale(-1, 1, 1); 
     
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
     const envMesh = new THREE.Mesh(envGeo, envMat); scene.add(envMesh); envMeshRef.current = envMesh;
@@ -142,7 +187,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         setTimeout(() => { if (cursorRef.current) (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0xffffff); }, 200);
       }
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'INTERACTION_HIT', patientId: activePatientId, hits: hitsRef.current, reactionTimeMs: lastRtRef.current, isHit: true }));
+        const config = getClinicalConfig(activeEcosystemRef.current);
+        wsRef.current.send(JSON.stringify({ 
+          type: 'INTERACTION_HIT', 
+          patientId: activePatientId, 
+          protocol: config.protocol,
+          hits: hitsRef.current, 
+          reactionTimeMs: lastRtRef.current, 
+          isHit: true 
+        }));
       }
     });
     scene.add(xrController);
@@ -164,7 +217,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
         const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
         if (videoElementRef.current.readyState >= 3) {
-          if (mat.map !== videoTextureRef.current) { mat.map = videoTextureRef.current; mat.color.setHex(0xffffff); mat.needsUpdate = true; }
+          if (mat.map !== videoTextureRef.current) { 
+            mat.map = videoTextureRef.current; 
+            mat.color.setHex(0xd0d0d0); 
+            mat.needsUpdate = true; 
+          }
           videoTextureRef.current.needsUpdate = true;
         }
       }
@@ -179,7 +236,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. EL REDIMENSIONADOR "BULLETPROOF" (SOLUCIÓN A LAS IMÁGENES DE IA)
+  // 4. CARGADOR CON COLORSPACE CORREGIDO Y ADAPTACIÓN DE CANVAS
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -212,23 +269,16 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
-    // 🔥 LA MAGIA: Forzar cualquier imagen JPG a 2048x1024 usando un Canvas intermedio
     const loadBulletproofImage = (imgPath: string, name: string) => {
       setStatusMessage(`Adaptando Imagen: ${name}...`);
-      
       const img = new Image();
       img.onload = () => {
-        // Creamos un lienzo de tamaño perfecto para WebGL (Potencia de 2)
         const canvas = document.createElement('canvas');
         canvas.width = 2048;
         canvas.height = 1024;
         const ctx = canvas.getContext('2d');
-        
         if (ctx) {
-          // Dibujamos la imagen de Gemini aplastándola a las proporciones perfectas
           ctx.drawImage(img, 0, 0, 2048, 1024);
-          
-          // Generamos la textura desde el lienzo limpio, no desde el archivo pesado
           const canvasTex = new THREE.CanvasTexture(canvas);
           canvasTex.generateMipmaps = false;
           canvasTex.minFilter = THREE.LinearFilter;
@@ -237,29 +287,35 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           mat.map = canvasTex;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
-          
           setMediaType('image');
           setStatusMessage(`Activo: ${name}`);
         }
       };
-      
       img.onerror = () => {
         setMediaType('error');
         setStatusMessage(`Error leyendo: ${imgPath}`);
       };
-      
       img.src = `${origin}${imgPath}`;
     };
 
     if (config.isVideo) {
-      setStatusMessage(`Conectando Video...`);
+      setStatusMessage(`Conectando Video: ${config.name}...`);
       
       const video = document.createElement('video');
       video.src = `${origin}${config.path}`;
-      video.loop = true; video.playsInline = true;
+      video.loop = true; 
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('webkit-playsinline', 'webkit-playsinline');
 
       const vTex = new THREE.VideoTexture(video);
-      vTex.generateMipmaps = false; vTex.minFilter = THREE.LinearFilter;
+      vTex.generateMipmaps = false; 
+      vTex.minFilter = THREE.LinearFilter;
+      
+      if ('colorSpace' in vTex) {
+        (vTex as any).colorSpace = (THREE as any).LinearSRGBColorSpace || 'linear';
+      }
+
       videoTextureRef.current = vTex;
       videoElementRef.current = video;
 
@@ -276,7 +332,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
       video.load();
 
-      // Si el MP4 falla, saca la imagen escalada
       setTimeout(() => {
         if (!isPlaying && video.readyState < 3 && config.fallbackImg) {
           videoElementRef.current = null;
@@ -285,7 +340,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       }, 3000);
 
     } else {
-      // Usamos el redimensionador para TODAS las imágenes generadas
       loadBulletproofImage(config.path, config.name);
     }
   }, [activeEcosystem]);
