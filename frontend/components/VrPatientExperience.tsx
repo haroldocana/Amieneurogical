@@ -35,7 +35,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const lastRtRef = useRef<number>(280);
 
   // =====================================================================
-  // 1. DICCIONARIO DE RUTAS (USANDO RUTAS RELATIVAS DIRECTAS DE VITE)
+  // 1. DICCIONARIO DE RUTAS
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
@@ -63,6 +63,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     return { key: 'CLINICAL_OFFICE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Consultorio Base' };
   };
+
+  // 🔥 AQUÍ SE ARREGLA EL ERROR DE PANTALLA ROJA
+  const currentConfig = getClinicalConfig(activeEcosystem);
 
   // =====================================================================
   // 2. WEBSOCKET - TELEMETRÍA PLANA A CHROMEBOOK
@@ -116,7 +119,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     renderer.setSize(width, height); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Esfera Invertida (Corrije efecto espejo sin dañar texturas)
+    // ESFERA INVERTIDA PARA EVITAR ESPEJO
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     envGeo.scale(-1, 1, 1); 
     
@@ -179,7 +182,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGADOR LIBRE DE CORS (100% COMPATIBLE CON PICO 3)
+  // 4. CARGADOR NATIVO WEBGL (LOCAL, SIN BLOQUEOS DE RED)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -202,7 +205,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         ctx.fillStyle = grad; ctx.fillRect(0, 0, 1024, 512);
         ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 256); ctx.lineTo(1024, 256); ctx.stroke();
         ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`Cargando: ${config.name}`, 512, 230);
+        ctx.fillText(`Cargando Entorno: ${config.name}`, 512, 230);
+        ctx.fillStyle = '#38bdf8'; ctx.font = '18px sans-serif';
+        ctx.fillText(config.isVideo ? "Use el GATILLO del mando para Iniciar Video" : "Aguarde la descarga de imagen...", 512, 290);
         
         const canvasTex = new THREE.CanvasTexture(canvas);
         mat.map = canvasTex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
@@ -210,8 +215,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
     drawProceduralRoom();
 
-    // 🔴 NOTA CLAVE: SE ELIMINÓ TODO RASTRO DE "crossOrigin='anonymous'"
-    // Ahora WebGL confía ciegamente en los archivos porque vienen de la misma carpeta raíz del servidor.
     const loadTextureNative = (imgPath: string, name: string) => {
       setStatusMessage(`Abriendo textura: ${name}...`);
       
@@ -220,7 +223,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       textureLoader.load(
         imgPath,
         (texture) => {
-          texture.generateMipmaps = false; // Desactiva la regla estricta de "Potencia de 2" de WebGL
+          texture.generateMipmaps = false; 
           texture.minFilter = THREE.LinearFilter;
           if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
           
@@ -241,7 +244,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     if (config.isVideo) {
       setStatusMessage(`Preparando Video...`);
       const video = document.createElement('video');
-      video.src = config.path; // Ruta directa relativa, sin CrossOrigin
+      video.src = config.path;
       video.loop = true; video.playsInline = true;
 
       const vTex = new THREE.VideoTexture(video);
@@ -266,7 +269,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       }, 4000);
 
     } else {
-      // Usamos la ruta local directamente (e.g. "/ecosystems/TDAH_EXECUTIVE.jpg")
       loadTextureNative(config.path, config.name);
     }
   }, [activeEcosystem]);
