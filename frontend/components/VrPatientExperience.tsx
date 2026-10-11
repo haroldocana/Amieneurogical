@@ -44,12 +44,15 @@ export const VrPatientExperience: React.FC<Props> = ({
     activeEcosystemRef.current = activeEcosystem;
   }, [activeEcosystem]);
 
+  // Métricas específicas según el examen
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
-  const lastRtRef = useRef<number>(350);
+  const commissionsRef = useRef<number>(0);
+  const omissionsRef = useRef<number>(0);
+  const lastRtRef = useRef<number>(320);
 
   // =====================================================================
-  // 1. WEBSOCKET PERSISTENTE
+  // 1. WEBSOCKET Y TELEMETRÍA ADAPTATIVA POR MÓDULO
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,34 +90,50 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
+    // Emisión adaptativa: ajusta las métricas enviadas según la prueba activa
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
-        const currentEnv = activeEcosystemRef.current;
+        const currentEnv = activeEcosystemRef.current.toUpperCase();
 
-        const payload = {
+        const basePayload = {
           type: 'VR_TELEMETRY_FRAME',
           patientId: activePatientId,
-          moduleId: currentEnv,
+          moduleId: activeEcosystemRef.current,
           packetCount: packetCountRef.current,
           hrvBpm: Math.floor(65 + Math.random() * 15),
           gsrValue: Number((2.1 + Math.random() * 0.8).toFixed(2)),
           attentionIndex: Math.floor(75 + Math.random() * 20),
           hits: hitsRef.current,
-          omissions: 0,
-          commissions: 0,
+          commissions: commissionsRef.current,
+          omissions: omissionsRef.current,
           reactionTimeMs: lastRtRef.current
         };
 
-        wsRef.current.send(JSON.stringify(payload));
-        wsRef.current.send(JSON.stringify({ ...payload, type: 'TDAH_TELEMETRY' }));
-        wsRef.current.send(JSON.stringify({
-          type: 'TDAH_METRICS',
-          patientId: activePatientId,
-          packetCount: packetCountRef.current,
-          hits: hitsRef.current,
-          rtMs: lastRtRef.current
-        }));
+        wsRef.current.send(JSON.stringify(basePayload));
+
+        // Telemetría específica para TDAH (Control Inhibitorio)
+        if (currentEnv.includes('TDAH') || currentEnv.includes('EXECUTIVE')) {
+          wsRef.current.send(JSON.stringify({
+            ...basePayload,
+            type: 'TDAH_TELEMETRY'
+          }));
+          wsRef.current.send(JSON.stringify({
+            type: 'TDAH_METRICS',
+            patientId: activePatientId,
+            packetCount: packetCountRef.current,
+            hits: hitsRef.current,
+            rtMs: lastRtRef.current
+          }));
+        } 
+        // Telemetría específica para Cluster B / Forense
+        else if (currentEnv.includes('CLUSTER_B') || currentEnv.includes('NARCISS') || currentEnv.includes('FORENSI')) {
+          wsRef.current.send(JSON.stringify({
+            ...basePayload,
+            type: 'CLUSTER_B_TELEMETRY',
+            autonomicArousal: Number((3.2 + Math.random() * 1.2).toFixed(2))
+          }));
+        }
       }
     }, 300);
 
@@ -127,7 +146,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 2. MOTOR THREE.JS Y EVENTO DEL MANDO VR
+  // 2. MOTOR THREE.JS Y MANEJO DEL MANDO VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -157,6 +176,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
+    // Esfera inicial en azul oscuro slate
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
@@ -169,6 +189,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     scene.add(cursor);
     cursorRef.current = cursor;
 
+    // Disparo del mando
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
@@ -222,6 +243,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         cursorRef.current.lookAt(pCam.position);
       }
 
+      // Actualización de video si corresponde
       if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
         const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
         if (videoElementRef.current.readyState >= 3) {
@@ -246,7 +268,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. ENRUTADOR INTELIGENTE (REDIMENSIONADOR CANVAS PARA GPU ANDROID)
+  // 3. CARGADOR DE ESTÍMULOS ESPECÍFICOS (MAPEO DIRECTO A ARCHIVOS REALES)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -261,17 +283,19 @@ export const VrPatientExperience: React.FC<Props> = ({
     videoTextureRef.current = null;
 
     mat.map = null;
-    mat.color.setHex(0x0f172a); // Vuelve a color oscuro seguro al cambiar
+    mat.color.setHex(0x0f172a); // Fondo oscuro seguro para prevenir deslumbrameinto blanco
     mat.needsUpdate = true;
     setMediaType('loading');
 
     const getModuleConfig = (rawName: string) => {
       const up = rawName.toUpperCase();
       
-      // VIDEOS
-      if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4' };
+      // Módulos con Video (.mp4)
+      if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) {
+        return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4' };
+      }
       
-      // IMÁGENES
+      // Módulos con Imagen (.jpg)
       if (up.includes('TDAH') || up.includes('EXECUTIVE')) return { key: 'TDAH_EXECUTIVE', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg' };
       if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) return { key: 'DEV_TRAUMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg' };
       if (up.includes('DUAL_CONTROL') || up.includes('SES')) return { key: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg' };
@@ -286,49 +310,38 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
 
     const config = getModuleConfig(activeEcosystem);
-    
-    // 🔥 FUNCIÓN DE CARGA POR CANVAS (100% COMPATIBLE CON PICO 3) 🔥
-    const loadStaticImageViaCanvas = (imagePath: string, displayName: string) => {
-      setStatusMessage(`Procesando imagen: ${displayName}...`);
-      
-      const img = new Image();
-      img.crossOrigin = 'anonymous'; // Vital para evitar bloqueos CORS
-      
-      img.onload = () => {
-        // Creamos un Canvas virtual de 2048x1024 (Medida perfecta "Power of Two")
-        const canvas = document.createElement('canvas');
-        canvas.width = 2048;
-        canvas.height = 1024;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-          // Dibujamos la imagen original escalada a 2048x1024
-          ctx.drawImage(img, 0, 0, 2048, 1024);
-          
-          // Generamos la textura desde el canvas ya adaptado
-          const canvasTexture = new THREE.CanvasTexture(canvas);
-          if ('colorSpace' in canvasTexture) (canvasTexture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          
-          mat.map = canvasTexture;
-          mat.color.setHex(0xffffff); // Ilumina la escena
-          mat.needsUpdate = true;
-          
-          setMediaType('image');
-          setStatusMessage(`Escenario: ${displayName}`);
-        }
-      };
 
-      img.onerror = () => {
-        console.warn(`Error al cargar ${imagePath}`);
-        setStatusMessage('Error: Usando fondo seguro');
-      };
+    const loadStaticImage = (path: string, name: string) => {
+      setStatusMessage(`Cargando Escenario: ${name}`);
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
       
-      // Iniciamos la descarga asíncrona de la ruta
-      img.src = imagePath;
+      loader.load(
+        path,
+        (texture) => {
+          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          mat.map = texture;
+          mat.color.setHex(0xffffff); // Aplica luz blanca SOLO tras confirmar la descarga
+          mat.needsUpdate = true;
+          setMediaType('image');
+          setStatusMessage(`Escenario Activo: ${name}`);
+        },
+        undefined,
+        (err) => {
+          console.warn(`Fallback para ${path}`, err);
+          loader.load('/ecosystems/CLINICAL_OFFICE.jpg', (fallbackTex) => {
+            mat.map = fallbackTex;
+            mat.color.setHex(0xffffff);
+            mat.needsUpdate = true;
+            setMediaType('image');
+            setStatusMessage('Oficina Clínica Respaldo');
+          });
+        }
+      );
     };
 
     if (config.isVideo) {
-      setStatusMessage('Iniciando Video 360°...');
+      setStatusMessage('Cargando Video 360°...');
       const video = document.createElement('video');
       video.crossOrigin = 'anonymous';
       video.src = config.path;
@@ -344,20 +357,19 @@ export const VrPatientExperience: React.FC<Props> = ({
 
       video.addEventListener('canplay', () => {
         setMediaType('video');
-        setStatusMessage(`Reproduciendo: ${config.key}`);
+        setStatusMessage(`Video Activo: ${config.key}`);
         video.play().catch(() => {});
       }, { once: true });
 
       video.addEventListener('error', () => {
-        console.warn(`Video ${config.path} no encontrado, cargando imagen de respaldo...`);
+        console.warn(`Video no disponible en ${config.path}, cargando imagen estática.`);
         videoElementRef.current = null;
-        loadStaticImageViaCanvas('/ecosystems/CLUSTER_B_FORENSIC.jpg', 'Forense Respaldo');
+        loadStaticImage('/ecosystems/CLUSTER_B_FORENSIC.jpg', 'Forense Respaldo');
       });
 
       video.load();
     } else {
-      setStatusMessage('Renderizando Catálogo 3D...');
-      loadStaticImageViaCanvas(config.path, config.key);
+      loadStaticImage(config.path, config.key);
     }
 
   }, [activeEcosystem]);
