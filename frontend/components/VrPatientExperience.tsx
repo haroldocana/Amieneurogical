@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, Sparkles } from 'lucide-react';
+import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, Sparkles, AlertTriangle } from 'lucide-react';
 
 interface Props { patientId?: string; moduleId?: string; onClose?: () => void; }
 type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
@@ -16,7 +16,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
   const [statusMessage, setStatusMessage] = useState('Iniciando Entorno Clínico...');
-  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading'>('loading');
+  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading' | 'error'>('loading');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -35,7 +35,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const lastRtRef = useRef<number>(280);
 
   // =====================================================================
-  // 1. DICCIONARIO DE RUTAS
+  // 1. MAPEADOR OFICIAL DE RECURSOS
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
@@ -64,11 +64,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return { key: 'CLINICAL_OFFICE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Consultorio Base' };
   };
 
-  // 🔥 AQUÍ SE ARREGLA EL ERROR DE PANTALLA ROJA
   const currentConfig = getClinicalConfig(activeEcosystem);
 
   // =====================================================================
-  // 2. WEBSOCKET - TELEMETRÍA PLANA A CHROMEBOOK
+  // 2. WEBSOCKET PERSISTENTE (TELEMETRÍA EN TIEMPO REAL)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,7 +102,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. MOTOR THREE.JS Y EVENTO DE DISPARO
+  // 3. MOTOR ESCENA THREE.JS Y EVENTO DE CONTROLADOR VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -119,7 +118,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     renderer.setSize(width, height); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // ESFERA INVERTIDA PARA EVITAR ESPEJO
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     envGeo.scale(-1, 1, 1); 
     
@@ -135,9 +133,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       hitsRef.current += 1;
       lastRtRef.current = Math.floor(210 + Math.random() * 80);
 
-      // Gatillo desbloquea el video si está pausado
       if (videoElementRef.current && videoElementRef.current.paused) {
-         videoElementRef.current.play().catch(e => console.error("Error reproduciendo:", e));
+         videoElementRef.current.play().catch(() => {});
       }
 
       if (cursorRef.current) {
@@ -182,7 +179,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGADOR NATIVO WEBGL (LOCAL, SIN BLOQUEOS DE RED)
+  // 4. CARGADOR DE BÚFER VERIFICADO (PREVIENE FALLOS DE VITE / RENDER)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -205,9 +202,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         ctx.fillStyle = grad; ctx.fillRect(0, 0, 1024, 512);
         ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 256); ctx.lineTo(1024, 256); ctx.stroke();
         ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`Cargando Entorno: ${config.name}`, 512, 230);
-        ctx.fillStyle = '#38bdf8'; ctx.font = '18px sans-serif';
-        ctx.fillText(config.isVideo ? "Use el GATILLO del mando para Iniciar Video" : "Aguarde la descarga de imagen...", 512, 290);
+        ctx.fillText(`AMIE CLINICAL VR • ${config.name}`, 512, 230);
         
         const canvasTex = new THREE.CanvasTexture(canvas);
         mat.map = canvasTex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
@@ -215,61 +210,81 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
     drawProceduralRoom();
 
-    const loadTextureNative = (imgPath: string, name: string) => {
-      setStatusMessage(`Abriendo textura: ${name}...`);
-      
-      const textureLoader = new THREE.TextureLoader();
-      
-      textureLoader.load(
-        imgPath,
-        (texture) => {
-          texture.generateMipmaps = false; 
-          texture.minFilter = THREE.LinearFilter;
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          
-          mat.map = texture;
-          mat.color.setHex(0xffffff);
-          mat.needsUpdate = true;
-          setMediaType('image');
-          setStatusMessage(`Activo: ${name}`);
-        },
-        undefined,
-        (error) => {
-          console.error("Error cargando imagen:", error);
-          setStatusMessage(`Fallo al cargar imagen`);
+    // DESCARGA VERIFICADA POR BLOB
+    const loadVerifiedImage = async (path: string, name: string) => {
+      setStatusMessage(`Verificando archivo: ${path}...`);
+      try {
+        const response = await fetch(path);
+        const contentType = response.headers.get('content-type') || '';
+
+        // Si Render devuelve HTML en lugar de imagen, el archivo no existe en la ruta especificada
+        if (!response.ok || contentType.includes('text/html')) {
+          throw new Error(`Archivo no encontrado en Render: ${path}`);
         }
-      );
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        const loader = new THREE.TextureLoader();
+        loader.load(
+          objectUrl,
+          (texture) => {
+            texture.generateMipmaps = false;
+            texture.minFilter = THREE.LinearFilter;
+            if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+            
+            mat.map = texture;
+            mat.color.setHex(0xffffff);
+            mat.needsUpdate = true;
+            setMediaType('image');
+            setStatusMessage(`Escenario Activo: ${name}`);
+            URL.revokeObjectURL(objectUrl);
+          },
+          undefined,
+          () => {
+            setMediaType('error');
+            setStatusMessage(`Error decodificando imagen: ${name}`);
+          }
+        );
+      } catch (err: any) {
+        console.warn(err.message);
+        setMediaType('error');
+        setStatusMessage(`No hallado: ${path}`);
+      }
     };
 
     if (config.isVideo) {
-      setStatusMessage(`Preparando Video...`);
-      const video = document.createElement('video');
-      video.src = config.path;
-      video.loop = true; video.playsInline = true;
+      setStatusMessage(`Verificando Video: ${config.path}...`);
+      
+      fetch(config.path).then((res) => {
+        const cType = res.headers.get('content-type') || '';
+        if (res.ok && !cType.includes('text/html')) {
+          const video = document.createElement('video');
+          video.src = config.path;
+          video.loop = true; video.playsInline = true;
 
-      const vTex = new THREE.VideoTexture(video);
-      vTex.generateMipmaps = false; vTex.minFilter = THREE.LinearFilter;
-      videoTextureRef.current = vTex;
-      videoElementRef.current = video;
+          const vTex = new THREE.VideoTexture(video);
+          vTex.generateMipmaps = false; vTex.minFilter = THREE.LinearFilter;
+          videoTextureRef.current = vTex;
+          videoElementRef.current = video;
 
-      let isVideoPlaying = false;
-      video.addEventListener('canplay', () => {
-        setMediaType('video');
-        setStatusMessage(`Gatillo para Iniciar Video`);
-        video.play().then(() => { isVideoPlaying = true; setStatusMessage(`Activo: ${config.name}`); }).catch(() => {});
-      }, { once: true });
+          video.addEventListener('canplay', () => {
+            setMediaType('video');
+            setStatusMessage(`Gatillo para iniciar video`);
+            video.play().catch(() => {});
+          }, { once: true });
 
-      video.load();
-
-      setTimeout(() => {
-        if (!isVideoPlaying && config.fallbackImg) {
-          videoElementRef.current = null;
-          loadTextureNative(config.fallbackImg, config.name + " (Respaldo JPG)");
+          video.load();
+        } else {
+          // Si no existe el mp4, conmuta al JPG de respaldo
+          if (config.fallbackImg) loadVerifiedImage(config.fallbackImg, config.name + " (Respaldo)");
         }
-      }, 4000);
+      }).catch(() => {
+        if (config.fallbackImg) loadVerifiedImage(config.fallbackImg, config.name + " (Respaldo)");
+      });
 
     } else {
-      loadTextureNative(config.path, config.name);
+      loadVerifiedImage(config.path, config.name);
     }
   }, [activeEcosystem]);
 
@@ -286,10 +301,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           </div>
           <h1 className="text-slate-200 font-black text-xs uppercase tracking-wider">{currentConfig.name}</h1>
           <p className="text-[11px] text-slate-400">Paciente: <strong className="text-cyan-300">{activePatientId}</strong></p>
-          <p className="text-[10px] text-slate-300 font-mono flex items-center justify-center gap-1">
+          <p className="text-[10px] font-mono flex items-center justify-center gap-1">
             {mediaType === 'video' && <Video className="w-3 h-3 text-purple-400" />}
             {mediaType === 'image' && <ImageIcon className="w-3 h-3 text-amber-400" />}
-            {statusMessage}
+            {mediaType === 'error' ? <span className="text-rose-400 font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {statusMessage}</span> : <span className="text-slate-300">{statusMessage}</span>}
           </p>
           <div className={`mt-2 px-3 py-1 rounded-full border text-[10px] font-bold inline-flex items-center gap-1.5 ${isConnected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400' : 'bg-rose-950/80 border-rose-500 text-rose-400'}`}>
             {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <RefreshCw className="w-3 h-3 animate-spin" />}
