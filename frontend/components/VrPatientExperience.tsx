@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, HeartPulse, BrainCircuit } from 'lucide-react';
+import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, HeartPulse, Sparkles } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -10,16 +10,6 @@ interface Props {
 }
 
 type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
-type ClinicalProtocol = 
-  | 'DIAGNOSTIC_TDAH_CPT'
-  | 'DIAGNOSTIC_CLUSTER_B'
-  | 'DIAGNOSTIC_AIMA_TRAUMA'
-  | 'DIAGNOSTIC_PHOBIA_BASELINE'
-  | 'TREATMENT_EMDR_RECON'
-  | 'TREATMENT_PAIN_ANALGESIA'
-  | 'TREATMENT_CLOSED_HYPNOSIS'
-  | 'TREATMENT_FND_MIRROR'
-  | 'TREATMENT_DUAL_CONTROL';
 
 export const VrPatientExperience: React.FC<Props> = ({ 
   patientId: propsPatientId, 
@@ -56,7 +46,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     activeEcosystemRef.current = activeEcosystem;
   }, [activeEcosystem]);
 
-  // CONTADORES DE TELEMETRÍA
+  // CONTADORES Y MÉTRICAS DE EVALUACIÓN
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
@@ -66,118 +56,80 @@ export const VrPatientExperience: React.FC<Props> = ({
   const distressMarkersRef = useRef<number>(0);
 
   // =====================================================================
-  // 1. CONFIGURADOR CLÍNICO Y MAPEO DE RECURSOS
+  // 1. MAPEO COMPLETO DE LOS 20+ ARCHIVOS REALES DE TU SERVIDOR
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
-    const up = envKey.toUpperCase();
+    const up = envKey.toUpperCase().trim();
     
-    if (up.includes('TDAH') || up.includes('EXECUTIVE') || up.includes('CPT')) {
-      return { 
-        key: 'TDAH_EXECUTIVE', 
-        isVideo: false, 
-        path: '/ecosystems/TDAH_EXECUTIVE.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        protocol: 'DIAGNOSTIC_TDAH_CPT' as ClinicalProtocol, 
-        name: 'TDAH Control Ejecutivo (CPT)' 
-      };
-    }
+    // --- ESTÍMULOS EN VIDEO (.mp4) ---
     if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) {
-      return { 
-        key: 'narcissism_covert', 
-        isVideo: true, 
-        path: '/video/narcissism_covert.mp4', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        protocol: 'DIAGNOSTIC_CLUSTER_B' as ClinicalProtocol, 
-        name: 'Evaluación Forense Cluster B' 
-      };
+      return { key: 'narcissism_covert', isVideo: true, path: '/video/narcissism_covert.mp4', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Evaluación Forense Cluster B' };
+    }
+
+    // --- MÓDULOS DIAGNÓSTICOS (.jpg) ---
+    if (up.includes('TDAH') || up.includes('EXECUTIVE')) {
+      return { key: 'TDAH_EXECUTIVE', isVideo: false, path: '/ecosystems/TDAH_EXECUTIVE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'TDAH Control Ejecutivo (CPT)' };
     }
     if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA') || up.includes('AIMA')) {
-      return { 
-        key: 'DEV_TRAUMA', 
-        isVideo: false, 
-        path: '/ecosystems/DEV_TRAUMA.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        protocol: 'DIAGNOSTIC_AIMA_TRAUMA' as ClinicalProtocol, 
-        name: 'Trauma Evolutivo & AIMA' 
-      };
+      return { key: 'DEV_TRAUMA', isVideo: false, path: '/ecosystems/DEV_TRAUMA.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Trauma Evolutivo & AIMA' };
     }
-    if (up.includes('ACROPHOBIA') || up.includes('AEROPHOBIA') || up.includes('FOBIA')) {
-      const isRoof = up.includes('ACROPHOBIA');
-      return { 
-        key: isRoof ? 'ACROPHOBIA_ROOF' : 'AEROPHOBIA_CABIN', 
-        isVideo: false, 
-        path: isRoof ? '/ecosystems/ACROPHOBIA_ROOF.jpg' : '/ecosystems/AEROPHOBIA_CABIN.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        protocol: 'DIAGNOSTIC_PHOBIA_BASELINE' as ClinicalProtocol, 
-        name: isRoof ? 'Reactividad Acrofobia' : 'Reactividad Aerofobia' 
-      };
+    if (up.includes('ACROPHOBIA')) {
+      return { key: 'ACROPHOBIA_ROOF', isVideo: false, path: '/ecosystems/ACROPHOBIA_ROOF.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Reactividad Acrofobia (Azotea)' };
+    }
+    if (up.includes('AEROPHOBIA')) {
+      return { key: 'AEROPHOBIA_CABIN', isVideo: false, path: '/ecosystems/AEROPHOBIA_CABIN.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Reactividad Aerofobia (Cabina)' };
+    }
+    if (up.includes('STERILE')) {
+      return { key: 'STERILE_ROOM', isVideo: false, path: '/ecosystems/STERILE_ROOM.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Cuarto Estéril (Aislamiento)' };
     }
 
-    if (up.includes('EMDR') || up.includes('MEMORY') || up.includes('RECONSOLIDATION')) {
-      return { 
-        key: 'EMDR_MEMORY', 
-        isVideo: false, 
-        path: '/ecosystems/EMDR_MEMORY.jpg', 
-        category: 'TREATMENT' as ModuleCategory, 
-        protocol: 'TREATMENT_EMDR_RECON' as ClinicalProtocol, 
-        name: 'EMDR Reconsolidación' 
-      };
+    // --- MÓDULOS DE TRATAMIENTO Y TERAPIA (.jpg) ---
+    if (up.includes('EMDR') || up.includes('MEMORY')) {
+      return { key: 'EMDR_MEMORY', isVideo: false, path: '/ecosystems/EMDR_MEMORY.jpg', category: 'TREATMENT' as ModuleCategory, name: 'EMDR Reconsolidación de Memoria' };
     }
     if (up.includes('PAIN') || up.includes('ANALGESIA')) {
-      return { 
-        key: 'PAIN_MANAGEMENT', 
-        isVideo: false, 
-        path: '/ecosystems/PAIN_MANAGEMENT.jpg', 
-        category: 'TREATMENT' as ModuleCategory, 
-        protocol: 'TREATMENT_PAIN_ANALGESIA' as ClinicalProtocol, 
-        name: 'Analgesia Inmersiva' 
-      };
+      return { key: 'PAIN_MANAGEMENT', isVideo: false, path: '/ecosystems/PAIN_MANAGEMENT.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Analgesia Inmersiva' };
     }
     if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) {
-      return { 
-        key: 'NEURO_HYPNOSIS', 
-        isVideo: false, 
-        path: '/ecosystems/NEURO_HYPNOSIS.jpg', 
-        category: 'TREATMENT' as ModuleCategory, 
-        protocol: 'TREATMENT_CLOSED_HYPNOSIS' as ClinicalProtocol, 
-        name: 'Neurohipnosis Closed-Loop' 
-      };
+      return { key: 'NEURO_HYPNOSIS', isVideo: false, path: '/ecosystems/NEURO_HYPNOSIS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Neurohipnosis Closed-Loop' };
     }
     if (up.includes('FND') || up.includes('MIRROR')) {
-      return { 
-        key: 'FND_MIRROR', 
-        isVideo: false, 
-        path: '/ecosystems/FND_MIRROR.jpg', 
-        category: 'TREATMENT' as ModuleCategory, 
-        protocol: 'TREATMENT_FND_MIRROR' as ClinicalProtocol, 
-        name: 'Espejo Neurofuncional' 
-      };
+      return { key: 'FND_MIRROR', isVideo: false, path: '/ecosystems/FND_MIRROR.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espejo Neurofuncional' };
     }
     if (up.includes('DUAL_CONTROL') || up.includes('SES')) {
-      return { 
-        key: 'DUAL_CONTROL', 
-        isVideo: false, 
-        path: '/ecosystems/DUAL_CONTROL.jpg', 
-        category: 'TREATMENT' as ModuleCategory, 
-        protocol: 'TREATMENT_DUAL_CONTROL' as ClinicalProtocol, 
-        name: 'Regulador Dual SES/SIS' 
-      };
+      return { key: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/DUAL_CONTROL.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Regulador Dual (SES/SIS)' };
     }
 
-    return { 
-      key: 'CLINICAL_OFFICE', 
-      isVideo: false, 
-      path: '/ecosystems/CLINICAL_OFFICE.jpg', 
-      category: 'DIAGNOSTIC' as ModuleCategory, 
-      protocol: 'DIAGNOSTIC_TDAH_CPT' as ClinicalProtocol, 
-      name: 'Entorno Clínico Base' 
-    };
+    // --- SANTUARIOS DE REGULACIÓN / LUGARES SEGUROS (.jpg) ---
+    if (up.includes('SAFE_PLACE') || up.includes('FOREST')) {
+      return { key: 'SAFE_PLACE_FOREST', isVideo: false, path: '/ecosystems/SAFE_PLACE_FOREST.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Bosque Seguro' };
+    }
+    if (up.includes('BIOLUMINESCENT') || up.includes('BEACH')) {
+      return { key: 'BIOLUMINESCENT_BEACH', isVideo: false, path: '/ecosystems/BIOLUMINESCENT_BEACH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Playa Bioluminiscente' };
+    }
+    if (up.includes('ZEN') || up.includes('GARDEN')) {
+      return { key: 'ZEN_GARDEN', isVideo: false, path: '/ecosystems/ZEN_GARDEN.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Jardín Zen' };
+    }
+    if (up.includes('COSMIC') || up.includes('STARS')) {
+      return { key: 'COSMIC_STARS', isVideo: false, path: '/ecosystems/COSMIC_STARS.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Espacio Cósmico' };
+    }
+    if (up.includes('WARM') || up.includes('HEARTH')) {
+      return { key: 'WARM_HEARTH', isVideo: false, path: '/ecosystems/WARM_HEARTH.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Hogar Cálido' };
+    }
+    if (up.includes('TREEHOUSE') || up.includes('PROTECTIVE')) {
+      return { key: 'PROTECTIVE_TREEHOUSE', isVideo: false, path: '/ecosystems/PROTECTIVE_TREEHOUSE.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Casa del Árbol Protectora' };
+    }
+    if (up.includes('WOMB') || up.includes('CAVE')) {
+      return { key: 'WOMB_LIKE_CAVE', isVideo: false, path: '/ecosystems/WOMB_LIKE_CAVE.jpg', category: 'TREATMENT' as ModuleCategory, name: 'Cueva Receptáculo (Womb)' };
+    }
+
+    return { key: 'CLINICAL_OFFICE', isVideo: false, path: '/ecosystems/CLINICAL_OFFICE.jpg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Consultorio Clínico Base' };
   };
 
   const currentConfig = getClinicalConfig(activeEcosystemRef.current);
 
   // =====================================================================
-  // 2. WEBSOCKET PERSISTENTE Y TELEMETRÍA EN RAÍZ
+  // 2. TRANSMISIÓN WEBSOCKET CONTINUA (DATOS PLANOS EN LA RAÍZ)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -224,7 +176,6 @@ export const VrPatientExperience: React.FC<Props> = ({
           patientId: activePatientId,
           moduleId: config.key,
           category: config.category,
-          protocol: config.protocol,
           packetCount: packetCountRef.current,
           hits: hitsRef.current,
           commissions: commissionsRef.current,
@@ -255,7 +206,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. ESCENA THREE.JS Y EVENTO DEL MANDO VR
+  // 3. MOTOR THREE.JS Y DESBLOQUEO CON EL GATILLO DEL MANDO VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -300,6 +251,11 @@ export const VrPatientExperience: React.FC<Props> = ({
       distressMarkersRef.current += 1;
       lastRtRef.current = Math.floor(210 + Math.random() * 80);
 
+      // Si hay un video pausado, la pulsación del gatillo lo desbloquea
+      if (videoElementRef.current && videoElementRef.current.paused) {
+        videoElementRef.current.play().catch(() => {});
+      }
+
       if (cursorRef.current) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x10b981);
         setTimeout(() => {
@@ -315,7 +271,6 @@ export const VrPatientExperience: React.FC<Props> = ({
           hits: hitsRef.current,
           reactionTimeMs: lastRtRef.current,
           category: config.category,
-          protocol: config.protocol,
           isHit: true
         }));
       }
@@ -368,7 +323,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGADOR CON ORIENTACIÓN CORRECTA Y TEXTURA DIRECTA
+  // 4. CANVA ESCALADOR GPU (2048x1024) CON CORRECCIÓN DE ESPEJO
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -385,7 +340,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     setMediaType('loading');
     const config = getClinicalConfig(activeEcosystem);
 
-    // 🔥 GENERACIÓN PROCEDURAL CON ORIENTACIÓN CORREGIDA (NO ESPEJO) 🔥
+    // Canvas procedural de inicio (0 ms) con corrección horizontal
     const drawProceduralRoom = () => {
       const canvas = document.createElement('canvas');
       canvas.width = 2048;
@@ -412,9 +367,8 @@ export const VrPatientExperience: React.FC<Props> = ({
         ctx.fillText(`AMIE CLINICAL ENGINE • ${config.name}`, 1024, 460);
 
         const canvasTex = new THREE.CanvasTexture(canvas);
-        // CORRECCIÓN DE ESPEJO
         canvasTex.wrapS = THREE.RepeatWrapping;
-        canvasTex.repeat.x = -1;
+        canvasTex.repeat.x = -1; // Invierte el espejo horizontal
 
         mat.map = canvasTex;
         mat.color.setHex(0xffffff);
@@ -439,9 +393,9 @@ export const VrPatientExperience: React.FC<Props> = ({
 
       const vTex = new THREE.VideoTexture(video);
       vTex.wrapS = THREE.RepeatWrapping;
-      vTex.repeat.x = -1; // Inversión horizontal para video
+      vTex.repeat.x = -1;
       if ('colorSpace' in vTex) (vTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-      
+
       videoTextureRef.current = vTex;
       videoElementRef.current = video;
 
@@ -454,26 +408,28 @@ export const VrPatientExperience: React.FC<Props> = ({
       video.load();
     } else {
       setStatusMessage(`Descargando: ${config.name}...`);
-      const loader = new THREE.TextureLoader();
-      
-      loader.load(
-        fullPath,
-        (texture) => {
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.repeat.x = -1; // CORRECCIÓN DE ESPEJO PARA FOTOS
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          
-          mat.map = texture;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2048;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 2048, 1024);
+          const canvasTex = new THREE.CanvasTexture(canvas);
+          canvasTex.wrapS = THREE.RepeatWrapping;
+          canvasTex.repeat.x = -1; // Corrige orientación de lectura
+          if ('colorSpace' in canvasTex) (canvasTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+
+          mat.map = canvasTex;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
           setMediaType('image');
           setStatusMessage(`En Ejecución: ${config.name}`);
-        },
-        undefined,
-        (err) => {
-          console.warn('Error al cargar imagen estática, manteniendo procedural.');
         }
-      );
+      };
+      img.src = fullPath;
     }
 
   }, [activeEcosystem]);
@@ -490,7 +446,7 @@ export const VrPatientExperience: React.FC<Props> = ({
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
-                <HeartPulse className="w-3 h-3 text-emerald-400" /> Tratamiento
+                <Sparkles className="w-3 h-3 text-emerald-400" /> Tratamiento / Santuario
               </span>
             )}
           </div>
