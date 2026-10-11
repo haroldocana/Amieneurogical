@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, Sparkles, AlertTriangle } from 'lucide-react';
+import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, Sparkles } from 'lucide-react';
 
 interface Props { patientId?: string; moduleId?: string; onClose?: () => void; }
 type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
@@ -16,7 +16,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
   const [statusMessage, setStatusMessage] = useState('Iniciando Entorno Clínico...');
-  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading' | 'error'>('loading');
+  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading'>('loading');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -35,7 +35,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const lastRtRef = useRef<number>(280);
 
   // =====================================================================
-  // 1. MAPEADOR OFICIAL DE RECURSOS
+  // 1. MAPEADOR DE ARCHIVOS REALES (PUBLIC / ECOSYSTEMS Y VIDEO)
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
@@ -67,7 +67,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const currentConfig = getClinicalConfig(activeEcosystem);
 
   // =====================================================================
-  // 2. WEBSOCKET PERSISTENTE (TELEMETRÍA EN TIEMPO REAL)
+  // 2. TELEMETRÍA EN TIEMPO REAL (JSON PLANO A CHROMEBOOK)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,7 +102,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. MOTOR ESCENA THREE.JS Y EVENTO DE CONTROLADOR VR
+  // 3. MOTOR THREE.JS Y CONTROLADOR PICO 3
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -179,7 +179,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGADOR DE BÚFER VERIFICADO (PREVIENE FALLOS DE VITE / RENDER)
+  // 4. CARGA DIRECTA DE MEDIOS (SIN FETCH, CERO BLOQUEOS)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -210,81 +210,72 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
     drawProceduralRoom();
 
-    // DESCARGA VERIFICADA POR BLOB
-    const loadVerifiedImage = async (path: string, name: string) => {
-      setStatusMessage(`Verificando archivo: ${path}...`);
-      try {
-        const response = await fetch(path);
-        const contentType = response.headers.get('content-type') || '';
-
-        // Si Render devuelve HTML en lugar de imagen, el archivo no existe en la ruta especificada
-        if (!response.ok || contentType.includes('text/html')) {
-          throw new Error(`Archivo no encontrado en Render: ${path}`);
+    // FUNCIÓN DE CARGA DE IMAGEN CON THREE.JS NATIVO
+    const loadStaticImageDirect = (imgPath: string, name: string) => {
+      setStatusMessage(`Cargando Imagen: ${name}...`);
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        imgPath,
+        (texture) => {
+          texture.generateMipmaps = false;
+          texture.minFilter = THREE.LinearFilter;
+          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          
+          mat.map = texture;
+          mat.color.setHex(0xffffff);
+          mat.needsUpdate = true;
+          setMediaType('image');
+          setStatusMessage(`Escenario Activo: ${name}`);
+        },
+        undefined,
+        () => {
+          setStatusMessage(`Fallo al cargar imagen: ${name}`);
         }
-
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-
-        const loader = new THREE.TextureLoader();
-        loader.load(
-          objectUrl,
-          (texture) => {
-            texture.generateMipmaps = false;
-            texture.minFilter = THREE.LinearFilter;
-            if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-            
-            mat.map = texture;
-            mat.color.setHex(0xffffff);
-            mat.needsUpdate = true;
-            setMediaType('image');
-            setStatusMessage(`Escenario Activo: ${name}`);
-            URL.revokeObjectURL(objectUrl);
-          },
-          undefined,
-          () => {
-            setMediaType('error');
-            setStatusMessage(`Error decodificando imagen: ${name}`);
-          }
-        );
-      } catch (err: any) {
-        console.warn(err.message);
-        setMediaType('error');
-        setStatusMessage(`No hallado: ${path}`);
-      }
+      );
     };
 
     if (config.isVideo) {
-      setStatusMessage(`Verificando Video: ${config.path}...`);
+      setStatusMessage(`Conectando transmisión de Video...`);
       
-      fetch(config.path).then((res) => {
-        const cType = res.headers.get('content-type') || '';
-        if (res.ok && !cType.includes('text/html')) {
-          const video = document.createElement('video');
-          video.src = config.path;
-          video.loop = true; video.playsInline = true;
+      const video = document.createElement('video');
+      video.src = config.path;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('webkit-playsinline', 'webkit-playsinline');
 
-          const vTex = new THREE.VideoTexture(video);
-          vTex.generateMipmaps = false; vTex.minFilter = THREE.LinearFilter;
-          videoTextureRef.current = vTex;
-          videoElementRef.current = video;
+      const vTex = new THREE.VideoTexture(video);
+      vTex.generateMipmaps = false;
+      vTex.minFilter = THREE.LinearFilter;
+      videoTextureRef.current = vTex;
+      videoElementRef.current = video;
 
-          video.addEventListener('canplay', () => {
-            setMediaType('video');
-            setStatusMessage(`Gatillo para iniciar video`);
-            video.play().catch(() => {});
-          }, { once: true });
+      let isPlaying = false;
 
-          video.load();
-        } else {
-          // Si no existe el mp4, conmuta al JPG de respaldo
-          if (config.fallbackImg) loadVerifiedImage(config.fallbackImg, config.name + " (Respaldo)");
-        }
-      }).catch(() => {
-        if (config.fallbackImg) loadVerifiedImage(config.fallbackImg, config.name + " (Respaldo)");
+      video.addEventListener('canplay', () => {
+        setMediaType('video');
+        setStatusMessage(`Reproduciendo Video: ${config.name}`);
+        video.play().then(() => { isPlaying = true; }).catch(() => {
+          setStatusMessage(`Presiona el gatillo para iniciar el video`);
+        });
+      }, { once: true });
+
+      video.addEventListener('error', () => {
+        if (config.fallbackImg) loadStaticImageDirect(config.fallbackImg, config.name + " (Respaldo)");
       });
 
+      video.load();
+
+      // Temporizador de seguridad: si en 2.5s Android bloquea el video, pasa a la imagen JPG
+      setTimeout(() => {
+        if (!isPlaying && video.readyState < 3 && config.fallbackImg) {
+          videoElementRef.current = null;
+          loadStaticImageDirect(config.fallbackImg, config.name + " (Respaldo)");
+        }
+      }, 2500);
+
     } else {
-      loadVerifiedImage(config.path, config.name);
+      loadStaticImageDirect(config.path, config.name);
     }
   }, [activeEcosystem]);
 
@@ -301,10 +292,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           </div>
           <h1 className="text-slate-200 font-black text-xs uppercase tracking-wider">{currentConfig.name}</h1>
           <p className="text-[11px] text-slate-400">Paciente: <strong className="text-cyan-300">{activePatientId}</strong></p>
-          <p className="text-[10px] font-mono flex items-center justify-center gap-1">
+          <p className="text-[10px] text-slate-300 font-mono flex items-center justify-center gap-1">
             {mediaType === 'video' && <Video className="w-3 h-3 text-purple-400" />}
             {mediaType === 'image' && <ImageIcon className="w-3 h-3 text-amber-400" />}
-            {mediaType === 'error' ? <span className="text-rose-400 font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {statusMessage}</span> : <span className="text-slate-300">{statusMessage}</span>}
+            {statusMessage}
           </p>
           <div className={`mt-2 px-3 py-1 rounded-full border text-[10px] font-bold inline-flex items-center gap-1.5 ${isConnected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400' : 'bg-rose-950/80 border-rose-500 text-rose-400'}`}>
             {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <RefreshCw className="w-3 h-3 animate-spin" />}
