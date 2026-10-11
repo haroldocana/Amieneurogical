@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, HeartPulse, Activity } from 'lucide-react';
+import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, HeartPulse, BrainCircuit } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -9,18 +9,17 @@ interface Props {
   onClose?: () => void;
 }
 
-// ARQUITECTURA DE EVALUACIÓN CLÍNICA DUAL (DIAGNÓSTICO VS. TRATAMIENTO)
 type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
 type ClinicalProtocol = 
-  | 'DIAGNOSTIC_TDAH_CPT'        // Test Diagnóstico Go/No-Go (Atención Sostenida e Inhibición)
-  | 'DIAGNOSTIC_CLUSTER_B'       // Provocación Autonómica Forense (GSR / HRV Arousal)
-  | 'DIAGNOSTIC_AIMA_TRAUMA'     // Evaluación de Hipervigilancia e Impacto Evolutivo
-  | 'DIAGNOSTIC_PHOBIA_BASELINE' // Reactividad Galvánica Ante Estímulo Fóbico
-  | 'TREATMENT_EMDR_RECON'       // Reprocesamiento Desensibilización y Memoria
-  | 'TREATMENT_PAIN_ANALGESIA'   // Biofeedback Coherencia HRV / Modulación del Dolor
-  | 'TREATMENT_CLOSED_HYPNOSIS'  // Neurohipnosis y Arrastre de Ondas Alfa/Theta
-  | 'TREATMENT_FND_MIRROR'       // Retroalimentación Proprioceptiva Neurofuncional
-  | 'TREATMENT_DUAL_CONTROL';    // Regulador Dual de Excitación / Inhibición (SES/SIS)
+  | 'DIAGNOSTIC_TDAH_CPT'
+  | 'DIAGNOSTIC_CLUSTER_B'
+  | 'DIAGNOSTIC_AIMA_TRAUMA'
+  | 'DIAGNOSTIC_PHOBIA_BASELINE'
+  | 'TREATMENT_EMDR_RECON'
+  | 'TREATMENT_PAIN_ANALGESIA'
+  | 'TREATMENT_CLOSED_HYPNOSIS'
+  | 'TREATMENT_FND_MIRROR'
+  | 'TREATMENT_DUAL_CONTROL';
 
 export const VrPatientExperience: React.FC<Props> = ({ 
   patientId: propsPatientId, 
@@ -40,7 +39,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
-  const [statusMessage, setStatusMessage] = useState('Iniciando Motor Clínico Dual...');
+  const [statusMessage, setStatusMessage] = useState('Iniciando Entorno Clínico...');
   const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading'>('loading');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -57,7 +56,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     activeEcosystemRef.current = activeEcosystem;
   }, [activeEcosystem]);
 
-  // TELEMETRÍA Y MÉTRICAS DE EVALUACIÓN DIAGNÓSTICA Y TRATAMIENTO
+  // CONTADORES DE TELEMETRÍA Y CONDUCTA
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
@@ -67,12 +66,12 @@ export const VrPatientExperience: React.FC<Props> = ({
   const distressMarkersRef = useRef<number>(0);
 
   // =====================================================================
-  // 1. MAPEADOR CLÍNICO: DIAGNÓSTICO VS. TRATAMIENTO Y TELEMETRÍA
+  // 1. CONFIGURADOR CLÍNICO Y MAPEO DE ARCHIVOS REALES
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase();
     
-    // --- MÓDULOS DIAGNÓSTICOS ---
+    // DIAGNÓSTICOS
     if (up.includes('TDAH') || up.includes('EXECUTIVE') || up.includes('CPT')) {
       return { 
         key: 'TDAH_EXECUTIVE', 
@@ -80,7 +79,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/TDAH_EXECUTIVE.jpg', 
         category: 'DIAGNOSTIC' as ModuleCategory, 
         protocol: 'DIAGNOSTIC_TDAH_CPT' as ClinicalProtocol, 
-        name: 'Diagnóstico TDAH (CPT Go/No-Go)' 
+        name: 'TDAH Control Ejecutivo (CPT)' 
       };
     }
     if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) {
@@ -90,7 +89,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/video/narcissism_covert.mp4', 
         category: 'DIAGNOSTIC' as ModuleCategory, 
         protocol: 'DIAGNOSTIC_CLUSTER_B' as ClinicalProtocol, 
-        name: 'Diagnóstico Forense Cluster B' 
+        name: 'Evaluación Forense Cluster B' 
       };
     }
     if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA') || up.includes('AIMA')) {
@@ -100,7 +99,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/DEV_TRAUMA.jpg', 
         category: 'DIAGNOSTIC' as ModuleCategory, 
         protocol: 'DIAGNOSTIC_AIMA_TRAUMA' as ClinicalProtocol, 
-        name: 'Diagnóstico Trauma Evolutivo (AIMA)' 
+        name: 'Trauma Evolutivo & AIMA' 
       };
     }
     if (up.includes('ACROPHOBIA') || up.includes('AEROPHOBIA') || up.includes('FOBIA')) {
@@ -111,11 +110,11 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: isRoof ? '/ecosystems/ACROPHOBIA_ROOF.jpg' : '/ecosystems/AEROPHOBIA_CABIN.jpg', 
         category: 'DIAGNOSTIC' as ModuleCategory, 
         protocol: 'DIAGNOSTIC_PHOBIA_BASELINE' as ClinicalProtocol, 
-        name: isRoof ? 'Diagnóstico Reactividad Acrofobia' : 'Diagnóstico Reactividad Aerofobia' 
+        name: isRoof ? 'Reactividad Acrofobia' : 'Reactividad Aerofobia' 
       };
     }
 
-    // --- MÓDULOS DE TRATAMIENTO / INTERVENCIÓN ---
+    // TRATAMIENTOS
     if (up.includes('EMDR') || up.includes('MEMORY') || up.includes('RECONSOLIDATION')) {
       return { 
         key: 'EMDR_MEMORY', 
@@ -123,7 +122,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/EMDR_MEMORY.jpg', 
         category: 'TREATMENT' as ModuleCategory, 
         protocol: 'TREATMENT_EMDR_RECON' as ClinicalProtocol, 
-        name: 'Tratamiento EMDR Reconsolidación' 
+        name: 'EMDR Reconsolidación' 
       };
     }
     if (up.includes('PAIN') || up.includes('ANALGESIA')) {
@@ -133,7 +132,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/PAIN_MANAGEMENT.jpg', 
         category: 'TREATMENT' as ModuleCategory, 
         protocol: 'TREATMENT_PAIN_ANALGESIA' as ClinicalProtocol, 
-        name: 'Tratamiento Analgesia Inmersiva' 
+        name: 'Analgesia Inmersiva' 
       };
     }
     if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) {
@@ -143,7 +142,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/NEURO_HYPNOSIS.jpg', 
         category: 'TREATMENT' as ModuleCategory, 
         protocol: 'TREATMENT_CLOSED_HYPNOSIS' as ClinicalProtocol, 
-        name: 'Tratamiento Neurohipnosis Closed-Loop' 
+        name: 'Neurohipnosis Closed-Loop' 
       };
     }
     if (up.includes('FND') || up.includes('MIRROR')) {
@@ -153,7 +152,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/FND_MIRROR.jpg', 
         category: 'TREATMENT' as ModuleCategory, 
         protocol: 'TREATMENT_FND_MIRROR' as ClinicalProtocol, 
-        name: 'Tratamiento Espejo Neurofuncional' 
+        name: 'Espejo Neurofuncional' 
       };
     }
     if (up.includes('DUAL_CONTROL') || up.includes('SES')) {
@@ -163,7 +162,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         path: '/ecosystems/DUAL_CONTROL.jpg', 
         category: 'TREATMENT' as ModuleCategory, 
         protocol: 'TREATMENT_DUAL_CONTROL' as ClinicalProtocol, 
-        name: 'Tratamiento Regulador Dual (SES/SIS)' 
+        name: 'Regulador Dual SES/SIS' 
       };
     }
 
@@ -173,14 +172,14 @@ export const VrPatientExperience: React.FC<Props> = ({
       path: '/ecosystems/CLINICAL_OFFICE.jpg', 
       category: 'DIAGNOSTIC' as ModuleCategory, 
       protocol: 'DIAGNOSTIC_TDAH_CPT' as ClinicalProtocol, 
-      name: 'Oficina Evaluación Base' 
+      name: 'Entorno Clínico Base' 
     };
   };
 
   const currentConfig = getClinicalConfig(activeEcosystemRef.current);
 
   // =====================================================================
-  // 2. WEBSOCKET PERSISTENTE: TRANSMISIÓN DE ESTRUCTURAS DE DATOS DUALES
+  // 2. WEBSOCKET PERSISTENTE CON JSON ESTRUCTURADO EN LA RAÍZ
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -218,74 +217,37 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // EMISIÓN CONTINUA DE PAQUETES (CADA 300 MS) HACIA LA CONSOLA CHROMEBOOK
+    // TRANSMISIÓN CONTINUA DE PAQUETES PLANOS A LA CHROMEBOOK (300 MS)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
         const config = getClinicalConfig(activeEcosystemRef.current);
 
-        // A. PAQUETE BIOMÉTRICO GENERAL
-        const basePayload = {
-          type: 'VR_TELEMETRY_FRAME',
+        // Estructura plana de variables para compatibilidad con la consola del doctor
+        const rootPayload = {
           patientId: activePatientId,
           moduleId: config.key,
           category: config.category,
           protocol: config.protocol,
           packetCount: packetCountRef.current,
+          hits: hitsRef.current,
+          commissions: commissionsRef.current,
+          omissions: omissionsRef.current,
+          reactionTimeMs: lastRtRef.current,
           hrvBpm: Math.floor(62 + Math.random() * 18),
           gsrValue: Number((2.1 + Math.random() * 0.9).toFixed(2)),
-          attentionIndex: Math.floor(72 + Math.random() * 22)
+          attentionIndex: Math.floor(72 + Math.random() * 22),
+          sudsLevel: sudsLevelRef.current,
+          focusScore: Math.floor(75 + Math.random() * 20),
+          autonomicArousal: Number((3.2 + Math.random() * 1.2).toFixed(2)),
+          safetyMarkers: distressMarkersRef.current
         };
-        wsRef.current.send(JSON.stringify(basePayload));
 
-        // B. PAQUETES ESPECÍFICOS SEGÚN CATEGORÍA (DIAGNÓSTICO VS. TRATAMIENTO)
-        if (config.protocol === 'DIAGNOSTIC_TDAH_CPT') {
-          wsRef.current.send(JSON.stringify({
-            ...basePayload,
-            type: 'TDAH_TELEMETRY',
-            diagnosticData: {
-              hits: hitsRef.current,
-              commissions: commissionsRef.current,
-              omissions: omissionsRef.current,
-              reactionTimeMs: lastRtRef.current,
-              dPrimeScore: Number((2.4 - (commissionsRef.current * 0.1)).toFixed(2))
-            }
-          }));
-        } 
-        else if (config.protocol === 'DIAGNOSTIC_CLUSTER_B') {
-          wsRef.current.send(JSON.stringify({
-            ...basePayload,
-            type: 'CLUSTER_B_TELEMETRY',
-            diagnosticData: {
-              autonomicArousalPeak: Number((3.5 + Math.random() * 1.5).toFixed(2)),
-              microExpressionReactivity: Math.floor(65 + Math.random() * 30),
-              empathyDeficitIndex: 82
-            }
-          }));
-        }
-        else if (config.protocol === 'DIAGNOSTIC_AIMA_TRAUMA' || config.protocol === 'DIAGNOSTIC_PHOBIA_BASELINE') {
-          wsRef.current.send(JSON.stringify({
-            ...basePayload,
-            type: 'DIAGNOSTIC_EXPOSURE_TELEMETRY',
-            diagnosticData: {
-              sudsBaseline: sudsLevelRef.current,
-              hyperarousalSpikes: distressMarkersRef.current,
-              vagalToneDrop: Number((1.2 + Math.random() * 0.5).toFixed(2))
-            }
-          }));
-        }
-        else if (config.category === 'TREATMENT') {
-          wsRef.current.send(JSON.stringify({
-            ...basePayload,
-            type: 'TREATMENT_PROGRESS_TELEMETRY',
-            treatmentData: {
-              habituatedIndexH: Number((2.8 + (packetCountRef.current * 0.01)).toFixed(2)),
-              sudsReductionDelta: -15,
-              coherenceScore: Math.floor(80 + Math.random() * 15),
-              activeAnchorCount: distressMarkersRef.current
-            }
-          }));
-        }
+        // Enviar evento multiprotocolo para actualizar contadores
+        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'VR_TELEMETRY_FRAME' }));
+        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'TDAH_TELEMETRY' }));
+        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'TDAH_METRICS' }));
+        wsRef.current.send(JSON.stringify({ ...rootPayload, type: 'CLUSTER_B_TELEMETRY' }));
       }
     }, 300);
 
@@ -298,7 +260,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 3. MOTOR THREE.JS Y LOGICA DE CONTROLADORES SEGÚN MÓDULO
+  // 3. MOTOR THREE.JS Y RESPUESTA DEL MANDO
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -336,10 +298,12 @@ export const VrPatientExperience: React.FC<Props> = ({
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // EL MANDO VR PROCESA TAREAS DIAGNÓSTICAS O TRATAMIENTOS
+    // EVENTO DEL GATILLO DEL MANDO VR
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
-      const config = getClinicalConfig(activeEcosystemRef.current);
+      hitsRef.current += 1;
+      distressMarkersRef.current += 1;
+      lastRtRef.current = Math.floor(210 + Math.random() * 80);
 
       if (cursorRef.current) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x10b981);
@@ -349,28 +313,16 @@ export const VrPatientExperience: React.FC<Props> = ({
       }
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        if (config.protocol === 'DIAGNOSTIC_TDAH_CPT') {
-          hitsRef.current += 1;
-          lastRtRef.current = Math.floor(210 + Math.random() * 80);
-          wsRef.current.send(JSON.stringify({
-            type: 'INTERACTION_HIT',
-            patientId: activePatientId,
-            hits: hitsRef.current,
-            reactionTimeMs: lastRtRef.current,
-            isDiagnosticTarget: true
-          }));
-        } 
-        else {
-          distressMarkersRef.current += 1;
-          wsRef.current.send(JSON.stringify({
-            type: 'CLINICAL_MARKER_EVENT',
-            patientId: activePatientId,
-            category: config.category,
-            protocol: config.protocol,
-            markerIndex: distressMarkersRef.current,
-            timestampMs: Date.now()
-          }));
-        }
+        const config = getClinicalConfig(activeEcosystemRef.current);
+        wsRef.current.send(JSON.stringify({
+          type: 'INTERACTION_HIT',
+          patientId: activePatientId,
+          hits: hitsRef.current,
+          reactionTimeMs: lastRtRef.current,
+          category: config.category,
+          protocol: config.protocol,
+          isHit: true
+        }));
       }
     });
     scene.add(xrController);
@@ -421,7 +373,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGADOR BLOB DE MEDIOS (CERO PANTALLAS AZULES / BLANCAS)
+  // 4. GENERADOR PROCEDURAL 360 Y SUPERPOSICIÓN DE FOTO/VIDEO
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -435,49 +387,49 @@ export const VrPatientExperience: React.FC<Props> = ({
     videoElementRef.current = null;
     videoTextureRef.current = null;
 
-    mat.map = null;
-    mat.color.setHex(0x0f172a); 
-    mat.needsUpdate = true;
     setMediaType('loading');
-
     const config = getClinicalConfig(activeEcosystem);
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const fullPath = `${origin}${config.path}`;
 
-    const loadSafeImageBlob = async (url: string, fallbackUrl: string) => {
-      setStatusMessage(`Sincronizando (${config.category}): ${config.name}...`);
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("HTTP error");
-        
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        
-        const loader = new THREE.TextureLoader();
-        loader.load(objectUrl, (texture) => {
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-          mat.map = texture;
-          mat.color.setHex(0xffffff); 
-          mat.needsUpdate = true;
-          setMediaType('image');
-          setStatusMessage(`En Ejecución: ${config.name}`);
-          URL.revokeObjectURL(objectUrl);
-        });
-      } catch (err) {
-        console.warn(`Fallback para ${url}...`);
-        const loader = new THREE.TextureLoader();
-        loader.load(`${origin}${fallbackUrl}`, (fallback) => {
-          mat.map = fallback;
-          mat.color.setHex(0xffffff);
-          mat.needsUpdate = true;
-          setMediaType('image');
-          setStatusMessage('Oficina Respaldo');
-        });
+    // GENERAR CANVAS PROCEDURAL EN MEMORIA (0 MS - ELIMINA LA ESFERA AZUL)
+    const drawProceduralRoom = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 2048;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const grad = ctx.createLinearGradient(0, 0, 0, 1024);
+        grad.addColorStop(0, '#0369a1');
+        grad.addColorStop(0.5, '#0f172a');
+        grad.addColorStop(1, '#020617');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 2048, 1024);
+
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 512);
+        ctx.lineTo(2048, 512);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 44px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`AMIE CLINICAL ENGINE • ${config.name}`, 1024, 460);
+
+        const canvasTex = new THREE.CanvasTexture(canvas);
+        mat.map = canvasTex;
+        mat.color.setHex(0xffffff);
+        mat.needsUpdate = true;
       }
     };
 
+    drawProceduralRoom();
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const fullPath = `${origin}${config.path}`;
+
     if (config.isVideo) {
-      setStatusMessage(`Cargando Estímulo de Video (${config.name})...`);
+      setStatusMessage(`Cargando Video: ${config.name}...`);
       const video = document.createElement('video');
       video.crossOrigin = 'anonymous';
       video.src = fullPath;
@@ -497,14 +449,27 @@ export const VrPatientExperience: React.FC<Props> = ({
         video.play().catch(() => {});
       }, { once: true });
 
-      video.addEventListener('error', () => {
-        videoElementRef.current = null;
-        loadSafeImageBlob(`${origin}/ecosystems/CLUSTER_B_FORENSIC.jpg`, '/ecosystems/CLINICAL_OFFICE.jpg');
-      });
-
       video.load();
     } else {
-      loadSafeImageBlob(fullPath, '/ecosystems/CLINICAL_OFFICE.jpg');
+      setStatusMessage(`Descargando: ${config.name}...`);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2048;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 2048, 1024);
+          const canvasTex = new THREE.CanvasTexture(canvas);
+          mat.map = canvasTex;
+          mat.color.setHex(0xffffff);
+          mat.needsUpdate = true;
+          setMediaType('image');
+          setStatusMessage(`En Ejecución: ${config.name}`);
+        }
+      };
+      img.src = fullPath;
     }
 
   }, [activeEcosystem]);
@@ -517,11 +482,11 @@ export const VrPatientExperience: React.FC<Props> = ({
           <div className="flex items-center gap-2 justify-center">
             {currentConfig.category === 'DIAGNOSTIC' ? (
               <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-500/50 text-cyan-300 text-[10px] font-black uppercase flex items-center gap-1">
-                <Stethoscope className="w-3 h-3 text-cyan-400" /> Módulo Diagnóstico
+                <Stethoscope className="w-3 h-3 text-cyan-400" /> Diagnóstico
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
-                <HeartPulse className="w-3 h-3 text-emerald-400" /> Módulo Tratamiento
+                <HeartPulse className="w-3 h-3 text-emerald-400" /> Tratamiento
               </span>
             )}
           </div>
