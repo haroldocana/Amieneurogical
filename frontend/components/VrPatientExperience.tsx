@@ -29,7 +29,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
   const [statusMessage, setStatusMessage] = useState('Iniciando Entorno...');
 
-  // Referencias Three.js y Métricas de Rendimiento
+  // Referencias Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
@@ -38,15 +38,15 @@ export const VrPatientExperience: React.FC<Props> = ({
   const cursorRef = useRef<THREE.Mesh | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Contadores TDAH Go/No-Go
+  // Contadores TDAH
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
   const omissionsRef = useRef<number>(0);
-  const lastRtRef = useRef<number>(260);
+  const lastRtRef = useRef<number>(350);
 
   // =====================================================================
-  // 1. WEBSOCKET - EMISIÓN DE TELEMETRÍA BIOMÉTRICA Y TDAH EN TIEMPO REAL
+  // 1. WEBSOCKET - TELEMETRÍA EN TIEMPO REAL
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -71,7 +71,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         ws.onopen = () => {
           if (!isMounted) return;
           setIsConnected(true);
-          setStatusMessage('🟢 ENLAZADO A CONSOLA');
+          setStatusMessage('🟢 ENLAZADO Y EMITIENDO');
           ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
         };
 
@@ -99,12 +99,10 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connectWithHealthCheck();
 
-    // BUCLE DE TELEMETRÍA A 300MS (TRANSMITE PAQUETES A LA CHROMEBOOK CONTINUAMENTE)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
 
-        // 1. Paquete Genérico
         wsRef.current.send(JSON.stringify({
           type: 'VR_TELEMETRY_FRAME',
           patientId: activePatientId,
@@ -119,7 +117,6 @@ export const VrPatientExperience: React.FC<Props> = ({
           reactionTimeMs: lastRtRef.current
         }));
 
-        // 2. Paquete Específico para el Monitor TDAH (Executive Control)
         wsRef.current.send(JSON.stringify({
           type: 'TDAH_TELEMETRY',
           patientId: activePatientId,
@@ -151,7 +148,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId, activeEcosystem]);
 
   // =====================================================================
-  // 2. ESCENA THREE.JS Y EVENTO DE DISPARO DEL MANDO VR (HIT / REACCIÓN)
+  // 2. MOTOR THREE.JS Y INTERACCIÓN VR
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -193,13 +190,12 @@ export const VrPatientExperience: React.FC<Props> = ({
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // EVENTO DEL MANDO VR: AL PRESIONAR EL GATILLO REGISTRA UN ACIERTO Y TR EN LA CHROMEBOOK
+    // EVENTO DEL MANDO VR (TRIGGER)
     const xrController = renderer.xr.getController(0);
     xrController.addEventListener('select', () => {
       hitsRef.current += 1;
       lastRtRef.current = Math.floor(220 + Math.random() * 90);
 
-      // Destello verde en el anillo visual del paciente
       if (cursorRef.current) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.setHex(0x10b981);
         setTimeout(() => {
@@ -207,7 +203,6 @@ export const VrPatientExperience: React.FC<Props> = ({
         }, 200);
       }
 
-      // Enviar paquete inmediato de interacción
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'INTERACTION_HIT',
@@ -267,7 +262,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId, activeEcosystem]);
 
   // =====================================================================
-  // 3. CARGADOR INTELIGENTE DE RECURSOS (MAPEO EXACTO A ARCHIVOS PUBLIC)
+  // 3. CARGADOR DE RUTAS ABSOLUTAS (GARANTIZA RESOLUCIÓN EN ANDROID VR)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -285,10 +280,9 @@ export const VrPatientExperience: React.FC<Props> = ({
     }
 
     mat.map = null;
-    mat.color.setHex(0x0284c7); // Color base mientras descarga
+    mat.color.setHex(0x0284c7); 
     mat.needsUpdate = true;
 
-    // MAPEO A NOMBRES EXACTOS DE ARCHIVOS EN PUBLIC/ECOSYSTEMS
     const mapEcosystemKey = (rawName: string): string => {
       const up = rawName.toUpperCase();
       if (up.includes('TDAH') || up.includes('EXECUTIVE')) return 'TDAH_EXECUTIVE';
@@ -305,62 +299,39 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
 
     const safeKey = mapEcosystemKey(activeEcosystem);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const absoluteJpgUrl = `${origin}/ecosystems/${safeKey}.jpg`;
+
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin('anonymous');
 
-    // 1. INTENTAR CARGAR LA IMAGEN JPG DE PUBLIC/ECOSYSTEMS/ (Ej. TDAH_EXECUTIVE.jpg)
+    // Carga mediante Ruta Absoluta Fija
     loader.load(
-      `/ecosystems/${safeKey}.jpg`,
+      absoluteJpgUrl,
       (texture) => {
         if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
         mat.map = texture;
         mat.color.setHex(0xffffff);
         mat.needsUpdate = true;
-        setStatusMessage(`Entorno 3D: ${safeKey}`);
+        setStatusMessage(`Entorno Cargar: ${safeKey}`);
       },
       undefined,
-      () => {
-        // 2. SI NO EXISTE LA IMAGEN JPG, CARGAR VIDEO MP4 DE PUBLIC/VIDEO/
-        console.warn(`Imagen /ecosystems/${safeKey}.jpg no encontrada. Intentando video MP4...`);
-        const video = document.createElement('video');
-        video.crossOrigin = 'anonymous';
-        video.src = `/video/${safeKey}.mp4`;
-        video.loop = true;
-        video.muted = true;
-        video.playsInline = true;
-        video.setAttribute('webkit-playsinline', 'webkit-playsinline');
-        videoElementRef.current = video;
-
-        const videoTexture = new THREE.VideoTexture(video);
-        if ('colorSpace' in videoTexture) (videoTexture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-        videoTextureRef.current = videoTexture;
-
-        video.addEventListener('canplay', () => {
-          mat.map = videoTexture;
+      (err) => {
+        console.warn(`No se pudo cargar la imagen ${absoluteJpgUrl}, cargando backup...`, err);
+        const fallbackUrl = `${origin}/ecosystems/CLINICAL_OFFICE.jpg`;
+        loader.load(fallbackUrl, (fallbackTex) => {
+          if ('colorSpace' in fallbackTex) (fallbackTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          mat.map = fallbackTex;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
-          setStatusMessage(`Video 360°: ${safeKey}`);
-          video.play().catch(() => {});
+          setStatusMessage('Oficina Clínica 3D');
         });
-
-        video.addEventListener('error', () => {
-          // 3. SI TAMPOCO HAY VIDEO, MOSTRAR LA OFICINA CLÍNICA DE RESPALDO
-          loader.load('/ecosystems/CLINICAL_OFFICE.jpg', (fallbackTex) => {
-            mat.map = fallbackTex;
-            mat.color.setHex(0xffffff);
-            mat.needsUpdate = true;
-            setStatusMessage('Oficina Clínica 3D');
-          });
-        });
-
-        video.load();
       }
     );
   }, [activeEcosystem]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
-      {/* Panel Flotante de Estado */}
       <div className="absolute z-10 bottom-24 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-1.5 bg-slate-950/90 p-5 rounded-2xl border border-slate-800/90 shadow-2xl max-w-sm">
           <h1 className="text-slate-200 font-black text-sm uppercase flex items-center justify-center gap-2">
