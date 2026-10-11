@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Wifi, CheckCircle2, RefreshCw, Video, Image as ImageIcon, Stethoscope, Sparkles } from 'lucide-react';
+import { Wifi, RefreshCw, Video, Image as ImageIcon, Stethoscope, Sparkles, AlertTriangle } from 'lucide-react';
 
 interface Props { patientId?: string; moduleId?: string; onClose?: () => void; }
 type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
@@ -16,7 +16,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
   const [statusMessage, setStatusMessage] = useState('Iniciando Entorno Clínico...');
-  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading'>('loading');
+  const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading' | 'error'>('loading');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -35,7 +35,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const lastRtRef = useRef<number>(280);
 
   // =====================================================================
-  // 1. MAPEADOR DE ARCHIVOS REALES (PUBLIC / ECOSYSTEMS Y VIDEO)
+  // 1. DICCIONARIO DE MÓDULOS
   // =====================================================================
   const getClinicalConfig = (envKey: string) => {
     const up = envKey.toUpperCase().trim();
@@ -67,7 +67,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const currentConfig = getClinicalConfig(activeEcosystem);
 
   // =====================================================================
-  // 2. TELEMETRÍA EN TIEMPO REAL (JSON PLANO A CHROMEBOOK)
+  // 2. WEBSOCKET - TELEMETRÍA PLANA A CHROMEBOOK
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -119,7 +119,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     container.appendChild(renderer.domElement);
 
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    envGeo.scale(-1, 1, 1); 
+    envGeo.scale(-1, 1, 1); // Evita efecto espejo
     
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
     const envMesh = new THREE.Mesh(envGeo, envMat); scene.add(envMesh); envMeshRef.current = envMesh;
@@ -179,7 +179,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, [activePatientId]);
 
   // =====================================================================
-  // 4. CARGA DIRECTA DE MEDIOS (SIN FETCH, CERO BLOQUEOS)
+  // 4. EL REDIMENSIONADOR "BULLETPROOF" (SOLUCIÓN A LAS IMÁGENES DE IA)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -210,72 +210,83 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
     drawProceduralRoom();
 
-    // FUNCIÓN DE CARGA DE IMAGEN CON THREE.JS NATIVO
-    const loadStaticImageDirect = (imgPath: string, name: string) => {
-      setStatusMessage(`Cargando Imagen: ${name}...`);
-      const loader = new THREE.TextureLoader();
-      loader.load(
-        imgPath,
-        (texture) => {
-          texture.generateMipmaps = false;
-          texture.minFilter = THREE.LinearFilter;
-          if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+    // 🔥 LA MAGIA: Forzar cualquier imagen JPG a 2048x1024 usando un Canvas intermedio
+    const loadBulletproofImage = (imgPath: string, name: string) => {
+      setStatusMessage(`Adaptando Imagen: ${name}...`);
+      
+      const img = new Image();
+      img.onload = () => {
+        // Creamos un lienzo de tamaño perfecto para WebGL (Potencia de 2)
+        const canvas = document.createElement('canvas');
+        canvas.width = 2048;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          // Dibujamos la imagen de Gemini aplastándola a las proporciones perfectas
+          ctx.drawImage(img, 0, 0, 2048, 1024);
           
-          mat.map = texture;
+          // Generamos la textura desde el lienzo limpio, no desde el archivo pesado
+          const canvasTex = new THREE.CanvasTexture(canvas);
+          canvasTex.generateMipmaps = false;
+          canvasTex.minFilter = THREE.LinearFilter;
+          if ('colorSpace' in canvasTex) (canvasTex as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+          
+          mat.map = canvasTex;
           mat.color.setHex(0xffffff);
           mat.needsUpdate = true;
+          
           setMediaType('image');
-          setStatusMessage(`Escenario Activo: ${name}`);
-        },
-        undefined,
-        () => {
-          setStatusMessage(`Fallo al cargar imagen: ${name}`);
+          setStatusMessage(`Activo: ${name}`);
         }
-      );
+      };
+      
+      img.onerror = () => {
+        setMediaType('error');
+        setStatusMessage(`Error leyendo: ${imgPath}`);
+      };
+      
+      img.src = `${origin}${imgPath}`;
     };
 
     if (config.isVideo) {
-      setStatusMessage(`Conectando transmisión de Video...`);
+      setStatusMessage(`Conectando Video...`);
       
       const video = document.createElement('video');
-      video.src = config.path;
-      video.loop = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.setAttribute('webkit-playsinline', 'webkit-playsinline');
+      video.src = `${origin}${config.path}`;
+      video.loop = true; video.playsInline = true;
 
       const vTex = new THREE.VideoTexture(video);
-      vTex.generateMipmaps = false;
-      vTex.minFilter = THREE.LinearFilter;
+      vTex.generateMipmaps = false; vTex.minFilter = THREE.LinearFilter;
       videoTextureRef.current = vTex;
       videoElementRef.current = video;
 
       let isPlaying = false;
-
       video.addEventListener('canplay', () => {
         setMediaType('video');
-        setStatusMessage(`Reproduciendo Video: ${config.name}`);
-        video.play().then(() => { isPlaying = true; }).catch(() => {
-          setStatusMessage(`Presiona el gatillo para iniciar el video`);
-        });
+        setStatusMessage(`Presiona el gatillo para iniciar`);
+        video.play().then(() => { isPlaying = true; setStatusMessage(`Activo: ${config.name}`); }).catch(() => {});
       }, { once: true });
 
       video.addEventListener('error', () => {
-        if (config.fallbackImg) loadStaticImageDirect(config.fallbackImg, config.name + " (Respaldo)");
+        if (config.fallbackImg) loadBulletproofImage(config.fallbackImg, config.name + " (Respaldo)");
       });
 
       video.load();
 
-      // Temporizador de seguridad: si en 2.5s Android bloquea el video, pasa a la imagen JPG
+      // Si el MP4 falla, saca la imagen escalada
       setTimeout(() => {
         if (!isPlaying && video.readyState < 3 && config.fallbackImg) {
           videoElementRef.current = null;
-          loadStaticImageDirect(config.fallbackImg, config.name + " (Respaldo)");
+          loadBulletproofImage(config.fallbackImg, config.name + " (Respaldo)");
         }
-      }, 2500);
+      }, 3000);
 
     } else {
-      loadStaticImageDirect(config.path, config.name);
+      // Usamos el redimensionador para TODAS las imágenes generadas
+      loadBulletproofImage(config.path, config.name);
     }
   }, [activeEcosystem]);
 
@@ -287,15 +298,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             {currentConfig.category === 'DIAGNOSTIC' ? (
               <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-500/50 text-cyan-300 text-[10px] font-black uppercase flex items-center gap-1"><Stethoscope className="w-3 h-3 text-cyan-400" /> Diagnóstico</span>
             ) : (
-              <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-400" /> Tratamiento / Santuario</span>
+              <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-400" /> Tratamiento</span>
             )}
           </div>
           <h1 className="text-slate-200 font-black text-xs uppercase tracking-wider">{currentConfig.name}</h1>
           <p className="text-[11px] text-slate-400">Paciente: <strong className="text-cyan-300">{activePatientId}</strong></p>
-          <p className="text-[10px] text-slate-300 font-mono flex items-center justify-center gap-1">
+          <p className="text-[10px] font-mono flex items-center justify-center gap-1">
             {mediaType === 'video' && <Video className="w-3 h-3 text-purple-400" />}
             {mediaType === 'image' && <ImageIcon className="w-3 h-3 text-amber-400" />}
-            {statusMessage}
+            {mediaType === 'error' ? <span className="text-rose-400 font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {statusMessage}</span> : <span className="text-slate-300">{statusMessage}</span>}
           </p>
           <div className={`mt-2 px-3 py-1 rounded-full border text-[10px] font-bold inline-flex items-center gap-1.5 ${isConnected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400' : 'bg-rose-950/80 border-rose-500 text-rose-400'}`}>
             {isConnected ? <Wifi className="w-3 h-3 animate-pulse" /> : <RefreshCw className="w-3 h-3 animate-spin" />}
