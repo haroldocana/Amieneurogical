@@ -16,7 +16,6 @@ export const VrPatientExperience: React.FC<Props> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  // Extraer parámetros de la URL
   const getUrlParam = (paramName: string): string | null => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
@@ -26,14 +25,12 @@ export const VrPatientExperience: React.FC<Props> = ({
   const activePatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
   const initialModule = propsModuleId || getUrlParam('modulo') || getUrlParam('moduleId') || 'NARCISSISM_CLUSTER_B';
 
-  // Estados de la Aplicación
   const [isConnected, setIsConnected] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState(initialModule);
   const [isVideo, setIsVideo] = useState(true);
   const [customImageUrl, setCustomImageUrl] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState('Despertando Servidor Render...');
+  const [statusMessage, setStatusMessage] = useState('Verificando Red...');
 
-  // Referencias Three.js & WebSocket
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
@@ -43,24 +40,14 @@ export const VrPatientExperience: React.FC<Props> = ({
   const wsRef = useRef<WebSocket | null>(null);
 
   // =====================================================================
-  // 1. CONEXIÓN WEBSOCKET Y DESPERTADOR AUTOMÁTICO DE RENDER
+  // 1. WEBSOCKET (CON REINTENTO SILENCIOSO)
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
 
-    const wakeUpAndConnect = async () => {
-      setStatusMessage('Despertando Servidor Render...');
-      
-      // Petición HTTP para despertar el servidor si estaba en suspensión
-      try {
-        await fetch('https://amieneurogical.onrender.com/health', { mode: 'cors' });
-      } catch (e) {
-        console.warn('Conectando a backend Render...');
-      }
-
-      if (!isMounted) return;
-
+    const connect = () => {
+      // Intenta conectar al backend principal
       const wsUrl = 'wss://amieneurogical.onrender.com';
       try {
         const ws = new WebSocket(wsUrl);
@@ -70,11 +57,7 @@ export const VrPatientExperience: React.FC<Props> = ({
           if (!isMounted) return;
           setIsConnected(true);
           setStatusMessage('🟢 Sincronizado con Consola');
-          ws.send(JSON.stringify({ 
-            type: 'HANDSHAKE', 
-            role: 'receiver', 
-            patientId: activePatientId 
-          }));
+          ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
         };
 
         ws.onmessage = (event) => {
@@ -93,11 +76,9 @@ export const VrPatientExperience: React.FC<Props> = ({
             } else if (targetEnv) {
               setCustomImageUrl(null);
               setActiveEcosystem(targetEnv);
-              
               const isVid = data.isVideo !== undefined 
                 ? !!data.isVideo 
                 : (targetEnv.toUpperCase().includes('NARCISS') || targetEnv.toUpperCase().includes('CLUSTER') || targetEnv.toUpperCase().includes('FORENSI'));
-              
               setIsVideo(isVid);
             }
 
@@ -111,26 +92,20 @@ export const VrPatientExperience: React.FC<Props> = ({
           }
         };
 
-        ws.onerror = () => {
-          if (!isMounted) return;
-          setIsConnected(false);
-          setStatusMessage('Reintentando red...');
-        };
-
+        ws.onerror = () => setIsConnected(false);
         ws.onclose = () => {
           if (!isMounted) return;
           setIsConnected(false);
           setStatusMessage('Buscando Red WSS...');
-          reconnectTimer = setTimeout(wakeUpAndConnect, 3000);
+          reconnectTimer = setTimeout(connect, 4000);
         };
       } catch (e) {
-        console.warn('Error iniciando WebSocket:', e);
+        console.warn('Error WebSocket:', e);
       }
     };
 
-    wakeUpAndConnect();
+    connect();
 
-    // Emisión continua de telemetría biométrica en vivo hacia la Chromebook
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
@@ -153,7 +128,7 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, [activePatientId, activeEcosystem]);
 
   // =====================================================================
-  // 2. ESCENA THREE.JS CON ILUMINACIÓN Y ELEMENTOS PERMANENTES
+  // 2. MOTOR THREE.JS Y RETÍCULO (CON PROTECCIÓN GPU)
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -163,15 +138,10 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0x020617);
+    scene.background = new THREE.Color(0x020617); // Fondo siempre definido para evitar crash
 
-    // Iluminación 3D permanente
     const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
     scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
-    dirLight.position.set(0, 10, 5);
-    scene.add(dirLight);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     camera.position.set(0, 1.6, 0);
@@ -184,33 +154,34 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Rejilla 3D de Suelo
     const gridHelper = new THREE.GridHelper(80, 80, 0x38bdf8, 0x1e293b);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Esfera 360 Inmersiva
+    // Entorno 360 Inmersivo (Inicia en azul seguro)
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
-    const envMat = new THREE.MeshBasicMaterial({ color: 0x0369a1, side: THREE.BackSide });
+    const envMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.BackSide });
     const envMesh = new THREE.Mesh(envGeo, envMat);
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // Retículo / Anillo Visual 3D
+    // Anillo Visual 3D
     const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthTest: false });
     const cursor = new THREE.Mesh(ringGeo, ringMat);
     scene.add(cursor);
     cursorRef.current = cursor;
 
-    // DESBLOQUEO DE AUTOPLAY AL ENTRAR A WEBXR
-    renderer.xr.addEventListener('sessionstart', () => {
-      if (videoElementRef.current) {
-        videoElementRef.current.play().catch(e => console.warn('Play en XR:', e));
+    // Eventos universales para forzar reproducción de video sin bloqueos
+    const forceVideoPlay = () => {
+      if (videoElementRef.current && videoElementRef.current.paused) {
+        videoElementRef.current.play().catch(() => {});
       }
-    });
+    };
+    renderer.xr.addEventListener('sessionstart', forceVideoPlay);
+    window.addEventListener('click', forceVideoPlay);
+    window.addEventListener('pointerdown', forceVideoPlay);
 
-    // Botón WebXR
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
@@ -227,21 +198,32 @@ export const VrPatientExperience: React.FC<Props> = ({
       container.appendChild(vrBtn);
     } catch (e) {}
 
-    // Bucle de Animación y Posicionamiento del Retículo
+    // BUCLE PRINCIPAL PROTEGIDO
     renderer.setAnimationLoop(() => {
+      // 1. Lógica del Retículo
       if (cursorRef.current && cameraRef.current) {
         const pCam = renderer.xr.isPresenting ? renderer.xr.getCamera() : cameraRef.current;
         const dir = new THREE.Vector3();
         pCam.getWorldDirection(dir);
         cursorRef.current.position.copy(pCam.position).add(dir.multiplyScalar(1.5));
-        
         const scale = 1 + Math.sin(Date.now() * 0.005) * 0.15;
         cursorRef.current.scale.set(scale, scale, 1);
         cursorRef.current.lookAt(pCam.position);
       }
 
-      if (videoTextureRef.current) {
-        videoTextureRef.current.needsUpdate = true;
+      // 2. Inyección Segura de VideoTexture (EVITA PANTALLA NEGRA)
+      if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
+        const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
+        // Solo asigna la textura si la GPU tiene suficientes datos del video (HAVE_FUTURE_DATA)
+        if (videoElementRef.current.readyState >= 3) {
+          if (mat.map !== videoTextureRef.current) {
+            mat.map = videoTextureRef.current;
+            mat.color.setHex(0xffffff);
+            mat.needsUpdate = true;
+            setStatusMessage('Video Estímulo en Reproducción');
+          }
+          videoTextureRef.current.needsUpdate = true;
+        }
       }
 
       renderer.render(scene, camera);
@@ -257,6 +239,9 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      renderer.xr.removeEventListener('sessionstart', forceVideoPlay);
+      window.removeEventListener('click', forceVideoPlay);
+      window.removeEventListener('pointerdown', forceVideoPlay);
       renderer.setAnimationLoop(null);
       envGeo.dispose(); envMat.dispose(); ringGeo.dispose(); ringMat.dispose(); renderer.dispose();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
@@ -265,12 +250,13 @@ export const VrPatientExperience: React.FC<Props> = ({
   }, []);
 
   // =====================================================================
-  // 3. CARGA SEGURA DE RECURSOS (VIDEOS MP4 vs IMÁGENES JPG)
+  // 3. CARGA DE ARCHIVOS MULTIMEDIA (VIDEOS E IMÁGENES)
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
+    // Limpiar anterior
     if (videoElementRef.current) {
       videoElementRef.current.pause();
       videoElementRef.current.src = '';
@@ -282,8 +268,9 @@ export const VrPatientExperience: React.FC<Props> = ({
       videoTextureRef.current = null;
     }
 
+    // Fondo azul temporal seguro
     mat.map = null;
-    mat.color.setHex(0x0284c7); // Color azul cyan seguro de fondo
+    mat.color.setHex(0x0284c7); 
     mat.needsUpdate = true;
 
     const mapEcosystemKey = (rawName: string): string => {
@@ -304,34 +291,27 @@ export const VrPatientExperience: React.FC<Props> = ({
       video.loop = true;
       video.muted = true;
       video.playsInline = true;
+      video.setAttribute('webkit-playsinline', 'webkit-playsinline'); // Vital para Android WebXR
       videoElementRef.current = video;
 
-      video.addEventListener('canplay', () => {
-        const texture = new THREE.VideoTexture(video);
-        if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
-        videoTextureRef.current = texture;
-        
-        mat.map = texture;
-        mat.color.setHex(0xffffff);
-        mat.needsUpdate = true;
-        setStatusMessage('Video 360° Activo');
-
-        video.play().catch(e => console.warn('Listo para reproducir en VR:', e));
-      }, { once: true });
+      const texture = new THREE.VideoTexture(video);
+      if ('colorSpace' in texture) (texture as any).colorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+      videoTextureRef.current = texture;
 
       video.addEventListener('error', () => {
-        console.warn(`Video /video/${safeKey}.mp4 no encontrado. Reemplazando por JPG...`);
+        console.warn(`Video /video/${safeKey}.mp4 falló. Cambiando a imagen JPG.`);
         const loader = new THREE.TextureLoader();
         loader.setCrossOrigin('anonymous');
         loader.load(
           `/ecosystems/${safeKey}.jpg`,
-          (tex) => { mat.map = tex; mat.color.setHex(0xffffff); mat.needsUpdate = true; },
-          undefined,
-          () => { mat.map = null; mat.color.setHex(0x0284c7); mat.needsUpdate = true; }
+          (tex) => { mat.map = tex; mat.color.setHex(0xffffff); mat.needsUpdate = true; }
         );
       });
 
+      // NO asiganamos la textura aquí, se asigna en el AnimationLoop
       video.load();
+      setStatusMessage('Decodificando Video para VR...');
+
     } else {
       const loader = new THREE.TextureLoader();
       loader.setCrossOrigin('anonymous');
@@ -364,7 +344,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         </button>
       )}
 
-      {/* Panel Flotante de Estado */}
+      {/* Interfaz Flotante de Estado */}
       <div className="absolute z-10 bottom-24 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-1 bg-slate-950/90 p-4 rounded-2xl border border-slate-800/90 shadow-2xl">
           <h1 className="text-slate-200 font-black text-sm uppercase flex items-center justify-center gap-2">
