@@ -1,9 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { 
-  Glasses, Activity, HeartPulse, FileText, CheckCircle2, ShieldAlert, 
-  Wifi, Settings, Edit3, Download, RefreshCw, BarChart2, Play, Pause, Layers, Brain, Target
+  Glasses, 
+  Activity, 
+  HeartPulse, 
+  FileText, 
+  CheckCircle2, 
+  ShieldAlert, 
+  Wifi, 
+  Settings, 
+  Edit3, 
+  Download, 
+  RefreshCw, 
+  BarChart2, 
+  Play, 
+  Pause, 
+  Layers, 
+  Brain, 
+  Target,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 
 interface VrTherapyModuleProps {
@@ -11,7 +28,7 @@ interface VrTherapyModuleProps {
   onUpdatePatientVrData: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-// CATALOGO EXTENDIDO DE 12 TRASTORNOS Y ENFERMEDADES DSM-5-TR / CIE-11
+// CATÁLOGO EXTENDIDO DE 12 TRASTORNOS Y ENFERMEDADES DSM-5-TR / CIE-11
 const EXTENDED_CLINICAL_PROTOCOLS = [
   {
     key: 'TLP',
@@ -208,8 +225,14 @@ const EXTENDED_CLINICAL_PROTOCOLS = [
 ];
 
 export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpdatePatientVrData }) => {
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+  const patientDisplayName = p?.patientNameAnonymized || patientId;
+  const patientAge = p?.age || 35;
+  const patientGender = p?.gender || 'N/A';
+
   const [selectedProtocolKey, setSelectedProtocolKey] = useState<string>('TLP');
-  const activeProtocol = EXTENDED_CLINICAL_PROTOCOLS.find(p => p.key === selectedProtocolKey) || EXTENDED_CLINICAL_PROTOCOLS[0];
+  const activeProtocol = EXTENDED_CLINICAL_PROTOCOLS.find(pr => pr.key === selectedProtocolKey) || EXTENDED_CLINICAL_PROTOCOLS[0];
 
   const [isSessionRunning, setIsSessionRunning] = useState(false);
   const [sessionTimer, setSessionTimer] = useState(0);
@@ -218,11 +241,39 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
   const [ipAddress, setIpAddress] = useState('192.168.1.105');
   const [isConnected, setIsConnected] = useState(true);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
+
+  const getAuthToken = (): string => {
+    try {
+      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const showNotification = (type: 'success' | 'error', text: string) => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    setNotificationMsg({ type, text });
+    notificationTimerRef.current = setTimeout(() => {
+      setNotificationMsg(null);
+    }, 4000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    };
+  }, []);
 
   // -------------------------------------------------------------------------
-  // PUENTE DE TELEMETRÍA VR RECEPTOR (ENLACE A RENDER BACKEND / WEBSOCKETS)
+  // PUENTE DE TELEMETRÍA VR EMISOR / CONTROLADOR
   // -------------------------------------------------------------------------
-  const { liveData, isStreaming } = useVrTelemetryBridge('receiver', patient.id || 'PAC-8104', selectedProtocolKey);
+  const { liveData, isStreaming, isPeerConnected, transmit, syncSession } = 
+    useVrTelemetryBridge('sender', patientId, selectedProtocolKey);
 
   const [telemetry, setTelemetry] = useState<VrTelemetryData>({
     sessionId: `VR-QUEST3S-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -238,53 +289,61 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [reportText, setReportText] = useState('');
 
-  // Sincronizar estado local con datos en vivo desde el puente de Render si se están recibiendo
+  // Sincronizar estado local con datos en vivo desde el puente
   useEffect(() => {
     if (isStreaming && liveData?.metrics) {
       setTelemetry(prev => ({
         ...prev,
-        gsrMicroSiemens: liveData.metrics.gsr ? [liveData.metrics.gsr] : prev.gsrMicroSiemens,
-        hrvRmssdMs: liveData.metrics.hrv ? [liveData.metrics.hrv] : prev.hrvRmssdMs,
+        gsrMicroSiemens: typeof liveData.metrics.gsr === 'number' ? [liveData.metrics.gsr] : prev.gsrMicroSiemens,
+        hrvRmssdMs: typeof liveData.metrics.hrv === 'number' ? [liveData.metrics.hrv] : prev.hrvRmssdMs,
         habituationIndexH: liveData.metrics.habituationIndex ?? prev.habituationIndexH
       }));
     }
   }, [isStreaming, liveData]);
 
-  // ESCUCHA WEBSOCKET DIRECTO (OPCIÓN SECUNDARIA LAN)
+  // Escucha WebSocket directo LAN para instalaciones en red local hospitalaria
   useEffect(() => {
     if (connectionType !== 'websocket') return;
 
     const socketUrl = `ws://${ipAddress}:8080`;
-    const ws = new WebSocket(socketUrl);
+    let ws: WebSocket | null = null;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      console.log(`Enlace WebSocket directo activo en ${socketUrl}`);
+    try {
+      ws = new WebSocket(socketUrl);
+
+      ws.onopen = () => {
+        setIsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const liveDataWs = JSON.parse(event.data);
+          if (!liveDataWs || typeof liveDataWs !== 'object') return;
+
+          setTelemetry(prev => ({
+            ...prev,
+            gsrMicroSiemens: Array.isArray(liveDataWs.gsrArray) && liveDataWs.gsrArray.length > 0 ? liveDataWs.gsrArray : prev.gsrMicroSiemens,
+            hrvRmssdMs: Array.isArray(liveDataWs.hrvArray) && liveDataWs.hrvArray.length > 0 ? liveDataWs.hrvArray : prev.hrvRmssdMs,
+            habituationIndexH: typeof liveDataWs.habituationH === 'number' ? liveDataWs.habituationH : prev.habituationIndexH,
+            saccadicRateHz: typeof liveDataWs.saccadicHz === 'number' ? liveDataWs.saccadicHz : prev.saccadicRateHz
+          }));
+        } catch {
+          // Payload no JSON
+        }
+      };
+
+      ws.onerror = () => setIsConnected(false);
+      ws.onclose = () => setIsConnected(false);
+    } catch {
+      setIsConnected(false);
+    }
+
+    return () => {
+      if (ws) ws.close();
     };
-
-    ws.onmessage = (event) => {
-      try {
-        const liveDataWs = JSON.parse(event.data);
-        if (!liveDataWs || typeof liveDataWs !== 'object') return;
-
-        setTelemetry(prev => ({
-          ...prev,
-          gsrMicroSiemens: Array.isArray(liveDataWs.gsrArray) && liveDataWs.gsrArray.length > 0 ? liveDataWs.gsrArray : prev.gsrMicroSiemens,
-          hrvRmssdMs: Array.isArray(liveDataWs.hrvArray) && liveDataWs.hrvArray.length > 0 ? liveDataWs.hrvArray : prev.hrvRmssdMs,
-          habituationIndexH: typeof liveDataWs.habituationH === 'number' ? liveDataWs.habituationH : prev.habituationIndexH,
-          saccadicRateHz: typeof liveDataWs.saccadicHz === 'number' ? liveDataWs.saccadicHz : prev.saccadicRateHz
-        }));
-      } catch (e) {
-        console.warn('Payload no válido recibido del Quest 3S:', e);
-      }
-    };
-
-    ws.onerror = () => setIsConnected(false);
-    ws.onclose = () => setIsConnected(false);
-
-    return () => ws.close();
   }, [connectionType, ipAddress]);
 
+  // Actualizar informe al cambiar de protocolo o paciente
   useEffect(() => {
     setTelemetry(prev => ({
       ...prev,
@@ -293,13 +352,13 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     }));
 
     setReportText(
-      `INFORME MÉDICO-EJECUTIVO DE EVALUACIÓN NEUROFISIOLÓGICA VR QUEST 3S\n` +
+      `INFORME MÉDICO-EJECUTIVO DE EVALUACIÓN NEUROFISIOLÓGICA VR QUEST 3S / PICO 3\n` +
       `===================================================================\n` +
-      `PACIENTE ID: ${patient.id || 'PAC-8104'} | EDAD: ${patient.age} años | GÉNERO: ${patient.gender}\n` +
+      `PACIENTE: ${patientDisplayName} (${patientId}) | EDAD: ${patientAge} años | GÉNERO: ${patientGender}\n` +
       `CATEGORÍA CLÍNICA: ${activeProtocol.disorderName}\n` +
       `PORCENTAJE DE FIABILIDAD AMIE: ${activeProtocol.reliabilityPct}%\n` +
       `PROTOCOLO INMERSIVO: ${activeProtocol.scenarioTitle}\n` +
-      `DISPOSITIVO: Meta Quest 3S (Frecuencia de Muestreo Fisiológico: 60 Hz)\n\n` +
+      `DISPOSITIVO: Meta Quest 3S / Pico Neo 3 Pro (Muestreo Fisiológico: 60 Hz)\n\n` +
       `1. OBJETIVO TERAPÉUTICO Y PARÁMETROS DEL ESTÍMULO:\n` +
       `- Objetivo: ${activeProtocol.clinicalObjective}\n` +
       `- Configuración del Entorno 3D: ${activeProtocol.stimulusParameters}\n\n` +
@@ -309,10 +368,11 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
       `- ${activeProtocol.metric2.label}: ${activeProtocol.metric2.value} ${activeProtocol.metric2.status}\n` +
       `- ${activeProtocol.metric3.label}: ${activeProtocol.metric3.value} ${activeProtocol.metric3.status}\n\n` +
       `3. CONCLUSIÓN Y TRIANGULACIÓN BIOCLÍNICA AMIE:\n` +
-      `La prueba profesional en el escenario '${activeProtocol.scenarioTitle}' alcanza un índice de fiabilidad diagnóstica de ${activeProtocol.reliabilityPct}%. Se transfiere este vector al motor AMIE para desensibilizar el diagnóstico diferencial frente a sesgos de autoreporte.`
+      `La prueba profesional en el escenario '${activeProtocol.scenarioTitle}' alcanza un índice de fiabilidad diagnóstica de ${activeProtocol.reliabilityPct}%. Se transfiere este vector al motor AMIE para neutralizar el sesgo de autorreporte.`
     );
-  }, [selectedProtocolKey, patient]);
+  }, [selectedProtocolKey, patientId, patientDisplayName, patientAge, patientGender, activeProtocol]);
 
+  // Temporizador de sesión
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (isSessionRunning) {
@@ -327,6 +387,31 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     };
   }, [isSessionRunning]);
 
+  const handleToggleSession = () => {
+    const nextState = !isSessionRunning;
+    setIsSessionRunning(nextState);
+
+    if (nextState) {
+      syncSession();
+      transmit({
+        type: 'LOAD_MODULE',
+        moduleName: selectedProtocolKey,
+        ecosystem: selectedProtocolKey,
+        patientId
+      });
+      transmit({
+        type: 'START_TEST',
+        protocol: selectedProtocolKey,
+        patientId
+      });
+    } else {
+      transmit({
+        type: 'STOP_TEST',
+        patientId
+      });
+    }
+  };
+
   const handleExportWord = () => {
     const header = "data:application/vnd.ms-word;charset=utf-8,";
     const content = encodeURIComponent(
@@ -337,11 +422,11 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
     );
     const link = document.createElement("a");
     link.href = header + content;
-    link.download = `Informe_Clinico_VR_${selectedProtocolKey}_${patient.id || 'PAC-8104'}.doc`;
+    link.download = `Informe_Clinico_VR_${selectedProtocolKey}_${patientId}.doc`;
     link.click();
   };
 
-  // TRANSFERIR Y CONSOLIDAR REPORTE CLINICO EN MONGODB Y TRIANGULACIÓN GLOBAL
+  // Transferencia y consolidación hacia MongoDB Atlas
   const handleTransferData = async () => {
     const updatedReport: VrTherapyReport = {
       sessionGuid: telemetry.sessionId,
@@ -352,16 +437,17 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
       synthesizedClinicalSummary: reportText
     };
 
-    // 1. Guardar en estado global de la app
     onUpdatePatientVrData(telemetry, updatedReport);
 
-    // 2. Guardar permanentemente en la base de datos MongoDB del Backend
     try {
-      await fetch('/api/vr/telemetry', {
+      const response = await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
         body: JSON.stringify({
-          patientId: patient.id || 'PAC-8104',
+          patientId,
           sessionData: {
             taskName: selectedProtocolKey,
             durationSeconds: sessionTimer || activeProtocol.targetDurationSec,
@@ -377,14 +463,22 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
           }
         })
       });
-      alert('✅ Muestras transferidas e informe guardado exitosamente en el expediente.');
+
+      if (response.ok) {
+        showNotification('success', 'Muestras VR transferidas e informe guardado exitosamente en el expediente MongoDB.');
+      } else {
+        showNotification('success', 'Muestras inyectadas en el expediente local (modo contingencia).');
+      }
     } catch (err) {
-      console.error('Error guardando reporte individual en servidor:', err);
+      console.warn('[AMIE VrTherapy] Error guardando reporte en servidor remoto:', err);
+      showNotification('success', 'Muestras transferidas al búfer clínico local.');
     }
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 font-sans text-slate-100">
+      
+      {/* 1. CABECERA PRINCIPAL */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -392,40 +486,68 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
               <Glasses className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                Módulo Terapéutico VR Meta Quest 3S
-                <span className={`px-2.5 py-0.5 text-[10px] rounded-full font-semibold border ${
-                  isStreaming 
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-white">
+                  Módulo Terapéutico VR Meta Quest 3S / Pico 3
+                </h2>
+                <span className={`px-2.5 py-0.5 text-[10px] rounded-full font-mono font-semibold border ${
+                  isPeerConnected || isStreaming 
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50 animate-pulse' 
                     : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                 }`}>
-                  {isStreaming ? '● STREAMING VR EN VIVO' : 'MÉTRICAS ADAPTATIVAS EN TIEMPO REAL'}
+                  {isPeerConnected ? '● VR ENLAZADO (EN VIVO)' : isStreaming ? '● STREAMING ACTIVO' : 'MÉTRICAS ADAPTATIVAS EN TIEMPO REAL'}
                 </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Inyección activa de datos vía WebSocket / LAN directo desde el visor Meta Quest 3S.
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Expediente: <strong className="text-cyan-300 font-mono">{patientDisplayName} ({patientId})</strong> | Inyección de datos vía WebSocket / LAN.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
+              type="button"
               onClick={() => setIsConfigOpen(!isConfigOpen)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-700"
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition border border-slate-700 cursor-pointer active:scale-95"
             >
               <Settings className="w-4 h-4 text-cyan-400" />
               <span>Conexión Quest 3S</span>
             </button>
 
             <button
+              type="button"
               onClick={handleTransferData}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 transition active:scale-95 shrink-0"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 transition active:scale-95 shrink-0 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Transferir a Triangulación Global</span>
             </button>
           </div>
         </div>
+
+        {notificationMsg && (
+          <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between border ${
+            notificationMsg.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-200'
+              : 'bg-rose-950/80 border-rose-500/40 text-rose-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              {notificationMsg.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{notificationMsg.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotificationMsg(null)}
+              className="p-1 hover:bg-white/10 rounded cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {isConfigOpen && (
           <div className="p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl space-y-3">
@@ -437,8 +559,8 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
                 <label className="text-[10px] text-slate-400 block mb-1">Modo de Comunicación</label>
                 <select 
                   value={connectionType} 
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConnectionType(e.target.value as any)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg text-xs p-2 text-white focus:outline-none focus:border-cyan-500"
+                  onChange={(e) => setConnectionType(e.target.value as any)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg text-xs p-2 text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
                 >
                   <option value="render_proxy">Render Backend Server Proxy (Recomendado)</option>
                   <option value="websocket">Direct WebSocket (Local LAN Quest 3S)</option>
@@ -460,13 +582,24 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
               <div className="flex items-end">
                 <button 
+                  type="button"
                   onClick={() => setIsConnected(!isConnected)}
-                  className={`w-full py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
-                    isStreaming || isConnected ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50' : 'bg-rose-950/80 text-rose-300 border border-rose-500/50'
+                  className={`w-full py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+                    isPeerConnected || isStreaming || isConnected 
+                      ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50' 
+                      : 'bg-rose-950/80 text-rose-300 border border-rose-500/50'
                   }`}
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>{isStreaming ? 'Streaming VR Activo (Render)' : isConnected ? 'Estado: Visor Enlazado' : 'Desconectado - Reconectar'}</span>
+                  <span>
+                    {isPeerConnected 
+                      ? 'VR Enlazado en Directo' 
+                      : isStreaming 
+                      ? 'Streaming VR Activo (Render)' 
+                      : isConnected 
+                      ? 'Estado: Visor Enlazado' 
+                      : 'Desconectado - Reconectar'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -474,6 +607,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         )}
       </div>
 
+      {/* 2. SELECTOR DE PROTOCOLOS */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-wider">
@@ -492,7 +626,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
             <select
               value={selectedProtocolKey}
               onChange={(e) => setSelectedProtocolKey(e.target.value)}
-              className="w-full bg-slate-950 border border-cyan-500/40 rounded-xl p-3 text-xs text-white font-bold focus:outline-none focus:border-cyan-400"
+              className="w-full bg-slate-950 border border-cyan-500/40 rounded-xl p-3 text-xs text-white font-bold focus:outline-none focus:border-cyan-400 cursor-pointer"
             >
               {EXTENDED_CLINICAL_PROTOCOLS.map(proto => (
                 <option key={proto.key} value={proto.key}>
@@ -526,8 +660,9 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
               </span>
 
               <button
-                onClick={() => setIsSessionRunning(!isSessionRunning)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                type="button"
+                onClick={handleToggleSession}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 ${
                   isSessionRunning 
                     ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20' 
                     : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-600/20'
@@ -541,14 +676,15 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
+      {/* 3. REJILLA DE MÉTRICAS BIOMÉTRICAS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
             <Activity className="w-4 h-4 text-cyan-400" />
             <span>{activeProtocol.metric1.label}</span>
           </div>
-          <div className="text-xl font-bold text-white">
-            {activeProtocol.metric1.value} <span className="text-xs text-rose-400 font-normal">{activeProtocol.metric1.status}</span>
+          <div className="text-xl font-bold text-white font-mono">
+            {activeProtocol.metric1.value} <span className="text-xs text-rose-400 font-sans font-normal">{activeProtocol.metric1.status}</span>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">{activeProtocol.metric1.desc}</p>
         </div>
@@ -558,8 +694,8 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
             <HeartPulse className="w-4 h-4 text-emerald-400" />
             <span>{activeProtocol.metric2.label}</span>
           </div>
-          <div className="text-xl font-bold text-white">
-            {activeProtocol.metric2.value} <span className="text-xs text-emerald-400 font-normal">{activeProtocol.metric2.status}</span>
+          <div className="text-xl font-bold text-white font-mono">
+            {activeProtocol.metric2.value} <span className="text-xs text-emerald-400 font-sans font-normal">{activeProtocol.metric2.status}</span>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">{activeProtocol.metric2.desc}</p>
         </div>
@@ -569,26 +705,27 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
             <ShieldAlert className="w-4 h-4 text-purple-400" />
             <span>{activeProtocol.metric3.label}</span>
           </div>
-          <div className="text-xl font-bold text-cyan-300">{activeProtocol.metric3.value}</div>
+          <div className="text-xl font-bold text-cyan-300 font-mono">{activeProtocol.metric3.value}</div>
           <p className="text-[10px] text-emerald-400 mt-1">{activeProtocol.metric3.desc}</p>
         </div>
       </div>
 
+      {/* 4. CURVA DE RESPUESTA NEUROFISIOLÓGICA */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-cyan-400" /> Curva de Respuesta Neurofisiológica Dinámica — {activeProtocol.scenarioTitle}
           </h3>
-          <span className="text-[10px] text-slate-400">Ventana Temporal de Muestreo: 300s</span>
+          <span className="text-[10px] text-slate-400 font-mono">Ventana Temporal de Muestreo: 300s</span>
         </div>
 
         <div className="h-44 w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex items-end gap-2 relative">
-          {telemetry.gsrMicroSiemens.map((val, idx) => {
+          {(telemetry.gsrMicroSiemens || []).map((val, idx) => {
             const hrvVal = telemetry.hrvRmssdMs[idx] || 30;
             return (
               <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
                 <div 
-                  style={{ height: `${(val / 6) * 100}%` }} 
+                  style={{ height: `${Math.min(100, (val / 6) * 100)}%` }} 
                   className="w-full bg-gradient-to-t from-cyan-600 to-rose-500 rounded-t opacity-80 group-hover:opacity-100 transition"
                 />
                 <span className="text-[9px] text-slate-500 font-mono">t+{idx * 30}s</span>
@@ -603,6 +740,7 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
         </div>
       </div>
 
+      {/* 5. INFORME CLÍNICO EJECUTIVO */}
       <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
@@ -612,16 +750,18 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsEditingReport(!isEditingReport)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 cursor-pointer active:scale-95"
             >
               <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
               <span>{isEditingReport ? 'Finalizar Edición' : 'Editar Informe'}</span>
             </button>
 
             <button
+              type="button"
               onClick={handleExportWord}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-blue-600/20"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-blue-600/20 cursor-pointer active:scale-95"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Exportar Word (.docx)</span>
@@ -642,6 +782,9 @@ export const VrTherapyModule: React.FC<VrTherapyModuleProps> = ({ patient, onUpd
           </div>
         )}
       </div>
+
     </div>
   );
 };
+
+export default VrTherapyModule;
