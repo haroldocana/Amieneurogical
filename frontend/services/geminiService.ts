@@ -6,6 +6,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
 
+// Modelo por defecto: Gemini 3.8 Flash
+const GEMINI_MODEL_ID = 
+  (import.meta as any).env?.VITE_GEMINI_MODEL || 
+  'gemini-3.8-flash';
+
 // ============================================================================
 // 1. EXPEDIENTE BASE SEGURO (FALLBACK CLÍNICO PRECALIBRADO)
 // ============================================================================
@@ -84,12 +89,11 @@ function getGeminiApiKey(): string {
 }
 
 // ============================================================================
-// 3. ANÁLISIS MULTIAXIAL AMIE (GEMINI 2.5 / 3.8 FLASH & FALLBACK ALGORÍTMICO)
+// 3. ANÁLISIS MULTIAXIAL AMIE (GEMINI 3.8 FLASH & MOTOR DE CONTINGENCIA)
 // ============================================================================
 export async function runAmieClinicalAnalysis(patient: PatientRecord): Promise<AmieClinicalAnalysis> {
   const apiKey = getGeminiApiKey();
 
-  // Serialización clínica y estructurada del expediente
   const patientId = patient?.id || (patient as any)?.patientId || 'PAC-8104';
   const age = patient?.age || 45;
   const gender = patient?.gender || 'M';
@@ -102,7 +106,6 @@ export async function runAmieClinicalAnalysis(patient: PatientRecord): Promise<A
 
   const sessions = (patient as any)?.clinicalNotes || (patient as any)?.sessions || [];
   
-  // 🟢 Línea 188 corregida (sin caracteres de escape de LaTeX):
   const mappedNotes = sessions
     .map((s: any) => `Sesión ${s.sessionNumber || ''} (${s.date || ''}): ${s.rawNotes || s.notes || ''}`)
     .filter(Boolean);
@@ -111,7 +114,7 @@ export async function runAmieClinicalAnalysis(patient: PatientRecord): Promise<A
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL_ID,
         generationConfig: {
           responseMimeType: 'application/json',
           temperature: 0.2
@@ -270,7 +273,6 @@ export async function syncWithClinicalApp(
     console.warn('[AMIE Sync] Operando en modo local/desconectado:', err.message);
   }
 
-  // Fallback con paciente seguro si el servidor no responde
   return {
     patient: {
       ...SAFE_DEFAULT_PATIENT,
@@ -294,10 +296,10 @@ export async function askAmieCopilot(
   if (apiKey) {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL_ID });
 
       const prompt = `
-Eres AMIE Clinical Copilot, un asistente médico psiquiátrico de alta precisión.
+Eres AMIE Clinical Copilot, un asistente médico psiquiátrico de alta precisión impulsado por Gemini 3.8 Flash.
 Responde a la consulta del profesional de manera sintética, clínica y basada en evidencia.
 
 CONTEXTO DEL PACIENTE:
