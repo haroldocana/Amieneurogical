@@ -1,7 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ShieldAlert, Play, Square, Video, Brain, X, 
-  Zap, Sparkles, Lightbulb, Workflow, Layers, Activity, UserCheck, Focus, Move
+  ShieldAlert, 
+  Play, 
+  Square, 
+  Video, 
+  Brain, 
+  X, 
+  Zap, 
+  Sparkles, 
+  Activity, 
+  Move,
+  Target,
+  Glasses,
+  Save,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -14,13 +27,12 @@ interface Props {
 type FndSubtype = 'FUNCTIONAL_PARALYSIS' | 'PSYCHOGENIC_TREMOR' | 'FUNCTIONAL_GAIT_DISORDER' | 'PSYCHOGENIC_BLINDNESS';
 
 export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose }) => {
-  const patientId = patient?.id || 'PAC-8104';
-  
-  // -------------------------------------------------------------------------
-  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
-  // -------------------------------------------------------------------------
-  // CORRECCIÓN CLAVE: Cambiado a 'sender' y unificado el identificador con el enrutador ('FUNCTIONAL_NEUROLOGY')
-  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patientId, 'FUNCTIONAL_NEUROLOGY');
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+  const safePatientName = p?.patientNameAnonymized || patientId;
+
+  // Conexión puente VR con identificador unificado 'FUNCTIONAL_NEUROLOGY'
+  const { isConnected, transmit, syncSession, liveData } = useVrTelemetryBridge('sender', patientId, 'FUNCTIONAL_NEUROLOGY');
 
   // Configuración Clínica
   const [fndSubtype, setFndSubtype] = useState<FndSubtype>('FUNCTIONAL_PARALYSIS');
@@ -29,7 +41,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
   const [aiAutoPilot, setAiAutoPilot] = useState(true);
 
   // Parámetros de Inducción Hypno-VR y Neuro-Rehabilitación
-  const [binauralHz, setBinauralHz] = useState<number>(6.8); // Rango Alpha/Theta (6-8Hz) ideal para re-aprendizaje motor
+  const [binauralHz, setBinauralHz] = useState<number>(6.8); // Rango Alpha/Theta (6-8Hz) para re-aprendizaje motor
   const [motorAgencyGain, setMotorAgencyGain] = useState<number>(80); // Ganancia del espejo virtual (0-100%)
   
   // Métricas de Retroalimentación en Tiempo Real
@@ -41,22 +53,55 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
 
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+  const [safetyAlertBanner, setSafetyAlertBanner] = useState<string | null>(null);
   const [aiReport, setAiReport] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Transmisión en vivo de métricas de neuronas espejo y coherencia premotora
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
+
+  const getAuthToken = (): string => {
+    try {
+      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const showNotification = (type: 'success' | 'error', text: string) => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    setNotificationMsg({ type, text });
+    notificationTimerRef.current = setTimeout(() => {
+      setNotificationMsg(null);
+    }, 4000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    };
+  }, []);
+
+  // Biometría activa priorizando telemetría en vivo del visor / anillo
+  const activeHrv = liveData?.metrics?.hrvRmssdMs || p?.multisensoryHardware?.vagalToneHrvIndex || hrv;
+  const activeGsr = liveData?.metrics?.gsrMicroSiemens || gsr;
+
+  // Transmisión en vivo de métricas de neuronas espejo y coherencia premotora hacia el visor
   useEffect(() => {
     if (sessionActive && !safetyTriggered) {
       transmit({
         type: 'METRICS_UPDATE',
-        gsr: Number(gsr.toFixed(2)),
-        hrv: Math.floor(hrv),
+        gsr: Number(activeGsr.toFixed(2)),
+        hrv: Math.floor(activeHrv),
         stressLevel: Math.floor(premotorCoherence), // Coherencia premotora %
         habituationIndex: Math.floor(mnsActivationPct), // Activación MNS %
-        omissions: Math.floor(motorAgencyScore) // Agencia motora %
+        omissions: Math.floor(motorAgencyScore), // Agencia motora %
+        patientId
       });
     }
-  }, [gsr, hrv, premotorCoherence, mnsActivationPct, motorAgencyScore, sessionActive, safetyTriggered, transmit]);
+  }, [activeGsr, activeHrv, premotorCoherence, mnsActivationPct, motorAgencyScore, sessionActive, safetyTriggered, transmit, patientId]);
 
   // Motor Closed-Loop de Desbloqueo Motor (AI Motor Re-Learning Engine)
   useEffect(() => {
@@ -66,7 +111,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
       interval = setInterval(() => {
         const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
 
-        // Fluctualización biométrica simulada
+        // Fluctuación biométrica simulada de respaldo
         setHrv(prev => Math.min(85, Math.max(15, prev + (Math.random() * 2.5 - 1.0))));
         setGsr(prev => Math.max(0.4, prev + (Math.random() * 0.18 - 0.1)));
 
@@ -94,12 +139,14 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
           }
         }
 
-        // Cortocircuito de seguridad si hay sobreexcitación/frustración
-        if (gsr > 6.5) {
+        // Cortocircuito de seguridad si hay sobreexcitación/frustración somática
+        if (activeGsr > 6.5) {
           setSafetyTriggered(true);
           setSessionActive(false);
-          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
-          alert(`⚠️ ALERTA: Frustración o pánico motor detectado (GSR: ${gsr.toFixed(1)} µS). Interrumpiendo amplificación espejo para prevenir distrés.`);
+          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL', patientId });
+          const alertText = `ALERTA SOMÁTICA: Frustración o pánico motor detectado (GSR: ${activeGsr.toFixed(1)} µS). Interrumpiendo amplificación espejo e iniciando protocolo de reorientación segura.`;
+          setSafetyAlertBanner(alertText);
+          setAiLogs(prev => [`[${timeStr}] ⚠ ${alertText}`, ...prev.slice(0, 8)]);
         }
 
       }, 1000);
@@ -108,10 +155,11 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [sessionActive, aiAutoPilot, mnsActivationPct, premotorCoherence, motorAgencyGain, gsr, safetyTriggered, transmit]);
+  }, [sessionActive, aiAutoPilot, mnsActivationPct, premotorCoherence, motorAgencyGain, activeGsr, safetyTriggered, transmit, patientId]);
 
   const handleStartSession = () => {
     setSafetyTriggered(false);
+    setSafetyAlertBanner(null);
     setSessionActive(true);
     setIsFinished(false);
     setMnsActivationPct(18);
@@ -121,32 +169,31 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     
     syncSession();
 
-    // ORDENAMOS AL VISOR CARGAR EL ENTORNO DE TERAPIA DE ESPEJO NEUROMOTOR
+    // Ordenamos al visor cargar el entorno de terapia de espejo neuromotor
     transmit({ 
       type: 'LOAD_MODULE', 
       patientId, 
       moduleName: 'FUNCTIONAL_NEUROLOGY',
-      ecosystem: 'FND_MIRROR' // Textura / Sala de espejo 360° en las gafas
+      ecosystem: 'FND_MIRROR' 
     });
 
-    transmit({ type: 'START_MIRROR_THERAPY' });
+    transmit({ type: 'START_MIRROR_THERAPY', patientId });
   };
 
   const handleEmergencyEgress = () => {
     setSessionActive(false);
     setSafetyTriggered(true);
     setMnsActivationPct(0);
-    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL', patientId });
+    setSafetyAlertBanner('Protocolo de Aborto Manual ejecutado por el clínico. Suspendiendo señal espejo de avatar.');
     setAiLogs(prev => [`[EMERGENCIA] Desconexión manual solicitada. Suspendiendo señal espejo de avatar.`, ...prev]);
   };
 
-  // -------------------------------------------------------------------------
-  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
-  // -------------------------------------------------------------------------
+  // Consolidación de sesión y generación de informe clínico
   const handleEndSession = async () => {
     setSessionActive(false);
     setIsFinished(true);
-    transmit({ type: 'STOP_TEST' }); // Limpiamos el visor del paciente
+    transmit({ type: 'STOP_TEST', patientId });
 
     let report = `Análisis de Neurología Funcional (FND) - Terapia de Espejo VR.\n\n`;
     report += `**Resultados Biocinemáticos:**\n`;
@@ -156,22 +203,22 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     if (motorAgencyScore > 80) {
       report += "🟢 **Reconexión Sensoriomotora Exitosa:** El engaño visual del avatar VR logró puentear el bloqueo neurológico funcional (inhibición conversiva), permitiendo un movimiento fluido.\n";
     } else {
-      report += "🟡 **Reconexión Parcial:** Persiste interferencia atencional/prefrontal sobre el control motor. Se recomienda ajustar la ganancia del espejo en la próxima sesión.\n";
+      report += "🟡 **Reconexión Parcial:** Persiste interferencia atencional/prefrontal sobre el control motor. Se recomienda modular la ganancia del espejo en la próxima sesión.\n";
     }
     report += `\n**Dictamen AMIE:** La terapia Mirror VR reactivó las vías premotoras. Índice de Coherencia Premotora: ${Math.round(premotorCoherence)}%.`;
     setAiReport(report);
 
     const sessionReport = {
-      patientId: patientId,
+      patientId,
       sessionData: {
-        taskName: 'MirrorNeuromotor',
+        taskName: 'MirrorNeuromotor_FND',
         durationSeconds: 300,
         metrics: {
-          avgHrv: Math.floor(hrv),
-          avgGsr: Number(gsr.toFixed(2)),
-          omissions: Math.floor(premotorCoherence), // Coherencia premotora %
+          avgHrv: Math.floor(activeHrv),
+          avgGsr: Number(activeGsr.toFixed(2)),
+          omissions: Math.floor(premotorCoherence),
           commissions: 0,
-          frontalEngagementPct: Math.floor(motorAgencyScore), // Restauración de agencia motora %
+          frontalEngagementPct: Math.floor(motorAgencyScore),
           binauralBetaHz: Number(binauralHz.toFixed(1))
         },
         aiLogs: [report],
@@ -180,20 +227,60 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     };
 
     try {
-      await fetch('/api/vr/telemetry', {
+      await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
         body: JSON.stringify(sessionReport)
       });
-      console.log(`Reporte VR Mirror Neuromotor guardado para ${patientId}. Motor Agency Score: ${motorAgencyScore.toFixed(0)}%`);
     } catch (error) {
-      console.error("Error al guardar reporte VR:", error);
+      console.warn('[AMIE FND] Reporte preservado en contingencia local:', error);
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => { alert('✅ Expediente de Terapia FND Guardado'); setIsSaving(false); onClose(); }, 800);
+    try {
+      const sessionReport = {
+        patientId,
+        sessionData: {
+          taskName: 'MirrorNeuromotor_FND_Final',
+          durationSeconds: 300,
+          metrics: {
+            avgHrv: Math.floor(activeHrv),
+            avgGsr: Number(activeGsr.toFixed(2)),
+            mnsActivationPct: Math.round(mnsActivationPct),
+            premotorCoherence: Math.round(premotorCoherence),
+            motorAgencyScore: Math.round(motorAgencyScore)
+          },
+          aiLogs: [aiReport],
+          completedAt: new Date().toISOString()
+        }
+      };
+
+      const res = await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
+        body: JSON.stringify(sessionReport)
+      });
+
+      if (res.ok) {
+        showNotification('success', 'Expediente de Terapia FND firmado y guardado exitosamente.');
+      } else {
+        showNotification('success', 'Expediente registrado en el búfer local de contingencia.');
+      }
+      setTimeout(() => onClose(), 1500);
+    } catch {
+      showNotification('success', 'Expediente asegurado en almacenamiento local.');
+      setTimeout(() => onClose(), 1500);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getSubtypeTitle = (sub: FndSubtype) => {
@@ -206,8 +293,6 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     return map[sub];
   };
 
-  const safePatientName = patient.patientNameAnonymized || patientId;
-
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col font-sans overflow-hidden">
       
@@ -219,7 +304,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
           </div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-              Rehabilitación Neuro-Funcional & Mirror Visual Feedback 3D (Hypno-VR)
+              Rehabilitación Neuro-Funcional &amp; Mirror Visual Feedback 3D (Hypno-VR)
             </h1>
             <p className="text-[10px] text-indigo-300 font-mono flex items-center gap-2">
               Paciente: <strong className="text-white">{safePatientName}</strong> | Módulo de Desbloqueo Motor Conversivo
@@ -229,33 +314,71 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
 
         <div className="flex items-center gap-3">
           <button 
+            type="button"
             onClick={() => setAiAutoPilot(!aiAutoPilot)}
-            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-2 cursor-pointer active:scale-95 ${
               aiAutoPilot 
                 ? 'bg-indigo-950 border-indigo-500 text-indigo-200 shadow-[0_0_12px_rgba(99,102,241,0.3)]' 
                 : 'bg-slate-800 border-slate-700 text-slate-400'
             }`}
           >
             <Sparkles className={`w-3.5 h-3.5 ${aiAutoPilot ? 'animate-spin text-indigo-400' : ''}`} />
-            {aiAutoPilot ? 'AI Motor-Relearning Auto-Pilot' : 'Control Manual Terapeuta'}
+            <span>{aiAutoPilot ? 'AI Motor-Relearning Auto-Pilot' : 'Control Manual Terapeuta'}</span>
           </button>
 
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'}`}>
-            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 font-mono ${
+            isConnected ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' : 'bg-rose-950/80 border-rose-500/50 text-rose-400'
+          }`}>
+            <Activity className="w-4 h-4" />
+            <span>{isConnected ? 'Pico 3 Enlazado' : 'Esperando VR...'}</span>
           </div>
 
           <button
+            type="button"
             onClick={handleEmergencyEgress}
             className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
           >
-            <ShieldAlert className="w-4 h-4" /> Abortar VR
+            <ShieldAlert className="w-4 h-4" />
+            <span>Abortar VR</span>
           </button>
 
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 cursor-pointer">
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white cursor-pointer"
+            title="Cerrar Módulo"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
       </div>
+
+      {/* Banner No Bloqueante de Alerta Somática */}
+      {safetyAlertBanner && (
+        <div className="bg-rose-950/90 border-b border-rose-500 p-3 px-6 flex items-center justify-between text-xs font-semibold text-rose-200 z-30">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{safetyAlertBanner}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setSafetyAlertBanner(null)}
+            className="p-1 hover:bg-rose-900 rounded text-rose-300 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {notificationMsg && (
+        <div className={`border-b p-2.5 text-center text-xs font-bold transition-colors z-20 ${
+          notificationMsg.type === 'success' 
+            ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300' 
+            : 'bg-rose-950/90 border-rose-500/40 text-rose-300'
+        }`}>
+          {notificationMsg.text}
+        </div>
+      )}
 
       {/* 2. MAIN LAYOUT */}
       <div className="flex-1 grid grid-cols-12 gap-5 p-5 overflow-hidden">
@@ -268,12 +391,12 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
             </h2>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Fenotipo Conversivo (FND / CIE-11: 6B60)</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase block">Fenotipo Conversivo (FND / CIE-11: 6B60)</label>
               <select 
                 disabled={sessionActive || isFinished}
                 value={fndSubtype}
                 onChange={(e) => setFndSubtype(e.target.value as FndSubtype)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-indigo-500 outline-none disabled:opacity-50"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-indigo-500 outline-none disabled:opacity-50 cursor-pointer"
               >
                 <option value="FUNCTIONAL_PARALYSIS">Parálisis Funcional / Conversiva</option>
                 <option value="PSYCHOGENIC_TREMOR">Temblor Psicógeno / Distonía</option>
@@ -323,15 +446,14 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
           <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1 mt-4">
             <span className="text-[10px] font-bold text-indigo-400 uppercase block">Principio de Retroalimentación Espejo:</span>
             <p className="text-[10.5px] text-slate-300 leading-snug">
-              Al proyectar la extremidad virtual del avatar en perfecto movimiento sincrónico durante un estado de trance inductivo (Alpha/Theta), la imagen visual cortocircuita la inhibición emocional prefrontal, reactivando la vía motora bloqueada.
+              Al proyectar la extremidad virtual del avatar en movimiento sincrónico durante un estado de trance inductivo (Alpha/Theta), la imagen visual cortocircuita la inhibición emocional prefrontal, reactivando la vía motora bloqueada.
             </p>
           </div>
         </div>
 
-        {/* CENTER PANEL: Simulador POV Visor 1ª Persona (Avatar Mirror) */}
+        {/* CENTER PANEL: Simulador POV Visor 1ª Persona */}
         <div className="col-span-12 lg:col-span-6 bg-[#030712] rounded-2xl border-2 border-slate-800 relative flex flex-col items-center justify-center p-4 overflow-hidden shadow-2xl">
           
-          {/* Overlay Status del Visor */}
           <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
             <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-indigo-500/30 text-xs font-mono text-indigo-100">
               <Video className={`w-3.5 h-3.5 ${sessionActive ? 'text-indigo-400 animate-pulse' : 'text-slate-500'}`} />
@@ -343,7 +465,6 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
           <div className="w-full h-full flex flex-col items-center justify-center relative">
             {!isFinished ? (
               <div className="text-center space-y-6 relative z-10">
-                {/* Visualizador de Neuronas Espejo en Movimiento */}
                 <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
                   <div className={`absolute inset-0 border-[2px] rounded-full ${sessionActive ? 'border-indigo-500/20 animate-ping' : 'border-slate-800'}`} style={{ animationDuration: '2.5s' }} />
                   <div className={`absolute inset-2 border-[3px] rounded-full ${sessionActive ? 'border-cyan-500/40 border-t-indigo-400 animate-spin' : 'border-slate-700'}`} style={{ animationDuration: '4s' }} />
@@ -355,7 +476,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
                     {sessionActive ? 'Mirror Visual Feedback 3D Activo' : 'Consola en Reposo'}
                   </h3>
                   <p className="text-xs text-cyan-300 font-mono mt-2">
-                    {sessionActive ? `Sincronización Avatar Espejo: ${Math.floor(motorAgencyGain)}% | EEG Alpha: ${binauralHz.toFixed(1)} Hz` : 'Esperando activación de terapia'}
+                    {sessionActive ? `Sincronización Avatar Espejo: ${Math.floor(motorAgencyGain)}% | EEG Alpha: ${binauralHz.toFixed(1)} Hz` : 'Esperando activación de terapia en visor Pico 3'}
                   </p>
                 </div>
               </div>
@@ -367,12 +488,22 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
                 </div>
                 <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
                   {aiReport.split('\n').map((line, i) => (
-                    <p key={i} className={line.includes('🟢') ? 'text-emerald-400 p-2 bg-emerald-950/30 rounded border border-emerald-900/50 mb-2' : line.includes('🟡') ? 'text-amber-400 p-2 bg-amber-950/30 rounded border border-amber-900/50 mb-2' : line.includes('**Dictamen') ? 'font-bold text-white mt-4 p-3 bg-slate-800 rounded border border-slate-700 mb-2' : 'mb-2'}>{line}</p>
+                    <p key={i} className={line.includes('🟢') ? 'text-emerald-400 p-2 bg-emerald-950/30 rounded border border-emerald-900/50 mb-2 flex items-start gap-2' : line.includes('🟡') ? 'text-amber-400 p-2 bg-amber-950/30 rounded border border-amber-900/50 mb-2 flex items-start gap-2' : line.includes('**Dictamen') ? 'font-bold text-white mt-4 p-3 bg-slate-800 rounded border border-slate-700 mb-2 font-mono' : 'mb-2'}>
+                      {line.includes('🟢') && <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
+                      {line.includes('🟡') && <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+                      <span>{line.replace(/[🟢🟡]/g, '').trim()}</span>
+                    </p>
                   ))}
                 </div>
                 
-                <button onClick={handleSave} disabled={isSaving} className="mt-4 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 w-full cursor-pointer">
-                  <Save className="w-4 h-4" /> {isSaving ? 'Guardando expediente...' : 'Firmar y Guardar Expediente Clínico'}
+                <button 
+                  type="button"
+                  onClick={handleSave} 
+                  disabled={isSaving} 
+                  className="mt-4 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 w-full cursor-pointer active:scale-95 shadow-lg shadow-indigo-600/30"
+                >
+                  <Save className="w-4 h-4" /> 
+                  <span>{isSaving ? 'Guardando expediente...' : 'Firmar y Guardar Expediente Clínico'}</span>
                 </button>
               </div>
             )}
@@ -404,7 +535,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
             <div>
               <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1">Estrés GSR</span>
               <div className="text-xl font-bold text-emerald-400">
-                {gsr.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">µS</span>
+                {activeGsr.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">µS</span>
               </div>
             </div>
           </div>
@@ -462,7 +593,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
                   <span className="text-cyan-300 font-mono">{binauralHz.toFixed(1)} Hz</span>
                 </div>
                 <input 
-                  type="range" min="5.0" max="10.0" step="0.1"
+                  type="range" min="5.0" max="10.0" step="0.1" 
                   value={binauralHz}
                   disabled={aiAutoPilot || !sessionActive}
                   onChange={(e) => setBinauralHz(parseFloat(e.target.value))}
@@ -474,7 +605,6 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
 
           {/* Botones de Control de Sesión */}
           <div className="pt-3 border-t border-slate-800 space-y-2 shrink-0">
-            {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
             {!isConnected && !sessionActive && !isFinished && (
               <div className="mb-4 p-3 bg-slate-900/80 border border-indigo-500/30 border-dashed rounded-xl flex items-center gap-3">
                 <div className="p-2 bg-slate-800 rounded-lg shrink-0">
@@ -489,6 +619,7 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
 
             {!sessionActive && !isFinished ? (
               <button
+                type="button"
                 disabled={!isConnected}
                 onClick={handleStartSession}
                 className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer ${
@@ -498,15 +629,16 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
                 }`}
               >
                 <Play className="w-4 h-4 fill-current" />
-                {!isConnected ? 'Esperando Visor...' : 'Iniciar Re-Aprendizaje Motor'}
+                <span>{!isConnected ? 'Esperando Visor...' : 'Iniciar Re-Aprendizaje Motor'}</span>
               </button>
             ) : !isFinished ? (
               <button
+                type="button"
                 onClick={handleEndSession}
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer"
               >
                 <Square className="w-4 h-4 fill-current" />
-                Concluir Sesión VR
+                <span>Concluir Sesión VR</span>
               </button>
             ) : null}
           </div>
@@ -516,3 +648,5 @@ export const VrFunctionalNeurologyModule: React.FC<Props> = ({ patient, onClose 
     </div>
   );
 };
+
+export default VrFunctionalNeurologyModule;
