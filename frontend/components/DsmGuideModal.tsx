@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { MORRISON_CLINICAL_PRINCIPLES } from '../constants';
 import { 
-  BookOpen, X, Stethoscope, Search, ShieldCheck, Activity, 
-  Layers, CheckCircle2, AlertTriangle, Users, Brain, Cpu, Glasses, GitCompare
+  BookOpen, 
+  X, 
+  Search, 
+  Activity 
 } from 'lucide-react';
 
 interface DsmGuideModalProps {
@@ -61,7 +63,7 @@ const MODULE_CLINICAL_DETAILS: ModuleClinicalDetail[] = [
     badge: 'Módulo 3 — Filtro Antisesgo',
     purpose: 'Cruce multiaxial y cálculo de la Distancia de Mahalanobis para neutralizar sesgos de confirmación, deseabilidad social y efecto Rosenthal.',
     metrics: [
-      { name: 'Distancia de Mahalanobis ($D^2$)', normal: '< 2.0 (Vector Coherente)', warning: '2.0 - 2.5 (Discrepancia Leve)', pathological: '> 2.5 (Atípico / Incongruencia de Autorreporte)' },
+      { name: 'Distancia de Mahalanobis (D²)', normal: '< 2.0 (Vector Coherente)', warning: '2.0 - 2.5 (Discrepancia Leve)', pathological: '> 2.5 (Atípico / Incongruencia de Autorreporte)' },
       { name: 'Ajuste Enmascaramiento Género', normal: '0% - 5%', warning: '6% - 15%', pathological: '> 15% (Máscara Social / Camouflaging)' },
       { name: 'Corrección Deseabilidad Social', normal: '< 0.10', warning: '0.10 - 0.25', pathological: '> 0.25 (Sesgo de Complacencia / Simulación)' }
     ],
@@ -70,13 +72,13 @@ const MODULE_CLINICAL_DETAILS: ModuleClinicalDetail[] = [
   },
   {
     id: 'apa_framework',
-    name: '4. Corrientes APA, RCI & Sincronía Díadica',
+    name: '4. Corrientes APA, RCI & Sincronía Diádica',
     badge: 'Marco APA — Efectividad & Alianza',
     purpose: 'Traducción epistemológica por corrientes (TCC, Psicodinámica, Gestalt, Sistémica, Neuropsicología), RCI de Jacobson & Truax y Co-regulación Autonómica.',
     metrics: [
       { name: 'Índice RCI (Jacobson & Truax)', normal: '-1.95 a +1.95 (Sin Cambio)', warning: 'Variación no significativa', pathological: 'RCI ≤ -1.96 (Mejoría Significativa p < 0.05)' },
       { name: 'Acoplamiento Fisiológico Díada', normal: '> 70% (Alianza Óptima)', warning: '45% - 69% (Co-regulación Moderada)', pathological: '< 45% (Desacoplamiento / Riesgo de Ruptura)' },
-      { name: 'Índice de Habituación ($H$)', normal: '> 2.0 (Extinción Óptima)', warning: '1.0 - 2.0 (Lenta Extinción)', pathological: '< 1.0 (Resistencia a la Extinción / Fobia)' }
+      { name: 'Índice de Habituación (H)', normal: '> 2.0 (Extinción Óptima)', warning: '1.0 - 2.0 (Lenta Extinción)', pathological: '< 1.0 (Resistencia a la Extinción / Fobia)' }
     ],
     psychologyFocus: 'Permite evaluar empíricamente el progreso psicoterapéutico en diseño de caso único (N=1) y monitorear la calidad de la alianza terapéutica.',
     psychiatryFocus: 'Proporciona evidencia cuantitativa sobre la efectividad combinada del tratamiento farmacológico y la psicoterapia.'
@@ -85,9 +87,9 @@ const MODULE_CLINICAL_DETAILS: ModuleClinicalDetail[] = [
     id: 'neuro_3d',
     name: '5. Neurotopografía 3D & qEEG',
     badge: 'Módulo 5 — Mapeo Cortical',
-    purpose: 'Visualización holográfica 3D del encéfalo, análisis de potencias por banda ($\delta, \theta, \alpha, \beta, \gamma$), ratios neurofisiológicos y Z-Scores normativos.',
+    purpose: 'Visualización holográfica 3D del encéfalo, análisis de potencias por banda (δ, θ, α, β, γ), ratios neurofisiológicos y Z-Scores normativos.',
     metrics: [
-      { name: 'Ratio Frontal Theta/Beta ($T/B$)', normal: '1.0 - 2.2', warning: '2.3 - 2.9 (Desatención Moderada)', pathological: '> 3.0 (TDAH / Hipoactivación Frontal)' },
+      { name: 'Ratio Frontal Theta/Beta (T/B)', normal: '1.0 - 2.2', warning: '2.3 - 2.9 (Desatención Moderada)', pathological: '> 3.0 (TDAH / Hipoactivación Frontal)' },
       { name: 'qEEG Z-Scores Corticales', normal: '-1.0 a +1.0 SD', warning: '±1.1 a ±1.9 SD', pathological: '> ±2.0 SD (Desviación Clínica Significativa)' },
       { name: 'Asimetría Alfa Temporal', normal: '-0.1 a +0.1', warning: '±0.2 a ±0.3', pathological: '> +0.4 / < -0.4 (Vulnerabilidad Afectiva)' }
     ],
@@ -96,7 +98,7 @@ const MODULE_CLINICAL_DETAILS: ModuleClinicalDetail[] = [
   },
   {
     id: 'vr_therapy',
-    name: '6. VR Inmersivo (Meta Quest 3S / Pico Neuro 3 Pro)',
+    name: '6. VR Inmersivo (Visor Pico 3 Pro)',
     badge: 'Biometría VR — Telemetría en Tiempo Real',
     purpose: 'Módulo de exposición inmersiva y desensibilización con biofeedback en tiempo real (GSR, HRV) y consolas de Analgesia, Mirror VR, Gamma 40Hz y Neurohipnosis.',
     metrics: [
@@ -132,9 +134,9 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans text-slate-100">
         
-        {/* Header */}
+        {/* Encabezado */}
         <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-600/20">
@@ -142,7 +144,7 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
             </div>
             <div>
               <h2 className="font-bold text-base text-white flex items-center gap-2">
-                Compendio Diagnóstico & Manual de Interpretación AMIE
+                Compendio Diagnóstico &amp; Manual de Interpretación AMIE
                 <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] rounded-full font-mono">
                   DSM-5-TR / CIE-11
                 </span>
@@ -154,17 +156,20 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
           </div>
 
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            title="Cerrar Manual"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Bar de Navegación & Búsqueda */}
+        {/* Barra de Navegación & Búsqueda */}
         <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 w-full sm:w-auto overflow-x-auto">
             <button
+              type="button"
               onClick={() => setView('principles')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                 view === 'principles' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
@@ -173,22 +178,25 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
               16 Principios Morrison
             </button>
             <button
+              type="button"
               onClick={() => setView('modules')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                 view === 'modules' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Guía de Módulos & Lectura
+              Guía de Módulos &amp; Lectura
             </button>
             <button
+              type="button"
               onClick={() => setView('ranges')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                 view === 'ranges' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Matriz de Rangos & Umbrales
+              Matriz de Rangos &amp; Umbrales
             </button>
             <button
+              type="button"
               onClick={() => setView('guide')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                 view === 'guide' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
@@ -212,7 +220,7 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
           )}
         </div>
 
-        {/* Body Content */}
+        {/* Contenido Principal */}
         <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 bg-slate-950">
           
           {/* VISTA 1: 16 PRINCIPIOS DE JAMES MORRISON */}
@@ -246,6 +254,7 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
                 {MODULE_CLINICAL_DETAILS.map((mod) => (
                   <button
                     key={mod.id}
+                    type="button"
                     onClick={() => setSelectedModuleId(mod.id)}
                     className={`w-full text-left p-3 rounded-xl text-xs font-semibold transition border cursor-pointer ${
                       selectedModuleId === mod.id
@@ -298,7 +307,7 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
                   </div>
                   <div className="p-3 bg-slate-900 border border-purple-500/30 rounded-xl space-y-1">
                     <span className="text-[10px] font-bold text-purple-400 uppercase block">Orientación para Psiquiatras</span>
-                    <p className="text-slate-300 leading-relaxed text-[11px]">{selectedModule.psychiatryFocus}</p>
+                    <p className="text-slate-300 leading-relaxed text-[11px]">{selectedModule.psychryFocus || selectedModule.psychiatryFocus}</p>
                   </div>
                 </div>
               </div>
@@ -310,7 +319,7 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-bold text-sky-400 text-sm flex items-center gap-2">
-                  <Activity className="w-4 h-4" /> Matriz Consolidada de Biomarcadores Fisiológicos & Psicométricos
+                  <Activity className="w-4 h-4" /> Matriz Consolidada de Biomarcadores Fisiológicos &amp; Psicométricos
                 </h3>
                 <span className="text-[10px] text-slate-400 font-mono">Unidades Estándar ISO/IEEE</span>
               </div>
@@ -342,7 +351,7 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
                       <td className="p-3 text-slate-400 font-sans">Capacidad de autorregulación parasimpática.</td>
                     </tr>
                     <tr>
-                      <td className="p-3 font-bold text-white">Ratio Frontal Theta/Beta ($T/B$)</td>
+                      <td className="p-3 font-bold text-white">Ratio Frontal Theta/Beta (T/B)</td>
                       <td className="p-3 text-emerald-400">1.0 - 2.2</td>
                       <td className="p-3 text-amber-400">2.3 - 2.9</td>
                       <td className="p-3 text-rose-400">&gt; 3.0</td>
@@ -356,14 +365,14 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
                       <td className="p-3 text-slate-400 font-sans">Desviación neurofisiológica normativa por edad.</td>
                     </tr>
                     <tr>
-                      <td className="p-3 font-bold text-white">Índice RCI (Jacobson & Truax)</td>
+                      <td className="p-3 font-bold text-white">Índice RCI (Jacobson &amp; Truax)</td>
                       <td className="p-3 text-slate-400">-1.95 a +1.95</td>
                       <td className="p-3 text-amber-400">N/A</td>
                       <td className="p-3 text-emerald-400">RCI ≤ -1.96</td>
-                      <td className="p-3 text-slate-400 font-sans">Cambio clínico significativo ($p &lt; 0.05$).</td>
+                      <td className="p-3 text-slate-400 font-sans">Cambio clínico significativo (p &lt; 0.05).</td>
                     </tr>
                     <tr>
-                      <td className="p-3 font-bold text-white">Distancia de Mahalanobis ($D^2$)</td>
+                      <td className="p-3 font-bold text-white">Distancia de Mahalanobis (D²)</td>
                       <td className="p-3 text-emerald-400">&lt; 2.0</td>
                       <td className="p-3 text-amber-400">2.0 - 2.5</td>
                       <td className="p-3 text-rose-400">&gt; 2.5</td>
@@ -385,19 +394,19 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                   <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
-                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 1-2: Neurodesarrollo & Psicosis</span>
+                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 1-2: Neurodesarrollo &amp; Psicosis</span>
                     <p className="text-slate-400">TDAH (F90.2), TEA (F84.0), Esquizofrenia (F20.9), Catatonia (F06.1), Trastorno Esquizofreniforme (F20.81).</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
-                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 3-4: Ánimo & Ansiedad</span>
+                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 3-4: Ánimo &amp; Ansiedad</span>
                     <p className="text-slate-400">TDM (F32/F33), Bipolar I/II (F31), Distimia (F34.1), Pánico (F41.0), Agorafobia (F40.0), TAG (F41.1).</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
-                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 5-8: TOC, Trauma & Somáticos</span>
+                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 5-8: TOC, Trauma &amp; Somáticos</span>
                     <p className="text-slate-400">TOC (F42), TEPT (F43.10), Estrés Agudo (F43.3), Síntomas Somáticos (F45.1), Conversión (F44.4).</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
-                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 15-17: Sustancias, Cognitivos & Personalidad</span>
+                    <span className="font-bold text-cyan-300 block mb-0.5">Capítulo 15-17: Sustancias, Cognitivos &amp; Personalidad</span>
                     <p className="text-slate-400">Intoxicación/Abstinencia F10-F19, Delirium (F05), TNC Mayor/Leve (G30/G31), TLP (F60.3), TPA (F60.2).</p>
                   </div>
                 </div>
@@ -407,10 +416,11 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
 
         </div>
 
-        {/* Footer */}
+        {/* Pie de Página */}
         <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
           <span>AMIE Clinical Engine • Norma DSM-5-TR / CIE-11</span>
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition cursor-pointer font-sans"
           >
@@ -421,3 +431,5 @@ export const DsmGuideModal: React.FC<DsmGuideModalProps> = ({
     </div>
   );
 };
+
+export default DsmGuideModal;
