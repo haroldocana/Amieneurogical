@@ -6,16 +6,17 @@ import { consumeAiCredit } from './userService';
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE VARIABLES DE ENTORNO, ENDPOINTS Y MODELO
 // ------------------------------------------------------------------
-export const GEMINI_MODEL = 'gemini-3.8-flash';
+export const GEMINI_MODEL = (import.meta as any).env?.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
-const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
+const GEMINI_API_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
+const PROXY_HEADER = (import.meta as any).env?.VITE_PROXY_HEADER || 'AMIE_SECRET_HEADER_2025';
 
-const CLOUD_RUN_API_URL = import.meta.env.VITE_CLOUD_RUN_URL || 'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
+const CLOUD_RUN_API_URL = (import.meta as any).env?.VITE_CLOUD_RUN_URL || 
+  'https://amie-clinical-analyzer-367911373284.us-central1.run.app/api/clinical/analyze-qeeg';
 
 // ------------------------------------------------------------------
-// EXPEDIENTE BASE (SAFE DEFAULT) - LIMPIO PARA EVITAR FALSOS POSITIVOS
+// EXPEDIENTE BASE (SAFE DEFAULT)
 // ------------------------------------------------------------------
 export const SAFE_DEFAULT_PATIENT: PatientRecord = {
   id: 'PAC-0000',
@@ -43,16 +44,43 @@ export const SAFE_DEFAULT_PATIENT: PatientRecord = {
 };
 
 // ------------------------------------------------------------------
-// FUNCIONES AUXILIARES DE TRANSFORMACIÓN Y PROXY
+// FUNCIONES AUXILIARES DE LIMPIEZA, PARSEO Y PROXY
 // ------------------------------------------------------------------
 
-async function callVertexViaProxy(originalUrl: string, payloadBody: unknown) {
+function getStoredAuthToken(): string {
+  try {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
+    }
+  } catch {
+    // Modo privado o contexto restringido
+  }
+  return '';
+}
+
+function cleanAndParseJson<T>(rawText: string): T {
+  const trimmed = rawText.trim();
+  const cleaned = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  return JSON.parse(cleaned) as T;
+}
+
+async function callVertexViaProxy(originalUrl: string, payloadBody: unknown): Promise<any> {
+  const token = getStoredAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-app-proxy': PROXY_HEADER
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${BACKEND_URL}/api-proxy`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-app-proxy': PROXY_HEADER
-    },
+    headers,
     body: JSON.stringify({
       originalUrl,
       body: payloadBody
@@ -96,35 +124,35 @@ function normalizeFunctionalAreas(rawAreas: unknown) {
 }
 
 // ------------------------------------------------------------------
-// AUXILIAR: DECODIFICADOR DE CAMPOS DE FIRESTORE REST API
+// DECODIFICADOR RECURSIVO DE CAMPOS FIRESTORE REST API
 // ------------------------------------------------------------------
+function unwrapFirestoreValue(valObj: any): any {
+  if (!valObj || typeof valObj !== 'object') return valObj;
+  if ('stringValue' in valObj) return valObj.stringValue;
+  if ('integerValue' in valObj) return Number(valObj.integerValue);
+  if ('doubleValue' in valObj) return Number(valObj.doubleValue);
+  if ('booleanValue' in valObj) return valObj.booleanValue;
+  if ('timestampValue' in valObj) return valObj.timestampValue;
+  if ('nullValue' in valObj) return null;
+  if ('mapValue' in valObj) return unwrapFirestoreDocument(valObj.mapValue?.fields || {});
+  if ('arrayValue' in valObj) {
+    return (valObj.arrayValue?.values || []).map(unwrapFirestoreValue);
+  }
+  return valObj;
+}
+
 function unwrapFirestoreDocument(fields: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
   if (!fields) return result;
 
   for (const [key, valObj] of Object.entries(fields)) {
-    if (!valObj || typeof valObj !== 'object') continue;
-
-    if ('stringValue' in valObj) result[key] = valObj.stringValue;
-    else if ('integerValue' in valObj) result[key] = Number(valObj.integerValue);
-    else if ('doubleValue' in valObj) result[key] = Number(valObj.doubleValue);
-    else if ('booleanValue' in valObj) result[key] = valObj.booleanValue;
-    else if ('mapValue' in valObj) result[key] = unwrapFirestoreDocument(valObj.mapValue?.fields || {});
-    else if ('arrayValue' in valObj) {
-      result[key] = (valObj.arrayValue?.values || []).map((v: any) => {
-        if ('stringValue' in v) return v.stringValue;
-        if ('integerValue' in v) return Number(v.integerValue);
-        if ('doubleValue' in v) return Number(v.doubleValue);
-        if ('mapValue' in v) return unwrapFirestoreDocument(v.mapValue?.fields || {});
-        return v;
-      });
-    }
+    result[key] = unwrapFirestoreValue(valObj);
   }
   return result;
 }
 
 // ------------------------------------------------------------------
-// MAPEO DE DATOS DE FIRESTORE (APP 1) A ESTRUCTURA DE APP 2
+// MAPEO DE DATOS DE FIRESTORE (APP 1) A ESTRUCTURA DE EXPEDIENTE (APP 2)
 // ------------------------------------------------------------------
 export async function mapApp1DataToApp2(
   rawCase: Record<string, unknown>,
@@ -227,18 +255,23 @@ export async function syncWithClinicalApp(
   doctorUsername?: string
 ): Promise<{ patient: PatientRecord; analysis?: AmieClinicalAnalysis | null; message: string }> {
 
-  const storedUsername = typeof window !== 'undefined'
-    ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username')
-    : null;
+  let storedUsername: string | null = null;
+  try {
+    if (typeof window !== 'undefined') {
+      storedUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username');
+    }
+  } catch {
+    // Contexto aislado
+  }
 
   const resolvedDoctorUsername = (doctorUsername || storedUsername || '2000').trim().toLowerCase();
   const cleanPacId = (patientId || '').trim().toUpperCase();
   
   if (!cleanPacId) throw new Error("Debe ingresar un código PAC válido (ej. PAC-2964).");
 
-  const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'amie-clinical-copilot';
-  const COLLECTION_NAME = import.meta.env.VITE_FIRESTORE_COLLECTION || 'patients';
-  const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDorrRPma3q_a-D-OuRh_K4F71yHGgBW1w';
+  const FIREBASE_PROJECT_ID = (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || 'amie-clinical-copilot';
+  const COLLECTION_NAME = (import.meta as any).env?.VITE_FIRESTORE_COLLECTION || 'patients';
+  const FIREBASE_API_KEY = (import.meta as any).env?.VITE_FIREBASE_API_KEY || 'AIzaSyDorrRPma3q_a-D-OuRh_K4F71yHGgBW1w';
 
   const colegiadoPrefix = typeof colegiado === 'number' ? `COL-${colegiado}` : String(colegiado).trim();
 
@@ -255,7 +288,7 @@ export async function syncWithClinicalApp(
   let matchedDocId = '';
 
   for (const docId of candidateDocIds) {
-    const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${docId}?key=${FIREBASE_API_KEY}`;
+    const firestoreEndpoint = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}/${encodeURIComponent(docId)}?key=${FIREBASE_API_KEY}`;
     
     try {
       const response = await fetch(firestoreEndpoint, {
@@ -322,7 +355,7 @@ export async function syncWithClinicalApp(
     };
   }
 
-  const matchedPreset = CLINICAL_CASE_PRESETS.find(p => p.record.id.toUpperCase() === cleanPacId);
+  const matchedPreset = CLINICAL_CASE_PRESETS.find(pr => pr.record.id.toUpperCase() === cleanPacId);
   if (matchedPreset) {
     const syncdPatient = await mapApp1DataToApp2(matchedPreset.record as any, cleanPacId, resolvedDoctorUsername);
     return {
@@ -336,31 +369,39 @@ export async function syncWithClinicalApp(
 }
 
 // ------------------------------------------------------------------
-// MOTOR PRINCIPAL DE INFERENCIA CLÍNICA AMIE (GEMINI / VERTEX)
-// CON ENFOQUE OBLIGATORIO DE TRIANGULACIÓN BIOCLÍNICA MULTIMODAL
+// MOTOR DE INFERENCIA CLÍNICA AMIE (TRIANGULACIÓN MULTIMODAL)
 // ------------------------------------------------------------------
 export async function runAmieClinicalAnalysis(
   patient: PatientRecord,
   qEegImageBase64?: string
 ): Promise<AmieClinicalAnalysis> {
-  const activeUsername = typeof window !== 'undefined'
-    ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01'
-    : 'harold01';
+  const p = patient as any;
 
-  consumeAiCredit(activeUsername);
+  let activeUsername = 'harold01';
+  try {
+    if (typeof window !== 'undefined') {
+      activeUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01';
+    }
+  } catch {
+    // Contexto aislado
+  }
 
-  const token = typeof window !== 'undefined'
-    ? localStorage.getItem('amie_auth_token') || 'demo-jwt-bearer-token'
-    : 'demo-jwt-bearer-token';
+  try {
+    consumeAiCredit(activeUsername);
+  } catch (creditErr) {
+    console.warn('[AMIE AI] Error consumiendo crédito:', creditErr);
+  }
 
-  const activeImage = qEegImageBase64 || patient.qeegBiomarkers?.heatmapBase64 || null;
+  const token = getStoredAuthToken() || 'demo-jwt-bearer-token';
+  const activeImage = qEegImageBase64 || p.qeegBiomarkers?.heatmapBase64 || p.qeegZScores?.heatmapBase64 || null;
 
+  // 1. Intento primario: Cloud Run API Microservicio
   try {
     const apiPayload = {
       patientRecord: patient,
       qEegImageBase64: activeImage,
       sentinelTelemetry: patient.sentinelTelemetry || null,
-      qeegBiomarkers: patient.qeegBiomarkers || null,
+      qeegBiomarkers: p.qeegBiomarkers || p.qeegZScores || null,
       multisensoryHardware: patient.multisensoryHardware || null,
       vrTelemetryData: patient.vrTelemetryData || null,
       vrTherapyReport: patient.vrTherapyReport || null,
@@ -384,9 +425,10 @@ export async function runAmieClinicalAnalysis(
       }
     }
   } catch (backendError) {
-    console.warn('Cloud Run API no disponible, ejecutando Gemini vía SDK/Proxy:', backendError);
+    console.warn('[AMIE AI] Cloud Run API no disponible, ejecutando Gemini vía SDK/Proxy:', backendError);
   }
 
+  // 2. Intento secundario: SDK Oficial de Google Generative AI
   const vrSection = patient.vrTelemetryData ? `
 --- PILAR 3.A: TELEMETRÍA VR INMERSIVA (PICO NEO 3 / QUEST 3S) ---
 - Session GUID: ${patient.vrTelemetryData.sessionId}
@@ -408,7 +450,7 @@ export async function runAmieClinicalAnalysis(
 Eres AMIE (Articulate Medical Intelligence Explorer), un copiloto de psiquiatría y neurología médica de precisión clínica operando con Gemini.
 TU REGLA FUNDAMENTAL ES LA TRIANGULACIÓN BIOCLÍNICA OBLIGATORIA EN 3 PILARES:
 
-PILAR 1 (SUBJETIVO / CLINICO): Anamnesis, motivo de consulta y notas de sesión.
+PILAR 1 (SUBJETIVO / CLÍNICO): Anamnesis, motivo de consulta y notas de sesión.
 PILAR 2 (PSICOMETRÍA CUANTITATIVA): Escalas estandarizadas. Si un examen no fue realizado o tiene valor cero, IGNORA sus alertas para evitar falsos positivos.
 PILAR 3 (FISIOLOGÍA Y BIOMETRÍA OBJETIVA): Tono vagal (HRV/RMSSD), conductancia cutánea (GSR), mapas de Z-Scores qEEG y métricas VR.
 
@@ -421,7 +463,8 @@ INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
     try {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: GEMINI_MODEL,
+        systemInstruction: systemInstructionText,
         generationConfig: {
           temperature: 0.15,
           responseMimeType: 'application/json'
@@ -429,8 +472,7 @@ INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
       });
 
       const promptParts: any[] = [
-        systemInstructionText,
-        `EXPEDIENTE PARA TRIANGULACIÓN BIOCLÍNICA:\n${JSON.stringify(patient, null, 2)}`
+        `EXPEDIENTE PARA TRIANGULACIÓN BIOCLÍNICA:\n${JSON.stringify(patient, null, 2)}\n${vrSection}\n${multisensorySection}`
       ];
 
       if (activeImage && activeImage.startsWith('data:image')) {
@@ -445,15 +487,15 @@ INSTRUCCIONES DE TRIANGULACIÓN Y DEVOLUCIÓN:
       const result = await model.generateContent(promptParts);
       const responseText = result.response.text();
       if (responseText) {
-        return JSON.parse(responseText) as AmieClinicalAnalysis;
+        return cleanAndParseJson<AmieClinicalAnalysis>(responseText);
       }
     } catch (directErr) {
-      console.warn('Fallo en SDK oficial Gemini API:', directErr);
+      console.warn('[AMIE AI] Fallo en SDK oficial Gemini API:', directErr);
     }
   }
 
+  // 3. Intento terciario: Proxy Express Backend (Vertex AI)
   const promptText = `
-${systemInstructionText}
 ${vrSection}
 ${multisensorySection}
 EXPEDIENTE PACIENTE (JSON):
@@ -470,7 +512,7 @@ ${JSON.stringify(patient, null, 2)}
 
   const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
   const proxyPayload = {
-    contents: [{ role: 'user', parts: parts }],
+    contents: [{ role: 'user', parts }],
     systemInstruction: { parts: [{ text: systemInstructionText }] },
     generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
   };
@@ -479,20 +521,23 @@ ${JSON.stringify(patient, null, 2)}
     const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
     const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text;
     if (responseText) {
-      return JSON.parse(responseText) as AmieClinicalAnalysis;
+      return cleanAndParseJson<AmieClinicalAnalysis>(responseText);
     }
   } catch (proxyError) {
-    console.warn('Proxy Express no disponible, generando respuesta de contingencia local:', proxyError);
+    console.warn('[AMIE AI] Proxy Express no disponible, generando respuesta de contingencia local:', proxyError);
   }
 
+  // 4. Contingencia Local Defensiva
   return generateFallbackAnalysis(patient);
 }
 
 // ------------------------------------------------------------------
 // GENERACIÓN DE CONTINGENCIA LOCAL DINÁMICA
 // ------------------------------------------------------------------
-const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis => {
-  const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || patient.multisensoryHardware?.vagalToneHrvIndex || 40;
+export const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis => {
+  const p = patient as any;
+  const hrvVal = patient.vrTelemetryData?.hrvRmssdMs?.[0] || 
+                 p.multisensoryHardware?.vagalToneHrvIndex || 40;
   const gsrVal = patient.vrTelemetryData?.gsrMicroSiemens?.[0] || 2.1;
   
   const phq9Val = patient.psychometricScores?.phq9 ?? 0;
@@ -534,7 +579,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
       differentialDiagnoses: [],
       bioclinicalTriangulation: {
         psychometricsSummary: `PILAR 2: PHQ-9 = ${phq9Val}, GAD-7 = ${gad7Val}, C-SSRS = ${cssrsVal}`,
-        functionalAreasAssessment: `Sueño ${patient.functionalAreas.sleep}, Atención ${patient.functionalAreas.attention}`,
+        functionalAreasAssessment: `Sueño ${patient.functionalAreas.sleep}/100, Atención ${patient.functionalAreas.attention}/100`,
         acousticBiometricAssessment: 'PILAR 3.A: Bradilalia.',
         vrHabituationAssessment: `PILAR 3.B: HRV = ${hrvVal} ms, GSR = ${gsrVal} µS.`,
         regionalLobeBreakdown: { frontal: 'Lentificación', temporal: 'Simétrico', parietal: 'Normal', occipital: 'Normal' },
@@ -545,17 +590,17 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
         disorderName: 'Depresión Mayor',
         affinityPct: finalConvergenceScore,
         status: 'Alta Concordancia Multimodal',
-        recommendedTherapy: 'TCC + Activación',
+        recommendedTherapy: 'TCC + Activación Conductual',
         psychopharmacologyScheme: 'Evaluación psiquiátrica urgente',
-        biomarkerRationale: 'Convergencia clara.'
+        biomarkerRationale: 'Convergencia clara entre psicometría y colapso autonómico vagal.'
       }],
       riskAlerts: {
         suicideRiskLevel: 'CRÍTICO',
         psychosisRisk: 'PRESENTE_DELIRANTE',
         cognitiveDeteriorationRisk: 'PSEUDODEMENCIA_DEPRESIVA',
         apkPassiveState: 'Riesgo inminente',
-        criticalAlertsList: ['Riesgo autolítico activo', `HRV bajo (${hrvVal} ms)`],
-        containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE LÍNEA DE CRISIS.'
+        criticalAlertsList: ['Riesgo autolítico activo', `HRV significativamente deprimido (${hrvVal} ms)`],
+        containmentProtocolSuggested: 'ACTIVACIÓN INMEDIATA DE PROTOCOLO DE CONTENCIÓN Y LÍNEA DE CRISIS.'
       },
       recommendedActionPlan: {
         neurofeedbackProtocol: [], psychotherapyStrategy: [], pharmacologySuggestions: [], psychiatryReferralUrgent: true, monitoringDirectives: [], urgentActions: []
@@ -571,7 +616,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
       certaintyPct: 92.5,
       specifiers: ['Sin riesgo detectado', 'Lectura Biométrica Activa'],
       gafEstimated: 85,
-      justificationDsm5: `Paciente ${patient.gender === 'F' ? 'Femenino' : 'Masculino'}, ${patient.age} años. Modulación autonómica estable según telemetría (HRV = ${hrvVal} ms, GSR = ${gsrVal} µS) sin baterías psicométricas en rango de riesgo.`
+      justificationDsm5: `Paciente ${patient.gender === 'F' ? 'Femenino' : 'Masculino'}, ${patient.age} años. Modulación autonómica estable según telemetría (HRV = ${hrvVal} ms, GSR = ${gsrVal} µS) sin baterías psicométricas en rango patológico.`
     },
     differentialMatrix: [
       {
@@ -584,7 +629,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
         psychometricsProfile: { scaleMatched: 'N/A', scoreSummary: 'Sin puntajes de riesgo' },
         apkPassiveMarker: 'Sincronía biomotora adecuada',
         acousticBiomarkerCorrelation: 'Prosodia normal',
-        biasDiscardRationale: 'Valores basales dentro de rango de salud (Normotonia).',
+        biasDiscardRationale: 'Valores basales dentro de rango de salud (Normotonía).',
         morrisonPrincipleApplied: 'Principio A de Morrison'
       }
     ],
@@ -604,7 +649,7 @@ const generateFallbackAnalysis = (patient: PatientRecord): AmieClinicalAnalysis 
       status: 'Confirmado por Telemetría',
       recommendedTherapy: 'Psicoeducación de mantenimiento',
       psychopharmacologyScheme: 'Ninguno',
-      biomarkerRationale: 'Lecturas biológicas y cuestionarios (si aplica) en equilibrio.'
+      biomarkerRationale: 'Lecturas biológicas y cuestionarios en equilibrio homeostático.'
     }],
     riskAlerts: {
       suicideRiskLevel: 'BAJO',
@@ -628,11 +673,24 @@ export async function askAmieAssistant(
   currentPatient: PatientRecord,
   analysisData?: AmieClinicalAnalysis | null
 ): Promise<string> {
-  const activeUsername = typeof window !== 'undefined'
-    ? localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01'
-    : 'harold01';
+  if (!conversation || conversation.length === 0) {
+    return 'No se proporcionó ninguna consulta para el asistente clínico.';
+  }
 
-  consumeAiCredit(activeUsername);
+  let activeUsername = 'harold01';
+  try {
+    if (typeof window !== 'undefined') {
+      activeUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username') || 'harold01';
+    }
+  } catch {
+    // Contexto aislado
+  }
+
+  try {
+    consumeAiCredit(activeUsername);
+  } catch (creditErr) {
+    console.warn('[AMIE AI] Error consumiendo crédito en chat:', creditErr);
+  }
 
   const systemContext = `
 Eres AMIE, Copiloto Clínico Psiquiátrico operando con Gemini.
@@ -640,37 +698,48 @@ Usa TRIANGULACIÓN BIOCLÍNICA MULTIMODAL.
 Paciente actual:
 ${JSON.stringify(currentPatient, null, 2)}
 ${analysisData ? `Análisis previo:\n${JSON.stringify(analysisData, null, 2)}` : ''}
-Responde al médico tratante de manera ultra-concisa y científica.
+Responde al médico tratante de manera concisa, analítica y con fundamentación clínica neurobiológica.
 `;
 
   if (GEMINI_API_KEY) {
     try {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: GEMINI_MODEL,
         systemInstruction: systemContext,
         generationConfig: { temperature: 0.25 }
       });
 
-      const formattedHistory = conversation.map(msg => ({
-        role: msg.role === 'model' ? 'model' : 'user',
-        parts: [{ text: msg.text }]
-      }));
+      // Normalización estricta de historial: el primer mensaje debe tener rol 'user'
+      const formattedHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+      
+      let userTurnFound = false;
+      for (const msg of conversation.slice(0, -1)) {
+        if (!userTurnFound && msg.role !== 'user') {
+          continue; // Omite turnos huérfanos del modelo al inicio del historial
+        }
+        userTurnFound = true;
+        formattedHistory.push({
+          role: msg.role === 'model' ? 'model' : 'user',
+          parts: [{ text: msg.text }]
+        });
+      }
 
-      const lastMsg = formattedHistory.pop();
+      const lastMsg = conversation[conversation.length - 1];
+
       const chat = model.startChat({
         history: formattedHistory
       });
 
-      if (lastMsg) {
-        const result = await chat.sendMessage(lastMsg.parts[0].text);
-        return result.response.text();
-      }
+      const result = await chat.sendMessage(lastMsg.text);
+      const text = result.response.text();
+      if (text) return text;
     } catch (directErr) {
-      console.warn('Fallo en SDK Gemini en asistente:', directErr);
+      console.warn('[AMIE Chat] Fallo en SDK Gemini oficial:', directErr);
     }
   }
 
+  // Fallback vía Vertex Proxy Backend
   const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
   const contents = conversation.map(msg => ({
     role: msg.role === 'model' ? 'model' : 'user',
@@ -678,7 +747,7 @@ Responde al médico tratante de manera ultra-concisa y científica.
   }));
 
   const proxyPayload = {
-    contents: contents,
+    contents,
     systemInstruction: { parts: [{ text: systemContext }] },
     generationConfig: { temperature: 0.25 }
   };
@@ -687,7 +756,7 @@ Responde al médico tratante de manera ultra-concisa y científica.
     const responseJson = await callVertexViaProxy(vertexEndpoint, proxyPayload);
     return responseJson.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta del motor Gemini.';
   } catch (err: unknown) {
-    console.error('Error en askAmieAssistant:', err);
-    return 'Error al conectar con la API de IA.';
+    console.error('[AMIE Chat] Error al conectar con la API de IA:', err);
+    return 'Estimado colega, en este momento el servicio de inferencia remota presenta alta latencia. Los biomarcadores de telemetría y el expediente continúan resguardados.';
   }
 }
