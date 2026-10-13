@@ -1,69 +1,134 @@
 import React from 'react';
 import { PatientRecord } from '../types';
-import { Smartphone, Moon, Activity, PhoneCall, ShieldAlert, Zap, Clock, BrainCircuit } from 'lucide-react';
+import { 
+  Smartphone, 
+  Moon, 
+  Activity, 
+  PhoneCall, 
+  ShieldAlert, 
+  Zap, 
+  Clock, 
+  BrainCircuit,
+  ArrowRight,
+  Glasses
+} from 'lucide-react';
 
 interface PatientSentinelDashboardProps {
   patient?: PatientRecord;
+  onNavigateToVrModule?: (moduleId: string) => void;
 }
 
-export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> = ({ patient }) => {
-  const sleepValue = patient?.functionalAreas?.sleep ?? 50;
+export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> = ({ 
+  patient,
+  onNavigateToVrModule 
+}) => {
+  const p = patient as any;
+  const sleepValue = p?.functionalAreas?.sleep ?? 50;
 
-  const sentinel = patient?.sentinelTelemetry || {
-    pacId: patient?.id || 'PAC-0001',
-    deviceSyncTime: 'En línea',
+  // Extracción polimórfica defensiva de telemetría pasiva (sentinelTelemetry o snapshot)
+  const rawSentinel = p?.sentinelTelemetry || p?.sentinelTelemetrySnapshot || {};
+
+  const sentinel = {
+    pacId: p?.id || p?.patientId || rawSentinel?.pacId || 'PAC-8104',
+    deviceSyncTime: rawSentinel?.deviceSyncTime || rawSentinel?.lastSyncTime || 'En línea',
     sleepMetrics: {
-      nightWakeups: sleepValue < 30 ? 4 : 1,
-      hoursInDarkness: 7.0,
-      avgSleepDurationHours: (sleepValue / 100) * 8,
-      sleepEfficiencyPct: Math.round(sleepValue * 0.8 + 15)
+      nightWakeups: rawSentinel?.sleepMetrics?.nightWakeups ?? 
+                    rawSentinel?.nightWakeups ?? 
+                    rawSentinel?.sleepDisruptionsCount ?? 
+                    (sleepValue < 30 ? 4 : 1),
+      hoursInDarkness: rawSentinel?.sleepMetrics?.hoursInDarkness ?? 7.0,
+      avgSleepDurationHours: rawSentinel?.sleepMetrics?.avgSleepDurationHours ?? 
+                             rawSentinel?.avgSleepDurationHours ?? 
+                             (sleepValue / 100) * 8,
+      sleepEfficiencyPct: rawSentinel?.sleepMetrics?.sleepEfficiencyPct ?? 
+                          rawSentinel?.sleepEfficiencyPct ?? 
+                          Math.round(sleepValue * 0.8 + 15)
     },
     behavioralBiometrics: {
-      typingLatencyMs: patient?.neuromotorBiomarkers?.reactionTimeMs || 320,
-      screenActiveTimeMinutes: sleepValue < 30 ? 110 : 20,
-      biomotorLatencyMs: patient?.neuromotorBiomarkers?.reactionTimeMs || 320,
-      activityRestlessnessIndex: 100 - sleepValue
+      typingLatencyMs: rawSentinel?.behavioralBiometrics?.typingLatencyMs ?? 
+                       rawSentinel?.typingLatencyMs ?? 
+                       p?.neuromotorBiomarkers?.reactionTimeMs ?? 
+                       320,
+      screenActiveTimeMinutes: rawSentinel?.behavioralBiometrics?.screenActiveTimeMinutes ?? 
+                               rawSentinel?.screenOnNightTimeMinutes ?? 
+                               (sleepValue < 30 ? 110 : 20),
+      biomotorLatencyMs: rawSentinel?.behavioralBiometrics?.biomotorLatencyMs ?? 
+                         rawSentinel?.biomotorLatencyMs ?? 
+                         p?.neuromotorBiomarkers?.reactionTimeMs ?? 
+                         320,
+      activityRestlessnessIndex: rawSentinel?.behavioralBiometrics?.activityRestlessnessIndex ?? 
+                                 rawSentinel?.activityRestlessnessIndex ?? 
+                                 (100 - sleepValue)
     },
     safetyStatus: {
-      riskLevel: (patient?.psychometricScores?.sadPersons ?? 0) >= 7 ? 'CRÍTICO' : (patient?.psychometricScores?.sadPersons ?? 0) >= 4 ? 'ALTO' : 'BAJO',
-      activeContentionTriggered: (patient?.psychometricScores?.sadPersons ?? 0) >= 6 || (patient?.psychometricScores?.cssrsLevel ?? 0) >= 4,
-      passiveRiskRationale: 'Monitoreo biomotor pasivo correlacionado con registro de ciclo sueño-vigilia.',
-      emergencyContact: {
-        name: 'Contacto Primario Asignado',
-        relationship: 'Familiar',
-        phone: '+52 55 0000-0000'
-      }
+      riskLevel: rawSentinel?.safetyStatus?.riskLevel ?? 
+                 rawSentinel?.passiveRiskScore ?? 
+                 ((p?.psychometricScores?.sadPersons ?? 0) >= 7 ? 'CRÍTICO' : 
+                  (p?.psychometricScores?.sadPersons ?? 0) >= 4 ? 'ALTO' : 'BAJO'),
+      activeContentionTriggered: rawSentinel?.safetyStatus?.activeContentionTriggered ?? 
+                                 ((p?.psychometricScores?.sadPersons ?? 0) >= 6 || (p?.psychometricScores?.cssrsLevel ?? 0) >= 4),
+      passiveRiskRationale: rawSentinel?.safetyStatus?.passiveRiskRationale ?? 
+                             rawSentinel?.passiveRiskRationale ?? 
+                             'Monitoreo biomotor pasivo correlacionado con registro circadiano.',
+      emergencyContact: rawSentinel?.safetyStatus?.emergencyContact ?? 
+                        rawSentinel?.emergencyContact ?? 
+                        p?.emergencyContact ?? {
+                          name: 'Contacto Primario Asignado',
+                          relationship: 'Familiar Red Primaria',
+                          phone: '+502 5555-0199'
+                        }
     }
   };
 
-  const nightWakeups = sentinel.sleepMetrics?.nightWakeups ?? (sentinel as any).nightWakeups ?? 0;
-  const biomotorLatencyMs = sentinel.behavioralBiometrics?.biomotorLatencyMs ?? sentinel.behavioralBiometrics?.typingLatencyMs ?? (sentinel as any).biomotorLatencyMs ?? 300;
-  const screenNightMinutes = sentinel.behavioralBiometrics?.screenActiveTimeMinutes ?? (sentinel as any).screenOnNightTimeMinutes ?? 0;
-  const sleepEff = sentinel.sleepMetrics?.sleepEfficiencyPct ?? (sentinel as any).sleepEfficiencyPct ?? 80;
-  const sleepDuration = sentinel.sleepMetrics?.avgSleepDurationHours ?? (sentinel as any).avgSleepDurationHours ?? 7;
-  const riskScore = sentinel.safetyStatus?.riskLevel ?? (sentinel as any).passiveRiskScore ?? 'BAJO';
-  const riskRationale = sentinel.safetyStatus?.passiveRiskRationale ?? (sentinel as any).passiveRiskRationale ?? 'Sincronización de telemetría sin anomalías críticas.';
-  const emergency = sentinel.safetyStatus?.emergencyContact ?? (sentinel as any).emergencyContact ?? { name: 'Familiar', phone: '+52 55 0000-0000', relationship: 'Red de Apoyo' };
+  const nightWakeups = sentinel.sleepMetrics.nightWakeups;
+  const biomotorLatencyMs = sentinel.behavioralBiometrics.biomotorLatencyMs;
+  const screenNightMinutes = sentinel.behavioralBiometrics.screenActiveTimeMinutes;
+  const sleepEff = sentinel.sleepMetrics.sleepEfficiencyPct;
+  const sleepDuration = sentinel.sleepMetrics.avgSleepDurationHours;
+  const riskScore = sentinel.safetyStatus.riskLevel;
+  const riskRationale = sentinel.safetyStatus.passiveRiskRationale;
+  const emergency = sentinel.safetyStatus.emergencyContact;
 
   const isNightWakeupHigh = nightWakeups > 3;
   const isBiomotorCritical = biomotorLatencyMs > 420 || biomotorLatencyMs < 200;
   const isHighRisk = riskScore === 'CRÍTICO' || riskScore === 'ALTO' || isNightWakeupHigh;
 
-  // MOTOR DE RECOMENDACIÓN CLÍNICA AMIE PARA VR
-  const getVrRecommendation = () => {
-    if (biomotorLatencyMs > 420) return "Sugerencia AMIE: Ejecutar Módulo VR de Depresión (TDM) - Evaluar aplanamiento psicomotor.";
-    if (biomotorLatencyMs < 200 && screenNightMinutes > 60) return "Sugerencia AMIE: Ejecutar Módulo VR TDAH o Descarte de Fase Maníaca.";
-    if (isNightWakeupHigh) return "Sugerencia AMIE: Ejecutar Módulo VR de Ansiedad (TAG) / Neurohipnosis para modulación vagal.";
-    return "Paciente basal. Seleccione módulo VR según criterio en el Master Selector.";
+  // Motor de recomendación de protocolo VR para visor Pico 3 Pro
+  const getVrRecommendationData = () => {
+    if (biomotorLatencyMs > 420) {
+      return {
+        moduleId: 'TDM_DEPRESSION',
+        text: 'Sugerencia AMIE: Ejecutar Módulo VR de Depresión (TDM) — Evaluar retardo psicomotor y aplanamiento afectivo.'
+      };
+    }
+    if (biomotorLatencyMs < 200 && screenNightMinutes > 60) {
+      return {
+        moduleId: 'TDAH_EXECUTIVE',
+        text: 'Sugerencia AMIE: Ejecutar Módulo VR TDAH — Evaluar desinhibición motora y descarte de hipomanía.'
+      };
+    }
+    if (isNightWakeupHigh) {
+      return {
+        moduleId: 'TAG_ANXIETY',
+        text: 'Sugerencia AMIE: Ejecutar Módulo VR de Ansiedad (TAG) / Neurohipnosis — Estimulación vagotónica.'
+      };
+    }
+    return {
+      moduleId: 'NEURO_HYPNOSIS',
+      text: 'Paciente en rango basal. Seleccione el protocolo inmersivo según el objetivo de la sesión.'
+    };
   };
 
+  const recommendation = getVrRecommendationData();
+  const sanitizedPhone = (emergency?.phone || '').replace(/[^\d+]/g, '');
+
   return (
-    <div className={`rounded-xl p-4 border shadow-xl transition-all ${
+    <div className={`rounded-xl p-4 border shadow-xl transition-all font-sans text-slate-100 ${
       isHighRisk 
         ? 'bg-slate-900 border-rose-500/50 shadow-rose-950/20' 
         : 'bg-slate-900 border-slate-800'
     }`}>
-      {/* Header */}
+      {/* Cabecera */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
@@ -75,11 +140,11 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
                 APK Centinela • Medición Pasiva
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700">
-                {sentinel.pacId || patient?.id || 'PAC-0001'}
+                {sentinel.pacId}
               </span>
             </div>
-            <span className="text-[10px] text-slate-400">
-              Sincronización: {sentinel.deviceSyncTime || 'En línea'}
+            <span className="text-[10px] text-slate-400 font-mono">
+              Sincronización: {sentinel.deviceSyncTime}
             </span>
           </div>
         </div>
@@ -87,7 +152,7 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
         <div className="flex items-center gap-1.5">
           <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${
             riskScore === 'CRÍTICO'
-              ? 'bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse'
+              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
               : riskScore === 'ALTO'
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
               : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -97,25 +162,25 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
         </div>
       </div>
 
-      {/* Telemetry Grid */}
+      {/* Rejilla de Telemetría */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs">
-        {/* Despertares nocturnos */}
+        {/* Despertares Nocturnos */}
         <div className={`p-2 rounded-lg border ${
           isNightWakeupHigh
-            ? 'bg-red-950/40 border-red-500/40 text-red-200'
+            ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
             : 'bg-slate-950/70 border-slate-800 text-slate-300'
         }`}>
           <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
             <span className="flex items-center gap-1">
               <Moon className="w-3 h-3 text-indigo-400" /> Despertares
             </span>
-            {isNightWakeupHigh && <span className="text-red-400 font-bold">ALERTA</span>}
+            {isNightWakeupHigh && <span className="text-rose-400 font-bold font-mono">ALERTA</span>}
           </div>
           <div className="text-base font-bold font-mono">
-            {nightWakeups} <span className="text-[10px] font-normal">/ noche</span>
+            {nightWakeups} <span className="text-[10px] font-normal text-slate-400">/ noche</span>
           </div>
           <div className="text-[9px] text-slate-400 mt-0.5">
-            {isNightWakeupHigh ? 'Despertares > 3 (Riesgo Suicida)' : 'Ciclo REM normal'}
+            {isNightWakeupHigh ? 'Despertares > 3 (Riesgo Autolítico)' : 'Arquitectura REM estable'}
           </div>
         </div>
 
@@ -131,25 +196,25 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
             </span>
           </div>
           <div className="text-base font-bold font-mono">
-            {biomotorLatencyMs} <span className="text-[10px] font-normal">ms</span>
+            {biomotorLatencyMs} <span className="text-[10px] font-normal text-slate-400">ms</span>
           </div>
           <div className="text-[9px] text-slate-400 mt-0.5">
             {biomotorLatencyMs > 420 ? 'Inhibición / Letargo' : biomotorLatencyMs < 200 ? 'Agitación impulsiva' : 'Velocidad esperada'}
           </div>
         </div>
 
-        {/* Pantalla Noche */}
+        {/* Pantalla Nocturna */}
         <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-300">
           <div className="text-[10px] text-slate-400 mb-0.5 flex items-center gap-1">
-            <Clock className="w-3 h-3 text-sky-400" /> Pantalla Nocturna
+            <Clock className="w-3 h-3 text-sky-400" /> Pantalla Noche
           </div>
           <div className="text-base font-bold font-mono text-sky-300">
-            {screenNightMinutes} <span className="text-[10px] font-normal">min</span>
+            {screenNightMinutes} <span className="text-[10px] font-normal text-slate-400">min</span>
           </div>
           <div className="text-[9px] text-slate-400 mt-0.5">Uso entre 00:00 - 05:00</div>
         </div>
 
-        {/* Eficiencia Sueño */}
+        {/* Eficiencia de Sueño */}
         <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-300">
           <div className="text-[10px] text-slate-400 mb-0.5 flex items-center gap-1">
             <Zap className="w-3.5 h-3.5 text-purple-400" /> Eficiencia Sueño
@@ -161,37 +226,57 @@ export const PatientSentinelDashboard: React.FC<PatientSentinelDashboardProps> =
         </div>
       </div>
 
-      {/* Rationale & Crisis Protocol Trigger */}
+      {/* Interpretación Algorítmica & Recomendación VR */}
       <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
         <p className="leading-relaxed">
           <strong className="text-slate-200">Interpretación Algorítmica: </strong>
           {riskRationale}
         </p>
 
-        {/* RECOMENDADOR DE MÓDULO VR */}
-        <div className="flex items-center gap-2 p-2 mt-2 bg-sky-950/40 border border-sky-900/50 rounded-lg text-sky-200">
-          <BrainCircuit className="w-4 h-4 text-sky-400 shrink-0" />
-          <span className="text-[11px] font-medium">{getVrRecommendation()}</span>
+        {/* Recomendador de Módulo VR Pico 3 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 mt-2 bg-sky-950/40 border border-sky-900/50 rounded-lg text-sky-200">
+          <div className="flex items-center gap-2">
+            <BrainCircuit className="w-4 h-4 text-sky-400 shrink-0" />
+            <span className="text-[11px] font-medium">{recommendation.text}</span>
+          </div>
+
+          {onNavigateToVrModule && (
+            <button
+              type="button"
+              onClick={() => onNavigateToVrModule(recommendation.moduleId)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-[10px] font-bold transition shrink-0 cursor-pointer active:scale-95 shadow-md shadow-sky-600/20"
+            >
+              <Glasses className="w-3 h-3" />
+              <span>Abrir Protocolo VR</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
+        {/* Alerta de Contención Crítica */}
         {isHighRisk && (
           <div className="p-2.5 bg-rose-950/60 border border-rose-500/40 rounded-lg text-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
               <span className="text-[11px] font-semibold">
-                Activar Protocolo de Contención 24/7 & Restricción de Medios
+                Activar Protocolo de Contención 24/7 &amp; Restricción de Medios
               </span>
             </div>
-            <a
-              href={`tel:${emergency.phone}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[11px] font-bold transition shrink-0 shadow-lg shadow-rose-600/30"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span>Llamar Red: {emergency.name}</span>
-            </a>
+
+            {sanitizedPhone && (
+              <a
+                href={`tel:${sanitizedPhone}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[11px] font-bold transition shrink-0 shadow-lg shadow-rose-600/30 cursor-pointer active:scale-95"
+              >
+                <PhoneCall className="w-3.5 h-3.5" />
+                <span>Llamar Red: {emergency.name}</span>
+              </a>
+            )}
           </div>
         )}
       </div>
     </div>
   );
 };
+
+export default PatientSentinelDashboard;
