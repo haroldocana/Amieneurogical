@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// 1. MIDDLEWARES & CORS (INTACTO)
+// 1. MIDDLEWARES & CORS
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -19,13 +19,13 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 2. CONEXIÓN A MONGODB ATLAS (INTACTO)
+// 2. CONEXIÓN A MONGODB ATLAS
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:amie2026@cluster0.mongodb.net/amie_clinical_db?retryWrites=true&w=majority';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB Conectada con éxito'))
   .catch(err => console.error('❌ Error de conexión a MongoDB:', err.message));
 
-// Definición global del Esquema de Sesión VR en MongoDB
+// Esquema y Modelo de Telemetría VR
 const VrSessionSchema = new mongoose.Schema({
   patientId: String,
   taskName: String,
@@ -39,7 +39,7 @@ const VrSessionSchema = new mongoose.Schema({
 
 const VrSession = mongoose.models.VrSession || mongoose.model('VrSession', VrSessionSchema);
 
-// 3. RUTAS DE COMPROBACIÓN DE SALUD (HEALTH CHECK - INTACTO)
+// 3. RUTAS DE SALUD DEL SISTEMA
 app.get('/health', (req, res) => {
   return res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -58,7 +58,7 @@ app.get('/status', (req, res) => {
   });
 });
 
-// 4. IMPORTAR Y REGISTRAR RUTAS EXISTENTES (INTACTO)
+// 4. RUTAS DE TELEMETRÍA VR
 try {
   const vrTelemetryRouter = require('./routes/vrTelemetry');
   app.use('/api/vr', vrTelemetryRouter);
@@ -67,11 +67,11 @@ try {
     const vrTelemetryRouter = require('./server/routes/vrTelemetry');
     app.use('/api/vr', vrTelemetryRouter);
   } catch (err) {
-    console.warn('⚠️ No se pudo cargar módulo externo de vrTelemetry, usando integrado');
+    console.warn('⚠️ Cargando rutas de telemetría directamente integradas');
   }
 }
 
-// Endpoint de respaldo existente /api/vr/telemetry (INTACTO)
+// Endpoint de respaldo existente /api/vr/telemetry
 app.post('/api/vr/telemetry', async (req, res) => {
   try {
     const { patientId, moduleId, taskName, kpis, telemetryLog, sessionData } = req.body;
@@ -94,7 +94,7 @@ app.post('/api/vr/telemetry', async (req, res) => {
   }
 });
 
-// 🟢 NUEVO ENDPOINT DE COMPATIBILIDAD CON VrPatientExperience (/api/telemetry/save)
+// Endpoint receptor para persistencia periódica de VrPatientExperience
 app.post('/api/telemetry/save', async (req, res) => {
   try {
     const data = req.body;
@@ -113,20 +113,22 @@ app.post('/api/telemetry/save', async (req, res) => {
         commissions: data.commissions,
         omissions: data.omissions,
         avgReactionTime: data.avgReactionTime,
-        tranceDepth: data.tranceDepth
+        tranceDepth: data.tranceDepth,
+        finalHrv: data.finalHrv,
+        finalGsr: data.finalGsr
       },
       rawSessionData: data
     });
 
-    console.log(`[MongoDB] Registro de sesión archivado con éxito: ${targetPatient} [${activeModule}]`);
+    console.log(`[MongoDB] Sesión archivada en base de datos: ${targetPatient} [${activeModule}]`);
     return res.status(200).json({ success: true, sessionId: saved._id });
   } catch (err) {
-    console.error('Error archivando sesión VR en MongoDB:', err);
+    console.error('Error guardando en /api/telemetry/save:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Proxy Shim para Vertex AI (INTACTO)
+// Proxy Shim para Vertex AI
 app.post('/api-proxy', async (req, res) => {
   if (req.headers['x-app-proxy'] !== 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ') {
     return res.status(401).json({ error: 'Acceso denegado: Proxy no autorizado' });
@@ -145,14 +147,14 @@ app.post('/api-proxy', async (req, res) => {
   }
 });
 
-// 5. SERVIDOR WEBSOCKET GLOBAL (PICO 3 <-> CHROMEBOOK) (INTACTO)
+// 5. SERVIDOR WEBSOCKET BIDIRECCIONAL (CHROMEBOOK <-> PICO 3)
 const wss = new WebSocketServer({ server });
 const connectedClients = new Set();
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-  // Interceptor Proxy Gemini Live WS (INTACTO)
+  // Interceptor Proxy Gemini Live WS
   if (url.pathname === '/ws-proxy') {
     const target = url.searchParams.get('target');
     if (!target) return ws.close();
@@ -165,9 +167,9 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  // Telemetría VR AMIE
+  // Enlace Clínico VR
   connectedClients.add(ws);
-  console.log('🔌 Cliente conectado al WebSocket VR Bridge');
+  console.log('🔌 Terminal conectada al WebSocket VR Bridge');
 
   ws.on('message', async (message) => {
     try {
@@ -178,7 +180,7 @@ wss.on('connection', (ws, req) => {
         ws.send(JSON.stringify({ type: 'HANDSHAKE_ACK', patientId }));
       }
 
-      // Si llega una orden de persistencia por WebSocket, guardarla en MongoDB
+      // Guardar en MongoDB si llega instrucción explícita por WebSocket
       if (data.type === 'PERSIST_SESSION_DATA' && data.payload) {
         try {
           await VrSession.create({
@@ -188,31 +190,31 @@ wss.on('connection', (ws, req) => {
             protocol: data.payload.protocol,
             rawSessionData: data.payload
           });
-          console.log(`[MongoDB-WS] Sesión archivada vía WebSocket para: ${patientId}`);
+          console.log(`[MongoDB-WS] Registro archivado para: ${patientId}`);
         } catch (dbErr) {
-          console.error('Error guardando paquete PERSIST_SESSION_DATA:', dbErr.message);
+          console.error('Error archivando por WebSocket:', dbErr.message);
         }
       }
 
-      // Rebotar paquetes a los demás clientes conectados (Pico 3 <-> Chromebook)
+      // Retransmisión bidireccional instantánea entre gafa y dashboard
       connectedClients.forEach(client => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify(data));
         }
       });
     } catch (e) {
-      console.error('Error procesando mensaje WS:', e);
+      console.error('Error procesando mensaje WebSocket:', e);
     }
   });
 
   ws.on('close', () => {
     connectedClients.delete(ws);
-    console.log('❌ Cliente desconectado del WebSocket');
+    console.log('❌ Terminal desconectada del WebSocket');
   });
 });
 
-// 6. INICIAR PUERTO (INTACTO)
+// 6. PUERTO DE ESCUCHA
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`🚀 Backend AMIE listo y corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor AMIE activo en puerto ${PORT}`);
 });
