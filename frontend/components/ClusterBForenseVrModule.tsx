@@ -16,7 +16,8 @@ import {
   Monitor,
   Flame,
   UserCheck,
-  Compass
+  Compass,
+  Activity
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 import { immersionMedia } from '../services/immersionMediaService';
@@ -40,7 +41,6 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
   const [isAvatarThinking, setIsAvatarThinking] = useState(false);
   const [isAiStreamingVoice, setIsAiStreamingVoice] = useState(false);
 
-  // CORRECCIÓN CLAVE: Nombre exacto del módulo y extracción de syncSession
   const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'CLUSTER_B_FORENSIC');
 
   const handleGenerateAiEnvironmentAndSession = async () => {
@@ -60,14 +60,11 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
         setEnvPromptStatus('Entorno VR cargado en modo local optimizado.');
       }
 
-      // Mapeo del entorno forense hacia el asset oficial en /ecosystems/
       const ecosystemAssetKey = selectedEnvironment === 'FORENSIC_COURTROOM' ? 'CLUSTER_B_FORENSIC' : 'ACROPHOBIA';
       const resolvedTextureUrl = immersionMedia.getEcosystemAssetUrl(ecosystemAssetKey);
 
-      // Aseguramos que el paciente está sincronizado antes de enviar el comando
       syncSession();
 
-      // Transmitir orden de generación y textura al visor Meta Quest / Pico
       transmit({
         type: 'LOAD_MODULE',
         moduleName: 'CLUSTER_B_FORENSIC',
@@ -288,3 +285,5 @@ export const ClusterBForenseVrModule: React.FC<Props> = ({ patient, onClose }) =
     </div>
   );
 };
+
+export default ClusterBForenseVrModule;
