@@ -1,283 +1,432 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { PatientRecord } from '../types';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
-  Sparkles,
-  Activity,
-  Zap,
-  Play,
-  Square,
-  RefreshCw,
-  Heart,
-  Sliders,
-  Glasses,
   Monitor,
   Compass,
   ShieldCheck,
   Scale,
-  CloudRain
+  CloudRain,
+  Activity,
+  Heart,
+  Zap,
+  Play,
+  Square,
+  Eye,
+  SlidersHorizontal,
+  FolderOpen,
+  Film,
+  Video
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
+import {
+  AMIE_CLINICAL_ENVIRONMENTS,
+  AMIE_CLINICAL_VIDEOS,
+  getEnvironmentAssetById,
+  getVideoAssetById,
+  VrEnvironmentAsset,
+  VrVideoAsset
+} from '../constants/vrAssetRegistry';
 
 interface Props {
   patient: PatientRecord;
   onClose?: () => void;
 }
 
-type AppRole = 'SELECTING_ROLE' | 'CALIBRATION_RUNNER' | 'CLINICIAN_CONSOLE' | 'PATIENT_VR_VIEWER';
-type ClinicalVrMode = 'HYPNOSIS' | 'PHOBIA_VRET' | 'CLUSTER_B_FORENSIC' | 'SYSTEMIC_COUPLE' | 'SEXUAL_HEALTH_SES_SIS';
-type InteractionType = 'DYNAMIC_AI' | 'PRE_RECORDED_VIDEO';
-
-const AMIE_12_ENVIRONMENTS = [
-  { id: 'FORENSIC_COURTROOM', name: '01. Sala de Audiencias / Tribunal Pericial (Cluster B)' },
-  { id: 'CORPORATE_OFFICE', name: '02. Oficina Ejecutiva de Confrontación' },
-  { id: 'MINIMALIST_ROOM', name: '03. Sala Neutra de Contrainterrogatorio' },
-  { id: 'AGORAPHOBIA_STREET', name: '04. Plaza Pública Abierta (Agorafobia)' },
-  { id: 'HEIGHTS_BALCONY', name: '05. Balcón Escénico en Altura (Acrofobia)' },
-  { id: 'ALPINE_SANCTUARY', name: '06. Santuario Alpino Minimalista (Grounding / Autoregla)' },
-  { id: 'NEUTRAL_LIVING_ROOM', name: '07. Sala de Estar Sistémica / Pareja (SES/SIS)' },
-  { id: 'MIRROR_ROOM', name: '08. Sala de Espejo Díadico / Vínculo Íntimo' },
-  { id: 'KINETIC_VOID', name: '09. Vacío Cinético de Respiración Lumínica' },
-  { id: 'DEEP_OCEAN_FLOOR', name: '10. Fondo Marino Disociativo y Seguro' },
-  { id: 'COGNITIVE_LAB', name: '11. Laboratorio de Pruebas Ejecutivas TDAH' },
-  { id: 'SAFE_HAVEN_GARDEN', name: '12. Jardín Zen de Regulación Emocional' }
-];
+type ModeType = 'ENVIRONMENT_360' | 'CLINICAL_VIDEO';
+type ClinicalVrModule = 
+  | 'CLUSTER_B_FORENSIC' 
+  | 'PHOBIA_VRET' 
+  | 'HYPNOSIS' 
+  | 'SEXUAL_HEALTH_SES_SIS' 
+  | 'SYSTEMIC_COUPLE' 
+  | 'NEURO_TRAUMA' 
+  | 'TDAH';
 
 export const AmieUnifiedVrConsole: React.FC<Props> = ({ patient, onClose }) => {
-  const patientId = patient?.id || 'PAC-8104';
-  
-  // INICIO DIRECTO EN VISTA DE TERAPEUTA (Se elimina el paso de selección de rol)
-  const [appRole, setAppRole] = useState<AppRole>('CLINICIAN_CONSOLE');
+  const patientId = patient?.id || (patient as any)?.patientId || 'PAC-8104';
 
-  const [vrMode, setVrMode] = useState<ClinicalVrMode>('SEXUAL_HEALTH_SES_SIS');
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('NEUTRAL_LIVING_ROOM');
-  const [interactionType, setInteractionType] = useState<InteractionType>('DYNAMIC_AI');
-  
-  const [aiContentType, setAiContentType] = useState<'SES_SIS_EXCITATORY' | 'SES_SIS_INHIBITORY' | 'CUSTOM_SCRIPT' | 'COUPLE_MEDIATION'>('SES_SIS_EXCITATORY');
-  const [customProfessionalPrompt, setCustomProfessionalPrompt] = useState<string>(
-    'Generar entorno inmersivo de seguridad y estímulo visual fotorrealista para desarticular frenos inhibitorios (SIS) y activar aceleradores (SES).'
-  );
-  const [aiVoiceTone, setAiVoiceTone] = useState<'SOFT_WHISPER' | 'EMPATHIC_GUIDE' | 'ARROGANT_COLD' | 'DEFENSIVE_HOSTILE'>('SOFT_WHISPER');
-  
-  const [clusterBPattern, setClusterBPattern] = useState<'GASLIGHTING' | 'LOVE_BOMBING' | 'SILENT_TREATMENT'>('GASLIGHTING');
+  const [mediaMode, setMediaMode] = useState<ModeType>('ENVIRONMENT_360');
+  const [vrModule, setVrModule] = useState<ClinicalVrModule>('CLUSTER_B_FORENSIC');
+
+  // Identificadores de activo seleccionado
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('CLUSTER_B_COURTROOM');
+  const [selectedVideoId, setSelectedVideoId] = useState<string>('OVERT_PROVOCATION_VIDEO');
+
+  // Parámetros clínicos
+  const [clusterBPattern, setClusterBPattern] = useState<'GASLIGHTING' | 'LOVE_BOMBING' | 'SILENT_TREATMENT' | 'EGO_THREAT'>('EGO_THREAT');
   const [vretExposureStep, setVretExposureStep] = useState<number>(3);
   const [isAiAutoRegulationActive, setIsAiAutoRegulationActive] = useState<boolean>(true);
 
-  const bridgeRole = appRole === 'PATIENT_VR_VIEWER' ? 'receiver' : 'sender';
-  const { isConnected, transmit, liveData } = useVrTelemetryBridge(bridgeRole, patientId, `UnifiedVR_${vrMode}`);
+  // Enlace WebSocket bidireccional (Chromebook <-> Pico 3)
+  const { isConnected, transmit, liveData } = useVrTelemetryBridge('sender', patientId, `UnifiedVR_${vrModule}`);
+  const [sessionActive, setSessionActive] = useState<boolean>(false);
 
-  const [sessionActive, setSessionActive] = useState(false);
-  const [envStatusMsg, setEnvStatusMsg] = useState<string>('Motor generativo de IA (Gemini 3.8 Flash) en espera...');
-  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  // Activos actuales resueltos
+  const currentEnvironment: VrEnvironmentAsset = getEnvironmentAssetById(selectedEnvironmentId);
+  const currentVideo: VrVideoAsset = getVideoAssetById(selectedVideoId);
 
-  const handleModuleChange = (newMode: ClinicalVrMode) => {
-    setVrMode(newMode);
-    if (newMode === 'SEXUAL_HEALTH_SES_SIS') setSelectedEnvironment('NEUTRAL_LIVING_ROOM');
-    else if (newMode === 'CLUSTER_B_FORENSIC') setSelectedEnvironment('FORENSIC_COURTROOM');
-    else if (newMode === 'PHOBIA_VRET') setSelectedEnvironment('HEIGHTS_BALCONY');
-    else if (newMode === 'SYSTEMIC_COUPLE') setSelectedEnvironment('MIRROR_ROOM');
-    else if (newMode === 'HYPNOSIS') setSelectedEnvironment('ALPINE_SANCTUARY');
+  // Cambio de módulo con asignación automática de escenario local
+  const handleModuleChange = (newModule: ClinicalVrModule) => {
+    setVrModule(newModule);
+
+    let defaultEnvId = 'CLUSTER_B_COURTROOM';
+    if (newModule === 'CLUSTER_B_FORENSIC') defaultEnvId = 'CLUSTER_B_COURTROOM';
+    else if (newModule === 'SEXUAL_HEALTH_SES_SIS') defaultEnvId = 'DUAL_CONTROL_SES_SIS';
+    else if (newModule === 'SYSTEMIC_COUPLE') defaultEnvId = 'CLINICAL_OFFICE_CONSULT';
+    else if (newModule === 'PHOBIA_VRET') defaultEnvId = 'ACROPHOBIA_HIGH_ROOF';
+    else if (newModule === 'HYPNOSIS') defaultEnvId = 'NEURO_HYPNOSIS_TRANCE';
+    else if (newModule === 'NEURO_TRAUMA') defaultEnvId = 'EMDR_MEMORY_REPROCESS';
+    else if (newModule === 'TDAH') defaultEnvId = 'TDAH_EXECUTIVE_LAB';
+
+    setSelectedEnvironmentId(defaultEnvId);
   };
 
-  const handleInitializeAndRenderEnvironment = async () => {
-    setIsGeneratingAi(true);
-    setEnvStatusMsg('Generando entorno y estímulo visual con Gemini 3.8 Flash...');
-
-    try {
-      const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://amieneurogical.onrender.com';
-      const PROXY_HEADER = import.meta.env.VITE_PROXY_HEADER || 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ';
-      
-      let generatedAssetUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80';
-
-      const vertexEndpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.8-flash:generateContent`;
-      const proxyPayload = {
-        contents: [{ role: 'user', parts: [{ text: `[MÓDULO: ${vrMode}] Describe visualmente en inglés y de forma fotorrealista esta escena clínica: "${customProfessionalPrompt}" (máx 15 palabras).` }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
-      };
-
-      const response = await fetch(`${BACKEND_URL}/api-proxy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-proxy': PROXY_HEADER
-        },
-        body: JSON.stringify({
-          originalUrl: vertexEndpoint,
-          body: proxyPayload
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          const queryTag = encodeURIComponent(rawText.trim());
-          generatedAssetUrl = `https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=1920&q=80&sig=${queryTag}`;
-        }
-      } else {
-        const encodedKeyword = encodeURIComponent(customProfessionalPrompt.slice(0, 20));
-        generatedAssetUrl = `https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80&t=${encodedKeyword}`;
-      }
-
-      setEnvStatusMsg('¡Asset visual generado con éxito y transmitido al visor!');
-
+  const handleStartSession = () => {
+    if (mediaMode === 'ENVIRONMENT_360') {
       transmit({
         type: 'RENDER_SPATIAL_ENVIRONMENT_WITH_MEDIA',
-        environment: selectedEnvironment,
-        mode: vrMode,
-        interactionType,
-        professionalPrompt: customProfessionalPrompt,
-        aiGeneratedAssetUrl: generatedAssetUrl,
+        mediaType: 'IMAGE_360',
+        environment: currentEnvironment.id,
+        mode: vrModule,
+        aiGeneratedAssetUrl: currentEnvironment.localAssetUrl,
         autoRegulation: isAiAutoRegulationActive,
-        voiceStyle: aiVoiceTone,
         clusterBPattern,
-        vretStep: vretExposureStep
+        vretStep: vretExposureStep,
+        patientId,
+        timestamp: Date.now()
       });
-
-      setSessionActive(true);
-    } catch (e) {
-      console.warn("Usando respaldo local:", e);
-      setEnvStatusMsg('Entorno activo con parámetros predeterminados.');
-      setSessionActive(true);
-    } finally {
-      setIsGeneratingAi(false);
+    } else {
+      transmit({
+        type: 'RENDER_SPATIAL_ENVIRONMENT_WITH_MEDIA',
+        mediaType: 'VIDEO_CLINICAL',
+        videoId: currentVideo.id,
+        videoUrl: currentVideo.localAssetUrl,
+        aiGeneratedAssetUrl: currentVideo.localAssetUrl,
+        mode: 'CLUSTER_B_FORENSIC',
+        triggerType: currentVideo.triggerType,
+        patientId,
+        timestamp: Date.now()
+      });
     }
+
+    setSessionActive(true);
   };
 
-  const handleEndSession = async () => {
+  const handleEndSession = () => {
     setSessionActive(false);
-    transmit({ type: 'STOP_TEST' });
+    transmit({
+      type: 'STOP_TEST',
+      patientId,
+      timestamp: Date.now()
+    });
     if (onClose) onClose();
   };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
+      {/* Cabecera Principal */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-lg">
+          <div className="p-3 bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-lg shadow-cyan-600/20">
             <Monitor className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white tracking-tight">Consola Profesional • Generación Nativa con Gemini 3.8 Flash</h2>
-            <p className="text-xs text-slate-400">Paciente: {patientId} | <button onClick={() => setAppRole('SELECTING_ROLE')} className="text-cyan-400 hover:underline cursor-pointer">Cambiar a Selector de Rol</button></p>
+            <h2 className="text-base font-black text-white tracking-tight">
+              Consola Profesional AMIE • 19 Entornos 360° &amp; Videos de Provocación
+            </h2>
+            <p className="text-xs text-slate-400">
+              Expediente: <strong className="text-slate-200">{patientId}</strong> | Enlace Local Directo (Pico 3)
+            </p>
           </div>
         </div>
-        {onClose && <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 cursor-pointer">✕</button>}
+        {onClose && (
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
-      <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+      {/* Monitor de Telemetría Bioclínica en Tiempo Real */}
+      <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-            <Compass className="w-4 h-4" /> Configuración de Módulo &amp; Generador IA
-          </h3>
-          <label className="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-            <input type="checkbox" checked={isAiAutoRegulationActive} onChange={(e) => setIsAiAutoRegulationActive(e.target.checked)} className="rounded bg-slate-950 border-slate-700 text-emerald-500 cursor-pointer" />
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" /> IA Autorregulada</span>
-          </label>
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" /> Telemetría del Visor en Vivo (Pico 3)
+          </span>
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1.5 ${
+            isConnected 
+              ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' 
+              : 'bg-amber-950 text-amber-300 border border-amber-500/40'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            {isConnected ? 'PICO 3 EN LÍNEA' : 'PICO 3 EN ESPERA'}
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="space-y-1.5">
-            <label className="text-slate-400 font-semibold block">Especialidad / Módulo Clínico:</label>
-            <select value={vrMode} onChange={(e) => handleModuleChange(e.target.value as ClinicalVrMode)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
-              <option value="SEXUAL_HEALTH_SES_SIS">💕 Salud Sexual &amp; Respuesta Sexual (SES / SIS)</option>
-              <option value="SYSTEMIC_COUPLE">👥 Terapia de Pareja y Mediación Sistémica</option>
-              <option value="HYPNOSIS">🧘 Neurohipnosis y Regulación (Grounding)</option>
-              <option value="CLUSTER_B_FORENSIC">⚖️ Forense Cluster B (Narcisismo / TLP)</option>
-              <option value="PHOBIA_VRET">🌪️ Fobias y Ansiedad (VRET)</option>
-            </select>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+            <span className="text-[10px] text-slate-400 uppercase block flex items-center gap-1">
+              <Zap className="w-3 h-3 text-amber-400" /> GSR (Conductancia)
+            </span>
+            <span className="text-base font-black font-mono text-cyan-300">
+              {liveData?.gsr ?? (liveData as any)?.gsrValue ?? 2.8} <span className="text-[10px] text-slate-400 font-normal">µS</span>
+            </span>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-slate-400 font-semibold block">Escenario Base 3D:</label>
-            <select value={selectedEnvironment} onChange={(e) => setSelectedEnvironment(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none font-mono text-xs">
-              {AMIE_12_ENVIRONMENTS.map((env) => (<option key={env.id} value={env.id}>{env.name}</option>))}
-            </select>
+          <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+            <span className="text-[10px] text-slate-400 uppercase block flex items-center gap-1">
+              <Heart className="w-3 h-3 text-rose-400" /> HRV (Tono Vagal)
+            </span>
+            <span className="text-base font-black font-mono text-rose-300">
+              {liveData?.hrv ?? (liveData as any)?.vagalTone ?? 42} <span className="text-[10px] text-slate-400 font-normal">RMSSD</span>
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+            <span className="text-[10px] text-slate-400 uppercase block flex items-center gap-1">
+              <Eye className="w-3 h-3 text-indigo-400" /> Ratio Theta/Beta
+            </span>
+            <span className="text-base font-black font-mono text-indigo-300">
+              {(liveData as any)?.thetaBetaRatio ?? 1.8}σ
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+            <span className="text-[10px] text-slate-400 uppercase block flex items-center gap-1">
+              <SlidersHorizontal className="w-3 h-3 text-emerald-400" /> Índice de Estrés
+            </span>
+            <span className="text-base font-black font-mono text-emerald-300">
+              {liveData?.stressLevel ? `${liveData.stressLevel}%` : 'Normal (32%)'}
+            </span>
           </div>
         </div>
+      </div>
 
-        {vrMode === 'SEXUAL_HEALTH_SES_SIS' && (
-          <div className="p-4 bg-slate-900 rounded-xl border border-rose-500/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-rose-300 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-rose-400" /> Prompt para Generación de Video e Imagen por IA (Modelo SES/SIS):
-              </span>
-              <select value={aiContentType} onChange={(e) => setAiContentType(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-rose-200 font-bold focus:outline-none">
-                <option value="SES_SIS_EXCITATORY">Modelo SES: Generar Estímulo Excitatorio</option>
-                <option value="SES_SIS_INHIBITORY">Modelo SIS: Generar Estímulo Inhibitorio / Calma</option>
-                <option value="COUPLE_MEDIATION">Sintonía Diádica / Pareja</option>
-                <option value="CUSTOM_SCRIPT">Prompt Libre de Generación Visual</option>
-              </select>
+      {/* Pestañas de Selección: Entornos 360° vs Videos Clínicos */}
+      <div className="flex gap-2 border-b border-slate-800 pb-2">
+        <button
+          type="button"
+          onClick={() => setMediaMode('ENVIRONMENT_360')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            mediaMode === 'ENVIRONMENT_360'
+              ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Compass className="w-4 h-4" /> 19 Entornos 360° (/ecosystems/)
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMediaMode('CLINICAL_VIDEO');
+            setVrModule('CLUSTER_B_FORENSIC');
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            mediaMode === 'CLINICAL_VIDEO'
+              ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Film className="w-4 h-4" /> Videos de Provocación Narcisismo (/video/)
+        </button>
+      </div>
+
+      {/* Panel de Configuración según Modo */}
+      <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+        {mediaMode === 'ENVIRONMENT_360' ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-slate-400 font-semibold block">Especialidad Clínica:</label>
+                <select
+                  value={vrModule}
+                  onChange={(e) => handleModuleChange(e.target.value as ClinicalVrModule)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  <option value="CLUSTER_B_FORENSIC">⚖️ Peritaje Forense Cluster B (Narcisismo)</option>
+                  <option value="SEXUAL_HEALTH_SES_SIS">💕 Control Sexual Dual (SES / SIS)</option>
+                  <option value="PHOBIA_VRET">🌪️ VRET Fobias (Acrofobia / Aerofobia)</option>
+                  <option value="HYPNOSIS">🧘 Neurohipnosis &amp; Grounding</option>
+                  <option value="NEURO_TRAUMA">🧠 Trauma, EMDR &amp; Apego</option>
+                  <option value="TDAH">🎯 Laboratorio Ejecutivo TDAH</option>
+                  <option value="SYSTEMIC_COUPLE">👥 Terapia Sistémica de Pareja</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-400 font-semibold block">Escenario 360 Asignado:</label>
+                <select
+                  value={selectedEnvironmentId}
+                  onChange={(e) => setSelectedEnvironmentId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-xs cursor-pointer"
+                >
+                  {AMIE_CLINICAL_ENVIRONMENTS.map((env) => (
+                    <option key={env.id} value={env.id}>
+                      {env.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <textarea
-              rows={3}
-              value={customProfessionalPrompt}
-              onChange={(e) => setCustomProfessionalPrompt(e.target.value)}
-              placeholder="Describa el video o imagen fotorrealista que la IA debe generar para el paciente..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-rose-500 transition"
-            />
-          </div>
+            {/* Vista Previa de la Imagen Local */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-3 bg-slate-900 rounded-xl border border-slate-800 items-center">
+              <div className="md:col-span-4 relative rounded-lg overflow-hidden border border-slate-700 h-28 bg-black">
+                <img
+                  src={currentEnvironment.localAssetUrl}
+                  alt={currentEnvironment.name}
+                  className="w-full h-full object-cover"
+                />
+                <span className="absolute bottom-1 left-1 bg-black/80 text-[9px] font-mono px-1.5 py-0.5 rounded text-cyan-300">
+                  {currentEnvironment.localAssetUrl}
+                </span>
+              </div>
+              <div className="md:col-span-8 space-y-1 text-xs">
+                <div className="font-bold text-white flex items-center gap-1.5">
+                  <FolderOpen className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{currentEnvironment.name}</span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">{currentEnvironment.description}</p>
+                <div className="text-[10px] text-amber-300 font-mono">Indicación: {currentEnvironment.targetCondition}</div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Modo Video de Provocación Clínica */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-rose-300 flex items-center gap-2">
+                <Video className="w-4 h-4 text-rose-400" /> Seleccionar Video de Provocación Narcisista / Pericial:
+              </label>
+
+              <select
+                value={selectedVideoId}
+                onChange={(e) => setSelectedVideoId(e.target.value)}
+                className="w-full bg-slate-900 border border-rose-500/40 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none cursor-pointer"
+              >
+                {AMIE_CLINICAL_VIDEOS.map((vid) => (
+                  <option key={vid.id} value={vid.id}>
+                    {vid.name} ({vid.localAssetUrl})
+                  </option>
+                ))}
+              </select>
+
+              {/* Vista Previa del Video */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-3 bg-slate-900 rounded-xl border border-slate-800 items-center">
+                <div className="md:col-span-5 relative rounded-lg overflow-hidden border border-rose-500/30 h-32 bg-black flex items-center justify-center">
+                  <video
+                    src={currentVideo.localAssetUrl}
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="md:col-span-7 space-y-1 text-xs">
+                  <div className="font-bold text-rose-200 flex items-center gap-1.5">
+                    <Film className="w-3.5 h-3.5 text-rose-400" />
+                    <span>{currentVideo.name}</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">{currentVideo.description}</p>
+                  <div className="text-[10px] text-amber-300 font-mono">Población diana: {currentVideo.targetCondition}</div>
+                </div>
+              </div>
+            </div>
+          </>
         )}
 
-        {vrMode === 'CLUSTER_B_FORENSIC' && (
+        {/* Controles para Cluster B / Narcisismo */}
+        {vrModule === 'CLUSTER_B_FORENSIC' && (
           <div className="p-4 bg-slate-900 rounded-xl border border-amber-500/30 space-y-3">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-2">
-              <Scale className="w-4 h-4 text-amber-400" /> Parámetros Periciales Cluster B:
+              <Scale className="w-4 h-4 text-amber-400" /> Protocolo de Provocación al Ego / Peritaje Forense:
             </span>
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1">Patrón de Manipulación:</label>
-                <select value={clusterBPattern} onChange={(e) => setClusterBPattern(e.target.value as any)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  <option value="GASLIGHTING">Gaslighting / Distorsión</option>
-                  <option value="LOVE_BOMBING">Love Bombing / Idealización</option>
-                  <option value="SILENT_TREATMENT">Silent Treatment / Castigo</option>
+                <label className="text-slate-400 block mb-1">Patrón de Provocación:</label>
+                <select 
+                  value={clusterBPattern} 
+                  onChange={(e) => setClusterBPattern(e.target.value as any)} 
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 cursor-pointer"
+                >
+                  <option value="EGO_THREAT">Amenaza Directa al Ego (Overt Ego Threat)</option>
+                  <option value="GASLIGHTING">Gaslighting / Confrontación de Realidad</option>
+                  <option value="LOVE_BOMBING">Love Bombing / Quiebre de Idealización</option>
+                  <option value="SILENT_TREATMENT">Silent Treatment / Abandono Repentino</option>
                 </select>
               </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Tono Guía Virtual:</label>
-                <select value={aiVoiceTone} onChange={(e) => setAiVoiceTone(e.target.value as any)} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  <option value="ARROGANT_COLD">Frío / Desapegado</option>
-                  <option value="DEFENSIVE_HOSTILE">Defensivo / Hostil</option>
-                  <option value="EMPATHIC_GUIDE">Guía Neutro Pericial</option>
-                </select>
+              <div className="flex items-center">
+                <label className="flex items-center gap-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800 w-full">
+                  <input 
+                    type="checkbox" 
+                    checked={isAiAutoRegulationActive} 
+                    onChange={(e) => setIsAiAutoRegulationActive(e.target.checked)} 
+                    className="rounded bg-slate-900 border-slate-700 text-emerald-500 cursor-pointer" 
+                  />
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Freno Autonómico Activo (GSR &gt; 8 µS)
+                  </span>
+                </label>
               </div>
             </div>
           </div>
         )}
 
-        {vrMode === 'PHOBIA_VRET' && (
+        {/* Controles para VRET (Fobias) */}
+        {vrModule === 'PHOBIA_VRET' && (
           <div className="p-4 bg-slate-900 rounded-xl border border-indigo-500/30 space-y-3">
             <span className="text-xs font-bold text-indigo-300 flex items-center gap-2">
-              <CloudRain className="w-4 h-4 text-indigo-400" /> Control de Exposición Gradual (VRET):
+              <CloudRain className="w-4 h-4 text-indigo-400" /> Control de Exposición Jerarquizada (VRET):
             </span>
             <div className="flex items-center gap-4 text-xs">
               <span className="text-slate-400">Nivel de Exposición (1-10):</span>
-              <input type="range" min="1" max="10" value={vretExposureStep} onChange={(e) => setVretExposureStep(Number(e.target.value))} className="flex-1 accent-indigo-500 cursor-pointer" />
-              <span className="font-mono font-bold text-indigo-400 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">Nivel {vretExposureStep}</span>
+              <input 
+                type="range" 
+                min="1" 
+                max="10" 
+                value={vretExposureStep} 
+                onChange={(e) => setVretExposureStep(Number(e.target.value))} 
+                className="flex-1 accent-indigo-500 cursor-pointer" 
+              />
+              <span className="font-mono font-bold text-indigo-400 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
+                Nivel {vretExposureStep}
+              </span>
             </div>
           </div>
         )}
-
-        <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1 font-mono text-xs">
-          <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">Estado del Generador de Assets IA:</div>
-          <div className="text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[11px]">{envStatusMsg}</div>
-        </div>
       </div>
 
+      {/* Botón de Transmisión */}
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
-        <span className="text-xs text-slate-400">Visor: <strong className={isConnected ? "text-emerald-400" : "text-amber-400"}>{isConnected ? 'EN LÍNEA' : 'STANDBY'}</strong></span>
+        <span className="text-xs text-slate-400">
+          Activo Listo: <strong className="text-cyan-400 font-mono">
+            {mediaMode === 'ENVIRONMENT_360' ? currentEnvironment.localAssetUrl : currentVideo.localAssetUrl}
+          </strong>
+        </span>
+
         {!sessionActive ? (
-          <button disabled={isGeneratingAi} onClick={handleInitializeAndRenderEnvironment} className="flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg bg-gradient-to-r from-cyan-500 via-indigo-500 to-rose-600 text-white cursor-pointer hover:scale-105 transition">
-            {isGeneratingAi ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            <span>Generar con IA y Enviar al Visor</span>
+          <button
+            type="button"
+            onClick={handleStartSession}
+            className="flex items-center gap-2 px-6 py-2.5 font-black text-xs rounded-xl shadow-lg bg-gradient-to-r from-cyan-500 via-indigo-500 to-rose-600 hover:from-cyan-400 hover:to-rose-500 text-white cursor-pointer hover:scale-105 active:scale-95 transition"
+          >
+            <Play className="w-4 h-4" />
+            <span>Transmitir {mediaMode === 'ENVIRONMENT_360' ? 'Entorno 360°' : 'Video'} a Pico 3</span>
           </button>
         ) : (
-          <button onClick={handleEndSession} className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl cursor-pointer">
-            <Square className="w-4 h-4" /> <span>Finalizar Sesión</span>
+          <button
+            type="button"
+            onClick={handleEndSession}
+            className="flex items-center gap-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl cursor-pointer shadow-lg shadow-rose-600/20 active:scale-95 transition"
+          >
+            <Square className="w-4 h-4" />
+            <span>Detener y Guardar Telemetría</span>
           </button>
         )}
       </div>
     </div>
   );
 };
+
+export default AmieUnifiedVrConsole;
