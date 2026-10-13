@@ -1,22 +1,23 @@
 {
   "name": "amie-clinical-copilot-psychiatric-neurological-diagnostic-engine",
+  "private": true,
+  "version": "3.8.0",
+  "type": "module",
   "workspaces": [
     "frontend",
     "backend"
-  ], 
+  ],
   "scripts": {
-    "dev-frontend": "npm run dev --prefix frontend",
-    "dev-backend": "npm run dev --prefix backend",
-    "dev": "concurrently \"npm run dev-frontend\" \"npm run dev-backend\""
-  },
-  "dependencies": {
-    "@react-three/drei": "latest",
-    "@react-three/fiber": "latest",
-    "@react-three/xr": "latest",
-    "react-router-dom": "latest",
-    "three": "latest"
+    "dev": "concurrently -n \"FRONTEND,BACKEND\" -c \"cyan.bold,magenta.bold\" \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "build": "npm run build --prefix frontend && npm run build --prefix backend --if-present",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend --if-present",
+    "start": "npm start --prefix backend",
+    "typecheck": "npm run typecheck --prefix frontend"
   },
   "devDependencies": {
-    "concurrently": "latest"
+    "concurrently": "^9.1.0"
   }
 }
