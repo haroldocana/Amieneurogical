@@ -1,3 +1,8 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - MÓDULO DE FENOTIPADO DIGITAL & PREVENCIÓN DE RECAÍDAS
+// frontend/components/DigitalPhenotypeModule.tsx
+// ============================================================================
+
 import React, { useState } from 'react';
 import { PatientRecord } from '../types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -36,7 +41,7 @@ export const DigitalPhenotypeModule: React.FC<Props> = ({ patient, onClose }) =>
   const patientId = patient?.id || (patient as any)?.patientId || 'PAC-8104';
   const p = patient as any;
 
-  // Normalización defensiva de telemetría pasiva (tolera formatos planos y anidados)
+  // Normalización defensiva de telemetría pasiva
   const sRaw = p?.sentinelTelemetry || p?.sentinelTelemetrySnapshot || {};
 
   const nightWakeups = Number(
@@ -83,14 +88,17 @@ export const DigitalPhenotypeModule: React.FC<Props> = ({ patient, onClose }) =>
     phone: '+502 5555-0199'
   };
 
-  const [prediction, setPrediction] = useState<RelapsePrediction null |>(null);
-  const [isPredicting, setIsPredicting] = useState(false);
+  const [prediction, setPrediction] = useState<RelapsePrediction | null>(null);
+  const [isPredicting, setIsPredicting] = useState<boolean>(false);
 
-  // Inferencia Predictiva con Gemini AI & Contingencia Algorítmica Local
   const handleRunPredictiveAi = async () => {
     setIsPredicting(true);
     try {
-      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+      const apiKey = 
+        (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+        (import.meta as any).env?.GEMINI_API_KEY || 
+        (typeof process !== 'undefined' ? process.env?.API_KEY : '') || 
+        '';
 
       if (apiKey) {
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -107,7 +115,7 @@ Eres el motor predictivo de Fenotipado Digital y Prevención de Recaídas de AMI
 Analiza la telemetría pasiva nocturna y biomotora para estimar el riesgo de recaída o descompensación afectiva/psicótica aguda.
 
 DATOS TELEMÉTRICOS DE ENTRADA:
-- Paciente ID: ${patientId} | Edad: ${patient?.age || 45} | Género: ${patient?.gender || 'M'}
+- Paciente ID: ${patientId} | Edad: ${patient?.age \vert{}\vert{} 45} \vert{} Género: ${patient?.gender || 'M'}
 - Motivo de Consulta: ${patient?.consultationReason || 'Evaluación general'}
 - Despertares Nocturnos: ${nightWakeups} por noche
 - Duración Promedio de Sueño: ${avgSleepDurationHours} hrs
@@ -130,7 +138,6 @@ Genera un JSON con esta estructura exacta:
         const result = await model.generateContent(prompt);
         const rawText = result.response.text();
 
-        // Extracción robusta entre llaves para evitar fallos por texto circundante
         const startIndex = rawText.indexOf('{');
         const endIndex = rawText.lastIndexOf('}');
         if (startIndex !== -1 && endIndex !== -1) {
@@ -141,7 +148,6 @@ Genera un JSON con esta estructura exacta:
           throw new Error('Estructura JSON no encontrada en la respuesta del modelo');
         }
       } else {
-        // Motor de contingencia local calibrado
         const calculatedRisk = Math.min(
           96, 
           Math.max(15, Math.round((nightWakeups * 11) + (screenOnNightTimeMinutes * 0.28) + (activityRestlessnessIndex * 0.2)))
@@ -171,7 +177,7 @@ Genera un JSON con esta estructura exacta:
         });
       }
     } catch (err: any) {
-      console.warn('[AMIE Fenotipo] Error en inferencia generativa, aplicando modelo local:', err.message);
+      console.warn('[AMIE Fenotipo] Inferencia generativa omitida, aplicando estimador local:', err.message);
       setPrediction({
         riskScorePct: 76,
         riskLevel: 'ALTO',
@@ -194,11 +200,10 @@ Genera un JSON con esta estructura exacta:
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
-      {/* Encabezado Principal */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-cyan-600 via-teal-600 to-emerald-600 rounded-2xl text-white shadow-lg shadow-cyan-600/30">
-            <Smartphone className="w-6 h-6"/>
+            <Smartphone className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -222,16 +227,15 @@ Genera un JSON con esta estructura exacta:
             className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
             title="Cerrar Módulo"
           >
-            <X className="w-5 h-5"/>
+            <X className="w-5 h-5" />
           </button>
         )}
       </div>
 
-      {/* Rejilla de Métricas Pasivas en Tiempo Real */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Moon className="w-3.5 h-3.5 text-indigo-400"/> Eficiencia del Sueño
+            <Moon className="w-3.5 h-3.5 text-indigo-400" /> Eficiencia del Sueño
           </span>
           <div className="text-xl font-mono font-bold text-indigo-400">
             {sleepEfficiencyPct}%
@@ -241,7 +245,7 @@ Genera un JSON con esta estructura exacta:
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-amber-400"/> Pantalla en Madrugada
+            <Clock className="w-3.5 h-3.5 text-amber-400" /> Pantalla en Madrugada
           </span>
           <div className="text-xl font-mono font-bold text-amber-400">
             {screenOnNightTimeMinutes} <span className="text-xs text-slate-500">min</span>
@@ -251,7 +255,7 @@ Genera un JSON con esta estructura exacta:
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Activity className="w-3.5 h-3.5 text-cyan-400"/> Latencia Biomotora
+            <Activity className="w-3.5 h-3.5 text-cyan-400" /> Latencia Biomotora
           </span>
           <div className="text-xl font-mono font-bold text-cyan-400">
             {biomotorLatencyMs} <span className="text-xs text-slate-500">ms</span>
@@ -261,7 +265,7 @@ Genera un JSON con esta estructura exacta:
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
-            <Zap className="w-3.5 h-3.5 text-rose-400"/> Inquietud Motora
+            <Zap className="w-3.5 h-3.5 text-rose-400" /> Inquietud Motora
           </span>
           <div className="text-xl font-mono font-bold text-rose-400">
             {activityRestlessnessIndex}/100
@@ -270,11 +274,10 @@ Genera un JSON con esta estructura exacta:
         </div>
       </div>
 
-      {/* Red de Contacto de Emergencia */}
       <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl">
-            <Users className="w-5 h-5"/>
+            <Users className="w-5 h-5" />
           </div>
           <div>
             <span className="text-xs font-bold text-white block">Contacto Primario de Seguridad Vinculado</span>
@@ -284,15 +287,14 @@ Genera un JSON con esta estructura exacta:
           </div>
         </div>
         <span className="px-2.5 py-1 text-[10px] font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded-lg flex items-center gap-1">
-          <CheckCircle2 className="w-3 h-3 text-emerald-400"/> LÍNEA DIRECTA ACTIVA
+          <CheckCircle2 className="w-3 h-3 text-emerald-400" /> LÍNEA DIRECTA ACTIVA
         </span>
       </div>
 
-      {/* Panel de Inferencia Predictiva de Recaídas */}
       <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
-            <Brain className="w-4 h-4 text-cyan-400"/>
+            <Brain className="w-4 h-4 text-cyan-400" />
             Predicción Temprana de Recaídas (Gemini AI Predictive Engine)
           </span>
 
@@ -302,7 +304,7 @@ Genera un JSON con esta estructura exacta:
             disabled={isPredicting}
             className="px-4 py-2 bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-cyan-600/20 transition flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
           >
-            {isPredicting ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <TrendingUp className="w-3.5 h-3.5"/>}
+            {isPredicting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <TrendingUp className="w-3.5 h-3.5" />}
             <span>Ejecutar Análisis Predictivo</span>
           </button>
         </div>
@@ -340,7 +342,7 @@ Genera un JSON con esta estructura exacta:
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
                 <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400"/> Desencadenantes Biométricos Detectados
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Desencadenantes Biométricos Detectados
                 </span>
                 <ul className="space-y-1">
                   {prediction.keyDrivers.map((driver, idx) => (
@@ -354,7 +356,7 @@ Genera un JSON con esta estructura exacta:
 
               <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
                 <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400"/> Plan Preventivo Sugerido
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Plan Preventivo Sugerido
                 </span>
                 <ul className="space-y-1">
                   {prediction.preventiveInterventions.map((item, idx) => (
