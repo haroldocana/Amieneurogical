@@ -3,25 +3,13 @@ import { PatientRecord } from '../types';
 import {
   Cpu,
   Brain,
-  Activity,
   Zap,
-  Play,
-  Pause,
   Maximize2,
   Minimize2,
   Sliders,
-  CheckCircle2,
   Radio,
   Layers,
-  Upload,
-  RefreshCw,
-  Sparkles,
-  Save,
-  MessageSquareQuote,
-  Eye,
-  ShieldCheck,
-  Check,
-  Disc3
+  Save
 } from 'lucide-react';
 
 interface FrequencyBand {
@@ -152,7 +140,6 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
   const [selectedBand, setSelectedBand] = useState<string>('theta');
   const [activeDisorderId, setActiveDisorderId] = useState<string>('TDAH');
   const [isAcquiring, setIsAcquiring] = useState<boolean>(true);
-  const [usbPortStatus, setUsbPortStatus] = useState<'CONNECTED' | 'SCANNING' | 'DISCONNECTED'>('CONNECTED');
   const [hoveredNode, setHoveredNode] = useState<Electrode1020 | null>(null);
 
   // Human-in-the-loop professional clinician input
@@ -162,7 +149,7 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
   const [isAdjustmentSaved, setIsAdjustmentSaved] = useState<boolean>(false);
 
   // 10-20 Standard Electrodes with live impedances
-  const [electrodes, setElectrodes] = useState<Electrode1020[]>([
+  const [electrodes] = useState<Electrode1020[]>([
     { id: 'Fp1', label: 'Fp1', region: 'Frontal', x: 0.38, y: 0.18, uV: 24.2, zScore: 2.8, impedanceKOhm: 2.1 },
     { id: 'Fp2', label: 'Fp2', region: 'Frontal', x: 0.62, y: 0.18, uV: 25.1, zScore: 3.0, impedanceKOhm: 1.9 },
     { id: 'F7', label: 'F7', region: 'Frontal', x: 0.22, y: 0.32, uV: 19.4, zScore: 2.1, impedanceKOhm: 3.4 },
@@ -206,7 +193,6 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
     const renderAllViews = () => {
       if (isAcquiring) {
         phase += 0.04;
-        // update FFT wave slightly
         if (Math.random() > 0.7) {
           setFftWaveform(prev => prev.map(v => Math.max(5, Math.min(98, v + (Math.random() - 0.5) * 6))));
         }
@@ -281,7 +267,7 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
           const radius = viewType === 'CENTRAL' ? w * 0.24 : w * 0.32;
           const grad = ctx.createRadialGradient(px, py, 2, px, py, radius);
           grad.addColorStop(0, color0);
-          grad.addColorStop(0.5, color0.replace(/[\d\.]+\)$/, '0.22)'));
+          grad.addColorStop(0.5, color0.replace(/[\d.]+\)$/, '0.22)'));
           grad.addColorStop(1, 'rgba(11, 15, 25, 0.0)');
 
           ctx.fillStyle = grad;
@@ -369,6 +355,10 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
     setIsAdjustmentSaved(true);
   };
 
+  const patientDisplay = patient
+    ? `Paciente: ${patient.patientNameAnonymized || patient.id} (${patient.id}) | Colegiado #749210`
+    : 'Adquisición de Señal USB-C en Tiempo Real';
+
   return (
     <div
       className={`bg-[#0B0F19] text-slate-100 p-5 rounded-2xl border border-slate-800/90 shadow-2xl space-y-5 transition-all duration-300 font-mono ${
@@ -384,14 +374,14 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-black tracking-wider text-white uppercase">
-                Consola Médica de Neurotopografía qEEG & Mapeo Espectral 3D
+                Consola Médica de Neurotopografía qEEG &amp; Mapeo Espectral 3D
               </h1>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                 CLINICAL GRADE V3.7
               </span>
             </div>
             <p className="text-xs text-slate-400 font-sans mt-0.5">
-              {patient ? `Paciente: ${patient.patientNameAnonymized} (${patient.id}) | Colegiado #749210` : 'Adquisición de Señal USB-C en Tiempo Real'}
+              {patientDisplay}
             </p>
           </div>
         </div>
@@ -404,8 +394,9 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
           </div>
 
           <button
+            type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs transition cursor-pointer"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-400" /> : <Maximize2 className="w-3.5 h-3.5 text-sky-400" />}
             <span>{isFullscreen ? 'Salir Fullscreen' : 'Fullscreen HUD'}</span>
@@ -425,7 +416,7 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
               setActiveDisorderId(e.target.value);
               setIsAdjustmentSaved(false);
             }}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-sky-500"
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-sky-500 cursor-pointer"
           >
             {CLINICAL_BENCHMARKS.map((b) => (
               <option key={b.id} value={b.id}>
@@ -452,8 +443,9 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
             {Object.values(BANDS).map((b) => (
               <button
                 key={b.id}
+                type="button"
                 onClick={() => setSelectedBand(b.id)}
-                className={`py-2 px-2 rounded-lg border text-center transition-all ${
+                className={`py-2 px-2 rounded-lg border text-center transition-all cursor-pointer ${
                   selectedBand === b.id
                     ? 'bg-gradient-to-r from-sky-600 to-indigo-600 border-sky-400 text-white font-black shadow-lg shadow-sky-500/25 scale-[1.02]'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
@@ -595,8 +587,9 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
 
           <div className="my-4">
             <button
+              type="button"
               onClick={handleTriggerAcquisition}
-              className={`w-24 h-24 rounded-full font-black text-xs uppercase flex flex-col items-center justify-center p-2 shadow-2xl transition-all duration-300 active:scale-95 ${
+              className={`w-24 h-24 rounded-full font-black text-xs uppercase flex flex-col items-center justify-center p-2 shadow-2xl transition-all duration-300 active:scale-95 cursor-pointer ${
                 isAcquiring
                   ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/50 ring-4 ring-emerald-400/40 animate-pulse'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
@@ -687,8 +680,9 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
           />
 
           <button
+            type="button"
             onClick={handleSaveNotes}
-            className="w-full py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-bold transition flex items-center justify-center gap-1.5"
+            className="w-full py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isAdjustmentSaved ? 'Certeza Recalculada ✓' : 'Guardar y Recalcular'}</span>
@@ -699,3 +693,5 @@ export const InteractiveNeuroViewer: React.FC<InteractiveNeuroViewerProps> = ({ 
     </div>
   );
 };
+
+export default InteractiveNeuroViewer;
