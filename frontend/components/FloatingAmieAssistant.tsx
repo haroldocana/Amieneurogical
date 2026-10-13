@@ -14,20 +14,28 @@ import {
   DownloadCloud,
   CheckCircle2,
   Lock,
-  Glasses,
-  BookOpen,
-  Activity
+  Glasses
 } from 'lucide-react';
+
+export type NavigationTabKey = 
+  | 'workstation' 
+  | 'scientific_evaluator' 
+  | 'differential_bias' 
+  | 'academy' 
+  | 'neuro_3d' 
+  | 'neurosensometry' 
+  | 'referral' 
+  | 'saas';
 
 interface FloatingAmieAssistantProps {
   currentPatientId: string;
-  onNavigateTab: (tabId: 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'referral' | 'saas') => void;
-  activeTab: string;
+  onNavigateTab: (tabId: NavigationTabKey) => void;
+  activeTab?: string;
 }
 
 interface GuideTopic {
   id: string;
-  tabKey: 'workstation' | 'scientific_evaluator' | 'differential_bias' | 'academy' | 'neuro_3d' | 'neurosensometry' | 'referral' | 'saas';
+  tabKey: NavigationTabKey;
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   subtitle: string;
@@ -41,8 +49,7 @@ interface GuideTopic {
 
 export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
   currentPatientId,
-  onNavigateTab,
-  activeTab,
+  onNavigateTab
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,7 +64,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       subtitle: 'Triangulación de Riesgos, APK Centinela y Dictamen 5 Bloques',
       color: 'text-sky-400',
       badge: 'Módulo 1 — Núcleo',
-      summary: 'Área de trabajo para evaluación diagnóstica en tiempo real, combinando psicometría estandarizada, notas de sesión y dictamen estructurado DSM-5-TR.',
+      summary: 'Área de trabajo para evaluación diagnóstica en tiempo real, combinando psicometría estandarizada, notas de sesión y dictamen estructurado DSM-5-TR / CIE-11.',
       keyPoints: [
         'Triangulación Bioclínica: Cruza datos subjetivos (anamnesis, notas) con marcadores objetivos (Z-Scores qEEG, latencia USB en ms y escalas PHQ-9/GAD-7/MMSE).',
         'Telemetría Pasiva APK Centinela: Registra despertares nocturnos (>3x indica riesgo autolítico agudo), latencia táctil en pantalla y tiempos de actividad nocturna.',
@@ -80,7 +87,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
         'Scoring de Afinidad (0-100%): Calcula concordancia terapéutica para Depresión Mayor, TLP, Esquizofrenia y TEA/Asperger.',
         'Medidor de Tono Vagal (HRV / RMSSD): Valores <20 ms RMSSD revelan inhibición parasimpática severa y estrés neuroautonómico crónico.',
         'Indicador de Enmascaramiento Social (Camouflaging Index): Cuantifica el esfuerzo consciente de camuflaje en adultos y mujeres con TEA.',
-        'Calibración Touch de Latencia: Compensación precisa en microsegundos mediante event.timeStamp para pruebas en tablet/celular.'
+        'Captura Hardware USB: Conexión nativa WebSerial / WebUSB de dinamómetros y sensores biomédicos con búfer de 16 KB.'
       ],
       psychologyTip: 'Permite diferenciar la inestabilidad reactiva de personalidad limítrofe de la sobrecarga sensorial en personas con TEA.',
       psychiatryTip: 'Guía para ajustar estabilizadores del ánimo o neurolépticos de acuerdo a la firma autonómica predominante.'
@@ -93,10 +100,10 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       subtitle: 'Matriz Antisesgo de 7 Trastornos y Gemelo Digital de Riesgo',
       color: 'text-cyan-400',
       badge: 'Módulo 3 — Antisesgo',
-      summary: 'Resuelve conflictos diagnósticos frecuentes (TDAH vs Ansiedad, Depresión vs TLP, TEA vs TOC) mediante la Distancia de Mahalanobis ($D^2$) y auditoría NLP.',
+      summary: 'Resuelve conflictos diagnósticos frecuentes (TDAH vs Ansiedad, Depresión vs TLP, TEA vs TOC) mediante la Distancia de Mahalanobis (D²) y auditoría NLP.',
       keyPoints: [
         'Decodificador NLP de Sesgos: Escanea las notas clínicas del terapeuta para detectar sesgos de confirmación, género y anclaje prematuro.',
-        'Distancia de Mahalanobis ($D^2$): Un valor $D^2 > 2.5$ señala atipicidad o incongruencia entre autorreporte y biometría.',
+        'Distancia de Mahalanobis (D²): Un valor D² > 2.5 señala atipicidad o incongruencia entre autorreporte y biometría objetiva.',
         'Gemelo Digital de Riesgo: Simula las complicaciones iatrogénicas si se aplica el tratamiento del diagnóstico erróneo.',
         'Reglas de Jerarquía James Morrison: Aplicación de los principios de seguridad A (descarte orgánico) y W (no diagnosticar TP en cuadro agudo).'
       ],
@@ -104,19 +111,37 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       psychiatryTip: 'Garantiza solidez pericial y médica antes de iniciar esquemas farmacológicos complejos.'
     },
     {
+      id: 'vr_console',
+      tabKey: 'workstation',
+      icon: Glasses,
+      title: 'd) Consola VR Inmersiva Pico 3',
+      subtitle: '19 Ecosistemas 360°, 3 Videos Clínicos y Telemetría en Vivo',
+      color: 'text-rose-400',
+      badge: 'RV Local Pico 3',
+      summary: 'Orquesta sesiones inmersivas teledirigidas desde la estación hacia el visor Pico 3 mediante WebSocket bidireccional local, eliminando dependencias externas de red.',
+      keyPoints: [
+        '19 Ecosistemas 360° (/ecosystems/): Ambientes locales fotorrealistas para fobia a alturas, vuelos, neurohipnosis y grounding.',
+        'Videos Clínicos de Provocación Narcisista (/video/): Ensayos periciales (Overt Provocation, Collapse y Antisocial Distress) para evaluar reactividad del ego.',
+        'Monitor de Telemetría en Vivo: Supervisión continua de conductancia de la piel (GSR en µS) y variabilidad cardíaca (RMSSD) durante la exposición.',
+        'Freno Autonómico JITAI: Disparo automático de escenarios de relajación cuando la conductancia supera los 8.0 µS.'
+      ],
+      psychologyTip: 'Ajusta el gradiente de exposición en VRET basándote en la respuesta galvánica real del paciente.',
+      psychiatryTip: 'Evalúa la capacidad de recuperación homeostática y el tono vagal basal tras inducción de estrés inmersivo.'
+    },
+    {
       id: 'neuro_3d',
       tabKey: 'neuro_3d',
       icon: Cpu,
-      title: 'd) Neurotopografía 3D Holográfica',
+      title: 'e) Neurotopografía 3D Holográfica',
       subtitle: 'Mapeo Térmico Volumétrico, 5 Bandas y Ratios Neurofisiológicos',
       color: 'text-indigo-400',
       badge: 'Módulo 5 — Cortical',
       summary: 'Visualizador volumétrico continuo en tiempo real con 4 vistas satelitales (Frontal, Lateral, Posterior, Dorsal) y sistema 10-20.',
       keyPoints: [
         '5 Bandas de Frecuencia: Delta (0.5-4 Hz), Theta (4-8 Hz), Alpha (8-12 Hz), Beta (12-30 Hz) y High-Beta (21-30 Hz).',
-        'Ratio Frontal Theta/Beta ($T/B$): Un ratio $T/B > 3.0$ es indicativo de hipoactivación dorsolateral frontal y desatención (TDAH).',
-        'Z-Scores Corticales: Valores $> \pm 2.0\text{ SD}$ reflejan desviaciones neurofisiológicas estadísticamente significativas.',
-        'Asimetría Alfa Temporal: Asimetrías $> \pm 0.4$ sugieren vulnerabilidad afectiva o inhibición anhedónica.'
+        'Ratio Frontal Theta/Beta (T/B): Un ratio T/B > 3.0 es indicativo de hipoactivación dorsolateral frontal y desatención ejecutiva (TDAH).',
+        'Z-Scores Corticales: Valores > ±2.0 SD reflejan desviaciones neurofisiológicas estadísticamente significativas.',
+        'Asimetría Alfa Temporal: Asimetrías > ±0.4 sugieren vulnerabilidad afectiva o inhibición anhedónica.'
       ],
       psychologyTip: 'Herramienta visual clave para psicoeducación sobre autorregulación cerebral y biofeedback.',
       psychiatryTip: 'Fundamento neurofisiológico para planificar rTMS, tDCS o estimulantes centrales.'
@@ -125,7 +150,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       id: 'neurosensometry',
       tabKey: 'neurosensometry',
       icon: Brain,
-      title: 'e) qEEG & Carga de Señal Cruda',
+      title: 'f) qEEG & Carga de Señal Cruda',
       subtitle: 'Inspección de Ondas Crudas (.EDF / .BDF / .EEG) y Espectro FFT',
       color: 'text-purple-400',
       badge: 'Parser Encefalográfico',
@@ -142,13 +167,13 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       id: 'sync_pac',
       tabKey: 'workstation',
       icon: DownloadCloud,
-      title: 'f) Sincronizador PAC & Servidor Backend',
-      subtitle: 'Importación de Expedientes Anonimizados Cloud Run',
+      title: 'g) Sincronizador PAC & Servidor Backend',
+      subtitle: 'Importación de Expedientes Anonimizados y Persistencia',
       color: 'text-emerald-400',
-      badge: 'Google Cloud Run / Render',
-      summary: 'Conexión dinámica para importar expedientes PAC anonimizados (PAC-XXXX) vinculados al número de colegiado médico.',
+      badge: 'Render & Atlas',
+      summary: 'Conexión dinámica para importar expedientes PAC anonimizados (PAC-XXXX) vinculados al número de colegiado médico con persistencia en MongoDB Atlas.',
       keyPoints: [
-        'Sincronización Segura: Petición HTTP POST autenticada con token JWT al backend.',
+        'Sincronización Segura: Petición HTTP POST autenticada con token JWT al backend clínico.',
         'Respuesta No Destructiva: Alerta visual clara en la barra superior si el código PAC no registra datos en la nube.',
         'Privacidad HIPAA/RGPD: Exposición exclusiva de datos anonimizados para resguardo de identidad.'
       ],
@@ -172,6 +197,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
       {/* Botón Flotante en la Esquina Inferior Derecha */}
       <div className="fixed bottom-6 right-6 z-40">
         <button
+          type="button"
           onClick={() => setIsOpen(true)}
           className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-slate-950/90 hover:bg-slate-900 border-2 border-cyan-400/80 text-white shadow-[0_0_30px_rgba(6,182,212,0.4)] backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer"
           title="Abrir Asistente Flotante de Ayuda Clínica AMIE"
@@ -181,7 +207,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
           </div>
           <div className="text-left">
             <div className="text-xs font-black tracking-wide bg-gradient-to-r from-cyan-300 to-white bg-clip-text text-transparent uppercase flex items-center gap-1">
-              <span>Asistente AMIE 2.5</span>
+              <span>Asistente AMIE 3.8</span>
               <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
             </div>
             <div className="text-[10px] text-slate-400 font-mono">
@@ -213,6 +239,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
               </div>
 
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
                 title="Cerrar Panel de Ayuda"
@@ -237,24 +264,29 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
 
             {/* Selector Horizontal de Temas */}
             <div className="p-2.5 bg-slate-950 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-              {filteredTopics.map((topic) => {
-                const IconComp = topic.icon;
-                const isSelected = selectedTopic === topic.id;
-                return (
-                  <button
-                    key={topic.id}
-                    onClick={() => setSelectedTopic(topic.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-md shadow-cyan-500/20 border border-cyan-400/40'
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <IconComp className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : topic.color}`} />
-                    <span>{topic.title.split(') ')[1] || topic.title}</span>
-                  </button>
-                );
-              })}
+              {filteredTopics.length > 0 ? (
+                filteredTopics.map((topic) => {
+                  const IconComp = topic.icon;
+                  const isSelected = selectedTopic === topic.id;
+                  return (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      onClick={() => setSelectedTopic(topic.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-md shadow-cyan-500/20 border border-cyan-400/40'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <IconComp className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : topic.color}`} />
+                      <span>{topic.title.split(') ')[1] || topic.title}</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <span className="text-xs text-slate-500 italic px-2">No se encontraron temas coincidentes.</span>
+              )}
             </div>
 
             {/* Panel de Detalle del Tema Seleccionado */}
@@ -277,6 +309,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
 
                 {/* Botón para Navegar al Módulo */}
                 <button
+                  type="button"
                   onClick={() => {
                     onNavigateTab(currentTopicData.tabKey);
                     setIsOpen(false);
@@ -291,7 +324,7 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
               {/* Especificaciones Técnicas */}
               <div className="space-y-2.5">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Especificaciones & Operativa:
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Especificaciones &amp; Operativa:
                 </span>
 
                 <div className="space-y-2">
@@ -331,8 +364,9 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
 
             {/* Footer */}
             <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
-              <span>AMIE Assistant Engine v2.5</span>
+              <span>AMIE Assistant Engine v3.8</span>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold cursor-pointer font-sans"
               >
@@ -345,3 +379,5 @@ export const FloatingAmieAssistant: React.FC<FloatingAmieAssistantProps> = ({
     </>
   );
 };
+
+export default FloatingAmieAssistant;
