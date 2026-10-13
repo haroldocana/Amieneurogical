@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// ARCHIVO CORRECTO DEL VISOR
+// ARCHIVO CORRECTO DEL VISOR PICO 3
 import { VrPatientExperience } from './components/VrPatientExperience';
 
 import { Header } from './components/Header';
@@ -105,17 +105,13 @@ function DoctorWorkstation() {
 
   useEffect(() => {
     const checkIsPatientApp = () => {
-      const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
-      const isAndroidDevice = /android/i.test(ua);
-      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
-      const isLocalhostOrFile = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || window.location.protocol === 'capacitor:';
-      const hasCapacitor = typeof (window as any).Capacitor !== 'undefined' || Boolean((window as any).Capacitor?.isNativePlatform?.());
+      const hasCapacitor = typeof (window as any).Capacitor !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
       const isPatientUrl = 
-        window.location.pathname.includes('/paciente') || 
         window.location.search.includes('mode=paciente') || 
         window.location.search.includes('paciente=true');
 
-      if (isAndroidDevice || isMobileDevice || isLocalhostOrFile || hasCapacitor || isPatientUrl) {
+      // Activación segura solo si es app nativa instalada o URL explícita de paciente
+      if (hasCapacitor || isPatientUrl) {
         setIsPatientMode(true);
       } else {
         setIsPatientMode(false);
@@ -895,11 +891,11 @@ function DoctorWorkstation() {
           <ApaTherapeuticModule patient={safePatient} />
         )}
 
+        {/* 🟢 RENDERIZADO DIRECTO DEL MÓDULO FORENSE CLUSTER B */}
         {activeTab === 'cluster_b' && (
-          <VrModuleRouter 
-            patient={safePatient}
-            initialModuleId="CLUSTER_B_FORENSIC"
-            onClose={() => setActiveTab('workstation')}
+          <PsychopathyNarcissismModule 
+            patient={safePatient} 
+            onClose={() => setActiveTab('workstation')} 
           />
         )}
 
@@ -1133,14 +1129,21 @@ function DoctorWorkstation() {
   );
 }
 
-// 2. ENRUTADOR PRINCIPAL: RUTA /visor APUNTA AL COMPONENTE ACTUALIZADO
+// 🟢 ENRUTADOR PRINCIPAL CON ALIAS RESILIENTES PARA PICO 3
 export default function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
+        
+        {/* Rutas directas para el Visor Pico 3 */}
         <Route path="/visor" element={<VrPatientExperience />} />
+        <Route path="/paciente" element={<VrPatientExperience />} />
+        <Route path="/vr" element={<VrPatientExperience />} />
+
+        {/* Fallback de redirección */}
+        <Route path="*" element={<Navigate to="/doctor" replace />} />
       </Routes>
     </Router>
   );
