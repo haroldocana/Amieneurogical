@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Activity,
   Zap,
@@ -45,7 +45,6 @@ class DSPCascade {
 
   // Filtro Notch (60 Hz) - Elimina interferencia de red eléctrica
   notch60Hz(x: number): number {
-    // Coeficientes IIR Biquad para Notch de 60Hz a 250Hz Fs
     const b0 = 0.9515, b1 = -0.5881, b2 = 0.9515;
     const a1 = -0.5881, a2 = 0.9031;
     const y = b0 * x + b1 * this.notchZ1 + b2 * this.notchZ2 - a1 * this.notchZ1 - a2 * this.notchZ2;
@@ -58,6 +57,14 @@ class DSPCascade {
     const step1 = this.highPass(x, sampleRate);
     const step2 = this.notch60Hz(step1);
     return this.lowPass(step2, sampleRate);
+  }
+
+  reset(): void {
+    this.hpfPrevX = 0;
+    this.hpfPrevY = 0;
+    this.lpfPrevY = 0;
+    this.notchZ1 = 0;
+    this.notchZ2 = 0;
   }
 }
 
@@ -99,7 +106,7 @@ class PanTompkinsDetector {
     this.mwiBuffer.push(squared);
     if (this.mwiBuffer.length > windowSize) this.mwiBuffer.shift();
 
-    const mwiVal = this.mwiBuffer.reduce((a, b) => a + b, 0) / this.mwiBuffer.length;
+    const mwiVal = this.mwiBuffer.reduce((a, b) => a + b, 0) / (this.mwiBuffer.length || 1);
 
     // 4. Umbral Adaptativo
     let isPeak = false;
@@ -114,6 +121,15 @@ class PanTompkinsDetector {
     this.threshold = this.noiseLevel + 0.25 * (this.signalLevel - this.noiseLevel);
     return isPeak;
   }
+
+  reset(): void {
+    this.buffer = [];
+    this.mwiBuffer = [];
+    this.samplesSinceLastPeak = 0;
+    this.threshold = 0.05;
+    this.signalLevel = 0.05;
+    this.noiseLevel = 0.01;
+  }
 }
 
 // ============================================================================
@@ -121,7 +137,7 @@ class PanTompkinsDetector {
 // ============================================================================
 
 export const calculateRMSSD = (rrIntervalsMs: number[]): number => {
-  if (rrIntervalsMs.length < 2) return 0;
+  if (!Array.isArray(rrIntervalsMs) || rrIntervalsMs.length < 2) return 0;
   let sumDiffs = 0;
   for (let i = 0; i < rrIntervalsMs.length - 1; i++) {
     const diff = rrIntervalsMs[i + 1] - rrIntervalsMs[i];
@@ -131,25 +147,25 @@ export const calculateRMSSD = (rrIntervalsMs: number[]): number => {
 };
 
 export const calculateLFHFRatio = (rrIntervalsMs: number[]): { lfPct: number; hfPct: number; ratio: number } => {
-  if (rrIntervalsMs.length < 8) return { lfPct: 50, hfPct: 50, ratio: 1.0 };
+  if (!Array.isArray(rrIntervalsMs) || rrIntervalsMs.length < 8) {
+    return { lfPct: 50, hfPct: 50, ratio: 1.0 };
+  }
 
-  // Resampleado y estimación frecuencial FFT simplificada por Welch / Lomb-Scargle
   let lfPower = 0;
   let hfPower = 0;
 
-  // Calculamos la variabilidad en banda LF (0.04-0.15 Hz) y HF (0.15-0.40 Hz)
   for (let i = 1; i < rrIntervalsMs.length; i++) {
     const delta = Math.abs(rrIntervalsMs[i] - rrIntervalsMs[i - 1]);
     if (delta > 20 && delta < 80) {
-      lfPower += delta * 1.2; // Dominancia Simpática / Barorrefleja
+      lfPower += delta * 1.2;
     } else if (delta <= 20) {
-      hfPower += delta * 1.5; // Modulación Vagal / Respiratoria
+      hfPower += delta * 1.5;
     }
   }
 
   const total = lfPower + hfPower || 1;
-  const lfPct = Math.round((lfPower / total) * 100);
-  const hfPct = Math.round((hfPower / total) * 100);
+  const lfPct = Math.min(100, Math.max(0, Math.round((lfPower / total) * 100)));
+  const hfPct = Math.max(0, 100 - lfPct);
   const ratio = parseFloat((lfPower / (hfPower || 1)).toFixed(2));
 
   return { lfPct, hfPct, ratio };
@@ -159,33 +175,50 @@ export const calculateLFHFRatio = (rrIntervalsMs: number[]): { lfPct: number; hf
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
-export const HrvBiofeedbackEngine: React.FC = () => {
+interface HrvBiofeedbackEngineProps {
+  initialBpm?: number;
+  onMetricsUpdate?: (metrics: { bpm: number; rmssd: number; lfHfRatio: number }) => void;
+}
+
+export const HrvBiofeedbackEngine: React.FC<HrvBiofeedbackEngineProps> = ({
+  initialBpm = 72,
+  onMetricsUpdate
+}) => {
   const ecgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const tachogramCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [bpm, setBpm] = useState<number>(72);
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
+  const [bpm, setBpm] = useState<number>(initialBpm);
   const [rmssd, setRmssd] = useState<number>(45.2);
   const [lfHf, setLfHf] = useState({ lfPct: 42, hfPct: 58, ratio: 0.72 });
   const [rrSeries, setRrSeries] = useState<number[]>([820, 815, 830, 840, 790, 805, 825, 835, 810]);
+  const rrSeriesRef = useRef<number[]>(rrSeries);
+  rrSeriesRef.current = rrSeries;
 
-  // Audio Context para 'Beep' médico en la onda R
+  const dspRef = useRef<DSPCascade>(new DSPCascade());
+  const detectorRef = useRef<PanTompkinsDetector>(new PanTompkinsDetector(250));
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const playBip = () => {
-    if (!soundEnabled) return;
+  const playBip = useCallback(() => {
+    if (!soundEnabledRef.current) return;
     try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioCtxRef.current = new AudioContextClass();
       }
       const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') ctx.resume();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime); // Canto de 880Hz
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
       gain.gain.setValueAtTime(0.08, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
 
@@ -195,27 +228,34 @@ export const HrvBiofeedbackEngine: React.FC = () => {
       osc.start();
       osc.stop(ctx.currentTime + 0.08);
     } catch {
-      // Ignorar restricciones de autoclick del navegador
+      // Ignorar restricciones de audio policy previas a interacción
     }
+  }, []);
+
+  const handleResetSeries = () => {
+    const defaultSeries = [800, 810, 805, 820];
+    setRrSeries(defaultSeries);
+    rrSeriesRef.current = defaultSeries;
+    dspRef.current.reset();
+    detectorRef.current.reset();
   };
 
+  // Ciclo principal continuo sin fugas de memoria ni reinicios del DSP
   useEffect(() => {
-    const dsp = new DSPCascade();
-    const detector = new PanTompkinsDetector(250);
-
     const ecgCanvas = ecgCanvasRef.current;
     const tachoCanvas = tachogramCanvasRef.current;
-
     if (!ecgCanvas || !tachoCanvas) return;
 
     const ctxEcg = ecgCanvas.getContext('2d');
     const ctxTacho = tachoCanvas.getContext('2d');
-
     if (!ctxEcg || !ctxTacho) return;
+
+    const dsp = dspRef.current;
+    const detector = detectorRef.current;
 
     let animationFrameId: number;
     let sweepX = 0;
-    const sweepSpeed = 2.5; // Corresponde a 25 mm/s en pantalla
+    const sweepSpeed = 2.5; // Sweep continuo a 25 mm/s
     let lastBeatTime = performance.now();
     let currentPhase = 0;
 
@@ -224,23 +264,20 @@ export const HrvBiofeedbackEngine: React.FC = () => {
       const height = ecgCanvas.height;
 
       // ----------------------------------------------------------------------
-      // 1. GENERACIÓN & FILTRADO DE SEÑAL
+      // 1. GENERACIÓN & FILTRADO DSP DE LA SEÑAL
       // ----------------------------------------------------------------------
       currentPhase += 0.04;
-      // Sintetizador PQRST con ruido muscular fisiológico
       let rawSignal = Math.sin(currentPhase) * 0.15;
       
-      // Simulación de QRS en pico
       if (Math.sin(currentPhase) > 0.96) {
-        rawSignal += (Math.random() * 0.4 + 1.2); // Pico R
+        rawSignal += (Math.random() * 0.4 + 1.2); // Onda R
       }
-      rawSignal += (Math.random() - 0.5) * 0.08; // Ruido mioeléctrico
+      rawSignal += (Math.random() - 0.5) * 0.08; // Ruido electromiográfico
 
-      // Procesamiento DSP en cascada
       const filteredSignal = dsp.process(rawSignal, 250);
 
       // ----------------------------------------------------------------------
-      // 2. DETECCIÓN QRS & TACOGRAMA
+      // 2. DETECCIÓN PAN-TOMPKINS & TACOGRAMA
       // ----------------------------------------------------------------------
       const isRPeak = detector.processSample(filteredSignal);
 
@@ -249,48 +286,53 @@ export const HrvBiofeedbackEngine: React.FC = () => {
         const deltaMs = Math.round(now - lastBeatTime);
         lastBeatTime = now;
 
-        if (deltaMs > 400 && deltaMs < 1500) {
+        if (deltaMs > 350 && deltaMs < 1600) {
           playBip();
           const calculatedBpm = Math.round(60000 / deltaMs);
           setBpm(calculatedBpm);
 
-          setRrSeries((prev) => {
-            const updated = [...prev.slice(-49), deltaMs];
-            const newRmssd = calculateRMSSD(updated);
-            const newLfHf = calculateLFHFRatio(updated);
-            setRmssd(parseFloat(newRmssd.toFixed(1)));
-            setLfHf(newLfHf);
-            return updated;
-          });
+          const updated = [...rrSeriesRef.current.slice(-49), deltaMs];
+          rrSeriesRef.current = updated;
+          setRrSeries(updated);
+
+          const newRmssd = parseFloat(calculateRMSSD(updated).toFixed(1));
+          const newLfHf = calculateLFHFRatio(updated);
+
+          setRmssd(newRmssd);
+          setLfHf(newLfHf);
+
+          if (onMetricsUpdate) {
+            onMetricsUpdate({
+              bpm: calculatedBpm,
+              rmssd: newRmssd,
+              lfHfRatio: newLfHf.ratio
+            });
+          }
         }
       }
 
       // ----------------------------------------------------------------------
-      // 3. BARIDO OSCILOSCOPIO (SWEEP MODE 25 MM/S)
+      // 3. BARRIDO OSCILOSCOPIO (SWEEP MODE)
       // ----------------------------------------------------------------------
       const yPos = height / 2 - filteredSignal * (height * 0.35);
 
-      // Limpieza de la barra de barrido (Eraser Head)
       ctxEcg.fillStyle = '#020617';
-      ctxEcg.fillRect(sweepX, 0, 15, height);
+      ctxEcg.fillRect(sweepX, 0, 16, height);
 
-      // Dibujar cuadrícula médica en el borrador
       ctxEcg.strokeStyle = '#0f172a';
       ctxEcg.lineWidth = 1;
       ctxEcg.beginPath();
-      ctxEcg.moveTo(sweepX + 15, 0);
-      ctxEcg.lineTo(sweepX + 15, height);
+      ctxEcg.moveTo(sweepX + 16, 0);
+      ctxEcg.lineTo(sweepX + 16, height);
       ctxEcg.stroke();
 
-      // Trazo de la señal electrocardiográfica
       ctxEcg.strokeStyle = isRPeak ? '#22c55e' : '#38bdf8';
       ctxEcg.lineWidth = isRPeak ? 2.5 : 1.8;
       ctxEcg.beginPath();
-      ctxEcg.moveTo(sweepX - sweepSpeed, yPos);
+      ctxEcg.moveTo(Math.max(0, sweepX - sweepSpeed), yPos);
       ctxEcg.lineTo(sweepX, yPos);
       ctxEcg.stroke();
 
-      // Indicador visual de Pico R
       if (isRPeak) {
         ctxEcg.fillStyle = '#22c55e';
         ctxEcg.beginPath();
@@ -302,7 +344,7 @@ export const HrvBiofeedbackEngine: React.FC = () => {
       if (sweepX >= width) sweepX = 0;
 
       // ----------------------------------------------------------------------
-      // 4. RENDER DEL TACOGRAMA (INTERVALOS R-R)
+      // 4. RENDERIZADO DEL TACOGRAMA (INTERVALOS R-R)
       // ----------------------------------------------------------------------
       const tWidth = tachoCanvas.width;
       const tHeight = tachoCanvas.height;
@@ -310,7 +352,6 @@ export const HrvBiofeedbackEngine: React.FC = () => {
       ctxTacho.fillStyle = '#020617';
       ctxTacho.fillRect(0, 0, tWidth, tHeight);
 
-      // Líneas de referencia (600ms - 1200ms)
       ctxTacho.strokeStyle = '#1e293b';
       ctxTacho.lineWidth = 1;
       [700, 800, 900, 1000, 1100].forEach((ms) => {
@@ -321,14 +362,14 @@ export const HrvBiofeedbackEngine: React.FC = () => {
         ctxTacho.stroke();
       });
 
-      // Gráfica de puntos R-R con degradado
-      if (rrSeries.length > 1) {
+      const currentSeries = rrSeriesRef.current;
+      if (currentSeries.length > 1) {
         ctxTacho.strokeStyle = '#a855f7';
         ctxTacho.lineWidth = 2;
         ctxTacho.beginPath();
 
         const stepX = tWidth / 50;
-        rrSeries.forEach((rr, idx) => {
+        currentSeries.forEach((rr, idx) => {
           const x = idx * stepX;
           const y = tHeight - Math.max(0, Math.min(tHeight, ((rr - 600) / 600) * tHeight));
           if (idx === 0) ctxTacho.moveTo(x, y);
@@ -336,8 +377,7 @@ export const HrvBiofeedbackEngine: React.FC = () => {
         });
         ctxTacho.stroke();
 
-        // Nube de puntos de latidos
-        rrSeries.forEach((rr, idx) => {
+        currentSeries.forEach((rr, idx) => {
           const x = idx * stepX;
           const y = tHeight - Math.max(0, Math.min(tHeight, ((rr - 600) / 600) * tHeight));
           ctxTacho.fillStyle = '#c084fc';
@@ -355,7 +395,20 @@ export const HrvBiofeedbackEngine: React.FC = () => {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [soundEnabled, rrSeries]);
+  }, [playBip, onMetricsUpdate]);
+
+  // Cierre limpio de AudioContext al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        try {
+          audioCtxRef.current.close();
+        } catch {
+          // Ignorar error de cierre
+        }
+      }
+    };
+  }, []);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 text-slate-100 shadow-2xl">
@@ -367,7 +420,7 @@ export const HrvBiofeedbackEngine: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm font-black text-white tracking-wide uppercase flex items-center gap-2">
-              <span>Osciloscopio ECG & Monitor VFC (SNA)</span>
+              <span>Osciloscopio ECG &amp; Monitor VFC (SNA)</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
                 DSP 250 Hz
               </span>
@@ -380,8 +433,9 @@ export const HrvBiofeedbackEngine: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`p-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               soundEnabled
                 ? 'bg-slate-800 border-slate-700 text-cyan-300 hover:bg-slate-700'
                 : 'bg-slate-950 border-slate-800 text-slate-500'
@@ -393,8 +447,9 @@ export const HrvBiofeedbackEngine: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setRrSeries([800, 810, 805, 820])}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition"
+            type="button"
+            onClick={handleResetSeries}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer active:scale-95"
             title="Reiniciar Ventana Móvil"
           >
             <RotateCcw className="w-4 h-4" />
@@ -402,7 +457,7 @@ export const HrvBiofeedbackEngine: React.FC = () => {
         </div>
       </div>
 
-      {/* Módulo 1 & 2: Osciloscopio ECG con Barrido y Detección QRS */}
+      {/* Osciloscopio ECG con Barrido y Detección QRS */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-mono text-slate-400 px-1">
           <span className="flex items-center gap-1.5 text-sky-400 font-bold">
@@ -423,7 +478,7 @@ export const HrvBiofeedbackEngine: React.FC = () => {
         </div>
       </div>
 
-      {/* Módulo 3: Tacograma (Intervalos R-R) */}
+      {/* Tacograma (Intervalos R-R) */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-mono text-slate-400 px-1">
           <span className="flex items-center gap-1.5 text-purple-400 font-bold">
@@ -444,7 +499,7 @@ export const HrvBiofeedbackEngine: React.FC = () => {
         </div>
       </div>
 
-      {/* Módulo 4: Métricas de Biofeedback y Estado del Sistema Nervioso Autónomo */}
+      {/* Métricas de Biofeedback y Estado del Sistema Nervioso Autónomo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
         {/* Tarjeta RMSSD */}
         <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
@@ -510,3 +565,5 @@ export const HrvBiofeedbackEngine: React.FC = () => {
     </div>
   );
 };
+
+export default HrvBiofeedbackEngine;
