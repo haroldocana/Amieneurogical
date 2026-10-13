@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   SimulatedCase,
-  LifeCycleStage,
   AvatarEmotionState,
   PsychotherapyFramework,
   PharmacologyClass,
@@ -17,20 +16,11 @@ import {
   Send,
   Bot,
   User,
-  Brain,
-  Pill,
   Award,
   Layers,
-  Heart,
-  ChevronRight,
   RefreshCw,
-  Clock,
-  AlertCircle,
-  FileCheck,
-  CheckCircle2,
   Stethoscope,
-  Wand2,
-  Zap
+  Wand2
 } from 'lucide-react';
 
 export const ACADEMY_SIMULATED_CASES: SimulatedCase[] = [
@@ -138,12 +128,17 @@ export const ACADEMY_SIMULATED_CASES: SimulatedCase[] = [
   },
 ];
 
+// Helper para limpiar bloques Markdown generados por Gemini
+const cleanJsonFence = (raw: string): string => {
+  return raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+};
+
 export const AmieClinicalAcademy: React.FC = () => {
   const [casesList, setCasesList] = useState<SimulatedCase[]>(ACADEMY_SIMULATED_CASES);
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(0);
   const currentCase = casesList[selectedCaseIdx] || casesList[0];
 
-  // Simulation State
+  // Estado de simulación
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'model'; text: string }>>([
     {
       role: 'model',
@@ -156,14 +151,24 @@ export const AmieClinicalAcademy: React.FC = () => {
   const [empathyMeter, setEmpathyMeter] = useState<number>(55);
   const [isGeneratingBlackSwan, setIsGeneratingBlackSwan] = useState(false);
 
-  // Professional Choices for Evaluation
+  // Decisiones profesionales para grading
   const [chosenDiagnosis, setChosenDiagnosis] = useState('');
   const [chosenFramework, setChosenFramework] = useState<PsychotherapyFramework>('TCC');
   const [chosenPharma, setChosenPharma] = useState<PharmacologyClass>('ISRS');
 
-  // Evaluation Score State
+  // Resultado de la evaluación
   const [scoringResult, setScoringResult] = useState<AcademyScoringResult | null>(null);
   const [isEvaluatingScore, setIsEvaluatingScore] = useState(false);
+
+  const dialogueEndRef = useRef<HTMLDivElement>(null);
+
+  const getApiKey = (): string => {
+    return (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+  };
+
+  useEffect(() => {
+    dialogueEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isBotTyping]);
 
   const handleSelectCase = (idx: number) => {
     setSelectedCaseIdx(idx);
@@ -183,10 +188,10 @@ export const AmieClinicalAcademy: React.FC = () => {
   const handleGenerateBlackSwan = async () => {
     setIsGeneratingBlackSwan(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const apiKey = getApiKey();
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         generationConfig: { responseMimeType: 'application/json', temperature: 0.8 }
       });
 
@@ -198,12 +203,12 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
   "id": "SIM-SWAN-${Date.now()}",
   "caseCode": "PAC-SWAN-${Math.floor(100 + Math.random() * 900)}",
-  "title": "Título llamativo del caso (ej. 'Cisne Negro: Síndrome de Charles Bonnet vs Psicosis Tardía')",
+  "title": "Título llamativo del caso",
   "patientName": "Nombre y edad (ej. 'Arturo Beltrán (68 años)')",
   "age": 68,
   "gender": "M",
   "stage": "ADULTEZ_MAYOR",
-  "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80",
+  "avatarUrl": "[https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80](https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80)",
   "initialEmotion": "Ansioso",
   "consultationReason": "Motivo de consulta cardinal que genera confusión",
   "clinicalBackstory": "Historia clínica detallada con trampa diagnóstica",
@@ -219,8 +224,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 `;
 
       const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      const newSwanCase: SimulatedCase = JSON.parse(responseText || '{}');
+      const cleaned = cleanJsonFence(result.response.text() || '{}');
+      const newSwanCase: SimulatedCase = JSON.parse(cleaned);
 
       if (newSwanCase.title) {
         const updatedList = [newSwanCase, ...casesList];
@@ -238,7 +243,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
         ]);
       }
     } catch (e) {
-      console.error('Error generating black swan case:', e);
+      console.error('Error generando caso cisne negro:', e);
     } finally {
       setIsGeneratingBlackSwan(false);
     }
@@ -255,10 +260,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
     setIsBotTyping(true);
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const apiKey = getApiKey();
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         generationConfig: { temperature: 0.7 }
       });
 
@@ -273,10 +278,10 @@ HISTORIAL CLÍNICO OCULTO:
 - Diagnóstico Gold Standard DSM-5: ${currentCase.goldStandardDiagnosis}
 
 INSTRUCCIONES DE ACTUACIÓN:
-1. Responde de forma natural, en primera persona, como este paciente en consulta.
-2. Evalúa sutilmente la empatía de la última pregunta del médico.
-3. Al final de tu respuesta, agrega una línea oculta con el formato: "[EMOTION: Neutral | Defensivo | Ansioso | Afligido | Aliviado]" que refleje tu reacción emocional actual.
-4. Mantén las respuestas conversacionales y verosímiles.
+1. Responde de forma natural, en primera persona, como este paciente en consulta médica.
+2. Evalúa la empatía y contención de la última intervención del médico.
+3. Al final de tu respuesta, añade SIEMPRE una etiqueta con el formato: "[EMOTION: Neutral | Defensivo | Ansioso | Afligido | Aliviado]" que refleje tu estado afectivo derivado de la intervención.
+4. Mantén las respuestas conversacionales, verosímiles y breves.
 `;
 
       const fullPrompt = `${promptContext}\n\nMensajes previos:\n${JSON.stringify(newHistory)}\n\nMédico: ${userText}`;
@@ -284,7 +289,9 @@ INSTRUCCIONES DE ACTUACIÓN:
       const replyText = result.response.text() || '...';
       
       let parsedEmotion: AvatarEmotionState = currentEmotion;
+      // 🟢 Regex corregido sin artefactos LaTeX
       const emotionMatch = replyText.match(/\[EMOTION:\s*(Neutral\vert{}Defensivo\vert{}Ansioso\vert{}Afligido\vert{}Aliviado)\]/i);
+      
       if (emotionMatch && emotionMatch[1]) {
         parsedEmotion = emotionMatch[1] as AvatarEmotionState;
         setCurrentEmotion(parsedEmotion);
@@ -300,7 +307,7 @@ INSTRUCCIONES DE ACTUACIÓN:
     } catch (err) {
       setMessages([
         ...newHistory,
-        { role: 'model', text: '... (El paciente guarda silencio mientras procesa la intervención).' }
+        { role: 'model', text: '... (El paciente guarda silencio unos segundos mientras procesa la intervención).' }
       ]);
     } finally {
       setIsBotTyping(false);
@@ -310,10 +317,10 @@ INSTRUCCIONES DE ACTUACIÓN:
   const handleFinishAndGrade = async () => {
     setIsEvaluatingScore(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const apiKey = getApiKey();
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         generationConfig: {
           responseMimeType: 'application/json',
           temperature: 0.2
@@ -355,8 +362,8 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
 `;
 
       const result = await model.generateContent(gradingPrompt);
-      const responseText = result.response.text();
-      const parsedScore: AcademyScoringResult = JSON.parse(responseText || '{}');
+      const cleaned = cleanJsonFence(result.response.text() || '{}');
+      const parsedScore: AcademyScoringResult = JSON.parse(cleaned);
       setScoringResult(parsedScore);
     } catch (e) {
       setScoringResult({
@@ -376,7 +383,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
 
   return (
     <div className="space-y-6">
-      {/* Top Banner with Black Swan Generator Button */}
+      {/* Banner Superior con Acciones */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 rounded-2xl text-white shadow-lg shadow-cyan-500/20">
@@ -398,11 +405,11 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Black Swan Generator */}
+          {/* Generador de Caso Cisne Negro */}
           <button
             onClick={handleGenerateBlackSwan}
             disabled={isGeneratingBlackSwan}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-950/70 hover:bg-purple-900/90 border border-purple-500/40 text-purple-200 transition shadow"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-950/70 hover:bg-purple-900/90 border border-purple-500/40 text-purple-200 transition shadow cursor-pointer disabled:opacity-50"
             title="Generar caso de extrema rareza diagnóstica con IA"
           >
             {isGeneratingBlackSwan ? (
@@ -418,10 +425,11 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             )}
           </button>
 
+          {/* Botón Evaluar Desempeño */}
           <button
             onClick={handleFinishAndGrade}
             disabled={isEvaluatingScore || messages.length < 3}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-white shadow-lg shadow-emerald-500/20 active:scale-95 transition"
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-white shadow-lg shadow-emerald-500/20 active:scale-95 transition cursor-pointer"
           >
             {isEvaluatingScore ? (
               <>
@@ -438,7 +446,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
         </div>
       </div>
 
-      {/* Scoring Report if Completed */}
+      {/* Reporte de Calificación si está generado */}
       {scoringResult && (
         <AcademyScoringReport
           score={scoringResult}
@@ -448,7 +456,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
         />
       )}
 
-      {/* Case Selector by 4 Life-Cycle Stages */}
+      {/* Selector de Casos por Ciclo Evolutivo */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
         <label className="text-[11px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5 mb-2.5">
           <Layers className="w-3.5 h-3.5 text-cyan-400" /> Matriz de Casos por Ciclo Evolutivo ({casesList.length} Casos Disponibles):
@@ -458,7 +466,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             <button
               key={c.id}
               onClick={() => handleSelectCase(i)}
-              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+              className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                 selectedCaseIdx === i
                   ? 'bg-slate-800 border-cyan-400 ring-2 ring-cyan-500/30 shadow-lg'
                   : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
@@ -466,7 +474,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             >
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950 px-1.5 py-0.2 rounded border border-cyan-800">
+                  <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">
                     {c.stage}
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">{c.age} años</span>
@@ -479,9 +487,9 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
         </div>
       </div>
 
-      {/* Main Simulation Arena */}
+      {/* Área Principal de Simulación */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Simulated Patient Avatar */}
+        {/* Columna Izquierda: Avatar y Pistas Clínicas */}
         <div className="lg:col-span-5 space-y-4">
           <SimulatedPatientAvatar
             avatarUrl={currentCase.avatarUrl}
@@ -494,7 +502,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             isSpeaking={isBotTyping}
           />
 
-          {/* Clinical Clues & Normative vs Pathology Box */}
+          {/* Desafío Diagnóstico y Marcadores */}
           <div className="p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl text-xs space-y-2">
             <span className="font-bold text-amber-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Desafío Diagnóstico del Caso:
@@ -508,9 +516,9 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
           </div>
         </div>
 
-        {/* Right Column: Interactive Clinical Interview Arena */}
+        {/* Columna Derecha: Feed Interactivo de Entrevista */}
         <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[580px]">
-          {/* Top Chat Bar */}
+          {/* Cabecera del Diálogo */}
           <div className="p-3.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-cyan-400" />
@@ -523,19 +531,19 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             </span>
           </div>
 
-          {/* Dialogue Feed */}
+          {/* Feed de Mensajes con Auto-scroll */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
             {messages.map((m, idx) => (
               <div
                 key={idx}
-                className={`flex items-start gap-2.5 ${
+                className={`flex items-start gap-2.5 animate-fadeIn ${
                   m.role === 'user' ? 'flex-row-reverse' : ''
                 }`}
               >
                 <div
                   className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
                     m.role === 'user'
-                      ? 'bg-cyan-600 text-white font-bold'
+                      ? 'bg-cyan-600 text-white font-bold shadow-md shadow-cyan-600/30'
                       : 'bg-slate-800 text-cyan-300 border border-slate-700'
                   }`}
                 >
@@ -554,7 +562,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             ))}
 
             {isBotTyping && (
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-start gap-2.5 animate-pulse">
                 <div className="w-7 h-7 rounded-xl bg-slate-800 text-cyan-400 border border-slate-700 flex items-center justify-center">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 </div>
@@ -563,21 +571,23 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
                 </div>
               </div>
             )}
+            <div ref={dialogueEndRef} />
           </div>
 
-          {/* Professional Input Form */}
+          {/* Formulario de Entrada */}
           <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
             <input
               type="text"
               value={inputText}
+              disabled={isBotTyping}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Escriba su pregunta o intervención terapéutica para el paciente..."
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={isBotTyping || !inputText.trim()}
-              className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-bold transition flex items-center gap-1.5 shadow-lg shadow-cyan-600/20"
+              className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-bold transition flex items-center gap-1.5 shadow-lg shadow-cyan-600/20 active:scale-95 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Enviar</span>
@@ -586,7 +596,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
         </div>
       </div>
 
-      {/* Treatment Selectors & Execution Protocol */}
+      {/* Selectores de Estrategia Terapéutica */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-200 border-b border-slate-800 pb-3">
           <Stethoscope className="w-4 h-4 text-cyan-400" />
@@ -610,7 +620,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             <select
               value={chosenFramework}
               onChange={(e) => setChosenFramework(e.target.value as PsychotherapyFramework)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none cursor-pointer"
             >
               <option value="TCC">TCC (Terapia Cognitivo-Conductual)</option>
               <option value="DBT">DBT (Terapia Dialéctico-Conductual)</option>
@@ -626,7 +636,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
             <select
               value={chosenPharma}
               onChange={(e) => setChosenPharma(e.target.value as PharmacologyClass)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none cursor-pointer"
             >
               <option value="ISRS">ISRS (Sertralina, Escitalopram, Fluoxetina)</option>
               <option value="ISRN">IRSN (Venlafaxina, Duloxetina)</option>
@@ -637,7 +647,7 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
           </div>
         </div>
 
-        {/* Step by step execution guide panel */}
+        {/* Guía de Ejecución Paso a Paso */}
         <ClinicalExecutionGuidePanel
           selectedFramework={chosenFramework}
           selectedPharmacology={chosenPharma}
@@ -646,3 +656,5 @@ RESPONDE EXCLUSIVAMENTE CON ESTE OBJETO JSON:
     </div>
   );
 };
+
+export default AmieClinicalAcademy;
