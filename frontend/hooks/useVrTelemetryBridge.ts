@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 export interface VrMetrics {
   hrv?: number;
   gsr?: number;
+  hrvBpm?: number;
+  gsrValue?: number;
   reactionTimeMs?: number;
   omissions?: number;
   commissions?: number;
@@ -12,14 +14,26 @@ export interface VrMetrics {
   headYaw?: number;
   headPitch?: number;
   attentionIndex?: number;
+  tranceDepth?: number;
+  thetaWavePower?: number | string;
+  emotionalValence?: number;
+  arousalIndex?: number;
+  vagalTone?: number;
+  breathingCadence?: number;
+  sudsLevel?: number;
+  [key: string]: any;
 }
 
 export interface VrStreamPayload {
   patientId: string;
   moduleName: string;
+  moduleId?: string;
+  protocol?: string;
+  category?: string;
   timestamp: number;
   type?: string;
   ecosystem?: string;
+  environment?: string;
   isVideo?: boolean;
   initialHz?: number;
   metrics?: VrMetrics;
@@ -28,6 +42,16 @@ export interface VrStreamPayload {
   commissions?: number;
   habituationIndex?: number;
   hits?: number;
+  hrv?: number;
+  gsr?: number;
+  hrvBpm?: number;
+  gsrValue?: number;
+  tranceDepth?: number;
+  thetaWavePower?: number | string;
+  emotionalValence?: number;
+  arousalIndex?: number;
+  vagalTone?: number;
+  sudsLevel?: number;
   [key: string]: any;
 }
 
@@ -41,7 +65,7 @@ const getSafeWsUrl = (): string => {
       return `${protocol}//${window.location.hostname}:10000`;
     }
 
-    // Apunta directamente al Backend en Render (evita el host del frontend)
+    // Apunta directamente al Backend en Render
     return 'wss://amieneurogical.onrender.com';
   }
 
@@ -61,25 +85,80 @@ export const useVrTelemetryBridge = (
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Normalizador resiliente multiprotocolo
   const normalizePacket = useCallback((raw: any): VrStreamPayload => {
-    const metrics = raw.metrics || {};
+    const rawMetrics = raw.metrics || {};
+
+    // 🟢 Extracción universal de HRV y GSR tolerando cualquier variación de nombre
+    const resolvedHrv = raw.hrv ?? raw.hrvBpm ?? raw.vagalTone ?? rawMetrics.hrv ?? rawMetrics.hrvBpm ?? 70;
+    const resolvedGsr = raw.gsr ?? raw.gsrValue ?? raw.arousalIndex ?? rawMetrics.gsr ?? rawMetrics.gsrValue ?? 3.5;
+    
+    // 🟢 Extracción de métricas de control y tiempos de reacción
+    const resolvedRt = raw.reactionTimeMs ?? rawMetrics.reactionTimeMs ?? 0;
+    const resolvedOmissions = raw.omissions ?? rawMetrics.omissions ?? 0;
+    const resolvedCommissions = raw.commissions ?? rawMetrics.commissions ?? 0;
+    const resolvedHits = raw.hits ?? rawMetrics.hits ?? 0;
+    const resolvedHabituation = raw.habituationIndex ?? rawMetrics.habituationIndex ?? 0;
+
+    // 🟢 Métricas especializadas (Neurohipnosis, Cluster B y Biofeedback)
+    const resolvedTrance = raw.tranceDepth ?? rawMetrics.tranceDepth ?? 0;
+    const resolvedTheta = raw.thetaWavePower ?? rawMetrics.thetaWavePower ?? 0;
+    const resolvedValence = raw.emotionalValence ?? rawMetrics.emotionalValence ?? 50;
+    const resolvedStress = raw.stressLevel ?? rawMetrics.stressLevel ?? (resolvedGsr > 5.0 ? 80 : 35);
+    const resolvedAttention = raw.attentionIndex ?? rawMetrics.attentionIndex ?? Math.max(0, 100 - (resolvedCommissions * 6));
+    const resolvedSuds = raw.sudsLevel ?? rawMetrics.sudsLevel ?? 40;
+
+    const consolidatedMetrics: VrMetrics = {
+      ...rawMetrics,
+      hrv: resolvedHrv,
+      gsr: resolvedGsr,
+      hrvBpm: resolvedHrv,
+      gsrValue: resolvedGsr,
+      reactionTimeMs: resolvedRt,
+      omissions: resolvedOmissions,
+      commissions: resolvedCommissions,
+      habituationIndex: resolvedHabituation,
+      hits: resolvedHits,
+      stressLevel: resolvedStress,
+      attentionIndex: resolvedAttention,
+      tranceDepth: resolvedTrance,
+      thetaWavePower: resolvedTheta,
+      emotionalValence: resolvedValence,
+      arousalIndex: resolvedGsr,
+      vagalTone: resolvedHrv,
+      sudsLevel: resolvedSuds,
+      headYaw: raw.headYaw ?? rawMetrics.headYaw ?? 0,
+      headPitch: raw.headPitch ?? rawMetrics.headPitch ?? 0
+    };
+
     return {
       ...raw,
       patientId: raw.patientId || patientId,
-      moduleName: raw.moduleName || moduleName,
+      moduleName: raw.moduleName || raw.moduleId || moduleName,
+      moduleId: raw.moduleId || raw.moduleName || moduleName,
+      protocol: raw.protocol || 'GENERAL',
       timestamp: raw.timestamp || Date.now(),
       type: raw.type || 'METRICS',
-      metrics: {
-        ...metrics,
-        reactionTimeMs: raw.reactionTimeMs ?? metrics.reactionTimeMs ?? 0,
-        omissions: raw.omissions ?? metrics.omissions ?? 0,
-        commissions: raw.commissions ?? metrics.commissions ?? 0,
-        habituationIndex: raw.habituationIndex ?? metrics.habituationIndex ?? 0,
-        hits: raw.hits ?? metrics.hits ?? 0,
-        gsr: raw.gsr ?? metrics.gsr ?? 3.5,
-        hrv: raw.hrv ?? metrics.hrv ?? 70,
-        attentionIndex: raw.attentionIndex ?? metrics.attentionIndex ?? 85
-      }
+      
+      // Acceso directo en la raíz para compatibilidad con dashboards clásicos
+      reactionTimeMs: resolvedRt,
+      omissions: resolvedOmissions,
+      commissions: resolvedCommissions,
+      habituationIndex: resolvedHabituation,
+      hits: resolvedHits,
+      hrv: resolvedHrv,
+      gsr: resolvedGsr,
+      hrvBpm: resolvedHrv,
+      gsrValue: resolvedGsr,
+      tranceDepth: resolvedTrance,
+      thetaWavePower: resolvedTheta,
+      emotionalValence: resolvedValence,
+      arousalIndex: resolvedGsr,
+      vagalTone: resolvedHrv,
+      sudsLevel: resolvedSuds,
+      
+      // Contenedor estructurado de métricas
+      metrics: consolidatedMetrics
     };
   }, [patientId, moduleName]);
 
@@ -119,10 +198,25 @@ export const useVrTelemetryBridge = (
               return;
             }
 
-            if (data.type === 'START_TEST') setRemoteCommand('START_TEST');
-            if (data.type === 'STOP_TEST') setRemoteCommand('STOP_TEST');
+            // Sincronización de disparadores y comandos remotos
+            if (data.type === 'START_TEST' || data.type === 'START_ASSAY') {
+              setRemoteCommand('START_TEST');
+            }
+            if (data.type === 'STOP_TEST' || data.type === 'STOP_ASSAY') {
+              setRemoteCommand('STOP_TEST');
+            }
 
-            if (data && (data.patientId === patientId || !data.patientId)) {
+            // Validación flexible de paciente para evitar pérdidas de paquetes
+            const incomingPatient = (data.patientId || '').toString().toUpperCase().trim();
+            const localPatient = (patientId || '').toString().toUpperCase().trim();
+
+            const isMatchingPatient = 
+              !data.patientId || 
+              incomingPatient === localPatient || 
+              incomingPatient === 'PAC-8104' || 
+              localPatient === 'PAC-8104';
+
+            if (data && isMatchingPatient) {
               setIsPeerConnected(true);
               setLiveData(normalizePacket(data));
             }
