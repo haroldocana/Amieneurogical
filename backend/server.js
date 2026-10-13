@@ -1,33 +1,69 @@
-const express = require('express');
-const http = require('http');
-const { WebSocketServer, WebSocket } = require('ws');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const mongoose = require('mongoose');
+import express, { Request, Response } from 'express';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+
+// Controladores Clínicos y de Inteligencia Artificial
+import { analyzePatientData } from './controllers/analyzePatientData.js';
+import { 
+  getSaasProfile, 
+  rechargeAiTokens, 
+  consumeAiTokens 
+} from './controllers/authAndLicenseController.js';
+import { manualGrantByAdmin } from './controllers/adminPanelController.js';
+
+// Modelos de Base de Datos
+import PatientRecord from './models/PatientRecord.js';
+import { DoctorUserModel, OrganizationModel } from './models/AuthAndLicenseModels.js';
+import User from './models/User.js';
+
+// Middlewares
+import { optionalAuth, requireAuth } from './middleware/authMiddleware.js';
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 
-// 1. MIDDLEWARES & CORS
+// ============================================================================
+// 1. CONFIGURACIÓN DE CORS & BODY PARSERS
+// ============================================================================
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    // Permite peticiones sin origin (gafas VR, WebXR nativo, curl, apps móviles)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || origin.includes('onrender.com') || origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Fallback permisivo para estaciones clínicas
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-user-id', 'Accept']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-app-proxy', 'x-user-id', 'x-amie-proxy-header', 'Accept']
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+
+// ============================================================================
 // 2. CONEXIÓN A MONGODB ATLAS
+// ============================================================================
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:amie2026@cluster0.mongodb.net/amie_clinical_db?retryWrites=true&w=majority';
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB Conectada con éxito'))
-  .catch(err => console.error('❌ Error de conexión a MongoDB:', err.message));
 
-// Esquema y Modelo de Telemetría VR
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ [MongoDB Atlas] Conectado exitosamente al clúster clínico'))
+  .catch((err: Error) => console.error('❌ [MongoDB Atlas] Error de conexión:', err.message));
+
+// Esquema y Modelo de Telemetría VR Unificado
 const VrSessionSchema = new mongoose.Schema({
-  patientId: String,
+  patientId: { type: String, required: true, index: true },
   taskName: String,
   moduleId: String,
   protocol: String,
@@ -39,43 +75,91 @@ const VrSessionSchema = new mongoose.Schema({
 
 const VrSession = mongoose.models.VrSession || mongoose.model('VrSession', VrSessionSchema);
 
-// 3. RUTAS DE SALUD DEL SISTEMA
-app.get('/health', (req, res) => {
-  return res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+// ============================================================================
+// 3. RUTAS DE SALUD & STATUS (Públicas para Render y Monitores)
+// ============================================================================
+app.get('/health', (_req: Request, res: Response) => {
+  return res.status(200).json({ 
+    status: 'OK', 
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString() 
+  });
 });
 
-app.get('/status', (req, res) => {
+app.get('/status', (_req: Request, res: Response) => {
   return res.status(200).json({
     success: true,
-    engine: 'AMIE Gemini 3.8 Flash',
+    engine: 'AMIE Gemini 3.8 Flash (Execution: gemini-2.5-flash)',
     status: 'online',
     timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     services: {
       clinicalAnalysis: 'operational',
       jitaiSentinel: 'operational',
-      vrTelemetry: 'operational'
+      vrTelemetry: 'operational',
+      saasBilling: 'operational'
     }
   });
 });
 
-// 4. RUTAS DE TELEMETRÍA VR
-try {
-  const vrTelemetryRouter = require('./routes/vrTelemetry');
-  app.use('/api/vr', vrTelemetryRouter);
-} catch (e) {
-  try {
-    const vrTelemetryRouter = require('./server/routes/vrTelemetry');
-    app.use('/api/vr', vrTelemetryRouter);
-  } catch (err) {
-    console.warn('⚠️ Cargando rutas de telemetría directamente integradas');
-  }
-}
+// Alias compatible bajo /api
+app.get('/api/status', (_req: Request, res: Response) => {
+  return res.status(200).json({
+    success: true,
+    status: 'online',
+    engine: 'AMIE Clinical Engine v3.8',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
 
-// Endpoint de respaldo existente /api/vr/telemetry
-app.post('/api/vr/telemetry', async (req, res) => {
+// ============================================================================
+// 4. MOTOR CLÍNICO AMIE & ANÁLISIS MULTIAXIAL (Gemini 2.5/3.8 Flash)
+// ============================================================================
+app.post('/api/analyze', optionalAuth, analyzePatientData);
+app.post('/api/clinical/analyze', optionalAuth, analyzePatientData);
+
+// Sincronización y consulta de expediente de paciente
+app.get('/api/patients/:patientId', optionalAuth, async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    let patient = await PatientRecord.findOne({
+      $or: [{ id: patientId }, { patientId: patientId }, { 'metadata.patientId': patientId }]
+    });
+
+    if (!patient) {
+      // Auto-generación de expediente base seguro si es nuevo
+      patient = await PatientRecord.create({
+        id: patientId,
+        patientId: patientId,
+        metadata: {
+          patientId,
+          sessionGuid: `SESS-${Date.now()}`,
+          facilityId: 'AMIE-CLINIC-CENTRAL',
+          operatorId: 'harold01'
+        }
+      });
+    }
+
+    return res.status(200).json({ success: true, patient });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
+// 5. BOLSÓN DE IA, LICENCIAS & CONTROL SAAS
+// ============================================================================
+app.get('/api/saas/profile', optionalAuth, getSaasProfile);
+app.post('/api/saas/recharge', optionalAuth, rechargeAiTokens);
+app.post('/api/admin/manual-grant', optionalAuth, manualGrantByAdmin);
+
+// ============================================================================
+// 6. ENDPOINTS DE TELEMETRÍA VR (PICO 3 / QUEST / CHROMIE SYNC)
+// ============================================================================
+app.post('/api/vr/telemetry', optionalAuth, async (req: Request, res: Response) => {
   try {
     const { patientId, moduleId, taskName, kpis, telemetryLog, sessionData } = req.body;
-    const targetPatient = patientId || 'PAC-8104';
+    const targetPatient = patientId || sessionData?.patientId || 'PAC-8104';
     const activeTask = moduleId || taskName || sessionData?.taskName || 'VR_MODULE';
 
     const saved = await VrSession.create({
@@ -83,19 +167,18 @@ app.post('/api/vr/telemetry', async (req, res) => {
       taskName: activeTask,
       moduleId: moduleId || activeTask,
       metrics: kpis || sessionData?.metrics || {},
-      telemetryLog: telemetryLog || sessionData?.telemetryLog || []
+      telemetryLog: telemetryLog || sessionData?.telemetryLog || [],
+      rawSessionData: req.body
     });
 
-    console.log(`[MongoDB] Telemetría guardada para: ${targetPatient}`);
     return res.status(200).json({ success: true, sessionId: saved._id });
-  } catch (err) {
-    console.error('Error guardando telemetría VR:', err);
+  } catch (err: any) {
+    console.error('[MongoDB Error] Guardando telemetría VR:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Endpoint receptor para persistencia periódica de VrPatientExperience
-app.post('/api/telemetry/save', async (req, res) => {
+app.post('/api/telemetry/save', optionalAuth, async (req: Request, res: Response) => {
   try {
     const data = req.body;
     const targetPatient = data.patientId || 'PAC-8104';
@@ -120,16 +203,15 @@ app.post('/api/telemetry/save', async (req, res) => {
       rawSessionData: data
     });
 
-    console.log(`[MongoDB] Sesión archivada en base de datos: ${targetPatient} [${activeModule}]`);
     return res.status(200).json({ success: true, sessionId: saved._id });
-  } catch (err) {
-    console.error('Error guardando en /api/telemetry/save:', err.message);
+  } catch (err: any) {
+    console.error('[MongoDB Error] Guardando en /api/telemetry/save:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Proxy Shim para Vertex AI
-app.post('/api-proxy', async (req, res) => {
+// Proxy Shim para llamadas de API Vertex / Microservicios
+app.post('/api-proxy', async (req: Request, res: Response) => {
   if (req.headers['x-app-proxy'] !== 'FMFLYlU8uZv2lv1YA5t5UhwoUbb8DJHJ') {
     return res.status(401).json({ error: 'Acceso denegado: Proxy no autorizado' });
   }
@@ -142,19 +224,34 @@ app.post('/api-proxy', async (req, res) => {
     });
     const data = await response.text();
     res.status(response.status).send(data);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: 'Proxy Request Failed', details: error.message });
   }
 });
 
-// 5. SERVIDOR WEBSOCKET BIDIRECCIONAL (CHROMEBOOK <-> PICO 3)
+// ============================================================================
+// 7. WEBSOCKET BRIDGE RESILIENTE (CHROMEBOOK <-> PICO 3) CON HEARTBEAT
+// ============================================================================
+interface ExtWebSocket extends WebSocket {
+  isAlive?: boolean;
+  patientId?: string;
+  role?: string;
+}
+
 const wss = new WebSocketServer({ server });
-const connectedClients = new Set();
+const connectedClients = new Set<ExtWebSocket>();
 
-wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+wss.on('connection', (ws: ExtWebSocket, req) => {
+  ws.isAlive = true;
 
-  // Interceptor Proxy Gemini Live WS
+  // Manejador del latido (Pong)
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
+  const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+
+  // Interceptor Proxy para WebSockets externos
   if (url.pathname === '/ws-proxy') {
     const target = url.searchParams.get('target');
     if (!target) return ws.close();
@@ -167,54 +264,92 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  // Enlace Clínico VR
   connectedClients.add(ws);
-  console.log('🔌 Terminal conectada al WebSocket VR Bridge');
+  console.log(`🔌 [WS] Nueva terminal conectada (Total activas: ${connectedClients.size})`);
 
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message.toString());
-      const patientId = data.patientId || 'PAC-8104';
+      const patientId = data.patientId || ws.patientId || 'PAC-8104';
 
       if (data.type === 'HANDSHAKE' || data.type === 'JOIN_ROOM') {
-        ws.send(JSON.stringify({ type: 'HANDSHAKE_ACK', patientId }));
+        ws.patientId = patientId;
+        ws.role = data.role || 'receiver';
+        ws.send(JSON.stringify({ 
+          type: 'HANDSHAKE_ACK', 
+          patientId,
+          timestamp: Date.now() 
+        }));
       }
 
-      // Guardar en MongoDB si llega instrucción explícita por WebSocket
+      // Archivo asíncrono si el paquete solicita persistencia en MongoDB
       if (data.type === 'PERSIST_SESSION_DATA' && data.payload) {
-        try {
-          await VrSession.create({
-            patientId: data.payload.patientId || patientId,
-            taskName: data.payload.moduleId || 'VR_SESSION',
-            moduleId: data.payload.moduleId,
-            protocol: data.payload.protocol,
-            rawSessionData: data.payload
-          });
-          console.log(`[MongoDB-WS] Registro archivado para: ${patientId}`);
-        } catch (dbErr) {
-          console.error('Error archivando por WebSocket:', dbErr.message);
-        }
+        VrSession.create({
+          patientId: data.payload.patientId || patientId,
+          taskName: data.payload.moduleId || 'VR_SESSION',
+          moduleId: data.payload.moduleId,
+          protocol: data.payload.protocol,
+          rawSessionData: data.payload
+        }).catch(err => console.error('[WS DB Error]:', err.message));
       }
 
-      // Retransmisión bidireccional instantánea entre gafa y dashboard
+      // Retransmisión bidireccional instantánea
       connectedClients.forEach(client => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(data));
+          // Si el cliente tiene asignado paciente, solo le entrega paquetes de su paciente
+          if (!client.patientId || client.patientId === patientId || patientId === 'PAC-8104') {
+            client.send(JSON.stringify(data));
+          }
         }
       });
+
     } catch (e) {
-      console.error('Error procesando mensaje WebSocket:', e);
+      console.error('[WS Parse Error]:', e);
     }
   });
 
   ws.on('close', () => {
     connectedClients.delete(ws);
-    console.log('❌ Terminal desconectada del WebSocket');
+    console.log(`❌ [WS] Terminal desconectada (Restantes: ${connectedClients.size})`);
+  });
+
+  ws.on('error', (err) => {
+    console.warn('[WS Warning]:', err.message);
   });
 });
 
-// 6. PUERTO DE ESCUCHA
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`🚀 Servidor AMIE activo en puerto ${PORT}`);
+// 🟢 INTERVALO HEARTBEAT (30 SEGUNDOS)
+// Impide que Render corte la conexión WebSocket por inactividad a los 55 segundos
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach((ws: WebSocket) => {
+    const extWs = ws as ExtWebSocket;
+    if (extWs.isAlive === false) {
+      extWs.terminate();
+      return;
+    }
+    extWs.isAlive = false;
+    extWs.ping();
+  });
+}, 30000);
+
+wss.on('close', () => {
+  clearInterval(heartbeatInterval);
+});
+
+// ============================================================================
+// 8. ESCUCHA DEL SERVIDOR
+// ============================================================================
+const PORT = Number(process.env.PORT) || 10000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`
+  ======================================================
+   AMIE NEUROLOGICAL ENGINE v3.8 - BACKEND SERVER
+  ======================================================
+   [*] Servidor activo en puerto: ${PORT}
+   [*] Protocolos: HTTP + WebSockets (WSS)
+   [*] Heartbeat Render: Activo (30s Ping/Pong)
+   [*] Base de Datos: MongoDB Atlas
+   [*] Motor IA: AMIE Gemini Engine
+  ======================================================
+  `);
 });
