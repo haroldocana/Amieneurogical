@@ -1,331 +1,378 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+export type ClinicalModuleType = 
+  | 'CLUSTER_B_FORENSIC' 
+  | 'PHOBIA_VRET' 
+  | 'HYPNOSIS' 
+  | 'SEXUAL_HEALTH_SES_SIS' 
+  | 'SYSTEMIC_COUPLE' 
+  | 'NEURO_TRAUMA' 
+  | 'TDAH'
+  | 'TDM_DEPRESSION'
+  | 'NEURO_DEGEN'
+  | 'TEA_SOCIAL'
+  | 'OPTO_NEUROMODULATION'
+  | 'PAIN_MANAGEMENT';
 
-export interface VrMetrics {
-  hrv?: number;
-  gsr?: number;
-  hrvBpm?: number;
-  gsrValue?: number;
-  reactionTimeMs?: number;
-  omissions?: number;
-  commissions?: number;
-  stressLevel?: number;
-  habituationIndex?: number;
-  hits?: number;
-  headYaw?: number;
-  headPitch?: number;
-  attentionIndex?: number;
-  tranceDepth?: number;
-  thetaWavePower?: number | string;
-  emotionalValence?: number;
-  arousalIndex?: number;
-  vagalTone?: number;
-  breathingCadence?: number;
-  sudsLevel?: number;
-  [key: string]: any;
+export interface VrEnvironmentAsset {
+  id: string;
+  key: string;
+  name: string;
+  clinicalModule: ClinicalModuleType;
+  localAssetUrl: string;
+  mediaType: 'IMAGE_360';
+  description: string;
+  targetCondition: string;
 }
 
-export interface VrStreamPayload {
-  patientId: string;
-  moduleName: string;
-  moduleId?: string;
-  protocol?: string;
-  category?: string;
-  timestamp: number;
-  type?: string;
-  ecosystem?: string;
-  environment?: string;
-  isVideo?: boolean;
-  initialHz?: number;
-  metrics?: VrMetrics;
-  reactionTimeMs?: number;
-  omissions?: number;
-  commissions?: number;
-  habituationIndex?: number;
-  hits?: number;
-  hrv?: number;
-  gsr?: number;
-  hrvBpm?: number;
-  gsrValue?: number;
-  tranceDepth?: number;
-  thetaWavePower?: number | string;
-  emotionalValence?: number;
-  arousalIndex?: number;
-  vagalTone?: number;
-  sudsLevel?: number;
-  [key: string]: any;
+export type VideoTriggerType = 
+  | 'OVERT_PROVOCATION' 
+  | 'COLLAPSE' 
+  | 'DISTRESS' 
+  | 'COVERT_REJECTION';
+
+export interface VrVideoAsset {
+  id: string;
+  key: string;
+  name: string;
+  clinicalModule: 'CLUSTER_B_FORENSIC';
+  localAssetUrl: string;
+  mediaType: 'VIDEO_CLINICAL';
+  description: string;
+  targetCondition: string;
+  triggerType: VideoTriggerType;
 }
 
-// Determinación fija de la URL del WebSocket hacia el BACKEND de Render
-const getSafeWsUrl = (): string => {
-  if (typeof window !== 'undefined') {
-    const isHttps = window.location.protocol === 'https:';
-    const protocol = isHttps ? 'wss:' : 'ws:';
+export type VrMediaAsset = VrEnvironmentAsset | VrVideoAsset;
 
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return `${protocol}//${window.location.hostname}:10000`;
-    }
+// ============================================================================
+// 1. ESCENARIOS 360° CLINICAMENTE ESTANDARIZADOS (.JPG MINÚSCULAS)
+// ============================================================================
+export const AMIE_CLINICAL_ENVIRONMENTS: VrEnvironmentAsset[] = [
+  // --- CLUSTER B / NARCISISMO & EVALUACIÓN FORENSE ---
+  {
+    id: 'CLUSTER_B_COURTROOM',
+    key: 'cluster_b_forensic',
+    name: '01. Peritaje Forense Cluster B (Narcisismo / Gaslighting)',
+    clinicalModule: 'CLUSTER_B_FORENSIC',
+    localAssetUrl: '/ecosystems/cluster_b_forensic.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Sala de contrainterrogatorio pericial para evaluación de defensas narcisistas, disonancia y tríada oscura.',
+    targetCondition: 'Trastornos Cluster B (F60.81, F60.3)'
+  },
+  {
+    id: 'STERILE_EXAMINATION_ROOM',
+    key: 'sterile_room',
+    name: '02. Sala Neutra de Evaluación Estéril',
+    clinicalModule: 'CLUSTER_B_FORENSIC',
+    localAssetUrl: '/ecosystems/sterile_room.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Ambiente despojado de estímulos distractores para análisis pericial y registro microfacial.',
+    targetCondition: 'Cluster B / Evaluación Forense'
+  },
+  {
+    id: 'LOW_POLY_WHITE_ROOM',
+    key: 'low_poly_white_room',
+    name: '03. Sala Blanca Minimalista (Calibración Biocognitiva)',
+    clinicalModule: 'TDM_DEPRESSION',
+    localAssetUrl: '/ecosystems/low_poly_white_room.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Espacio de baja carga semántica para pruebas cinemáticas de temblor, latencia TDM y navegación.',
+    targetCondition: 'Depresión Mayor (F32) / Deterioro Cognitivo (G30)'
+  },
 
-    // Apunta directamente al Backend en Render
-    return 'wss://amieneurogical.onrender.com';
+  // --- SALUD SEXUAL / MODELO DUAL SES-SIS & TERAPIA DE PAREJA ---
+  {
+    id: 'DUAL_CONTROL_SES_SIS',
+    key: 'dual_control',
+    name: '04. Modelo Dual de Control Sexual (SES / SIS)',
+    clinicalModule: 'SEXUAL_HEALTH_SES_SIS',
+    localAssetUrl: '/ecosystems/dual_control.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Entorno de mediación neurosexual para desactivación de frenos inhibitorios (SIS) y activación de deseo (SES).',
+    targetCondition: 'Disfunciones Sexuales / Inhibición Psicosomática'
+  },
+  {
+    id: 'CLINICAL_OFFICE_CONSULT',
+    key: 'clinical_office',
+    name: '05. Despacho Clínico de Mediación y Pareja',
+    clinicalModule: 'SYSTEMIC_COUPLE',
+    localAssetUrl: '/ecosystems/clinical_office.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Espacio de encuadre profesional para sintonía diádica, contacto ocular y abordaje relacional.',
+    targetCondition: 'Terapia de Pareja y Disfunciones Relacionales'
+  },
+
+  // --- FOBIAS ESPECÍFICAS Y EXPOSICIÓN VRET ---
+  {
+    id: 'ACROPHOBIA_HIGH_ROOF',
+    key: 'acrophobia_roof',
+    name: '06. Azotea Escénica en Altura (VRET Acrofobia)',
+    clinicalModule: 'PHOBIA_VRET',
+    localAssetUrl: '/ecosystems/acrophobia_roof.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Plataforma con barandilla perimetral para exposición jerarquizada en niveles 1 a 10.',
+    targetCondition: 'Fobia Específica: Alturas (F40.2)'
+  },
+  {
+    id: 'AEROPHOBIA_FLIGHT_CABIN',
+    key: 'aerophobia_cabin',
+    name: '07. Cabina de Vuelo Comercial (VRET Aerofobia)',
+    clinicalModule: 'PHOBIA_VRET',
+    localAssetUrl: '/ecosystems/aerophobia_cabin.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Interior de aeronave presurizada para desensibilización a despegue, turbulencia y confinamiento.',
+    targetCondition: 'Fobia a Volar (F40.2)'
+  },
+
+  // --- HIPNOSIS, REGULACIÓN Y GROUNDING ---
+  {
+    id: 'NEURO_HYPNOSIS_TRANCE',
+    key: 'neuro_hypnosis',
+    name: '08. Vacío de Neurohipnosis & Trance Focalizado',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/neuro_hypnosis.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Matriz lumínica concéntrica para inducción rápida y sincronización de ritmo respiratorio a 0.1 Hz.',
+    targetCondition: 'Desregulación Autonómica / Dolor Psicógeno'
+  },
+  {
+    id: 'ALPINE_SANCTUARY_MINIMAL',
+    key: 'alpine_sanctuary',
+    name: '09. Santuario Alpino Minimalista',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/alpine_sanctuary.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Refugio alpino de horizonte abierto para inducción Ericksoniana y grounding somático.',
+    targetCondition: 'Trastorno de Ansiedad Generalizada / Neurohipnosis'
+  },
+  {
+    id: 'BIOLUMINESCENT_OCEAN_BEACH',
+    key: 'bioluminescent_beach',
+    name: '10. Playa Bioluminiscente Marina (Grounding)',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/bioluminescent_beach.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Oleaje costero de baja frecuencia para amortiguación de taquicardia y aumento del tono vagal HRV.',
+    targetCondition: 'Ataques de Pánico / Hiperactivación Basal'
+  },
+  {
+    id: 'SAFE_FOREST_SANCTUARY',
+    key: 'safe_place_forest',
+    name: '11. Bosque de Espacio Seguro & Anclaje',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/safe_place_forest.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Entorno natural biofílico con filtrado de luz cenital para instalación de recursos de calma.',
+    targetCondition: 'Ansiedad Generalizada (F41.1)'
+  },
+  {
+    id: 'ZEN_GARDEN_REGULATION',
+    key: 'zen_garden',
+    name: '12. Jardín Zen de Contemplación y Enfoque',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/zen_garden.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Jardín seco japonés para respiración diafragmática guiada y modulación de GSR.',
+    targetCondition: 'Estrés Agudo / Regulación Afectiva'
+  },
+  {
+    id: 'WARM_HEARTH_CABIN',
+    key: 'warm_hearth',
+    name: '13. Hogar de Chimenea Cálida & Contención',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/warm_hearth.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Luz cálida y textura leñosa para reducción de tono simpático y sensación de refugio térmico.',
+    targetCondition: 'Depresión Mayor / Sensación de Vacío'
+  },
+  {
+    id: 'WOMB_LIKE_CAVE_SAFETY',
+    key: 'womb_like_cave',
+    name: '14. Cueva Uterina de Contención Profunda',
+    clinicalModule: 'HYPNOSIS',
+    localAssetUrl: '/ecosystems/womb_like_cave.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Cúpula natural envolvente de bajo contraste para reducción de hipervigilancia extrema.',
+    targetCondition: 'Trauma Complejo / Agorafobia Severa'
+  },
+  {
+    id: 'COSMIC_STARS_EXPANSION',
+    key: 'cosmic_stars',
+    name: '15. Espacio Cósmico Estelar (Disociación Asistida / Opto-Gamma)',
+    clinicalModule: 'OPTO_NEUROMODULATION',
+    localAssetUrl: '/ecosystems/cosmic_stars.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Perspectiva macroscópica para fotobiomodulación Gamma 40Hz y reducción de rumiación obsesiva.',
+    targetCondition: 'TOC / Alzheimer / Desincronización Cortical'
+  },
+  {
+    id: 'SNOW_CABIN_REFUGE',
+    key: 'snow_cabin',
+    name: '16. Cabaña Nevada con Chimenea',
+    clinicalModule: 'NEURO_TRAUMA',
+    localAssetUrl: '/ecosystems/snow_cabin.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Ambiente térmico contrastante para regulación y reprocesamiento de memorias traumáticas.',
+    targetCondition: 'TEPT / Duelo Traumático'
+  },
+
+  // --- TRAUMA, EMDR Y NEURODESARROLLO ---
+  {
+    id: 'EMDR_MEMORY_REPROCESS',
+    key: 'emdr_memory',
+    name: '17. Cámara de Reprocesamiento EMDR & Movimiento Sacádico',
+    clinicalModule: 'NEURO_TRAUMA',
+    localAssetUrl: '/ecosystems/emdr_memory.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Entorno de baja carga semántica optimizado para barridos sacádicos bilaterales de 1.2 a 1.5 Hz.',
+    targetCondition: 'TEPT (F43.10) / Memorias Traumáticas'
+  },
+  {
+    id: 'DEV_TRAUMA_ATTACHMENT',
+    key: 'dev_trauma',
+    name: '18. Reparación de Trauma del Desarrollo & Apego',
+    clinicalModule: 'NEURO_TRAUMA',
+    localAssetUrl: '/ecosystems/dev_trauma.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Escenario simbólico para reestructuración de esquemas tempranos desadaptativos y apego herido.',
+    targetCondition: 'Trastornos de la Personalidad / Trauma Temprano'
+  },
+  {
+    id: 'PROTECTIVE_TREEHOUSE_INNER_CHILD',
+    key: 'protective_treehouse',
+    name: '19. Casa del Árbol Protectora (Niño Interior)',
+    clinicalModule: 'NEURO_TRAUMA',
+    localAssetUrl: '/ecosystems/protective_treehouse.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Refugio elevado y seguro para intervenciones en población infanto-juvenil o trabajo de partes.',
+    targetCondition: 'Trauma Infantil / Disociación Estructural'
+  },
+  {
+    id: 'FND_MIRROR_NEUROLOGICAL',
+    key: 'fnd_mirror',
+    name: '20. Sala de Terapia en Espejo (Neurología Funcional)',
+    clinicalModule: 'NEURO_TRAUMA',
+    localAssetUrl: '/ecosystems/fnd_mirror.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Espejo corporal adaptativo para recalibración visuomotora en paresias y distonías funcionales.',
+    targetCondition: 'Trastorno de Síntomas Neurológicos Funcionales (F44.4)'
+  },
+  {
+    id: 'PAIN_MANAGEMENT_CHRONIC',
+    key: 'pain_management',
+    name: '21. Desfocalización Somática de Dolor Crónico',
+    clinicalModule: 'PAIN_MANAGEMENT',
+    localAssetUrl: '/ecosystems/pain_management.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Inmersión analgésica por distracción atencional competitiva sobre corteza somatosensorial.',
+    targetCondition: 'Fibromialgia / Dolor Crónico Neuropático'
+  },
+  {
+    id: 'TDAH_EXECUTIVE_LAB',
+    key: 'tdah_executive',
+    name: '22. Laboratorio de Funciones Ejecutivas TDAH',
+    clinicalModule: 'TDAH',
+    localAssetUrl: '/ecosystems/tdah_executive.jpg',
+    mediaType: 'IMAGE_360',
+    description: 'Aula/Laboratorio con distractores controlados para tests continuos de rendimiento (CPT).',
+    targetCondition: 'TDAH (F90.0) / Déficit Ejecutivo'
   }
+];
 
-  return 'wss://amieneurogical.onrender.com';
+// ============================================================================
+// 2. VIDEOS CLÍNICOS DE PROVOCACIÓN FORENSE Y NARCISISMO (/video/)
+// ============================================================================
+export const AMIE_CLINICAL_VIDEOS: VrVideoAsset[] = [
+  {
+    id: 'OVERT_PROVOCATION_VIDEO',
+    key: 'overt_provocation',
+    name: 'Provocación Directa al Ego (Overt Provocation)',
+    clinicalModule: 'CLUSTER_B_FORENSIC',
+    localAssetUrl: '/video/overt_provocation.mp4',
+    mediaType: 'VIDEO_CLINICAL',
+    description: 'Estímulo audiovisual de confrontación directa para medir umbral de ira narcisista y descompensación simpática.',
+    targetCondition: 'Narcisismo Manifiesto / Cluster B',
+    triggerType: 'OVERT_PROVOCATION'
+  },
+  {
+    id: 'COVERT_REJECTION_VIDEO',
+    key: 'covert_rejection',
+    name: 'Rechazo Social Encubierto (Covert Rejection)',
+    clinicalModule: 'CLUSTER_B_FORENSIC',
+    localAssetUrl: '/video/covert_rejection.mp4',
+    mediaType: 'VIDEO_CLINICAL',
+    description: 'Dinámica de micro-desprecio y exclusión social para evaluar hipersensibilidad al rechazo y vergüenza tóxica.',
+    targetCondition: 'Narcisismo Vulnerable / TLP',
+    triggerType: 'COVERT_REJECTION'
+  },
+  {
+    id: 'NARCISSISM_COLLAPSE_VIDEO',
+    key: 'narcissism_collapse',
+    name: 'Colapso Narcisista & Retiro de Refuerzo (Collapse)',
+    clinicalModule: 'CLUSTER_B_FORENSIC',
+    localAssetUrl: '/video/narcissism_collapse.mp4',
+    mediaType: 'VIDEO_CLINICAL',
+    description: 'Simulación de pérdida de control y retirada de validación externa para evaluar micro-disociación y respuesta galvánica.',
+    targetCondition: 'Narcisismo Encubierto / Desregulación Borderline',
+    triggerType: 'COLLAPSE'
+  },
+  {
+    id: 'ANTISOCIAL_DISTRESS_VIDEO',
+    key: 'antisocial_distress',
+    name: 'Distrés Antisocial & Falta de Empatía (Antisocial Distress)',
+    clinicalModule: 'CLUSTER_B_FORENSIC',
+    localAssetUrl: '/video/antisocial_distress.mp4',
+    mediaType: 'VIDEO_CLINICAL',
+    description: 'Exposición a dilemas de dolor ajeno para medir respuesta autonómica (embotamiento afectivo vs reactividad fisiológica).',
+    targetCondition: 'Rasgos Psicopáticos / Trastorno Antisocial (F60.2)',
+    triggerType: 'DISTRESS'
+  }
+];
+
+// ============================================================================
+// 3. RESOLUTORES Y BÚSQUEDA POLIMÓRFICA RESILIENTE
+// ============================================================================
+
+/**
+ * Busca un entorno 360° por ID, clave estandarizada o coincidencia parcial.
+ * Si no encuentra coincidencia, retorna un entorno clínico seguro por defecto.
+ */
+export const getEnvironmentAssetById = (envId: string): VrEnvironmentAsset => {
+  if (!envId) return AMIE_CLINICAL_ENVIRONMENTS[0];
+  
+  const query = envId.toLowerCase().trim().replace(/[\s-]+/g, '_');
+
+  const found = AMIE_CLINICAL_ENVIRONMENTS.find(e => 
+    e.id.toLowerCase() === query ||
+    e.key.toLowerCase() === query ||
+    e.localAssetUrl.toLowerCase().includes(query) ||
+    query.includes(e.key.toLowerCase())
+  );
+
+  return found || AMIE_CLINICAL_ENVIRONMENTS[0];
 };
 
-export const useVrTelemetryBridge = (
-  mode: 'sender' | 'receiver',
-  patientId: string,
-  moduleName: string = 'ExecutiveControl'
-) => {
-  const [liveData, setLiveData] = useState<VrStreamPayload | null>(null);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
-  const [remoteCommand, setRemoteCommand] = useState<'START_TEST' | 'STOP_TEST' | null>(null);
+/**
+ * Busca un video clínico por ID, clave estandarizada o tipo de disparador.
+ */
+export const getVideoAssetById = (videoId: string): VrVideoAsset => {
+  if (!videoId) return AMIE_CLINICAL_VIDEOS[0];
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const query = videoId.toLowerCase().trim().replace(/[\s-]+/g, '_');
 
-  // Normalizador resiliente multiprotocolo
-  const normalizePacket = useCallback((raw: any): VrStreamPayload => {
-    const rawMetrics = raw.metrics || {};
+  const found = AMIE_CLINICAL_VIDEOS.find(v => 
+    v.id.toLowerCase() === query ||
+    v.key.toLowerCase() === query ||
+    v.triggerType.toLowerCase() === query ||
+    v.localAssetUrl.toLowerCase().includes(query) ||
+    query.includes(v.key.toLowerCase())
+  );
 
-    // 🟢 Extracción universal de HRV y GSR tolerando cualquier variación de nombre
-    const resolvedHrv = raw.hrv ?? raw.hrvBpm ?? raw.vagalTone ?? rawMetrics.hrv ?? rawMetrics.hrvBpm ?? 70;
-    const resolvedGsr = raw.gsr ?? raw.gsrValue ?? raw.arousalIndex ?? rawMetrics.gsr ?? rawMetrics.gsrValue ?? 3.5;
-    
-    // 🟢 Extracción de métricas de control y tiempos de reacción
-    const resolvedRt = raw.reactionTimeMs ?? rawMetrics.reactionTimeMs ?? 0;
-    const resolvedOmissions = raw.omissions ?? rawMetrics.omissions ?? 0;
-    const resolvedCommissions = raw.commissions ?? rawMetrics.commissions ?? 0;
-    const resolvedHits = raw.hits ?? rawMetrics.hits ?? 0;
-    const resolvedHabituation = raw.habituationIndex ?? rawMetrics.habituationIndex ?? 0;
+  return found || AMIE_CLINICAL_VIDEOS[0];
+};
 
-    // 🟢 Métricas especializadas (Neurohipnosis, Cluster B y Biofeedback)
-    const resolvedTrance = raw.tranceDepth ?? rawMetrics.tranceDepth ?? 0;
-    const resolvedTheta = raw.thetaWavePower ?? rawMetrics.thetaWavePower ?? 0;
-    const resolvedValence = raw.emotionalValence ?? rawMetrics.emotionalValence ?? 50;
-    const resolvedStress = raw.stressLevel ?? rawMetrics.stressLevel ?? (resolvedGsr > 5.0 ? 80 : 35);
-    const resolvedAttention = raw.attentionIndex ?? rawMetrics.attentionIndex ?? Math.max(0, 100 - (resolvedCommissions * 6));
-    const resolvedSuds = raw.sudsLevel ?? rawMetrics.sudsLevel ?? 40;
-
-    const consolidatedMetrics: VrMetrics = {
-      ...rawMetrics,
-      hrv: resolvedHrv,
-      gsr: resolvedGsr,
-      hrvBpm: resolvedHrv,
-      gsrValue: resolvedGsr,
-      reactionTimeMs: resolvedRt,
-      omissions: resolvedOmissions,
-      commissions: resolvedCommissions,
-      habituationIndex: resolvedHabituation,
-      hits: resolvedHits,
-      stressLevel: resolvedStress,
-      attentionIndex: resolvedAttention,
-      tranceDepth: resolvedTrance,
-      thetaWavePower: resolvedTheta,
-      emotionalValence: resolvedValence,
-      arousalIndex: resolvedGsr,
-      vagalTone: resolvedHrv,
-      sudsLevel: resolvedSuds,
-      headYaw: raw.headYaw ?? rawMetrics.headYaw ?? 0,
-      headPitch: raw.headPitch ?? rawMetrics.headPitch ?? 0
-    };
-
-    return {
-      ...raw,
-      patientId: raw.patientId || patientId,
-      moduleName: raw.moduleName || raw.moduleId || moduleName,
-      moduleId: raw.moduleId || raw.moduleName || moduleName,
-      protocol: raw.protocol || 'GENERAL',
-      timestamp: raw.timestamp || Date.now(),
-      type: raw.type || 'METRICS',
-      
-      // Acceso directo en la raíz para compatibilidad con dashboards clásicos
-      reactionTimeMs: resolvedRt,
-      omissions: resolvedOmissions,
-      commissions: resolvedCommissions,
-      habituationIndex: resolvedHabituation,
-      hits: resolvedHits,
-      hrv: resolvedHrv,
-      gsr: resolvedGsr,
-      hrvBpm: resolvedHrv,
-      gsrValue: resolvedGsr,
-      tranceDepth: resolvedTrance,
-      thetaWavePower: resolvedTheta,
-      emotionalValence: resolvedValence,
-      arousalIndex: resolvedGsr,
-      vagalTone: resolvedHrv,
-      sudsLevel: resolvedSuds,
-      
-      // Contenedor estructurado de métricas
-      metrics: consolidatedMetrics
-    };
-  }, [patientId, moduleName]);
-
-  useEffect(() => {
-    if (!patientId) return;
-    let isMounted = true;
-
-    const connectWs = () => {
-      try {
-        const wsUrl = getSafeWsUrl();
-        const ws = new WebSocket(wsUrl);
-        socketRef.current = ws;
-
-        ws.onopen = () => {
-          if (!isMounted) return;
-          setIsConnected(true);
-          try {
-            ws.send(JSON.stringify({ 
-              type: 'HANDSHAKE', 
-              patientId, 
-              role: mode, 
-              moduleName, 
-              timestamp: Date.now() 
-            }));
-          } catch (e) {
-            console.warn('Error en handshake inicial:', e);
-          }
-        };
-
-        ws.onmessage = (event) => {
-          if (!isMounted) return;
-          try {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'HANDSHAKE_ACK' || data.type === 'PEER_CONNECTED') {
-              setIsPeerConnected(true);
-              return;
-            }
-
-            // Sincronización de disparadores y comandos remotos
-            if (data.type === 'START_TEST' || data.type === 'START_ASSAY') {
-              setRemoteCommand('START_TEST');
-            }
-            if (data.type === 'STOP_TEST' || data.type === 'STOP_ASSAY') {
-              setRemoteCommand('STOP_TEST');
-            }
-
-            // Validación flexible de paciente para evitar pérdidas de paquetes
-            const incomingPatient = (data.patientId || '').toString().toUpperCase().trim();
-            const localPatient = (patientId || '').toString().toUpperCase().trim();
-
-            const isMatchingPatient = 
-              !data.patientId || 
-              incomingPatient === localPatient || 
-              incomingPatient === 'PAC-8104' || 
-              localPatient === 'PAC-8104';
-
-            if (data && isMatchingPatient) {
-              setIsPeerConnected(true);
-              setLiveData(normalizePacket(data));
-            }
-          } catch (e) {
-            console.warn('Error al procesar paquete WS:', e);
-          }
-        };
-
-        ws.onerror = (err) => {
-          if (!isMounted) return;
-          console.warn('Conexión WebSocket en reintento:', err);
-          setIsConnected(false);
-          setIsPeerConnected(false);
-        };
-
-        ws.onclose = () => {
-          if (!isMounted) return;
-          setIsConnected(false);
-          setIsPeerConnected(false);
-          reconnectTimerRef.current = setTimeout(connectWs, 3000);
-        };
-      } catch (e) {
-        console.error('Error al instanciar WebSocket:', e);
-        if (isMounted) {
-          setIsConnected(false);
-          setIsPeerConnected(false);
-          reconnectTimerRef.current = setTimeout(connectWs, 4000);
-        }
-      }
-    };
-
-    connectWs();
-
-    return () => {
-      isMounted = false;
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      if (socketRef.current) {
-        socketRef.current.onopen = null;
-        socketRef.current.onmessage = null;
-        socketRef.current.onerror = null;
-        socketRef.current.onclose = null;
-        socketRef.current.close();
-      }
-    };
-  }, [mode, patientId, moduleName, normalizePacket]);
-
-  const syncSession = useCallback(() => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      try {
-        socketRef.current.send(JSON.stringify({ 
-          type: 'HANDSHAKE', 
-          patientId, 
-          role: mode, 
-          moduleName, 
-          timestamp: Date.now() 
-        }));
-      } catch (e) {
-        console.warn('Error en syncSession:', e);
-      }
-    }
-  }, [mode, patientId, moduleName]);
-
-  const sendRemoteStart = useCallback(() => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      try {
-        socketRef.current.send(JSON.stringify({ 
-          type: 'START_TEST', 
-          patientId, 
-          moduleName, 
-          timestamp: Date.now() 
-        }));
-      } catch (e) {
-        console.warn('Error en sendRemoteStart:', e);
-      }
-    }
-  }, [patientId, moduleName]);
-
-  const transmit = useCallback(async (metricsData: VrMetrics | any) => {
-    const isObject = typeof metricsData === 'object' && metricsData !== null;
-    const packetType = isObject && metricsData.type ? metricsData.type : 'METRICS';
-    const metrics: VrMetrics = isObject && metricsData.metrics ? metricsData.metrics : metricsData;
-
-    const payload: VrStreamPayload = normalizePacket({
-      patientId,
-      moduleName,
-      timestamp: Date.now(),
-      ...metricsData,
-      type: packetType,
-      metrics
-    });
-
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      try {
-        socketRef.current.send(JSON.stringify(payload));
-      } catch (e) {
-        console.warn('Error en transmit:', e);
-      }
-    }
-  }, [patientId, moduleName, normalizePacket]);
-
-  return { 
-    isConnected, 
-    isPeerConnected, 
-    isStreaming: isConnected && isPeerConnected, 
-    liveData, 
-    lastPacket: liveData, 
-    remoteCommand, 
-    syncSession, 
-    sendRemoteStart, 
-    transmit 
-  };
+/**
+ * Resuelve cualquier recurso multimedia (video o imagen 360°) bajo un identificador unificado.
+ */
+export const resolveImmersionMedia = (identifier: string, isVideo = false): VrMediaAsset => {
+  return isVideo ? getVideoAssetById(identifier) : getEnvironmentAssetById(identifier);
 };
