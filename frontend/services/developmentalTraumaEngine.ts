@@ -2,15 +2,36 @@
 // AMIE CLINICAL COPILOT - MOTOR DE TRAUMA EVOLUTIVO Y ADAPTACIÓN HIPNO-VR
 // ============================================================================
 
-export type DevelopmentalStage = 'CHILDHOOD' | 'ADOLESCENCE' | 'EARLY_ADULT' | 'MATURE_ADULT' | 'GERIATRIC';
+export type DevelopmentalStage = 
+  | 'CHILDHOOD' 
+  | 'ADOLESCENCE' 
+  | 'EARLY_ADULT' 
+  | 'MATURE_ADULT' 
+  | 'GERIATRIC';
 
 export type TraumaTypology = 
-  | 'ATTACHMENT_DEVELOPMENTAL' // Trauma de Apego / Desarrollo
-  | 'SINGLE_EVENT_ACUTE'        // Evento Único Agudo (Accidente/Asalto)
-  | 'COMPLEX_REPETITIVE'        // Trauma Complejo Repetitivo (TEPT-C)
-  | 'INTERPERSONAL_ABUSE'       // Abuso Interpersonal / Bullying
-  | 'MEDICAL_SOMATIC'           // Trauma Médico / Dolor Somático
-  | 'LOSS_BEREAVEMENT';         // Duelo Traumático / Pérdida
+  | 'ATTACHMENT_DEVELOPMENTAL' // Trauma de Apego / Desarrollo Infantil
+  | 'SINGLE_EVENT_ACUTE'       // Evento Único Agudo (Accidente / Agresión)
+  | 'COMPLEX_REPETITIVE'       // Trauma Complejo Repetitivo (TEPT-C / CIE-11: 6B41)
+  | 'INTERPERSONAL_ABUSE'      // Abuso Interpersonal / Violencia / Bullying
+  | 'MEDICAL_SOMATIC'          // Trauma Médico / Dolor Somático Iatrogénico
+  | 'LOSS_BEREAVEMENT';        // Duelo Traumático / Pérdida Paroxística
+
+export type VoiceStyleType = 
+  | 'PLAYFUL_PROTECTIVE' 
+  | 'EMPOWERING_NEUTRAL' 
+  | 'DIRECT_ERICKSONIAN' 
+  | 'SOMATIC_VISCERAL' 
+  | 'SERENE_REASSURING';
+
+export type RecommendedEcosystemKey = 
+  | 'WOMB_LIKE_CAVE'
+  | 'PROTECTIVE_TREEHOUSE'
+  | 'WARM_HEARTH'
+  | 'CALM_BEACH_SUNSET'
+  | 'SAFE_PLACE_FOREST'
+  | 'ZEN_GARDEN'
+  | 'BIOLUMINESCENT_BEACH';
 
 export interface AdaptedProgramConfig {
   stage: DevelopmentalStage;
@@ -20,12 +41,64 @@ export interface AdaptedProgramConfig {
   minBinauralHz: number;
   visualMetaphorId: string;
   visualMetaphorNameEs: string;
-  voiceStyle: 'PLAYFUL_PROTECTIVE' | 'EMPOWERING_NEUTRAL' | 'DIRECT_ERICKSONIAN' | 'SOMATIC_VISCERAL' | 'SERENE_REASSURING';
-  gsrSafetyThresholduS: number;  // Disparo de seguridad
-  minHrvThresholdMs: number;
-  vrMotionSpeedMultiplier: number; // Modificador de velocidad para evitar mareo cinetósico
+  recommendedEcosystemKey: RecommendedEcosystemKey;
+  voiceStyle: VoiceStyleType;
+  gsrSafetyThresholduS: number;  // Umbral crítico de interrupción autonómica
+  minHrvThresholdMs: number;     // Tono vagal mínimo antes de inducir anclaje
+  vrMotionSpeedMultiplier: number; // Factor cinemático para prevenir cinetosis
   clinicalRationale: string;
 }
+
+export interface TraumaMetadata {
+  key: TraumaTypology;
+  labelEs: string;
+  clinicalFocus: string;
+}
+
+export const TRAUMA_TYPOLOGIES_LIST: TraumaMetadata[] = [
+  {
+    key: 'ATTACHMENT_DEVELOPMENTAL',
+    labelEs: 'Apego / Desarrollo (Infantil)',
+    clinicalFocus: 'Heridas tempranas de sintonización y esquemas primarios de abandono.'
+  },
+  {
+    key: 'COMPLEX_REPETITIVE',
+    labelEs: 'TEPT Complejo (TEPT-C / Repetitivo)',
+    clinicalFocus: 'Exposición acumulativa, hipervigilancia amigdalar y desregulación afectiva crónica.'
+  },
+  {
+    key: 'SINGLE_EVENT_ACUTE',
+    labelEs: 'Evento Único Agudo (Asalto / Accidente)',
+    clinicalFocus: 'Desensibilización focal de memorias paroxísticas no integradas.'
+  },
+  {
+    key: 'INTERPERSONAL_ABUSE',
+    labelEs: 'Abuso Interpersonal / Bullying',
+    clinicalFocus: 'Restauración de agencia, límites personales y autoeficacia corporal.'
+  },
+  {
+    key: 'MEDICAL_SOMATIC',
+    labelEs: 'Trauma Médico / Dolor Somático',
+    clinicalFocus: 'Modulación de memoria nociceptiva y reactividad iatrogénica.'
+  },
+  {
+    key: 'LOSS_BEREAVEMENT',
+    labelEs: 'Duelo Traumático / Pérdida',
+    clinicalFocus: 'Procesamiento de ruptura vincular e integración afectiva pacífica.'
+  }
+];
+
+/**
+ * Determina la etapa evolutiva garantizando defensividad ante valores anómalos
+ */
+export const getStageFromAge = (rawAge: number): DevelopmentalStage => {
+  if (!Number.isFinite(rawAge) || rawAge <= 0) return 'EARLY_ADULT';
+  if (rawAge < 12) return 'CHILDHOOD';
+  if (rawAge < 18) return 'ADOLESCENCE';
+  if (rawAge < 36) return 'EARLY_ADULT';
+  if (rawAge < 65) return 'MATURE_ADULT';
+  return 'GERIATRIC';
+};
 
 /**
  * Genera la configuración optimizada para el entorno VR basada en Edad y Tipología de Trauma
@@ -34,15 +107,11 @@ export const calculateAdaptedProgram = (
   age: number,
   traumaType: TraumaTypology = 'COMPLEX_REPETITIVE'
 ): AdaptedProgramConfig => {
-  // 1. Clasificación por Etapa Evolutiva (Base)
-  let stage: DevelopmentalStage = 'EARLY_ADULT';
-  if (age < 12) stage = 'CHILDHOOD';
-  else if (age >= 12 && age < 18) stage = 'ADOLESCENCE';
-  else if (age >= 18 && age < 36) stage = 'EARLY_ADULT';
-  else if (age >= 36 && age < 65) stage = 'MATURE_ADULT';
-  else stage = 'GERIATRIC';
+  // 1. Sanitización de Edad Biológica (Prevención de NaN / negativos / desbordamientos)
+  const safeAge = Number.isFinite(age) ? Math.max(4, Math.min(105, age)) : 28;
+  const stage = getStageFromAge(safeAge);
 
-  // 2. Matriz de Configuración Base por Etapa
+  // 2. Matriz de Configuración Base por Etapa Evolutiva
   let config: AdaptedProgramConfig;
 
   switch (stage) {
@@ -55,6 +124,7 @@ export const calculateAdaptedProgram = (
         maxBinauralHz: 9.0,
         visualMetaphorId: 'PROTECTIVE_SANCTUARY_3D',
         visualMetaphorNameEs: 'Santuario del Guardián Mágico (Jardín Protector)',
+        recommendedEcosystemKey: 'PROTECTIVE_TREEHOUSE',
         voiceStyle: 'PLAYFUL_PROTECTIVE',
         gsrSafetyThresholduS: 2.5,
         minHrvThresholdMs: 40,
@@ -72,6 +142,7 @@ export const calculateAdaptedProgram = (
         maxBinauralHz: 8.0,
         visualMetaphorId: 'IDENTITY_SHIELD_AVATAR',
         visualMetaphorNameEs: 'Escudo de Identidad y Reconfiguración de Agencia 6DoF',
+        recommendedEcosystemKey: 'ZEN_GARDEN',
         voiceStyle: 'EMPOWERING_NEUTRAL',
         gsrSafetyThresholduS: 3.5,
         minHrvThresholdMs: 35,
@@ -89,6 +160,7 @@ export const calculateAdaptedProgram = (
         maxBinauralHz: 7.0,
         visualMetaphorId: 'EMDR_BILATERAL_SPHERE',
         visualMetaphorNameEs: 'Desensibilización Hipno-Bilateral (VR-HD 3D)',
+        recommendedEcosystemKey: 'SAFE_PLACE_FOREST',
         voiceStyle: 'DIRECT_ERICKSONIAN',
         gsrSafetyThresholduS: 4.5,
         minHrvThresholdMs: 25,
@@ -106,6 +178,7 @@ export const calculateAdaptedProgram = (
         maxBinauralHz: 6.5,
         visualMetaphorId: 'SOMATIC_BODY_MAP_3D',
         visualMetaphorNameEs: 'Mapa Somático 3D y Disolución Nodal Traumática',
+        recommendedEcosystemKey: 'WARM_HEARTH',
         voiceStyle: 'SOMATIC_VISCERAL',
         gsrSafetyThresholduS: 4.0,
         minHrvThresholdMs: 30,
@@ -123,12 +196,13 @@ export const calculateAdaptedProgram = (
         minBinauralHz: 7.0,
         maxBinauralHz: 10.0,
         visualMetaphorId: 'SERENE_CHRONICLE_ROOM',
-        visualMetaphorNameEs: 'Habitación de Crónicas Serenes (Integración de Vida)',
+        visualMetaphorNameEs: 'Habitación de Crónicas Serenas (Integración de Vida)',
+        recommendedEcosystemKey: 'BIOLUMINESCENT_BEACH',
         voiceStyle: 'SERENE_REASSURING',
         gsrSafetyThresholduS: 3.0,
         minHrvThresholdMs: 35,
         vrMotionSpeedMultiplier: 0.2,
-        clinicalRationale: 'Evita la estimulación desorientadora. Utiliza frecuencias Alfa para favorecer la integración del recuerdo sin compromiso cenestésico ni riesgo de mareo.'
+        clinicalRationale: 'Evita la estimulación desorientadora. Utiliza frecuencias Alfa para favorecer la integración del recuerdo sin compromiso cinestésico ni riesgo de cinetosis.'
       };
       break;
   }
@@ -136,38 +210,45 @@ export const calculateAdaptedProgram = (
   // 3. Modulación Específica por Tipología de Trauma (Segunda Capa Bio-Adaptativa)
   switch (traumaType) {
     case 'ATTACHMENT_DEVELOPMENTAL':
-      // Trauma de apego: Reduce el umbral de seguridad GSR para evitar disociación silenciosa
-      config.gsrSafetyThresholduS = Math.max(1.8, +(config.gsrSafetyThresholduS - 0.5).toFixed(1));
-      config.clinicalRationale += ' [Modulación Apego: Umbral GSR reducido para prevenir disociación severa por abandono.]';
+      // Reducción preventiva del umbral GSR para evitar disociación silenciosa por abandono
+      config.gsrSafetyThresholduS = Math.max(1.8, Number((config.gsrSafetyThresholduS - 0.5).toFixed(1)));
+      config.recommendedEcosystemKey = 'WOMB_LIKE_CAVE';
+      config.clinicalRationale += ' [Modulación Apego: Umbral GSR reducido para prevenir disociación severa por abandono. Refugio intrauterino asignado.]';
       break;
 
     case 'MEDICAL_SOMATIC':
-      // Trauma somático/dolor: Inyecta frecuencias binaurales tendientes a Delta/Theta bajo
-      config.recommendedBinauralHz = Math.max(config.minBinauralHz, +(config.recommendedBinauralHz - 0.8).toFixed(1));
+      // Inducción hacia rango Theta/Delta bajo para analgesia neuro-visceral
+      config.recommendedBinauralHz = Math.max(config.minBinauralHz, Number((config.recommendedBinauralHz - 0.8).toFixed(1)));
       config.voiceStyle = 'SOMATIC_VISCERAL';
+      config.recommendedEcosystemKey = 'WARM_HEARTH';
       config.clinicalRationale += ' [Modulación Somática: Inducción de analgesia neuro-visceral y relajación muscular profunda.]';
       break;
 
     case 'COMPLEX_REPETITIVE':
-      // TEPT Complejo: Reduce la velocidad de movimiento para no detonar hipervigilancia
-      config.vrMotionSpeedMultiplier = +(config.vrMotionSpeedMultiplier * 0.8).toFixed(2);
+      // Reducción cinemática para mitigar la hipervigilancia de la amígdala
+      config.vrMotionSpeedMultiplier = Number((config.vrMotionSpeedMultiplier * 0.8).toFixed(2));
       config.clinicalRationale += ' [Modulación C-PTSD: Velocidad de cámara reducida para mitigar la hipervigilancia de la amígdala.]';
       break;
 
     case 'INTERPERSONAL_ABUSE':
-      // Abuso interpersonal: Prioriza voces no autoritarias
-      if (stage !== 'CHILDHOOD') config.voiceStyle = 'EMPOWERING_NEUTRAL';
-      config.clinicalRationale += ' [Modulación Abuso: Tono narrativo de reafirmación de límites y agencia personal.]';
+      // Tono de empoderamiento y límites definidos sin imposición
+      if (stage !== 'CHILDHOOD') {
+        config.voiceStyle = 'EMPOWERING_NEUTRAL';
+      }
+      config.recommendedEcosystemKey = 'PROTECTIVE_TREEHOUSE';
+      config.clinicalRationale += ' [Modulación Abuso: Tono narrativo de reafirmación de límites y agencia personal. Entorno de refugio elevado.]';
       break;
 
     case 'LOSS_BEREAVEMENT':
       config.voiceStyle = 'SERENE_REASSURING';
-      config.clinicalRationale += ' [Modulación Duelo: Enfoque en la consolidación afectiva y la integración del afecto perdiendo el dolor agudo.]';
+      config.recommendedEcosystemKey = 'BIOLUMINESCENT_BEACH';
+      config.clinicalRationale += ' [Modulación Duelo: Enfoque en la consolidación afectiva y la integración del afecto atenuando el dolor agudo.]';
       break;
 
     case 'SINGLE_EVENT_ACUTE':
     default:
-      // Mantiene los valores estándar calibrados por etapa de edad
+      config.recommendedEcosystemKey = 'SAFE_PLACE_FOREST';
+      // Mantiene los valores basales calibrados por etapa de edad
       break;
   }
 
