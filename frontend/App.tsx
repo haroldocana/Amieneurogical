@@ -639,7 +639,6 @@ function DoctorWorkstation() {
         return;
       }
 
-      // Generación nativa de recurso Bundle FHIR R4 si no hay método externo
       const fhirBundlePayload = {
         resourceType: 'Bundle',
         type: 'document',
