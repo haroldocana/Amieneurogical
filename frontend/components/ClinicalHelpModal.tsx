@@ -9,24 +9,16 @@ import {
   Cpu,
   ShieldAlert,
   KeyRound,
-  Brain,
-  Smartphone,
-  Mic,
-  HeartPulse,
-  Pill,
-  Sparkles,
-  BookOpen,
   Search,
   CheckCircle2,
-  AlertTriangle,
   ArrowRight,
-  Tablet,
-  ScanEye,
-  Flame,
-  Activity,
   HeartHandshake,
   Tent,
-  Lightbulb
+  Lightbulb,
+  Glasses,
+  FileCheck,
+  Share2,
+  Sparkles
 } from 'lucide-react';
 
 export interface ClinicalHelpModalProps {
@@ -48,11 +40,11 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
       subtitle: 'Expediente PAC, Triangulación Bioclínica y Dictamen AMIE en 5 Bloques',
       color: 'text-sky-400',
       badge: 'Módulo Central',
-      summary: 'El núcleo de trabajo para la evaluación diagnóstica en tiempo real, combinando psicometría estandarizada, notas de sesión y dictámenes según el marco James Morrison y DSM-5.',
+      summary: 'El núcleo de trabajo para la evaluación diagnóstica en tiempo real, combinando psicometría estandarizada, notas de sesión y dictámenes según el marco James Morrison y criterios DSM-5-TR.',
       details: [
         {
           heading: 'Expediente Digital del Paciente (JSON)',
-          content: 'Permite editar o cargar casos prototípicos (PAC-XXXX). Contiene anamnesis longitudinal, motivo de consulta, notas de evolución por sesión, antecedentes médicos y consumo de sustancias.'
+          content: 'Permite editar o cargar casos clínicos prototípicos (PAC-XXXX). Contiene anamnesis longitudinal, motivo de consulta, notas de evolución por sesión, antecedentes médicos y consumo de sustancias.'
         },
         {
           heading: 'Medición Pasiva (APK Centinela)',
@@ -69,38 +61,65 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
       ]
     },
     {
-      id: 'scientific_evaluator',
-      icon: Microscope,
-      title: '2. Evaluador Científico & Multisensor',
-      subtitle: 'Scoring de Afinidad Terapéutica & Telemetría Física de Hardware',
-      color: 'text-teal-400',
-      badge: 'Biomarcadores Físicos',
-      summary: 'Extrae automáticamente los parámetros del expediente PAC y calcula el % de afinidad terapéutica cruzando datos duros con la respuesta clínica esperada.',
+      id: 'vr_unified_console',
+      icon: Glasses,
+      title: '2. Consola VR Inmersiva & Provocación',
+      subtitle: '19 Ecosistemas 360°, 3 Videos Clínicos y Telemetría Pico 3',
+      color: 'text-cyan-400',
+      badge: 'RV Local Pico 3',
+      summary: 'Orquesta sesiones inmersivas teledirigidas desde la Chromebook hacia el visor Pico 3 mediante WebSockets locales, eliminando dependencias externas de red y garantizando latencia cero.',
       details: [
         {
-          heading: 'Sistema de Scoring de Afinidad Terapéutica (0-100%)',
-          content: 'Calcula la probabilidad de éxito de intervenciones específicas (TCC, DBT, MBT, EMDR, Remediación Cognitiva e Integración Sensorial) para Depresión, TLP, Esquizofrenia y TEA/Asperger.'
+          heading: '19 Ecosistemas Equirrectangulares 360° (/ecosystems/)',
+          content: 'Entornos especializados en fotorrealismo para VRET (acrofobia y aerofobia), neurohipnosis (santuario alpino, cueva uterina, playa bioluminiscente), funciones ejecutivas TDAH y reestructuración de apego.'
         },
         {
-          heading: 'Medidor de Tono Vagal (HRV / RMSSD)',
-          content: 'Mide la actividad parasimpática y la variabilidad de la frecuencia cardíaca. Valores <25 indican estrés crónico, hiperactivación simpática y pobre regulación autonómica.'
+          heading: 'Videos Clínicos de Provocación Narcisista (/video/)',
+          content: 'Módulos audiovisuales periciales (Overt Provocation, Collapse y Antisocial Distress) para evaluar la reactividad galvánica y el umbral de descompensación simpática ante amenaza directa al ego.'
         },
         {
-          heading: 'Indicador de Enmascaramiento Social (Camouflaging Index)',
-          content: 'Herramienta clave para el diagnóstico de TEA/Asperger en adultos y mujeres, detectando el esfuerzo consciente por imitar normas sociales y su costo de agotamiento emocional.'
+          heading: 'Telemetría Bioclínica en Tiempo Real',
+          content: 'Monitorización continua de conductancia de la piel (GSR en µS), tono vagal parasimpático (HRV RMSSD), ratio Theta/Beta e índice de estrés durante la exposición inmersiva.'
         },
         {
-          heading: 'Calibración Touch de Alta Precisión',
-          content: 'Compensa la latencia táctil del hardware en tabletas y teléfonos utilizando microsegundos exactos del navegador (event.timeStamp).'
+          heading: 'Freno de Seguridad Autonómica',
+          content: 'Sistema JITAI que suspende el estímulo o activa entornos de anclaje (Grounding) si la conductancia supera los 8.0 µS o se detecta rigidez simpática prolongada.'
+        }
+      ]
+    },
+    {
+      id: 'scientific_evaluator',
+      icon: Microscope,
+      title: '3. Evaluador Científico & Hardware USB',
+      subtitle: 'Captura WebSerial/WebUSB, Dinamometría y Tono Vagal',
+      color: 'text-teal-400',
+      badge: 'Hardware Biomédico',
+      summary: 'Interconexión directa de sensores de grado clínico vía WebSerial y WebUSB sin controladores intermedios ni software propietario adicional.',
+      details: [
+        {
+          heading: 'Captura Sensorial de Alta Frecuencia (WebSerial/WebUSB)',
+          content: 'Conexión de dinamómetros de presión palmar, pedales de latencia y cascos EEG con búfer de 16 KB y prevención de bloqueos mediante AbortController.'
+        },
+        {
+          heading: 'Scoring de Afinidad Terapéutica (0-100%)',
+          content: 'Calcula la probabilidad de respuesta positiva a TCC, DBT, ACT, EMDR y remediación cognitiva cruzando biomarcadores basales y diagnósticos confirmados.'
+        },
+        {
+          heading: 'Medición de Tono Vagal (HRV / RMSSD)',
+          content: 'Cuantifica la modulación parasimpática; valores inferiores a 20 ms denotan agotamiento autonómico, rigidez simpática y vulnerabilidad a desregulación afectiva.'
+        },
+        {
+          heading: 'Índice de Enmascaramiento Social (Camouflaging)',
+          content: 'Identifica sobreesfuerzo adaptativo en población femenina y adulta con sospecha de TEA Nivel 1 mediante discrepancias entre latencia motora y autorreporte.'
         }
       ]
     },
     {
       id: 'differential_bias',
       icon: GitCompare,
-      title: '3. Diferenciador & Matriz Antisesgo',
-      subtitle: 'Contraste Bioclínico Cuádruple, NLP de Notas y Gemelo de Riesgo',
-      color: 'text-cyan-400',
+      title: '4. Diferenciador & Matriz Antisesgo',
+      subtitle: 'Contraste Bioclínico Cuádruple, NLP y Gemelo Iatrogénico',
+      color: 'text-sky-300',
       badge: 'Seguridad Diagnóstica',
       summary: 'Resuelve dilemas diagnósticos de alta complejidad evitando sesgos de confirmación, género o anclaje mediante contrastación cruzada.',
       details: [
@@ -110,7 +129,7 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
         },
         {
           heading: 'Tabla de Triangulación de 4 Ejes',
-          content: 'Contrasta para cada patología: 1) Z-Scores qEEG, 2) Biometría Acústica de voz, 3) Batería Psicométrica DSM-5, 4) Telemetría APK Centinela.'
+          content: 'Contrasta para cada patología: 1) Z-Scores qEEG, 2) Biometría Acústica de voz, 3) Batería Psicométrica DSM-5-TR, 4) Telemetría APK Centinela.'
         },
         {
           heading: 'Decodificador de Sesgos del Lenguaje (NLP)',
@@ -123,10 +142,37 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
       ]
     },
     {
+      id: 'apa_validation',
+      icon: FileCheck,
+      title: '5. Validación Científica APA & RCI',
+      subtitle: 'Índice de Jacobson & Truax y Sincronía Diádica HRV',
+      color: 'text-emerald-400',
+      badge: 'División 12 APA',
+      summary: 'Marco epistemológico que traduce los biomarcadores objetivos a las 5 grandes corrientes psicoterapéuticas y valida el cambio clínico significativo mediante estadística robusta (N=1).',
+      details: [
+        {
+          heading: 'Traductor por 5 Corrientes Epistemológicas',
+          content: 'Formula hipótesis clínicas y técnicas recomendadas adaptadas a Cognitivo-Conductual/ACT, Psicodinámica, Humanista/Gestalt, Sistémica Relacional y Neuropsicología.'
+        },
+        {
+          heading: 'Índice de Cambio Confiable (RCI de Jacobson & Truax)',
+          content: 'Calcula matemáticamente si la reducción sintomática supera el error de medición del instrumento (Z > 1.96, p < 0.05), clasificando en Recuperado, Mejorado, Sin Cambio o Deterioro.'
+        },
+        {
+          heading: 'Sincronía Fisiológica Diádica (HRV Coupling)',
+          content: 'Calcula la correlación de Pearson momento a momento entre el tono vagal del terapeuta y el paciente como indicador neurobiológico de alianza terapéutica y co-regulación.'
+        },
+        {
+          heading: 'Exportación de Caso Clínico APA (N=1)',
+          content: 'Genera el informe estandarizado listo para ateneos clínicos, comités de bioética o publicaciones científicas universitarias.'
+        }
+      ]
+    },
+    {
       id: 'academy',
       icon: GraduationCap,
-      title: '4. Capacitación AMIE & Simulador IA',
-      subtitle: 'Pacientes Virtuales Fotorrealistas, Ciclo Vital y Scoring 0-100 pts',
+      title: '6. Capacitación AMIE & Simulador IA',
+      subtitle: 'Pacientes Virtuales Fotorrealistas, Ciclo Vital y Casos Cisne Negro',
       color: 'text-purple-400',
       badge: 'Entrenamiento Inmersivo',
       summary: 'Gimnasio clínico interactivo para psicólogos y psiquiatras con avatares dinámicos, evaluación por ciclo evolutivo y feedback pedagógico con acreditación.',
@@ -144,15 +190,15 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
           content: 'Crea mediante IA generativa casos clínicos atípicos de extrema rareza diagnóstica con trampas clínicas complejas para entrenamiento avanzado.'
         },
         {
-          heading: 'Sistema de Scoring y Pantalla Victoria/Fallo',
-          content: 'Evalúa 4 ejes (25 pts c/u): Anamnesis, Agudeza, Selección de Terapia/Fármaco y Adherencia al Protocolo. Calificaciones >=70 obtienen Victoria 🥳 con Certificado descargable; <70 muestran Fallo 😞 con lecturas de repaso.'
+          heading: 'Sistema de Scoring Multiaxial (0-100 pts)',
+          content: 'Evalúa 4 ejes (25 pts c/u): Anamnesis/Rapport, Agudeza Diagnóstica, Selección de Terapia/Fármaco y Adherencia al Protocolo según las reglas de James Morrison.'
         }
       ]
     },
     {
       id: 'neuro_3d',
       icon: Cpu,
-      title: '5. Neurotopografía 3D Dinámica',
+      title: '7. Neurotopografía 3D Dinámica',
       subtitle: 'Mapeador Neuro-Espectral FFT, 5 Bandas y Seguimiento Ocular',
       color: 'text-indigo-400',
       badge: 'Electrofisiología qEEG',
@@ -172,14 +218,37 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
         },
         {
           heading: 'Canal Human-in-the-Loop',
-          content: 'Permite a la psicóloga o psiquiatra ingresar observaciones clínicas cualitativas que recalculan instantáneamente el % de certeza del dictamen.'
+          content: 'Permite al profesional ingresar observaciones clínicas cualitativas que recalculan instantáneamente el porcentaje de certeza del dictamen.'
+        }
+      ]
+    },
+    {
+      id: 'interoperability_fhir',
+      icon: Share2,
+      title: '8. Interoperabilidad HL7 FHIR & PDF',
+      subtitle: 'Bundles R4 Hospitalarios, Codificación Dual y Reportes Legales',
+      color: 'text-blue-400',
+      badge: 'EHR Hospitalario',
+      summary: 'Exportación de historias clínicas y dictámenes periciales bajo estándares universales para integración con sistemas hospitalarios (Epic, Cerner) y firma médica oficial.',
+      details: [
+        {
+          heading: 'Recurso FHIR DiagnosticReport (HL7 R4)',
+          content: 'Encapsula el dictamen psiquiátrico bajo el código LOINC 11526-1 con observaciones anidadas de HRV (LOINC 80404-7), GSR y psicometría PHQ-9.'
+        },
+        {
+          heading: 'Codificación Cruzada Dual (CIE-11 y DSM-5-TR)',
+          content: 'Garantiza la validez legal y de facturación internacional asociando simultáneamente la ontología de la OMS y los criterios de la APA.'
+        },
+        {
+          heading: 'Dictamen Médico en PDF con Hash Criptográfico',
+          content: 'Genera el dictamen pericial con firma del médico tratante, número de colegiado y hash SHA-256 de autenticidad para respaldo forense.'
         }
       ]
     },
     {
       id: 'referral',
       icon: ShieldAlert,
-      title: '6. Referencia a Psiquiatría & Contención',
+      title: '9. Referencia a Psiquiatría & Contención',
       subtitle: 'Hoja de Derivación Oficial, Protocolo de Rescate y Checklist 24/7',
       color: 'text-rose-400',
       badge: 'Interconsulta Médica',
@@ -198,29 +267,29 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
     {
       id: 'saas',
       icon: KeyRound,
-      title: '7. Licencias SaaS & Cloud Storage',
-      subtitle: 'Aprovisionamiento de Accesos Médicos en Google Cloud Storage',
+      title: '10. Licencias Médicas & MongoDB Atlas',
+      subtitle: 'Aprovisionamiento de Tokens IA y Gestión Colegiada',
       color: 'text-amber-400',
       badge: 'Gestión Institucional',
-      summary: 'Administración de credenciales para profesionales de salud colegiados vinculadas a Cloud Storage (gs://base-conocimiento-medica/licencias/<username>.json).',
+      summary: 'Administración de credenciales para profesionales de salud colegiados con persistencia en MongoDB Atlas y validación criptográfica en backend Render.',
       details: [
         {
           heading: 'Validación por No. de Colegiado Numérico',
           content: 'Garantiza que sólo facultativos certificados y registrados tengan acceso a las herramientas diagnósticas avanzadas y expedientes confidenciales.'
         },
         {
-          heading: 'Almacenamiento Seguro HIPAA / RGPD',
-          content: 'Genera llaves de acceso cifradas y sincronización institucional por niveles (Institucional, Clínica Privada, Investigación).'
+          heading: 'Recarga Administrativa de Tokens y Licencias',
+          content: 'Panel SuperAdmin para inyectar saldo al bolsón de IA generativa y extender la vigencia anual de la licencia médica institucional.'
         }
       ]
     },
     {
       id: 'dual_control',
       icon: HeartHandshake,
-      title: '8. Control Dual (SES / SIS)',
+      title: '11. Control Dual (SES / SIS)',
       subtitle: 'Modelo Bancroft & Nagoski: Acelerador vs. Freno en Sexualidad',
-      color: 'text-rose-400',
-      badge: 'Terapia de Pareja / Individual',
+      color: 'text-pink-400',
+      badge: 'Terapia de Pareja',
       summary: 'Evalúa la activación del Sistema de Excitación Sexual (SES) frente al Sistema de Inhibición Sexual (SIS) mediante estresores personalizados y biofeedback.',
       details: [
         {
@@ -228,7 +297,7 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
           content: 'Identifica qué contextos o cogniciones bloquean la respuesta sexual o activan la hiperreactividad simpática.'
         },
         {
-          heading: 'Biofeedback y Regulación',
+          heading: 'Biofeedback y Regulación Diádica',
           content: 'Sincroniza la respiración y el control vagal (HRV) en pareja o de forma individual para reducir la ansiedad de ejecución.'
         }
       ]
@@ -236,7 +305,7 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
     {
       id: 'cluster_b_forensic',
       icon: ShieldAlert,
-      title: '9. Perfilado Forense Cluster B',
+      title: '12. Perfilado Forense Cluster B',
       subtitle: 'Medida TriPM, Narcisismo y Ensayos de Provocación Inmersiva',
       color: 'text-rose-500',
       badge: 'Ámbito Pericial',
@@ -248,16 +317,16 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
         },
         {
           heading: 'Contraste Antisesgo',
-          content: 'Detecta discrepancias entre el autoreporte defensivo y la respuesta electrodérmica subcortical.'
+          content: 'Detecta discrepancias entre el autorreporte defensivo y la respuesta electrodérmica subcortical.'
         }
       ]
     },
     {
       id: 'dev_trauma',
       icon: Tent,
-      title: '10. Trauma Evolutivo & AIMA',
+      title: '13. Trauma Evolutivo & AIMA',
       subtitle: 'Regulación del Apego y Entornos Uterinos/Seguros',
-      color: 'text-pink-400',
+      color: 'text-purple-300',
       badge: 'Neurorecepción',
       summary: 'Protocolo de modulación somática enfocado en la teoría polivagal para pacientes con antecedentes de trauma complejo del desarrollo.',
       details: [
@@ -270,9 +339,9 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
     {
       id: 'gamma_insight',
       icon: Lightbulb,
-      title: '11. Opto-Neuromodulación Gamma 40Hz',
+      title: '14. Opto-Neuromodulación Gamma 40Hz',
       subtitle: 'Estimulación Sensorial para Alzheimer, TOC y TEA',
-      color: 'text-amber-400',
+      color: 'text-amber-300',
       badge: 'Neuromodulación',
       summary: 'Inducción de ondas cerebrales en banda gamma mediante patrones visuales y auditivos sincronizados para despeje microglial y neuroplasticidad.',
       details: [
@@ -284,8 +353,6 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
     }
   ];
 
-  const currentMod = MODULES_HELP.find(m => m.id === activeSection) || MODULES_HELP[0];
-
   const filteredModules = MODULES_HELP.filter(m =>
     m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.subtitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -293,8 +360,10 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
     m.details.some(d => d.heading.toLowerCase().includes(searchQuery.toLowerCase()) || d.content.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const currentMod = filteredModules.find(m => m.id === activeSection) || filteredModules[0] || MODULES_HELP[0];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-slate-100">
         
         {/* Modal Header */}
@@ -319,8 +388,9 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
             title="Cerrar Guía"
           >
             <X className="w-5 h-5" />
@@ -336,13 +406,13 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
               placeholder="Buscar función, biomarcador o módulo..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 font-mono"
             />
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Sparkles className="w-4 h-4 text-cyan-400" />
-            <span>Pase el cursor sobre cualquier botón de la app para ver micro-ayuda rápida.</span>
+            <span>Documentación técnica validada bajo estándares SaMD, APA y HL7 FHIR.</span>
           </div>
         </div>
 
@@ -352,31 +422,39 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
           {/* Left Navigation Tabs */}
           <div className="md:col-span-4 bg-slate-950/90 border-r border-slate-800 p-3 overflow-y-auto space-y-1.5">
             <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider px-2 block mb-1">
-              Módulos del Sistema
+              Módulos del Sistema ({filteredModules.length})
             </span>
-            {filteredModules.map((mod) => {
-              const IconComponent = mod.icon;
-              const isSelected = activeSection === mod.id;
-              return (
-                <button
-                  key={mod.id}
-                  onClick={() => setActiveSection(mod.id)}
-                  className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-start gap-2.5 ${
-                    isSelected
-                      ? 'bg-slate-800 border-sky-500/50 text-white shadow-md'
-                      : 'bg-slate-900/40 border-slate-800/60 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                  }`}
-                >
-                  <IconComponent className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? mod.color : 'text-slate-500'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs truncate text-slate-200">{mod.title}</span>
+
+            {filteredModules.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-500 italic">
+                No se encontraron módulos para "{searchQuery}".
+              </div>
+            ) : (
+              filteredModules.map((mod) => {
+                const IconComponent = mod.icon;
+                const isSelected = currentMod.id === mod.id;
+                return (
+                  <button
+                    key={mod.id}
+                    type="button"
+                    onClick={() => setActiveSection(mod.id)}
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-start gap-2.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-slate-800 border-sky-500/50 text-white shadow-md'
+                        : 'bg-slate-900/40 border-slate-800/60 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                    }`}
+                  >
+                    <IconComponent className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? mod.color : 'text-slate-500'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs truncate text-slate-200">{mod.title}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{mod.subtitle}</p>
                     </div>
-                    <p className="text-[10px] text-slate-400 truncate mt-0.5">{mod.subtitle}</p>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {/* Right Detail Content Panel */}
@@ -400,7 +478,7 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
             {/* Detailed Feature List */}
             <div className="space-y-3.5">
               <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Componentes & Funcionamiento Técnico:
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Componentes &amp; Funcionamiento Técnico:
               </span>
 
               <div className="grid grid-cols-1 gap-3 text-xs">
@@ -425,7 +503,7 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
             <div className="p-3.5 rounded-xl bg-slate-950 border border-cyan-500/30 flex items-start gap-3 text-xs text-slate-300">
               <ShieldAlert className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
               <div>
-                <strong className="text-white">Estándar de Seguridad Médica:</strong> Todos los análisis emitidos deben ser contrastados por el médico colegiado responsable utilizando las reglas diagnósticas de James Morrison y el juicio clínico profesional.
+                <strong className="text-white">Estándar de Seguridad Médica (SaMD):</strong> Todos los análisis emitidos deben ser contrastados por el médico colegiado responsable utilizando las reglas diagnósticas de James Morrison y el juicio clínico profesional.
               </div>
             </div>
           </div>
@@ -437,8 +515,9 @@ export const ClinicalHelpModal: React.FC<ClinicalHelpModalProps> = ({ isOpen, on
             AMIE Clinical Engine • Articulate Medical Intelligence Explorer
           </span>
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer"
           >
             Entendido, Volver a la Consola
           </button>
