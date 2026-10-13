@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { QeegBandPowers, PatientRecord } from '../types';
 import { InteractiveNeuroViewer } from './InteractiveNeuroViewer';
-import { Usb, Activity, Cpu, X, Play, CheckCircle2, RotateCcw, Terminal, Upload, FileCheck, RefreshCw, CheckCircle, BarChart3, Zap, ArrowRight } from 'lucide-react';
+import { 
+  Usb, 
+  Activity, 
+  Cpu, 
+  X, 
+  Play, 
+  CheckCircle2, 
+  RotateCcw, 
+  Terminal, 
+  Upload, 
+  FileCheck, 
+  RefreshCw, 
+  CheckCircle, 
+  ArrowRight 
+} from 'lucide-react';
 
 export interface QeegAttachmentPayload {
   recordingDate: string;
@@ -21,6 +35,8 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({
   onAttachQeegToPatient,
   onNavigateTab 
 }) => {
+  const patientId = patient?.id || (patient as any)?.patientId || 'PAC-8104';
+
   const [isUsbModalOpen, setIsUsbModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
@@ -33,7 +49,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({
     '[SYSTEM] Esperando conexión de dispositivos biométricos de precisión.'
   ]);
 
-  // Potencias Espectrales Globales (qEEG)
+  // Potencias Espectrales Globales (qEEG) con compatibilidad dual alfa/alpha
   const [bandPowers] = useState<QeegBandPowers>({
     delta: 24,
     theta: 32,
@@ -41,7 +57,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({
     beta: 16,
     highBeta: 6,
     gamma: 2
-  });
+  } as any);
 
   // Cierre por tecla ESC
   useEffect(() => {
@@ -141,7 +157,7 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({
               <Cpu className="w-5 h-5" />
             </div>
             <h1 className="text-base font-bold text-white">
-              Módulo de Neurosensometría & Topografía qEEG
+              Módulo de Neurosensometría &amp; Topografía qEEG
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -214,13 +230,13 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    DIAGNÓSTICO & CALIBRACIÓN DE HARDWARE USB
+                    DIAGNÓSTICO &amp; CALIBRACIÓN DE HARDWARE USB
                     <span className="px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-500/40 text-[9px] font-mono rounded">
                       WEBUSB SOPORTADO
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Paciente: PAC-8104 | Telemetría Neuromotora Directa
+                    Paciente: {patientId} | Telemetría Neuromotora Directa
                   </p>
                 </div>
               </div>
@@ -348,3 +364,5 @@ export const NeuroSensoryModule: React.FC<NeuroSensoryModuleProps> = ({
     </div>
   );
 };
+
+export default NeuroSensoryModule;
