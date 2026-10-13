@@ -1,9 +1,15 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - WORKSTATION MÉDICA & ORQUESTADOR GLOBAL MULTIMODAL
+// frontend/App.tsx
+// ============================================================================
+
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// ARCHIVO CORRECTO DEL VISOR PICO 3 (MOTOR THREE.JS / WEBXR)
+// MOTOR WEBXR / THREE.JS PARA VISORES PICO 3 PRO & META QUEST 3/3S
 import { VrPatientExperience } from './components/VrPatientExperience';
 
+// COMPONENTES PRINCIPALES DE CONSULTA Y TELEMETRÍA
 import { Header } from './components/Header';
 import { PatientJsonEditor } from './components/PatientJsonEditor';
 import { BiomarkerDashboard } from './components/BiomarkerDashboard';
@@ -27,11 +33,12 @@ import { LoginModal } from './components/LoginModal';
 import { VrTherapyModule } from './components/VrTherapyModule';
 import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
+import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 
-// CONSOLA UNIFICADA IMPULSADA POR IA & VR
+// CONSOLA UNIFICADA IA + VR
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
 
-// MÓDULOS ESPECIALIZADOS
+// MÓDULOS DE ALTA ESPECIALIDAD CLÍNICA
 import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
 import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
 import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
@@ -45,11 +52,32 @@ import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
 import { SentinelMobileCollector } from './components/SentinelMobileCollector';
 import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
 
-import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
-import { PatientRecord, AmieClinicalAnalysis, VrTelemetryData, VrTherapyReport } from './types';
-import { CLINICAL_CASE_PRESETS } from './constants';
+// TIPOS Y CONSTANTES
+import { 
+  PatientRecord, 
+  AmieClinicalAnalysis, 
+  VrTelemetryData, 
+  VrTherapyReport 
+} from './types';
+import { CLINICAL_CASE_PRESETS, MASTER_VR_ENVIRONMENTS } from './constants';
+
+// SERVICIOS CLÍNICOS Y MOTORES MATEMÁTICOS DE PRECISIÓN
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
+import { telemetryService, PrecisionTelemetryPacket, TelemetryProtocol } from './services/telemetryService';
+import { VrControlService, VrConnectionStatus } from './services/VrControlService';
+import { 
+  getUserProfile, 
+  consumeAiCredit, 
+  hasAvailableCredits, 
+  rechargeAiCredits, 
+  onCreditsUpdated, 
+  UserProfile 
+} from './services/userService';
 import { subscribeUsbDeviceEvents } from './utils/checkUsbSupport';
+import { exportAmieClinicalPdf } from './utils/pdfExporter';
+import { convertToFhirBundle, downloadFhirJson } from './utils/fhirConverter';
+
+// ICONOGRAFÍA LUCIDE
 import {
   Activity,
   LayoutDashboard,
@@ -79,8 +107,14 @@ import {
   Info,
   Printer,
   Wifi,
+  Radio,
+  Bluetooth,
+  Flame,
+  FileCode,
+  Coins,
+  Plus,
+  Scale,
   ShieldCheck,
-  CheckCircle2,
   HeartHandshake,
   Monitor
 } from 'lucide-react';
@@ -100,10 +134,75 @@ type AppTab =
   | 'saas';
 
 function DoctorWorkstation() {
+  // --------------------------------------------------------------------------
+  // 1. ESTADO DE MODO DE OPERACIÓN Y AUTENTICACIÓN
+  // --------------------------------------------------------------------------
   const [isPatientMode, setIsPatientMode] = useState<boolean>(false);
   const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
 
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
+  const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
+  const [colegiadoNumber, setColegiadoNumber] = useState<number | string>(749210);
+
+  // Perfil y saldo de créditos IA
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => getUserProfile());
+
+  // --------------------------------------------------------------------------
+  // 2. ESTADO DE NAVEGACIÓN Y EXPEDIENTE
+  // --------------------------------------------------------------------------
+  const [activeTab, setActiveTab] = useState<AppTab>('workstation');
+  const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
+
+  const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
+    return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
+  });
+  const [analysis, setAnalysis] = useState<AmieClinicalAnalysis | null>(null);
+
+  // Estados de carga e interacción asíncrona
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // --------------------------------------------------------------------------
+  // 3. ESTADOS DE MODALES Y CONSOLAS INMERSIVAS
+  // --------------------------------------------------------------------------
+  const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
+  const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
+  
+  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
+  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
+  const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
+  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
+  
+  const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
+
+  // --------------------------------------------------------------------------
+  // 4. ESTADO DE TELEMETRÍA, HARDWARE Y WEBSOCKETS VR
+  // --------------------------------------------------------------------------
+  const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
+  const [telemetryProtocol, setTelemetryProtocol] = useState<TelemetryProtocol>('DISCONNECTED');
+  const [isTelemetryConnected, setIsTelemetryConnected] = useState<boolean>(false);
+  const [telemetryDeviceName, setTelemetryDeviceName] = useState<string>('Sin hardware');
+  const [liveTelemetry, setLiveTelemetry] = useState<PrecisionTelemetryPacket | null>(null);
+  const [vrWsStatus, setVrWsStatus] = useState<VrConnectionStatus>('DISCONNECTED');
+
+  const closeAllModals = () => {
+    setIsDsmModalOpen(false);
+    setIsFullscreenConsoleOpen(false);
+    setIsFullscreenDiagnosticOpen(false);
+    setIsFullscreenPhenotypeOpen(false);
+    setIsFullscreenUnifiedVrOpen(false);
+    setActiveVrModuleId(null);
+  };
+
+  // --------------------------------------------------------------------------
+  // 5. CICLO DE VIDA Y SUSCRIPCIONES REACTIVAS
+  // --------------------------------------------------------------------------
   useEffect(() => {
+    // Detección automática de visor VR Pico/Quest o query string
     const checkIsPatientApp = () => {
       const isPatientUrl = 
         window.location.search.includes('mode=paciente') || 
@@ -121,44 +220,7 @@ function DoctorWorkstation() {
     return () => clearTimeout(timer);
   }, []);
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
-  const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
-  const [colegiadoNumber, setColegiadoNumber] = useState<number>(749210);
-
-  const [activeTab, setActiveTab] = useState<AppTab>('workstation');
-  const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
-
-  const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
-    return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
-  });
-  const [analysis, setAnalysis] = useState<AmieClinicalAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
-  const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
-  const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
-  
-  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
-  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
-  const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
-  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
-  
-  const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
-  const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
-
-  const closeAllModals = () => {
-    setIsDsmModalOpen(false);
-    setIsFullscreenConsoleOpen(false);
-    setIsFullscreenDiagnosticOpen(false);
-    setIsFullscreenPhenotypeOpen(false);
-    setIsFullscreenUnifiedVrOpen(false);
-    setActiveVrModuleId(null);
-  };
-
+  // Restauración de sesión médica
   useEffect(() => {
     try {
       const savedToken = localStorage.getItem('amie_auth_token');
@@ -171,30 +233,70 @@ function DoctorWorkstation() {
         setDoctorUsername(savedUsername || 'harold01');
         setColegiadoNumber(Number(savedColegiado) || 749210);
         setIsAuthenticated(true);
-        closeAllModals();
       }
     } catch (e) {
-      console.warn('Acceso a localStorage restringido:', e);
+      console.warn('[AMIE] Almacenamiento local restringido:', e);
     }
   }, []);
 
+  // Suscripción al gestor de créditos IA
+  useEffect(() => {
+    const unsubCredits = onCreditsUpdated((updated) => {
+      setUserProfile(updated);
+    });
+    return () => unsubCredits();
+  }, []);
+
+  // Suscripción a eventos de hardware USB (Hotplug)
   useEffect(() => {
     const unsubscribe = subscribeUsbDeviceEvents(
       (deviceName: string) => {
         setUsbDeviceName(deviceName);
-        setSyncSuccessMsg(`Hardware detectado: ${deviceName}`);
+        setSyncSuccessMsg(`Sensor biomédico conectado: ${deviceName}`);
         setTimeout(() => setSyncSuccessMsg(null), 4000);
       },
       (deviceName: string) => {
         setUsbDeviceName(null);
-        setErrorMsg(`Hardware desconectado: ${deviceName}`);
+        setErrorMsg(`Sensor biomédico desconectado: ${deviceName}`);
         setTimeout(() => setErrorMsg(null), 4000);
       }
     );
     return () => unsubscribe();
   }, []);
 
-  // Objeto de paciente seguro y normalizado
+  // Suscripción al TelemetryService (BLE, USB, Wi-Fi)
+  useEffect(() => {
+    const unsubStatus = telemetryService.subscribeStatus((status) => {
+      setTelemetryProtocol(status.protocol);
+      setIsTelemetryConnected(status.connected);
+      setTelemetryDeviceName(status.deviceName);
+    });
+
+    const unsubData = telemetryService.subscribeData((packet) => {
+      setLiveTelemetry(packet);
+    });
+
+    return () => {
+      unsubStatus();
+      unsubData();
+    };
+  }, []);
+
+  // Suscripción al WebSocket de Puente VR (Render)
+  useEffect(() => {
+    const unsubVr = VrControlService.subscribeStatus((status) => {
+      setVrWsStatus(status);
+    });
+
+    // Auto-conectar el puente VR en segundo plano
+    VrControlService.connect(undefined, currentPatient?.id || 'PAC-8104');
+
+    return () => unsubVr();
+  }, [currentPatient?.id]);
+
+  // --------------------------------------------------------------------------
+  // 6. NORMALIZACIÓN DEFENSIVA DEL EXPEDIENTE
+  // --------------------------------------------------------------------------
   const safePatient: PatientRecord = {
     ...SAFE_DEFAULT_PATIENT,
     ...(currentPatient || {}),
@@ -225,7 +327,9 @@ function DoctorWorkstation() {
     return <div className="min-h-screen bg-slate-950"></div>;
   }
 
-  // 🟢 MODO PACIENTE: CARGA DIRECTA DEL VISOR THREE.JS / WEBXR EN LA PICO 3
+  // --------------------------------------------------------------------------
+  // 7. VISTA DIRECTA DE PACIENTE (VISOR WEBXR EN PICO 3 PRO / QUEST)
+  // --------------------------------------------------------------------------
   if (isPatientMode) {
     return (
       <div className="relative w-screen h-screen">
@@ -245,6 +349,9 @@ function DoctorWorkstation() {
     );
   }
 
+  // --------------------------------------------------------------------------
+  // 8. CONTROL DE ACCESO
+  // --------------------------------------------------------------------------
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -254,7 +361,6 @@ function DoctorWorkstation() {
     setIsAuthenticated(true);
   };
 
-  // 🟢 SI NO ESTÁ AUTENTICADO: MODAL DE INICIO QUE PERMITE ENTRAR COMO PACIENTE AL VISOR VR
   if (!isAuthenticated) {
     return (
       <LoginModal 
@@ -267,23 +373,35 @@ function DoctorWorkstation() {
 
   const handleLogout = () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch (e) {
-      console.warn('Error en cierre de sesión:', e);
-    }
+      localStorage.removeItem('amie_auth_token');
+      localStorage.removeItem('amie_doctor_name');
+    } catch {}
     closeAllModals();
     setIsAuthenticated(false);
   };
 
+  // --------------------------------------------------------------------------
+  // 9. ACCIONES PRINCIPALES (IA, HARDWARE, EXPORTACIONES)
+  // --------------------------------------------------------------------------
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
+
+    // Validación preventiva de créditos de IA
+    if (!hasAvailableCredits(1)) {
+      setErrorMsg('Saldo insuficiente de Créditos de IA. Recargue su bolsón en el panel superior.');
+      return;
+    }
+
     setIsAnalyzing(true);
     setErrorMsg(null);
     try {
+      // Consumir 1 crédito de inferencia clínica
+      consumeAiCredit(doctorUsername, 1);
       const result = await runAmieClinicalAnalysis(currentPatient);
       setAnalysis(result);
       setActiveTab('workstation');
+      setSyncSuccessMsg('Triangulación bioclínica completada. 1 Crédito de IA consumido.');
+      setTimeout(() => setSyncSuccessMsg(null), 4000);
     } catch (err: unknown) {
       console.error(err);
       const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
@@ -300,7 +418,7 @@ function DoctorWorkstation() {
     setSyncNotFoundAlert(null);
 
     try {
-      const syncResult = await syncWithClinicalApp(pacId, colegiadoNumber, doctorUsername);
+      const syncResult = await syncWithClinicalApp(pacId, Number(colegiadoNumber), doctorUsername);
       if (syncResult && syncResult.patient) {
         setCurrentPatient(syncResult.patient);
         if (syncResult.analysis) {
@@ -311,10 +429,10 @@ function DoctorWorkstation() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Fallo de conexión';
-      if (msg.includes('no existe o no tiene datos cargados') || msg.includes('Acceso denegado')) {
+      if (msg.includes('no existe') || msg.includes('Acceso denegado')) {
         setSyncNotFoundAlert(msg);
       } else {
-        setErrorMsg('Error de comunicación con el servidor: ' + msg);
+        setErrorMsg('Error de sincronización con servidor clínico: ' + msg);
       }
     } finally {
       setIsSyncing(false);
@@ -336,7 +454,7 @@ function DoctorWorkstation() {
       vrTelemetryData: telemetry,
       vrTherapyReport: report
     }));
-    setSyncSuccessMsg('Métricas VR transferidas exitosamente a la Triangulación Global.');
+    setSyncSuccessMsg('Métricas inmersivas VR transferidas a la Triangulación Global.');
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
@@ -356,112 +474,84 @@ function DoctorWorkstation() {
         }
       }
     }));
-    setSyncSuccessMsg('Estudio qEEG/Neurosensométrico vinculado al expediente activo.');
+    setSyncSuccessMsg('Estudio neurosensométrico vinculado con éxito al expediente.');
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
-  const handlePrintIndividualReport = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const reportContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Reporte Objetivo Individual — ${safePatientId}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 30px; color: #0f172a; line-height: 1.5; }
-          h1 { color: #0284c7; font-size: 18px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
-          h2 { font-size: 14px; color: #334155; margin-top: 20px; }
-          .meta { background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-          th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
-          th { background: #f1f5f9; }
-          .signature-box { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; }
-          .signature-line { border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 5px; }
-        </style>
-      </head>
-      <body>
-        <h1>AMIE CLINICAL ENGINE — REPORTE OBJETIVO INDIVIDUAL (ROI)</h1>
-        
-        <div class="meta">
-          <strong>PACIENTE ID:</strong> ${safePatientId} | <strong>EDAD:</strong> ${safeAge} años | <strong>GÉNERO:</strong> ${safeGender}<br/>
-          <strong>PROFESIONAL RESPONSABLE:</strong> ${doctorName} (No. Colegiado: ${colegiadoNumber})<br/>
-          <strong>FECHA DE EMISIÓN:</strong> ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
-        </div>
-
-        <h2>1. MATRIZ DE TRIANGULACIÓN Y RESUMEN DE MÓDULOS</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Módulo Clínico</th>
-              <th>Métrica Objetiva / Indicador</th>
-              <th>Diferencial vs. Línea Base (Δ)</th>
-              <th>Estatus de Validación</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Workstation & Centinela</td>
-              <td>PHQ-9 / GAD-7 / Acústica F0</td>
-              <td>Dentro de norma histórica</td>
-              <td>Triangulado (3/3 Ejes)</td>
-            </tr>
-            <tr>
-              <td>Evaluador Científico</td>
-              <td>Afinidad Terapéutica / Tono Vagal</td>
-              <td>HRV RMSSD: 38 ms</td>
-              <td>Validado</td>
-            </tr>
-            <tr>
-              <td>Diferenciador Antisesgo</td>
-              <td>Distancia de Mahalanobis (D²)</td>
-              <td>D² = 1.84 (Sin atipicidad)</td>
-              <td>Filtro OK (D² &lt; 2.5)</td>
-            </tr>
-            <tr>
-              <td>Corrientes APA & RCI</td>
-              <td>Índice de Cambio Confiable (RCI)</td>
-              <td>RCI = -2.14 (Mejoría)</td>
-              <td>Significativo (p &lt; .05)</td>
-            </tr>
-            <tr>
-              <td>VR Inmersivo / Biofeedback</td>
-              <td>Conductancia Cutánea / Habituación H</td>
-              <td>GSR: 2.1 µS | H = 2.84</td>
-              <td>Closed-Loop Activo</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h2>2. DICTAMEN DE SINCRO-AUDITORÍA Y FIRMA</h2>
-        <p style="font-size: 11px; color: #475569;">
-          El presente informe certifica la consistencia multiaxial de los datos biométricos y psicométricos recopilados. Todas las pruebas fueron procesadas bajo normativas de confidencialidad HIPAA/RGPD y auditadas mediante algoritmos antisesgo.
-        </p>
-
-        <div class="signature-box">
-          <div class="signature-line">
-            Firma del Asistente / Facilitador
-          </div>
-          <div class="signature-line">
-            ${doctorName}<br/>
-            No. Colegiado: ${colegiadoNumber}
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(reportContent);
-    printWindow.document.close();
+  // Enlace y control de hardware
+  const handleConnectBluetooth = async () => {
+    setSyncSuccessMsg('Buscando dispositivos BLE médicos (Colmi Ring / Geoid ECG)...');
+    const success = await telemetryService.connectBluetooth();
+    if (success) {
+      setSyncSuccessMsg('Sensor BLE vinculado correctamente.');
+    } else {
+      setErrorMsg('No se completó la vinculación Web Bluetooth.');
+    }
+    setTimeout(() => { setSyncSuccessMsg(null); setErrorMsg(null); }, 4000);
   };
 
+  const handleConnectUsb = async () => {
+    setSyncSuccessMsg('Abriendo puerto serie (Web Serial API)...');
+    const success = await telemetryService.connectUsb();
+    if (success) {
+      setSyncSuccessMsg('Microcontrolador biomédico USB sincronizado.');
+    } else {
+      setErrorMsg('Conexión serial cancelada o puerto ocupado.');
+    }
+    setTimeout(() => { setSyncSuccessMsg(null); setErrorMsg(null); }, 4000);
+  };
+
+  const handleTareGrip = () => {
+    const offset = telemetryService.executeZeroTare();
+    setSyncSuccessMsg(`Tara de dinamometría manual calibrada a 0.0 kg (Offset: ${offset.toFixed(1)} kg).`);
+    setTimeout(() => setSyncSuccessMsg(null), 4000);
+  };
+
+  const handleTriggerGrounding = () => {
+    VrControlService.triggerGroundingProtocol(safePatientId);
+    setSyncSuccessMsg('EMERGENCIA VR: Protocolo de Grounding y Retorno Inmediato despachado al visor.');
+    setTimeout(() => setSyncSuccessMsg(null), 5000);
+  };
+
+  // Exportaciones clínicas oficiales
+  const handleExportPdfReport = () => {
+    const opened = exportAmieClinicalPdf(
+      safePatient,
+      analysis,
+      doctorName,
+      colegiadoNumber
+    );
+    if (!opened) {
+      setErrorMsg('Ventana bloqueada. Active pop-ups para generar el dictamen oficial en PDF.');
+      setTimeout(() => setErrorMsg(null), 4000);
+    }
+  };
+
+  const handleExportFhirBundle = () => {
+    try {
+      const bundle = convertToFhirBundle(safePatient, analysis, colegiadoNumber);
+      downloadFhirJson(bundle, `HL7_FHIR_R4_${safePatientId}.json`);
+      setSyncSuccessMsg('Recurso HL7 FHIR R4 Bundle descargado con éxito.');
+      setTimeout(() => setSyncSuccessMsg(null), 4000);
+    } catch {
+      setErrorMsg('Error al serializar el Bundle HL7 FHIR R4.');
+      setTimeout(() => setErrorMsg(null), 4000);
+    }
+  };
+
+  const handleQuickRecharge = () => {
+    const newTotal = rechargeAiCredits(20);
+    setSyncSuccessMsg(`+20 Créditos de IA acreditados. Saldo actual: ${newTotal}`);
+    setTimeout(() => setSyncSuccessMsg(null), 4000);
+  };
+
+  // --------------------------------------------------------------------------
+  // 10. RENDERIZADO DEL ENTORNO DE TRABAJO MÉDICO
+  // --------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
+      
+      {/* 1. CABECERA PRINCIPAL CON SESIÓN Y EXPEDIENTE */}
       <Header
         isAnalyzing={isAnalyzing}
         onRunAnalysis={handleRunAnalysis}
@@ -474,7 +564,7 @@ function DoctorWorkstation() {
           setIsDsmModalOpen(true);
         }}
         doctorName={doctorName}
-        colegiadoNumber={colegiadoNumber}
+        colegiadoNumber={Number(colegiadoNumber)}
         currentPatientId={safePatientId}
         patientAge={safeAge}
         patientGender={safeGender}
@@ -483,44 +573,115 @@ function DoctorWorkstation() {
         onLogout={handleLogout}
       />
 
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between text-[11px] text-slate-400">
-        <div className="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between">
-          <div className="flex items-center gap-2">
-            <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span>
-              <strong className="text-slate-200">Aviso Regulador (CDSS):</strong> AMIE Neurological provee soporte diagnóstico probabilístico. Los biomarcadores deben ser validados por el profesional colegiado.
+      {/* 2. SUB-BARRA DE TELEMETRÍA, PROTOCOLO DE SEGURIDAD Y CRÉDITOS IA */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-[11px] text-slate-400">
+        <div className="max-w-7xl mx-auto w-full flex flex-wrap items-center justify-between gap-3">
+          
+          {/* Indicadores de hardware en vivo */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 font-mono">
+              <Radio className={`w-3 h-3 ${isTelemetryConnected ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
+              <span className="text-[10px] uppercase font-bold">{telemetryProtocol}:</span>
+              <span className="text-slate-200">{telemetryDeviceName}</span>
+            </span>
+
+            {/* Muestra rápida de bioseñales si hay conexión */}
+            {isTelemetryConnected && liveTelemetry && (
+              <span className="flex items-center gap-2 px-2 py-0.5 bg-emerald-950/60 border border-emerald-500/30 rounded-md text-[10px] text-emerald-300 font-mono">
+                <span>FC: <strong>{liveTelemetry.heartRateBpm}</strong> bpm</span>
+                <span>VFC: <strong>{liveTelemetry.hrvRmssdMs}</strong> ms</span>
+                <span>GSR: <strong>{liveTelemetry.gsrMicroSiemens}</strong> µS</span>
+                <span>Grip: <strong>{liveTelemetry.handGripPressureKg}</strong> kg</span>
+              </span>
+            )}
+
+            {/* Conexión WebSocket con Puente VR */}
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-md text-[10px] font-mono">
+              <span className={`w-2 h-2 rounded-full ${vrWsStatus === 'CONNECTED' ? 'bg-cyan-400 animate-pulse' : vrWsStatus === 'CONNECTING' ? 'bg-amber-400' : 'bg-slate-600'}`}></span>
+              <span className="text-slate-400">VR Bridge: {vrWsStatus}</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Acciones de hardware y exportaciones clínicas */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Calibrar dinamometría */}
             <button
-              onClick={() => setIsPatientMode(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-500/40 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm"
-              title="Cambiar al Visor VR de Paciente"
+              onClick={handleTareGrip}
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10.5px] font-semibold border border-slate-700 transition cursor-pointer"
+              title="Ajusta la lectura actual de presión manual a 0 kg"
             >
-              <Glasses className="w-3.5 h-3.5 text-purple-400" />
-              <span>Modo Paciente (VR)</span>
+              <Scale className="w-3 h-3 text-amber-400" />
+              <span>Tara Grip</span>
             </button>
 
+            {/* Conectar BLE */}
             <button
-              onClick={handlePrintIndividualReport}
-              className="flex items-center gap-1.5 px-3 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm"
-              title="Imprimir o exportar Reporte Objetivo Individual (ROI)"
+              onClick={handleConnectBluetooth}
+              className="flex items-center gap-1 px-2.5 py-1 bg-blue-950/70 hover:bg-blue-900 text-blue-200 rounded-lg text-[10.5px] font-semibold border border-blue-600/40 transition cursor-pointer"
+              title="Vincular anillo Colmi o banda Geoid por Bluetooth"
             >
-              <Printer className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Imprimir Reporte ROI</span>
+              <Bluetooth className="w-3 h-3 text-blue-400" />
+              <span>Conectar BLE</span>
             </button>
+
+            {/* Conectar USB */}
+            <button
+              onClick={handleConnectUsb}
+              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950/70 hover:bg-cyan-900 text-cyan-200 rounded-lg text-[10.5px] font-semibold border border-cyan-600/40 transition cursor-pointer"
+              title="Vincular microcontrolador ESP32 / Biopac por puerto serie"
+            >
+              <Usb className="w-3 h-3 text-cyan-400" />
+              <span>Conectar USB</span>
+            </button>
+
+            {/* Protocolo de Grounding de emergencia */}
+            <button
+              onClick={handleTriggerGrounding}
+              className="flex items-center gap-1 px-2.5 py-1 bg-rose-950/90 hover:bg-rose-900 text-rose-200 rounded-lg text-[10.5px] font-bold border border-rose-500/60 shadow-sm transition cursor-pointer animate-pulse"
+              title="Fuerza al visor VR a regresar inmediatamente al entorno de calma"
+            >
+              <ShieldAlert className="w-3 h-3 text-rose-400" />
+              <span>Grounding VR</span>
+            </button>
+
+            {/* Exportar Dictamen Oficial en PDF */}
+            <button
+              onClick={handleExportPdfReport}
+              className="flex items-center gap-1.5 px-3 py-1 bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-500/40 rounded-lg text-[11px] font-bold transition cursor-pointer shadow-sm"
+              title="Generar dictamen pericial con formato de receta médica oficial"
+            >
+              <Printer className="w-3.5 h-3.5 text-sky-400" />
+              <span>Dictamen PDF</span>
+            </button>
+
+            {/* Exportar HL7 FHIR R4 */}
+            <button
+              onClick={handleExportFhirBundle}
+              className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/40 rounded-lg text-[11px] font-bold transition cursor-pointer shadow-sm"
+              title="Descargar HL7 FHIR R4 Bundle interoperable (JSON)"
+            >
+              <FileCode className="w-3.5 h-3.5 text-emerald-400" />
+              <span>FHIR R4</span>
+            </button>
+
+            {/* Saldo de Créditos IA */}
+            <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-950 border border-amber-500/40 rounded-lg font-mono text-[11px]">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-amber-300 font-bold">{userProfile.availableAiCredits}</span>
+              <span className="text-slate-500 text-[10px]">IA</span>
+              <button 
+                onClick={handleQuickRecharge}
+                className="ml-1 p-0.5 hover:bg-amber-500/20 rounded text-amber-400 hover:text-amber-200 transition"
+                title="Recargar +20 créditos de inferencia"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {usbDeviceName && (
-        <div className="bg-cyan-900/40 border-b border-cyan-800/50 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-cyan-200 z-20">
-          <Usb className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
-          <span>Telemetría Activa: <strong>{usbDeviceName}</strong></span>
-        </div>
-      )}
-
+      {/* 3. NAVEGACIÓN PRINCIPAL DE MÓDULOS DE EVALUACIÓN */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
@@ -591,8 +752,8 @@ function DoctorWorkstation() {
             <div className="shrink-0 inline-flex">
               <HoverTooltip
                 title="Traducción APA & RCI"
-                description="Interpretación por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI."
-                clinicalUtility="Evaluación de cambio confiable (Jacobson & Truax) y alianza terapéutica."
+                description="Interpretación por corrientes teóricas (TCC, Psicodinámica, Gestalt, Sistémica) y cálculo RCI de Jacobson & Truax."
+                clinicalUtility="Evaluación de cambio clínicamente confiable y alianza terapéutica."
                 badge="Marco APA"
               >
                 <button
@@ -612,7 +773,7 @@ function DoctorWorkstation() {
             <div className="shrink-0 inline-flex">
               <HoverTooltip
                 title="Cluster B & Perfilado Biocomportamental"
-                description="Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y disociales (Factor 1/2)."
+                description="Caracterización autonómica diferenciada entre rasgos narcisistas (Overt/Covert) y disociales."
                 clinicalUtility="Análisis pericial forense y provocación inmersiva con consentimiento."
                 badge="Cluster B"
               >
@@ -633,8 +794,8 @@ function DoctorWorkstation() {
             <div className="shrink-0 inline-flex">
               <HoverTooltip
                 title="Capacitación AMIE & Simulador IA"
-                description="Pacientes virtuales fotorrealistas y casos por ciclo evolutivo."
-                clinicalUtility="Entrenamiento inmersivo acreditado bajo DSM-5-TR."
+                description="Pacientes virtuales fotorrealistas y casos clínicos acreditados bajo DSM-5-TR."
+                clinicalUtility="Entrenamiento inmersivo continuado."
                 badge="Módulo 4"
               >
                 <button
@@ -655,7 +816,7 @@ function DoctorWorkstation() {
               <HoverTooltip
                 title="Neurotopografía 3D Holográfica"
                 description="Mapeador de potencia relativa continua por bandas (Delta, Theta, Alpha, Beta)."
-                clinicalUtility="Contraste de neurobiomarcadores con benchmarks."
+                clinicalUtility="Contraste de neurobiomarcadores con benchmarks normativos."
                 badge="Módulo 5"
               >
                 <button
@@ -674,9 +835,9 @@ function DoctorWorkstation() {
 
             <div className="shrink-0 inline-flex">
               <HoverTooltip
-                title="qEEG & Carga de Archivos"
+                title="qEEG & Carga de Señales Crudas"
                 description="Carga de archivos nativos de electroencefalografía (.EDF/.BDF/.EEG/.CSV)."
-                clinicalUtility="Inspección de ondas crudas y potencias por canal."
+                clinicalUtility="Inspección espectral de ondas y potencia por canal."
                 badge="Señales Crudas"
               >
                 <button
@@ -695,9 +856,9 @@ function DoctorWorkstation() {
 
             <div className="shrink-0 inline-flex">
               <HoverTooltip
-                title="Módulo Terapéutico VR (Meta Quest 3S / Pico)"
-                description="Exposición inmersiva con biofeedback en tiempo real (GSR, HRV)."
-                clinicalUtility="Cálculo del índice de habituación H."
+                title="Módulo Terapéutico VR (Meta Quest 3S / Pico 3)"
+                description="Catálogo de 10 entornos de exposición inmersiva y biofeedback con cálculo de habituación H."
+                clinicalUtility="Desensibilización sistemática y autorregulación."
                 badge="Biometría VR"
               >
                 <button
@@ -716,8 +877,8 @@ function DoctorWorkstation() {
 
             <div className="shrink-0 inline-flex">
               <HoverTooltip
-                title="Capturador Móvil Centinela 24/7"
-                description="Prueba en vivo de ingesta de datos móviles (tecleo, sueño, GPS) para predecir brotes."
+                title="Capturador Móvil Centinela JITAI 24/7"
+                description="Prueba en vivo de ingesta de datos móviles (tecleo, sueño, geocerca) para predecir brotes."
                 clinicalUtility="Fenotipado Digital"
                 badge="Tester Móvil"
               >
@@ -737,8 +898,8 @@ function DoctorWorkstation() {
 
             <div className="shrink-0 inline-flex">
               <HoverTooltip
-                title="Referencia a Psiquiatría"
-                description="Generación estructurada de hoja de derivación oficial e interconsulta."
+                title="Hoja de Derivación a Psiquiatría"
+                description="Generación estructurada de interconsulta oficial con estratificación de riesgo."
                 clinicalUtility="Gestión de crisis y derivación urgente."
                 badge="Interconsulta"
               >
@@ -758,9 +919,9 @@ function DoctorWorkstation() {
 
             <div className="shrink-0 inline-flex">
               <HoverTooltip
-                title="Perfil de Licencia & Control IA"
-                description="Monitoreo de vigencia de licencia y consumo del bolsón de IA en MongoDB."
-                clinicalUtility="Perfil de usuario e indicadores."
+                title="Panel SaaS & Licenciamiento"
+                description="Supervisión de vigencia de licencias y sincronización con MongoDB."
+                clinicalUtility="Gestión de cuentas institucionales."
                 badge="Perfil"
               >
                 <button
@@ -781,15 +942,18 @@ function DoctorWorkstation() {
         </div>
       </div>
 
+      {/* 4. CUERPO DE CONTENIDO DINÁMICO */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
+        
+        {/* Banner de alerta de expediente no localizado */}
         {syncNotFoundAlert && (
-          <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl animate-shake">
+          <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-rose-600 rounded-xl text-white shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <span className="font-bold text-sm block text-white">Notificación de Sincronización:</span>
+                <span className="font-bold text-sm block text-white">Alerta de Sincronización:</span>
                 <span className="text-rose-200 font-semibold">{syncNotFoundAlert}</span>
               </div>
             </div>
@@ -802,6 +966,7 @@ function DoctorWorkstation() {
           </div>
         )}
 
+        {/* Mensaje de confirmación */}
         {syncSuccessMsg && (
           <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 shadow-lg">
             <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -809,16 +974,18 @@ function DoctorWorkstation() {
           </div>
         )}
 
+        {/* Notificación de error no fatal */}
         {errorMsg && (
           <div className="p-4 bg-red-950/60 border border-red-500/50 rounded-xl text-red-200 text-xs flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
             <div>
-              <span className="font-bold">Error de Ejecución: </span>
+              <span className="font-bold">Aviso del Sistema: </span>
               <span>{errorMsg}</span>
             </div>
           </div>
         )}
 
+        {/* TAB 1: WORKSTATION PRINCIPAL */}
         {activeTab === 'workstation' && (
           <div className="space-y-5">
             {analysis?.riskAlerts && <RiskAlertBanner alerts={analysis.riskAlerts} />}
@@ -847,10 +1014,10 @@ function DoctorWorkstation() {
                       <BrainCircuit className="w-8 h-8" />
                     </div>
                     <h3 className="text-base font-bold text-white mb-2">
-                      Motor Clínico AMIE Listo para Análisis Multimodal
+                      Motor AMIE Listo para Triangulación Multimodal
                     </h3>
                     <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                      Ingresa un código PAC en la barra superior o selecciona un caso prototípico. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para generar el dictamen estructurado con Gemini 3.8 Flash.
+                      El expediente cuenta con métricas psicométricas y de hardware validadas. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para activar la inferencia clínica guiada por Gemini 3.8 Flash.
                     </p>
 
                     <button
@@ -859,7 +1026,7 @@ function DoctorWorkstation() {
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-lg shadow-sky-500/20 active:scale-95 transition cursor-pointer"
                     >
                       <Activity className="w-4 h-4" />
-                      <span>Procesar Expediente Ahora</span>
+                      <span>{isAnalyzing ? 'Procesando Triangulación...' : 'Procesar Expediente Ahora'}</span>
                     </button>
                   </div>
                 )}
@@ -868,8 +1035,10 @@ function DoctorWorkstation() {
           </div>
         )}
 
+        {/* TAB 2: EVALUADOR CIENTÍFICO */}
         {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
         
+        {/* TAB 3: DIFERENCIADOR Y SESGOS */}
         {activeTab === 'differential_bias' && (
           <div className="space-y-6">
             <DifferentialBiasResolver patient={safePatient} />
@@ -877,10 +1046,12 @@ function DoctorWorkstation() {
           </div>
         )}
 
+        {/* TAB 4: CORRIENTES APA & RCI */}
         {activeTab === 'apa_framework' && (
           <ApaTherapeuticModule patient={safePatient} />
         )}
 
+        {/* TAB 5: CLUSTER B & NARCISISMO */}
         {activeTab === 'cluster_b' && (
           <PsychopathyNarcissismModule 
             patient={safePatient} 
@@ -888,8 +1059,10 @@ function DoctorWorkstation() {
           />
         )}
 
+        {/* TAB 6: CAPACITACIÓN ACADEMY */}
         {activeTab === 'academy' && <AmieClinicalAcademy />}
         
+        {/* TAB 7: NEUROTOPOGRAFÍA 3D */}
         {activeTab === 'neuro_3d' && (
           <div className="space-y-4">
             <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
@@ -930,6 +1103,7 @@ function DoctorWorkstation() {
           </div>
         )}
         
+        {/* TAB 8: qEEG & CARGA */}
         {activeTab === 'neurosensometry' && (
           <NeuroSensoryModule 
             patient={safePatient} 
@@ -937,6 +1111,7 @@ function DoctorWorkstation() {
           />
         )}
         
+        {/* TAB 9: VR INMERSIVO & CONSOLAS */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-4">
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
@@ -1044,24 +1219,28 @@ function DoctorWorkstation() {
           </div>
         )}
 
+        {/* TAB 10: TESTER MÓVIL JITAI */}
         {activeTab === 'sentinel_tester' && (
           <div className="py-2">
             <SentinelMobileCollector />
           </div>
         )}
 
+        {/* TAB 11: REFERENCIA PSIQUIÁTRICA */}
         {activeTab === 'referral' && (
           <PsychiatryReferralView
             patient={safePatient}
             analysis={analysis}
             currentDoctorName={doctorName}
-            colegiadoNumber={colegiadoNumber}
+            colegiadoNumber={Number(colegiadoNumber)}
           />
         )}
 
+        {/* TAB 12: GESTIÓN SAAS */}
         {activeTab === 'saas' && <AdminSaaSPanel />}
       </main>
 
+      {/* 5. ASISTENTE FLOTANTE AMIE Y MODALES GLOBALES */}
       <FloatingAmieAssistant
         currentPatientId={safePatientId}
         onNavigateTab={(targetTab: string) => setActiveTab(targetTab as AppTab)}
@@ -1074,6 +1253,7 @@ function DoctorWorkstation() {
         defaultView={dsmModalView}
       />
 
+      {/* Enrutador de Escenas VR Activas */}
       {activeVrModuleId && (
         <VrModuleRouter
           patient={safePatient}
@@ -1082,6 +1262,7 @@ function DoctorWorkstation() {
         />
       )}
 
+      {/* Consola Inmersiva Unificada */}
       {isFullscreenUnifiedVrOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <AmieUnifiedVrConsole
@@ -1091,6 +1272,7 @@ function DoctorWorkstation() {
         </div>
       )}
 
+      {/* Consola de Tratamiento 3D */}
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
           patient={safePatient}
@@ -1098,6 +1280,7 @@ function DoctorWorkstation() {
         />
       )}
 
+      {/* Consola de Diagnóstico 3D */}
       {isFullscreenDiagnosticOpen && (
         <FullscreenDiagnosticRunner
           patient={safePatient}
@@ -1106,6 +1289,7 @@ function DoctorWorkstation() {
         />
       )}
 
+      {/* Consola de Fenotipado Digital */}
       {isFullscreenPhenotypeOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md p-4 lg:p-8 overflow-y-auto flex items-center justify-center">
           <DigitalPhenotypeModule
@@ -1118,7 +1302,9 @@ function DoctorWorkstation() {
   );
 }
 
-// 🟢 ENRUTADOR PRINCIPAL CON ALIAS RESILIENTES PARA PICO 3
+// ----------------------------------------------------------------------------
+// ENRUTADOR PRINCIPAL CON ALIAS RESILIENTES PARA PICO 3 PRO Y QUEST
+// ----------------------------------------------------------------------------
 export default function App() {
   return (
     <Router>
@@ -1126,12 +1312,12 @@ export default function App() {
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
         
-        {/* Rutas directas para el Visor Pico 3 */}
+        {/* Rutas directas para el Visor Pico 3 Pro y Meta Quest */}
         <Route path="/visor" element={<VrPatientExperience />} />
         <Route path="/paciente" element={<VrPatientExperience />} />
         <Route path="/vr" element={<VrPatientExperience />} />
 
-        {/* Fallback de redirección */}
+        {/* Fallback de redirección segura */}
         <Route path="*" element={<Navigate to="/doctor" replace />} />
       </Routes>
     </Router>
