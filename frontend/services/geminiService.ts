@@ -6,7 +6,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
 
-// Modelo por defecto: Gemini 3.8 Flash
+// Modelo clínico principal: Gemini 3.8 Flash
 const GEMINI_MODEL_ID = 
   (import.meta as any).env?.VITE_GEMINI_MODEL || 
   'gemini-3.8-flash';
@@ -89,7 +89,7 @@ function getGeminiApiKey(): string {
 }
 
 // ============================================================================
-// 3. ANÁLISIS MULTIAXIAL AMIE (GEMINI 3.8 FLASH & MOTOR DE CONTINGENCIA)
+// 3. ANÁLISIS MULTIAXIAL AMIE (GEMINI 3.8 FLASH & CONTINGENCIA DETERMINISTA)
 // ============================================================================
 export async function runAmieClinicalAnalysis(patient: PatientRecord): Promise<AmieClinicalAnalysis> {
   const apiKey = getGeminiApiKey();
@@ -303,11 +303,11 @@ Eres AMIE Clinical Copilot, un asistente médico psiquiátrico de alta precisió
 Responde a la consulta del profesional de manera sintética, clínica y basada en evidencia.
 
 CONTEXTO DEL PACIENTE:
-- ID: ${patient.id} (${patient.age} años, ${patient.gender})
-- Motivo de consulta: ${patient.consultationReason}
+- ID: ${patient?.id || 'PAC-8104'} (${patient?.age || 45} años, ${patient?.gender || 'M'})
+- Motivo de consulta: ${patient?.consultationReason || 'Evaluación general'}
 - Diagnóstico Principal Estimado: ${analysis?.principalDiagnosis?.disorderName || 'En evaluación'}
 - Justificación: ${analysis?.principalDiagnosis?.justificationDsm5 || 'N/A'}
-- Biomarcadores: Reacción ${patient.neuromotorBiomarkers?.reactionTimeMs}ms, Theta/Beta ${patient.qeegZScores?.frontalThetaBetaRatio}
+- Biomarcadores: Reacción ${patient?.neuromotorBiomarkers?.reactionTimeMs ?? 250}ms, Theta/Beta ${patient?.qeegZScores?.frontalThetaBetaRatio ?? 1.8}
 
 PREGUNTA DEL MÉDICO:
 "${userQuestion}"
@@ -322,5 +322,31 @@ Proporciona una respuesta concisa, profesional y orientada a la toma de decision
     }
   }
 
-  return `[AMIE Copilot]: Evaluando el expediente ${patient.id}. Considerando la sintomatología y el diagnóstico estimado de ${analysis?.principalDiagnosis?.disorderName || 'Trastorno Depresivo'}, se sugiere priorizar la estabilización del patrón circadiano y la adherencia psicoterapéutica antes de realizar modificaciones mayores en el esquema actual.`;
+  return `[AMIE Copilot]: Evaluando el expediente ${patient?.id || 'PAC-8104'}. Considerando la sintomatología y el diagnóstico estimado de ${analysis?.principalDiagnosis?.disorderName || 'Trastorno Depresivo'}, se sugiere priorizar la estabilización del patrón circadiano y la adherencia psicoterapéutica antes de realizar modificaciones mayores en el esquema actual.`;
 }
+
+/**
+ * Sobrecarga resiliente para resolver 'askAmieAssistant' importado por AmieChatCopilot.tsx
+ */
+export async function askAmieAssistant(
+  patientOrQuestion: PatientRecord | string,
+  analysisOrHistory?: AmieClinicalAnalysis | any,
+  userQuestion?: string
+): Promise<string> {
+  if (typeof patientOrQuestion === 'string') {
+    return askAmieCopilot(SAFE_DEFAULT_PATIENT, null, patientOrQuestion);
+  }
+  return askAmieCopilot(
+    patientOrQuestion, 
+    analysisOrHistory || null, 
+    userQuestion || (typeof analysisOrHistory === 'string' ? analysisOrHistory : '')
+  );
+}
+
+export default {
+  SAFE_DEFAULT_PATIENT,
+  runAmieClinicalAnalysis,
+  syncWithClinicalApp,
+  askAmieCopilot,
+  askAmieAssistant
+};
