@@ -1,22 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { PatientRecord } from '../types';
 import { 
   Smartphone, 
   Zap, 
-  MapPin, 
   Moon, 
   CheckCircle2, 
-  AlertTriangle, 
   Radio, 
   BrainCircuit, 
-  Clock, 
-  ShieldCheck, 
   Heart, 
-  Keyboard, 
   BarChart3, 
-  Wifi, 
-  RefreshCw, 
-  Layers,
-  Activity
+  RefreshCw,
+  Wifi
 } from 'lucide-react';
 
 interface PatientTelemetryData {
@@ -30,35 +24,54 @@ interface PatientTelemetryData {
   lastSyncTimestamp: string;
 }
 
-export const SentinelMobileCollector: React.FC = () => {
-  const [patientId] = useState('PAC-8104');
-  
-  // 1. ESTADO DE TRAZABILIDAD DEL DISPOSITIVO DEL PACIENTE
-  const [connectionStatus, setConnectionStatus] = useState<'ONLINE' | 'DEGRADED' | 'OFFLINE'>('ONLINE');
+interface SentinelMobileCollectorProps {
+  patient?: PatientRecord;
+  onTriggerJitaiAlert?: (riskSummary: { type: string; score: number }) => void;
+}
+
+export const SentinelMobileCollector: React.FC<SentinelMobileCollectorProps> = ({ 
+  patient,
+  onTriggerJitaiAlert 
+}) => {
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+  const rawSentinel = p?.sentinelTelemetry || p?.sentinelTelemetrySnapshot || {};
+
+  // 1. Estado de conectividad y trazabilidad
+  const [connectionStatus] = useState<'ONLINE' | 'DEGRADED' | 'OFFLINE'>('ONLINE');
   const [pingMs, setPingMs] = useState<number>(28);
   const [packetsReceived, setPacketsReceived] = useState<number>(24);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 2. MÉTRICAS PASIVAS CAPTURADAS EN EL TELÉFONO DEL PACIENTE
+  // 2. Métricas pasivas capturadas con fallback al expediente
   const [telemetry, setTelemetry] = useState<PatientTelemetryData>({
-    patientId: 'PAC-8104',
-    typingLatencyMs: 148,
+    patientId,
+    typingLatencyMs: rawSentinel?.behavioralBiometrics?.typingLatencyMs ?? 
+                     p?.neuromotorBiomarkers?.reactionTimeMs ?? 
+                     148,
     typingVariabilityMs: 22,
-    sleepHoursLastNight: 6.5,
-    nightAwakenings: 2,
-    restingHeartRate: 72,
-    isOutsideSafeZone: false,
-    lastSyncTimestamp: new Date().toLocaleTimeString('es-ES')
+    sleepHoursLastNight: rawSentinel?.sleepMetrics?.avgSleepDurationHours ?? 6.5,
+    nightAwakenings: rawSentinel?.sleepMetrics?.nightWakeups ?? 2,
+    restingHeartRate: rawSentinel?.restingHeartRate ?? 72,
+    isOutsideSafeZone: Boolean(rawSentinel?.isOutsideSafeGeofence),
+    lastSyncTimestamp: new Date().toLocaleTimeString('es-GT')
   });
 
-  // Polling continuo de comunicación pasiva con la APK
+  // Limpieza de temporizadores al desmontar
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, []);
+
+  // Polling continuo de comunicación pasiva con la APK Centinela
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = new Date().toLocaleTimeString('es-ES');
+      const now = new Date().toLocaleTimeString('es-GT');
       setPingMs(Math.floor(20 + Math.random() * 15));
       setPacketsReceived(prev => prev + 1);
       
-      // Simula ligeras variaciones en la telemetría enviada por el teléfono en background
       setTelemetry(prev => ({
         ...prev,
         typingLatencyMs: Math.min(Math.max(prev.typingLatencyMs + Math.floor(Math.random() * 7 - 3), 110), 260),
@@ -71,16 +84,19 @@ export const SentinelMobileCollector: React.FC = () => {
 
   const handleManualRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+
+    refreshTimerRef.current = setTimeout(() => {
       setTelemetry(prev => ({
         ...prev,
-        lastSyncTimestamp: new Date().toLocaleTimeString('es-ES')
+        lastSyncTimestamp: new Date().toLocaleTimeString('es-GT')
       }));
+      setPingMs(Math.floor(18 + Math.random() * 10));
       setIsRefreshing(false);
     }, 600);
   };
 
-  // 3. MOTOR DE DEDUCCIÓN CLÍNICA DERIVADO A TRASTORNOS (JITAI)
+  // 3. Motor de deducción clínica derivado a trastornos (JITAI)
   const depressionRisk = Math.min(
     Math.max(
       (telemetry.typingLatencyMs > 180 ? 45 : 10) + 
@@ -118,6 +134,15 @@ export const SentinelMobileCollector: React.FC = () => {
     98
   );
 
+  // Notificar al sistema padre si un vector supera el umbral crítico
+  useEffect(() => {
+    if (onTriggerJitaiAlert) {
+      if (depressionRisk >= 75) onTriggerJitaiAlert({ type: 'DEPRESION_INHIBICION', score: depressionRisk });
+      else if (maniaRisk >= 75) onTriggerJitaiAlert({ type: 'VIRAJE_MANIACO', score: maniaRisk });
+      else if (anxietyRisk >= 75) onTriggerJitaiAlert({ type: 'HIPERAROUSAL_ANSIEDAD', score: anxietyRisk });
+    }
+  }, [depressionRisk, maniaRisk, anxietyRisk, onTriggerJitaiAlert]);
+
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-slate-100 space-y-6 font-sans">
       
@@ -129,10 +154,11 @@ export const SentinelMobileCollector: React.FC = () => {
               <Radio className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-bold text-white">Trazabilidad de Comunicación JITAI</h2>
-                <span className="px-2.5 py-0.5 text-[9px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-500/40 rounded-full font-bold">
-                  APK TELEMETRY LINK OK
+                <span className="px-2.5 py-0.5 text-[9px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-500/40 rounded-full font-bold flex items-center gap-1">
+                  <Wifi className="w-3 h-3 text-emerald-400" />
+                  LINK {connectionStatus} ({pingMs} ms)
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -142,16 +168,17 @@ export const SentinelMobileCollector: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={handleManualRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition cursor-pointer shrink-0 active:scale-95"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Sincronizar Estado</span>
           </button>
         </div>
 
-        {/* METRICAS DE CONEXIÓN */}
+        {/* MÉTRICAS DE CONEXIÓN */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Dispositivo Paciente</span>
@@ -161,13 +188,13 @@ export const SentinelMobileCollector: React.FC = () => {
           <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Servicio Pasivo</span>
             <span className="font-mono text-emerald-400 font-bold text-[11px] flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
               AccessibilityService
             </span>
           </div>
 
           <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Última Recepción ($t$)</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase block">Última Recepción (t)</span>
             <span className="font-mono text-amber-300 font-bold text-[11px] block">{telemetry.lastSyncTimestamp}</span>
           </div>
 
@@ -185,7 +212,9 @@ export const SentinelMobileCollector: React.FC = () => {
             <Smartphone className="w-4 h-4 text-cyan-400" />
             Telemetría Pasiva del Paciente (Solo Lectura)
           </h3>
-          <span className="text-[10px] font-mono text-slate-400">PAC: {patientId}</span>
+          <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+            PAC: {patientId}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
@@ -199,20 +228,20 @@ export const SentinelMobileCollector: React.FC = () => {
               <span className="text-xl font-mono font-black text-amber-400">
                 {telemetry.typingLatencyMs} <span className="text-xs text-slate-400 font-sans">ms</span>
               </span>
-              <span className="text-[9px] text-slate-500">Captura APK</span>
+              <span className="text-[9px] text-slate-500 font-mono">Captura APK</span>
             </div>
           </div>
 
           {/* Variabilidad */}
           <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-1">
             <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5 text-purple-400" /> Variabilidad Tecleo ($\sigma$)
+              <BarChart3 className="w-3.5 h-3.5 text-purple-400" /> Variabilidad Tecleo (σ)
             </span>
             <div className="flex items-baseline justify-between pt-1">
               <span className="text-xl font-mono font-black text-purple-300">
                 {telemetry.typingVariabilityMs} <span className="text-xs text-slate-400 font-sans">ms</span>
               </span>
-              <span className="text-[9px] text-slate-500">Intersigno</span>
+              <span className="text-[9px] text-slate-500 font-mono">Intersigno</span>
             </div>
           </div>
 
@@ -240,7 +269,7 @@ export const SentinelMobileCollector: React.FC = () => {
               <span className="text-xl font-mono font-black text-emerald-400">
                 {telemetry.restingHeartRate} <span className="text-xs text-slate-400 font-sans">bpm</span>
               </span>
-              <span className="text-[9px] text-emerald-400/80 font-bold">Normocardia</span>
+              <span className="text-[9px] text-emerald-400/80 font-bold font-mono">Normocardia</span>
             </div>
           </div>
 
@@ -329,3 +358,5 @@ export const SentinelMobileCollector: React.FC = () => {
     </div>
   );
 };
+
+export default SentinelMobileCollector;
