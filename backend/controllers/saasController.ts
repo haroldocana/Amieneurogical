@@ -33,11 +33,12 @@ export const getSaasProfile = async (req: AuthRequest, res: Response): Promise<R
 
     // Si el usuario no existe aún en MongoDB, se genera la estructura base
     if (!user) {
+      const userMeta = req.user as any;
       user = await User.create({
         username: userId,
-        name: req.user?.name || 'Dr. Harold',
-        collegiateNumber: req.user?.collegiateNumber || '2001',
-        hospitalName: req.user?.hospitalName || 'Clínica de Neurociencia Avanzada',
+        name: userMeta?.name || 'Dr. Harold',
+        collegiateNumber: userMeta?.collegiateNumber || userMeta?.colegiadoNumber || '2001',
+        hospitalName: userMeta?.hospitalName || 'Clínica de Neurociencia Avanzada',
         licenseDaysRemaining: 365,
         aiTokensTotal: 100,
         aiTokensUsed: 0,
@@ -136,5 +137,76 @@ export const rechargeAiTokens = async (req: AuthRequest, res: Response): Promise
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error interno del servidor';
     return res.status(500).json({ success: false, error: message });
+  }
+};
+
+/**
+ * Función requerida por analyzePatientData: debita créditos de IA de forma atómica
+ */
+export const consumeAiTokens = async (
+  userId: string,
+  tokens: number = 1
+): Promise<{ success: boolean; remaining?: number; message?: string }> => {
+  try {
+    const query = buildUserQuery(String(userId));
+    let user = await User.findOne(query);
+
+    // Auto-registro con saldo de bienvenida si no existe en MongoDB
+    if (!user) {
+      user = await User.create({
+        username: userId,
+        name: 'Dr. Harold',
+        collegiateNumber: '2001',
+        hospitalName: 'Clínica de Neurociencia Avanzada',
+        licenseDaysRemaining: 365,
+        aiTokensTotal: 100,
+        aiTokensUsed: 0,
+        rechargeHistory: []
+      });
+    }
+
+    const tokensTotal = user.aiTokensTotal ?? 100;
+    const tokensUsed = user.aiTokensUsed ?? 0;
+    const available = tokensTotal - tokensUsed;
+
+    if (available < tokens) {
+      return {
+        success: false,
+        remaining: Math.max(0, available),
+        message: `Saldo insuficiente en el Bolsón de IA. Disponibles: ${available}, Requeridos: ${tokens}.`
+      };
+    }
+
+    // Actualización atómica con validación de saldo para evitar saldos negativos
+    const updated = await User.findOneAndUpdate(
+      {
+        ...query,
+        $expr: { $gte: [{$subtract: ['$aiTokensTotal', '$aiTokensUsed'] }, tokens] }
+      },
+      {
+        $inc: { aiTokensUsed: tokens }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return {
+        success: false,
+        remaining: 0,
+        message: 'No fue posible debitar el crédito de IA debido a concurrencia o saldo límite.'
+      };
+    }
+
+    const remaining = Math.max(0, (updated.aiTokensTotal ?? 0) - (updated.aiTokensUsed ?? 0));
+    return {
+      success: true,
+      remaining
+    };
+  } catch (error: unknown) {
+    console.error('Error en consumeAiTokens:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Error debitando crédito de IA'
+    };
   }
 };
