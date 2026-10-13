@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PatientRecord } from '../types';
 import { 
   requestUsbDevicePermission, 
@@ -16,15 +16,13 @@ import {
   Terminal, 
   Play, 
   Pause, 
-  Gauge,
-  Signal,
-  FastForward,
-  ArrowRight,
-  Radio,
-  Activity,
-  Zap,
-  ShieldCheck,
-  AlertTriangle
+  Gauge, 
+  Signal, 
+  FastForward, 
+  Radio, 
+  Activity, 
+  Zap, 
+  ShieldCheck 
 } from 'lucide-react';
 
 interface Props {
@@ -44,6 +42,10 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
 }) => {
   if (!isOpen) return null;
 
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+  const patientDisplayName = p?.patientNameAnonymized || patientId;
+
   const [connectionType, setConnectionType] = useState<ConnectionType>('SIMULATED');
   const [isWebUsbSupported, setIsWebUsbSupported] = useState(false);
   const [connectedDeviceName, setConnectedDeviceName] = useState<string | null>('Sensor Virtual AMIE');
@@ -53,23 +55,41 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
   const [sqiScore, setSqiScore] = useState(96);
 
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Limpiador seguro de temporizadores para evitar fugas de memoria
+  const safeSetTimeout = useCallback((cb: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      timeoutsRef.current = timeoutsRef.current.filter((t) => t !== id);
+      cb();
+    }, ms);
+    timeoutsRef.current.push(id);
+    return id;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
+  }, []);
 
   const [liveSample, setLiveSample] = useState<NeuromotorTelemetrySample>({
-    reactionTimeMs: patient?.neuromotorBiomarkers?.reactionTimeMs || 240,
-    handGripPressureKg: patient?.multisensoryHardware?.handGripPressureKg || 32.5,
-    touchTapLatencyMs: patient?.multisensoryHardware?.touchTapLatencyCompensatedMs || 180,
+    reactionTimeMs: p?.neuromotorBiomarkers?.reactionTimeMs || 240,
+    handGripPressureKg: p?.multisensoryHardware?.handGripPressureKg || 32.5,
+    touchTapLatencyMs: p?.multisensoryHardware?.touchTapLatencyCompensatedMs || 180,
     eegChannelsRaw: [12.4, -4.2, 18.1, 8.5, -2.1, 14.3, 6.2, 0.8],
     timestamp: Date.now()
   });
 
   const [logs, setLogs] = useState<string[]>([
-    `[${new Date().toLocaleTimeString()}] Sistema de diagnóstico biométrico iniciado.`,
-    `[${new Date().toLocaleTimeString()}] Canal BLE / USB inicializado en puerto COM_VIRTUAL_0.`,
-    `[${new Date().toLocaleTimeString()}] Modo actual: SIMULATED_PRECISION_STREAM.`
+    `[${new Date().toLocaleTimeString('es-GT')}] Sistema de diagnóstico biométrico iniciado.`,
+    `[${new Date().toLocaleTimeString('es-GT')}] Canal BLE / USB inicializado en puerto COM_VIRTUAL_0.`,
+    `[${new Date().toLocaleTimeString('es-GT')}] Modo actual: SIMULATED_PRECISION_STREAM.`
   ]);
 
   const addLog = (message: string) => {
-    setLogs(prev => [...prev.slice(-30), `[${new Date().toLocaleTimeString()}] ${message}`]);
+    setLogs((prev) => [...prev.slice(-30), `[${new Date().toLocaleTimeString('es-GT')}] ${message}`]);
   };
 
   useEffect(() => {
@@ -134,7 +154,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
 
   const handleConnectBluetooth = () => {
     addLog('Escaneando dispositivos Bluetooth BLE (Polar/Colmi/Geoid)...');
-    setTimeout(() => {
+    safeSetTimeout(() => {
       setConnectedDeviceName('Colmi R02 BLE Ring / Polar H10');
       setConnectionType('BLUETOOTH');
       setIsStreaming(true);
@@ -144,7 +164,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
 
   const handleConnectWifi = () => {
     addLog(`Iniciando socket WebSocket en IP ${wifiIp}:8080...`);
-    setTimeout(() => {
+    safeSetTimeout(() => {
       setConnectedDeviceName(`ESP32 Streamer (${wifiIp})`);
       setConnectionType('WIFI');
       setIsStreaming(true);
@@ -155,10 +175,10 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
   const handleCalibrateZero = () => {
     setCalibrationStatus('calibrating');
     addLog('Ejecutando tara de dinamómetro y calibración de latencia Cero...');
-    setTimeout(() => {
+    safeSetTimeout(() => {
       setCalibrationStatus('calibrated');
       addLog('Calibración completada: Calidad de señal offset en 0.00 kg / 0 ms.');
-      setTimeout(() => setCalibrationStatus('idle'), 3000);
+      safeSetTimeout(() => setCalibrationStatus('idle'), 3000);
     }, 1500);
   };
 
@@ -169,12 +189,13 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
     onClose();
   };
 
-  const patientDisplayName = patient?.patientNameAnonymized || patient?.id || 'PAC-8104';
-
   return (
     <div 
       className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 lg:p-6 font-sans"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Diagnóstico & Calibración de Hardware"
     >
       <div 
         className="bg-slate-950 border border-cyan-500/40 rounded-2xl w-full max-w-5xl h-[92vh] flex flex-col text-slate-100 shadow-[0_0_50px_rgba(6,182,212,0.15)] overflow-hidden relative"
@@ -187,9 +208,9 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
               <Signal className="w-5 h-5 animate-pulse text-cyan-200" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-black tracking-wide text-white">
-                  DIAGNÓSTICO & CALIBRACIÓN HARDWARE
+                  DIAGNÓSTICO &amp; CALIBRACIÓN HARDWARE
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold border bg-cyan-950 text-cyan-300 border-cyan-500/30">
                   {connectionType}
@@ -199,7 +220,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Paciente Vinculado: <span className="text-white font-semibold">{patientDisplayName}</span>
+                Paciente Vinculado: <span className="text-white font-semibold font-mono">{patientDisplayName}</span>
               </p>
             </div>
           </div>
@@ -227,6 +248,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
               type="button"
               onClick={onClose}
               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition cursor-pointer"
+              title="Cerrar modal"
             >
               <X className="w-5 h-5" />
             </button>
@@ -240,13 +262,13 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
             <button
               type="button"
               onClick={handleConnectUsbDevice}
-              className={`p-3 rounded-xl border flex items-center gap-3 transition ${
+              className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${
                 connectionType === 'USB'
                   ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200'
                   : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
               }`}
             >
-              <Usb className="w-5 h-5 text-cyan-400" />
+              <Usb className="w-5 h-5 text-cyan-400 shrink-0" />
               <div className="text-left">
                 <span className="text-xs font-bold block text-white">Puerto USB / COM</span>
                 <span className="text-[10px] text-slate-400 font-mono">
@@ -258,13 +280,13 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
             <button
               type="button"
               onClick={handleConnectBluetooth}
-              className={`p-3 rounded-xl border flex items-center gap-3 transition ${
+              className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${
                 connectionType === 'BLUETOOTH'
                   ? 'bg-indigo-950/80 border-indigo-500 text-indigo-200'
                   : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
               }`}
             >
-              <Bluetooth className="w-5 h-5 text-indigo-400" />
+              <Bluetooth className="w-5 h-5 text-indigo-400 shrink-0" />
               <div className="text-left">
                 <span className="text-xs font-bold block text-white">Bluetooth LE</span>
                 <span className="text-[10px] text-slate-400 font-mono">Polar / Colmi / Geoid</span>
@@ -284,6 +306,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                     type="text"
                     value={wifiIp}
                     onChange={(e) => setWifiIp(e.target.value)}
+                    placeholder="192.168.1.105"
                     className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-200 w-24 focus:outline-none"
                   />
                 </div>
@@ -291,7 +314,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={handleConnectWifi}
-                className="px-2 py-1 bg-sky-600 hover:bg-sky-500 text-white font-bold text-[10px] rounded"
+                className="px-2 py-1 bg-sky-600 hover:bg-sky-500 text-white font-bold text-[10px] rounded cursor-pointer transition active:scale-95"
               >
                 Sync
               </button>
@@ -305,13 +328,13 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 setIsStreaming(true);
                 addLog('Modo simulación de precisión activado.');
               }}
-              className={`p-3 rounded-xl border flex items-center gap-3 transition ${
+              className={`p-3 rounded-xl border flex items-center gap-3 transition cursor-pointer ${
                 connectionType === 'SIMULATED'
                   ? 'bg-purple-950/80 border-purple-500 text-purple-200'
                   : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
               }`}
             >
-              <Radio className="w-5 h-5 text-purple-400" />
+              <Radio className="w-5 h-5 text-purple-400 shrink-0" />
               <div className="text-left">
                 <span className="text-xs font-bold block text-white">Simulador AMIE</span>
                 <span className="text-[10px] text-slate-400 font-mono">Sintetizador de Ondas</span>
@@ -339,7 +362,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setIsStreaming(!isStreaming)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
                   isStreaming ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
@@ -351,7 +374,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 type="button"
                 onClick={handleCalibrateZero}
                 disabled={calibrationStatus === 'calibrating'}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs rounded-lg border border-slate-700 flex items-center gap-1.5 transition"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-cyan-300 font-bold text-xs rounded-lg border border-slate-700 flex items-center gap-1.5 transition cursor-pointer active:scale-95"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${calibrationStatus === 'calibrating' ? 'animate-spin text-amber-400' : ''}`} />
                 <span>{calibrationStatus === 'calibrating' ? 'Calibrando...' : 'Tara / Calibrar Cero'}</span>
@@ -366,7 +389,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 <Zap className="w-3.5 h-3.5 text-amber-400" /> Tiempo de Reacción
               </span>
               <div className="text-2xl font-mono font-bold text-amber-400">
-                {liveSample.reactionTimeMs} <span className="text-xs text-slate-500">ms</span>
+                {liveSample.reactionTimeMs} <span className="text-xs text-slate-500 font-normal">ms</span>
               </div>
               <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-2">
                 <div 
@@ -381,7 +404,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 <Gauge className="w-3.5 h-3.5 text-cyan-400" /> Presión de Prensión
               </span>
               <div className="text-2xl font-mono font-bold text-cyan-400">
-                {liveSample.handGripPressureKg} <span className="text-xs text-slate-500">kg</span>
+                {liveSample.handGripPressureKg} <span className="text-xs text-slate-500 font-normal">kg</span>
               </div>
               <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-2">
                 <div 
@@ -396,7 +419,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 <Sliders className="w-3.5 h-3.5 text-purple-400" /> Latencia de Tap Táctil
               </span>
               <div className="text-2xl font-mono font-bold text-purple-400">
-                {liveSample.touchTapLatencyMs} <span className="text-xs text-slate-500">ms</span>
+                {liveSample.touchTapLatencyMs} <span className="text-xs text-slate-500 font-normal">ms</span>
               </div>
               <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-2">
                 <div 
@@ -424,7 +447,9 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
                 <div key={idx} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 space-y-1">
                   <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
                     <span>CH-{idx + 1}</span>
-                    <span className={val >= 0 ? 'text-cyan-400' : 'text-rose-400'}>{val > 0 ? `+${val}` : val} µV</span>
+                    <span className={val >= 0 ? 'text-cyan-400' : 'text-rose-400'}>
+                      {val > 0 ? `+${val}` : val} µV
+                    </span>
                   </div>
                   <div className="w-full bg-slate-900 h-2 rounded overflow-hidden relative">
                     <div 
@@ -441,7 +466,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
           <div className="bg-slate-950 rounded-xl border border-slate-800/80 overflow-hidden">
             <div className="bg-slate-900 px-3 py-1.5 border-b border-slate-800 flex items-center gap-2 text-xs text-slate-400 font-mono">
               <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Consola de Diagnóstico & Eventos Seriales</span>
+              <span>Consola de Diagnóstico &amp; Eventos Seriales</span>
             </div>
             <div 
               ref={logContainerRef}
@@ -464,7 +489,7 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
             <button
               type="button"
               onClick={handleTransferToPatient}
-              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition cursor-pointer"
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition cursor-pointer active:scale-95"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Transferir a Estación de Trabajo</span>
@@ -475,3 +500,5 @@ export const UsbHardwareDiagnosticModal: React.FC<Props> = ({
     </div>
   );
 };
+
+export default UsbHardwareDiagnosticModal;
