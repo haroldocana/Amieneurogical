@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
 import { 
   getTheoreticalInterpretation, 
@@ -13,9 +13,9 @@ import {
   Users, 
   Download, 
   CheckCircle2, 
-  Copy,
-  Check,
-  FileText
+  Copy, 
+  Check, 
+  FileText 
 } from 'lucide-react';
 
 interface ApaTherapeuticModuleProps {
@@ -24,39 +24,54 @@ interface ApaTherapeuticModuleProps {
 
 export const ApaTherapeuticModule: React.FC<ApaTherapeuticModuleProps> = ({ patient }) => {
   const [selectedCurrent, setSelectedCurrent] = useState<'tcc' | 'psychodynamic' | 'humanist' | 'systemic' | 'neuropsych'>('tcc');
-  
-  // Puntuaciones pre/post con fallback a las métricas del expediente
-  const initialPre = (patient as any).psychometricScores?.phq9 ?? 
-                     (patient as any).psychometricScores?.bdi2 ?? 
-                     16;
-  const [preScore, setPreScore] = useState<number>(Number(initialPre));
+
+  // Extracción segura de línea de base psicométrica
+  const resolveInitialPreScore = (): number => {
+    const p = patient as any;
+    return Number(p?.psychometricScores?.phq9 ?? p?.psychometricScores?.bdi2 ?? 16);
+  };
+
+  const [preScore, setPreScore] = useState<number>(resolveInitialPreScore());
   const [postScore, setPostScore] = useState<number>(8);
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
 
+  // 1. Resincronización automática de puntajes cuando cambia el paciente
+  useEffect(() => {
+    setPreScore(resolveInitialPreScore());
+    setPostScore(8);
+  }, [patient?.id]);
+
   const interpretation: TheoreticalInterpretation = getTheoreticalInterpretation(patient, selectedCurrent);
   const rci = calculateRCI(preScore, postScore);
 
-  // Extracción de señales autonómicas reales o baseline de sesión
-  const patientHrvTrace = (patient as any).vrTherapyIntervention?.realtimeTelemetrySummary?.lfHfRatio 
-    ? [1.2, 1.4, (patient as any).vrTherapyIntervention.realtimeTelemetrySummary.lfHfRatio, 1.3] 
-    : [1.2, 1.5, 2.1, 1.8];
-  const therapistHrvTrace = [1.1, 1.4, 2.0, 1.7];
-  const synchrony = calculateDyadicSynchrony(therapistHrvTrace, patientHrvTrace);
+  // 2. Extracción de trazas de HRV con resolución de telemetría real de la sesión
+  const p = patient as any;
+  const patientHrvSeries: number[] = Array.isArray(p?.vrTelemetryData?.hrvRmssdMs) && p.vrTelemetryData.hrvRmssdMs.length >= 2
+    ? p.vrTelemetryData.hrvRmssdMs.slice(-4)
+    : p?.vrTherapyIntervention?.realtimeTelemetrySummary?.lfHfRatio
+      ? [1.2, 1.4, Number(p.vrTherapyIntervention.realtimeTelemetrySummary.lfHfRatio), 1.3]
+      : [1.2, 1.5, 2.1, 1.8];
+
+  const therapistHrvSeries: number[] = [1.1, 1.4, 2.0, 1.7];
+  const synchrony = calculateDyadicSynchrony(therapistHrvSeries, patientHrvSeries);
 
   const generateReportText = () => {
+    const patientId = patient?.id || p?.patientId || 'PAC-8104';
+    const diagCode = p?.diagnosticCode || p?.diagnosticEngineOutput?.primaryDiagnostic?.dsm5Code || 'F32.9';
+
     return `
 ===================================================================
 REPORTE DE CASO CLÍNICO ESTÁNDAR APA (N=1) - AMIE NEUROLOGICAL
 ===================================================================
 FECHA DE EMISIÓN: ${new Date().toLocaleDateString('es-GT', { year: 'numeric', month: 'long', day: 'numeric' })}
-ID PACIENTE: ${patient.id || (patient as any).patientId || 'PAC-8104'}
-EDAD: ${patient.age || 55} años | GÉNERO: ${patient.gender || 'M'}
-DIAGNÓSTICO DSM-5: ${(patient as any).diagnosticCode || (patient as any).diagnosticEngineOutput?.primaryDiagnostic?.dsm5Code || 'F32.9'}
+ID PACIENTE: ${patientId}
+EDAD: ${patient?.age || 55} años | GÉNERO: ${patient?.gender || 'M'}
+DIAGNÓSTICO DSM-5: ${diagCode}
 MARCO TEÓRICO SELECCIONADO: ${interpretation.currentName}
 
 --- TRIANGULACIÓN BIOMÉTRICA DE BASE ---
-Motivo de Consulta: ${(patient as any).consultationReason || 'Evaluación neuropsiquiátrica y monitoreo JITAI'}
+Motivo de Consulta: ${p?.consultationReason || 'Evaluación neuropsiquiátrica y monitoreo JITAI'}
 Correlato Biométrico: ${interpretation.biometricCorrelate}
 
 --- FORMULACIÓN CLÍNICA (${interpretation.currentName}) ---
@@ -88,7 +103,7 @@ Validación Científica AMIE • División 12 APA (Clinical Psychology)
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Caso_Clinico_APA_${patient.id || 'PAC-8104'}_${selectedCurrent.toUpperCase()}.txt`;
+      link.download = `Caso_Clinico_APA_${patient?.id || 'PAC-8104'}_${selectedCurrent.toUpperCase()}.txt`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -96,7 +111,7 @@ Validación Científica AMIE • División 12 APA (Clinical Psychology)
 
       setDownloaded(true);
       setTimeout(() => setDownloaded(false), 2500);
-    } catch (e) {
+    } catch {
       handleCopyReport();
     }
   };
@@ -213,7 +228,6 @@ Validación Científica AMIE • División 12 APA (Clinical Psychology)
           </div>
         </div>
 
-        {/* Correlato Biométrico de la Corriente */}
         <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-800 text-[11px] text-slate-300">
           <strong className="text-cyan-400 font-mono">Correlato Biométrico de Triangulación:</strong> {interpretation.biometricCorrelate}
         </div>
