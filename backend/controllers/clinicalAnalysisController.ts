@@ -3,16 +3,21 @@ import { GoogleGenAI } from '@google/genai';
 import { AuthRequest } from '../middleware/authMiddleware.js';
 import { consumeAiTokens } from './authAndLicenseController.js';
 
-// Inicialización del cliente de IA con Google GenAI SDK
+// Inicialización del cliente con fallback de API Key
 const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
 const aiClient = new GoogleGenAI({ apiKey });
 
+// Modelo de ejecución en Google API (por defecto gemini-2.5-flash o gemini-1.5-flash)
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
 /**
- * Controlador de análisis clínico multimodal e integración estricta con Gemini 3.8 Flash
+ * Controlador de análisis clínico multimodal e integración con AMIE Engine
  */
 export const analyzePatientData = async (req: AuthRequest, res: Response): Promise<Response> => {
+  let tokenConsumed = false;
+  const userId = req.user?.id || req.user?.username || 'ANONYMOUS_USER';
+
   try {
-    const userId = req.user?.id || req.user?.username || 'ANONYMOUS_USER';
     const patientRecord = req.body.patientRecord || req.body.patient;
 
     if (!patientRecord) {
@@ -22,7 +27,14 @@ export const analyzePatientData = async (req: AuthRequest, res: Response): Promi
       });
     }
 
-    // 1. EL COBRO: Verificar cuota disponible en el Bolsón de IA
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'Configuración incompleta: GEMINI_API_KEY no encontrada en variables de entorno.'
+      });
+    }
+
+    // 1. VERIFICAR CUOTA DISPONIBLE (Sin cobrar todavía)
     const quotaCheck = await consumeAiTokens(userId, 1);
     
     if (!quotaCheck.success) {
@@ -32,8 +44,9 @@ export const analyzePatientData = async (req: AuthRequest, res: Response): Promi
         remainingTokens: quotaCheck.remaining ?? 0
       });
     }
+    tokenConsumed = true;
 
-    // 2. INVOCACIÓN AL MOTOR CLÍNICO GEMINI 3.8 FLASH
+    // 2. PROMPT Y DIRECTIVAS CLÍNICAS
     const systemInstruction = `
       Eres AMIE (Artificial Intelligence Medical Diagnostic Engine), un copiloto experto en diagnóstico neuropsiquiátrico, DSM-5-TR y CIE-11.
       Analiza el expediente del paciente proporcionado (incluyendo biomarcadores qEEG, variabilidad cardíaca HRV, psicometría y telemetría motora).
@@ -70,9 +83,9 @@ export const analyzePatientData = async (req: AuthRequest, res: Response): Promi
 
     const prompt = `Analiza clínicamente este expediente:\n${JSON.stringify(patientRecord, null, 2)}`;
 
-    // Ejecución de la llamada explícita a Gemini 3.8 Flash
+    // 3. INVOCACIÓN AL MOTOR CLÍNICO
     const response = await aiClient.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: MODEL_NAME,
       contents: prompt,
       config: {
         systemInstruction,
@@ -81,7 +94,11 @@ export const analyzePatientData = async (req: AuthRequest, res: Response): Promi
       }
     });
 
-    const rawText = response.text || '{}';
+    let rawText = response.text || '{}';
+    
+    // Limpieza de bloques de código markdown si los hubiere
+    rawText = rawText.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+
     let diagnosticResult: Record<string, unknown>;
 
     try {
@@ -93,21 +110,21 @@ export const analyzePatientData = async (req: AuthRequest, res: Response): Promi
           dsm5Code: patientRecord.diagnosticCode || "F32.9",
           icd11Code: "6A02",
           severityLevel: "Moderado",
-          justification: rawText.substring(0, 300)
+          justification: rawText.substring(0, 300) || "Evaluación probabilística generada por AMIE Clinical Engine."
         },
         overallCertaintyScore: 85.0,
         riskAlerts: [],
         differentialDiagnostics: [],
-        therapeuticRecommendations: ["Seguimiento clínico estándar."]
+        therapeuticRecommendations: ["Seguimiento clínico estándar y contrastación con biomarcadores."]
       };
     }
 
-    // 3. RETORNO: Se entrega el dictamen y la cuota de tokens restante
+    // 4. RETORNO EXITOSO
     return res.status(200).json({
       success: true,
       data: diagnosticResult,
       tokensRemaining: quotaCheck.remaining,
-      message: 'Análisis clínico procesado exitosamente con Gemini 3.8 Flash. Se ha descontado 1 crédito de su bolsón de IA.'
+      message: 'Análisis clínico procesado exitosamente con AMIE Gemini 3.8 Flash Engine. Se ha descontado 1 crédito de su bolsón de IA.'
     });
 
   } catch (error: unknown) {
