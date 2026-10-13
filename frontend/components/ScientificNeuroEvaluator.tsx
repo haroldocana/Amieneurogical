@@ -29,6 +29,9 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   patient,
   onUpdatePatientData 
 }) => {
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+
   const latestTelemetryRef = useRef<PrecisionTelemetryPacket>(telemetryService.getCurrentPacket());
   const [displayTelemetry, setDisplayTelemetry] = useState<PrecisionTelemetryPacket>(telemetryService.getCurrentPacket());
 
@@ -42,21 +45,25 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // ESTADOS Y REFERENCIAS PARA DETECCIÓN OFF-BODY (WATCHDOG + DETECTOR DE CONGELAMIENTO)
+  // Estados y referencias para detección Off-Body
   const [isOffBody, setIsOffBody] = useState<boolean>(false);
   const [offBodyGuardEnabled, setOffBodyGuardEnabled] = useState<boolean>(true);
   
   const lastPacketTimestampRef = useRef<number>(Date.now());
   const lastBpmValueRef = useRef<number>(0);
   const consecutiveSameBpmCountRef = useRef<number>(0);
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Canvas y Renderizado Fisiológico UCI
+  // Canvas y Renderizado Fisiológico
   const ppgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const tachoCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const animFrameId = useRef<number | null>(null);
   const sweepXRef = useRef<number>(0);
   const waveformBufferRef = useRef<number[]>([]);
+  const beatPhaseRef = useRef<number>(0);
+  const breathPhaseRef = useRef<number>(0);
+  const lastRenderTimeRef = useRef<number>(performance.now());
 
   // Búfer para cálculo espectral y Tacograma R-R
   const rrHistoryRef = useRef<number[]>([]);
@@ -72,21 +79,35 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     peakFrequencyHz: 0.0
   });
 
-  // 1. RECEPCIÓN DE TELEMETRÍA CON WATCHDOG Y DETECTOR DE SEÑAL CONGELADA
+  const showNotification = (msg: string) => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    setNotificationMsg(msg);
+    notificationTimerRef.current = setTimeout(() => {
+      setNotificationMsg(null);
+    }, 4000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    };
+  }, []);
+
+  // 1. Recepción de Telemetría con Watchdog y Detector de Señal Congelada
   useEffect(() => {
     const unsubData = telemetryService.subscribeData((packet) => {
       lastPacketTimestampRef.current = Date.now();
 
       if (offBodyGuardEnabled && connectionStatus.connected && connectionStatus.protocol !== 'SIMULATED') {
         
-        // DETECTOR 1: Frecuencia de pulso nula o inválida
+        // Detector 1: Frecuencia de pulso nula o no fisiológica
         if (packet.heartRateBpm <= 0 || packet.heartRateBpm > 220) {
           setIsOffBody(true);
           latestTelemetryRef.current = { ...packet, heartRateBpm: 0, hrvRmssdMs: 0, rrIntervalMs: 0 };
           return;
         }
 
-        // DETECTOR 2: Detección de BPM congelado
+        // Detector 2: Detección de BPM estático/congelado por fallo de sensor
         if (packet.heartRateBpm === lastBpmValueRef.current && packet.heartRateBpm > 0) {
           consecutiveSameBpmCountRef.current += 1;
         } else {
@@ -145,7 +166,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     };
   }, [connectionStatus.connected, connectionStatus.protocol, offBodyGuardEnabled]);
 
-  // 2. MOTOR ESPECTRAL DINÁMICO & TACOGRAMA
+  // 2. Motor Espectral Dinámico & Tacograma
   useEffect(() => {
     const spectralInterval = setInterval(() => {
       const packet = latestTelemetryRef.current;
@@ -176,9 +197,9 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         let calculatedHf = Math.round(35 + (hrvFactor * 0.45) - (stdDev * 0.2));
         calculatedHf = Math.min(82, Math.max(18, calculatedHf));
 
-        let calculatedLf = 100 - calculatedHf;
-        let ratio = Number((calculatedLf / calculatedHf).toFixed(2));
-        let peakHz = Number((packet.heartRateBpm / 60).toFixed(2));
+        const calculatedLf = 100 - calculatedHf;
+        const ratio = Number((calculatedLf / calculatedHf).toFixed(2));
+        const peakHz = Number((packet.heartRateBpm / 60).toFixed(2));
 
         setSpectralPower({
           lfPower: calculatedLf,
@@ -199,7 +220,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     return () => clearInterval(spectralInterval);
   }, [connectionStatus.connected, isOffBody]);
 
-  // 3. MOTOR DE DIBUJO CANVA
+  // 3. Motor Gráfico en Canvas (Preservación de Fase y Trazado Continuo)
   useEffect(() => {
     const ppgCanvas = ppgCanvasRef.current;
     const tachoCanvas = tachoCanvasRef.current;
@@ -211,13 +232,11 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
     if (!ctxPpg || !ctxTacho) return;
 
-    let beatPhase = 0;
-    let breathPhase = 0;
-    let lastRender = performance.now();
+    lastRenderTimeRef.current = performance.now();
 
     const renderLoop = (now: number) => {
-      const deltaSec = Math.min((now - lastRender) / 1000, 0.1);
-      lastRender = now;
+      const deltaSec = Math.min((now - lastRenderTimeRef.current) / 1000, 0.1);
+      lastRenderTimeRef.current = now;
 
       const widthPpg = ppgCanvas.width;
       const heightPpg = ppgCanvas.height;
@@ -255,9 +274,12 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         ctxPpg.stroke();
 
         if (isOffBody) {
+          ctxPpg.save();
           ctxPpg.fillStyle = '#f87171';
           ctxPpg.font = 'bold 11px monospace';
-          ctxPpg.fillText('[DETECCION OFF-BODY: ANILLO SIN CONTACTO O PAQUETE CONGELADO]', widthPpg / 2 - 210, heightPpg / 2 - 12);
+          ctxPpg.textAlign = 'center';
+          ctxPpg.fillText('[DETECCIÓN OFF-BODY: ANILLO SIN CONTACTO O PAQUETE CONGELADO]', widthPpg / 2, heightPpg / 2 - 12);
+          ctxPpg.restore();
         }
       } else {
         const speedPxPerSec = 140; 
@@ -265,22 +287,24 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         const currentX = sweepXRef.current;
 
         const beatsPerSec = bpm / 60;
-        beatPhase = (beatPhase + deltaSec * beatsPerSec) % 1.0;
-        breathPhase = (breathPhase + deltaSec * 0.25 * 2 * Math.PI) % (2 * Math.PI);
+        beatPhaseRef.current = (beatPhaseRef.current + deltaSec * beatsPerSec) % 1.0;
+        breathPhaseRef.current = (breathPhaseRef.current + deltaSec * 0.25 * 2 * Math.PI) % (2 * Math.PI);
 
-        const baselineDrift = Math.sin(breathPhase) * (heightPpg * 0.06);
+        const baselineDrift = Math.sin(breathPhaseRef.current) * (heightPpg * 0.06);
 
         let normalizedPulse = 0;
-        if (beatPhase < 0.18) {
-          normalizedPulse = Math.sin((beatPhase / 0.18) * (Math.PI / 2));
-        } else if (beatPhase >= 0.18 && beatPhase < 0.28) {
-          const t = (beatPhase - 0.18) / 0.10;
+        const bPhase = beatPhaseRef.current;
+
+        if (bPhase < 0.18) {
+          normalizedPulse = Math.sin((bPhase / 0.18) * (Math.PI / 2));
+        } else if (bPhase >= 0.18 && bPhase < 0.28) {
+          const t = (bPhase - 0.18) / 0.10;
           normalizedPulse = 1.0 - (t * 0.35);
-        } else if (beatPhase >= 0.28 && beatPhase < 0.38) {
-          const t = (beatPhase - 0.28) / 0.10;
+        } else if (bPhase >= 0.28 && bPhase < 0.38) {
+          const t = (bPhase - 0.28) / 0.10;
           normalizedPulse = 0.65 + Math.sin(t * Math.PI) * 0.12;
-        } else if (beatPhase >= 0.38 && beatPhase < 0.70) {
-          const t = (beatPhase - 0.38) / 0.32;
+        } else if (bPhase >= 0.38 && bPhase < 0.70) {
+          const t = (bPhase - 0.38) / 0.32;
           normalizedPulse = 0.65 * Math.cos(t * (Math.PI / 2));
         } else {
           normalizedPulse = Math.random() * 0.02;
@@ -376,23 +400,20 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     };
   }, [connectionStatus.connected, isOffBody]);
 
-  // HANDLERS
+  // Handlers de Control de Hardware
   const handleConnectUsb = async () => {
     const success = await telemetryService.connectUsb();
-    setNotificationMsg(success ? 'Hardware USB Serial enlazado.' : 'No se seleccionó dispositivo USB.');
-    setTimeout(() => setNotificationMsg(null), 4000);
+    showNotification(success ? 'Hardware USB Serial enlazado.' : 'No se seleccionó dispositivo USB.');
   };
 
   const handleConnectBluetooth = async () => {
     const success = await telemetryService.connectBluetooth();
-    setNotificationMsg(success ? 'Dispositivo BLE enlazado.' : 'Cancelada la conexión Bluetooth.');
-    setTimeout(() => setNotificationMsg(null), 4000);
+    showNotification(success ? 'Dispositivo BLE enlazado.' : 'Cancelada la conexión Bluetooth.');
   };
 
   const handleConnectWifi = () => {
     telemetryService.connectWifi(wifiIp);
-    setNotificationMsg(`Socket Wi-Fi a ws://${wifiIp}:8080 enlazado.`);
-    setTimeout(() => setNotificationMsg(null), 4000);
+    showNotification(`Socket Wi-Fi a ws://${wifiIp}:8080 enlazado.`);
   };
 
   const handleZeroTareCalibration = () => {
@@ -400,44 +421,59 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
     setTimeout(() => {
       const offset = telemetryService.executeZeroTare();
       setIsCalibrating(false);
-      setNotificationMsg(`Calibración completada. Tara de offset: ${offset} kg`);
-      setTimeout(() => setNotificationMsg(null), 4000);
+      showNotification(`Calibración completada. Tara de offset: ${typeof offset === 'number' ? offset.toFixed(2) : offset || '0.00'} kg`);
     }, 500);
   };
 
   const handleTransferToGlobalRecord = () => {
-    if (onUpdatePatientData && patient) {
-      const hrvVal = (connectionStatus.connected && !isOffBody && displayTelemetry.heartRateBpm > 30) ? displayTelemetry.hrvRmssdMs : 0;
+    if (onUpdatePatientData) {
+      const hrvVal = (connectionStatus.connected && !isOffBody && displayTelemetry.heartRateBpm > 30) 
+        ? displayTelemetry.hrvRmssdMs 
+        : 0;
+      const gripVal = (connectionStatus.connected && !isOffBody) 
+        ? displayTelemetry.handGripPressureKg 
+        : 0;
+      const reactionVal = (connectionStatus.connected && !isOffBody) 
+        ? displayTelemetry.reactionTimeMs 
+        : 0;
+      const tapVal = (connectionStatus.connected && !isOffBody) 
+        ? displayTelemetry.touchTapLatencyMs 
+        : 0;
+
       onUpdatePatientData({
         multisensoryHardware: {
-          ...patient.multisensoryHardware,
+          ...(patient?.multisensoryHardware || {}),
           vagalToneHrvIndex: hrvVal,
-          handGripPressureKg: (connectionStatus.connected && !isOffBody) ? displayTelemetry.handGripPressureKg : 0,
-          camouflagingIndexPct: patient.multisensoryHardware?.camouflagingIndexPct || 25,
-          ocularFixationDurationMs: patient.multisensoryHardware?.ocularFixationDurationMs || 350,
-          touchTapLatencyCompensatedMs: (connectionStatus.connected && !isOffBody) ? displayTelemetry.touchTapLatencyMs : 0,
+          handGripPressureKg: gripVal,
+          camouflagingIndexPct: patient?.multisensoryHardware?.camouflagingIndexPct || 25,
+          ocularFixationDurationMs: patient?.multisensoryHardware?.ocularFixationDurationMs || 350,
+          touchTapLatencyCompensatedMs: tapVal,
           microExpressionState: hrvVal < 25 && hrvVal > 0 
             ? 'Incongruencia Afectiva' 
             : hrvVal > 0 ? 'Normorreactivo' : 'Aplanamiento Motor'
         },
         neuromotorBiomarkers: {
-          reactionTimeMs: (connectionStatus.connected && !isOffBody) ? displayTelemetry.reactionTimeMs : 0,
-          omissionErrors: patient.neuromotorBiomarkers?.omissionErrors || 0,
-          commissionErrors: patient.neuromotorBiomarkers?.commissionErrors || 0,
-          motorStabilityScore: (connectionStatus.connected && !isOffBody) ? Math.min(100, Math.max(0, 100 - Math.round(displayTelemetry.handGripPressureKg))) : 0
+          ...(patient?.neuromotorBiomarkers || {}),
+          reactionTimeMs: reactionVal,
+          omissionErrors: patient?.neuromotorBiomarkers?.omissionErrors || 0,
+          commissionErrors: patient?.neuromotorBiomarkers?.commissionErrors || 0,
+          motorStabilityScore: (connectionStatus.connected && !isOffBody) 
+            ? Math.min(100, Math.max(0, 100 - Math.round(gripVal))) 
+            : 0
         }
       });
+      showNotification('Biometría inyectada con éxito en el expediente del paciente.');
+    } else {
+      showNotification('No hay sesión de paciente activa para transferir datos.');
     }
-    setNotificationMsg('Biometría inyectada en el expediente.');
-    setTimeout(() => setNotificationMsg(null), 4000);
   };
 
   const hasActivePulse = connectionStatus.connected && displayTelemetry.heartRateBpm > 30 && !isOffBody;
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-6 font-sans text-slate-100">
       
-      {/* 1. CABECERA PRINCIPAL */}
+      {/* 1. CABECERA PRINCIPAL Y ESTADO DE DISPOSITIVO */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -453,10 +489,10 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               <Cpu className={`w-6 h-6 ${hasActivePulse ? 'animate-pulse' : 'text-slate-300'}`} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-white">ScientificNeuroEvaluator • Monitor Clínico VFC</h2>
                 
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 font-mono ${
                   hasActivePulse
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
                     : isOffBody
@@ -485,37 +521,41 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
               </div>
               
               <p className="text-xs text-slate-400 mt-0.5">
-                Dispositivo: <strong className="text-slate-200">{connectionStatus.deviceName}</strong> | Tasa RX: <strong className="text-cyan-300 font-mono tabular-nums">{packetRateHz} Hz</strong> | Calidad (SQI): <strong className="text-emerald-400 font-mono tabular-nums">{sqiPct}%</strong>
+                Expediente: <strong className="text-cyan-300 font-mono">{patientId}</strong> | Dispositivo: <strong className="text-slate-200">{connectionStatus.deviceName}</strong> | Tasa RX: <strong className="text-cyan-300 font-mono tabular-nums">{packetRateHz} Hz</strong> | Calidad (SQI): <strong className="text-emerald-400 font-mono tabular-nums">{sqiPct}%</strong>
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              type="button"
               onClick={() => setOffBodyGuardEnabled(!offBodyGuardEnabled)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border cursor-pointer active:scale-95 ${
                 offBodyGuardEnabled 
                   ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40' 
                   : 'bg-slate-800 text-slate-400 border-slate-700'
               }`}
+              title="Alternar filtro de detección de contacto"
             >
               {offBodyGuardEnabled ? <ShieldOff className="w-3.5 h-3.5 text-emerald-400" /> : <RadioTower className="w-3.5 h-3.5 text-slate-400" />}
               <span>{offBodyGuardEnabled ? 'Filtro Off-Body: ACTIVO' : 'Filtro Off-Body: OFF'}</span>
             </button>
 
             <button
+              type="button"
               onClick={handleZeroTareCalibration}
               disabled={isCalibrating || !connectionStatus.connected}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95"
             >
               <Sliders className="w-3.5 h-3.5 text-amber-400" />
               <span>{isCalibrating ? 'Calibrando...' : 'Calibrar Cero'}</span>
             </button>
 
             <button
+              type="button"
               onClick={handleTransferToGlobalRecord}
               disabled={!connectionStatus.connected || isOffBody}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer active:scale-95"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Transferir a Triangulación Global</span>
@@ -523,7 +563,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
           </div>
         </div>
 
-        {/* CONTROLES DE CONEXIÓN */}
+        {/* Controles de Conexión */}
         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
             <Gauge className="w-4 h-4 text-cyan-400" /> Conectar Puerto de Hardware:
@@ -531,15 +571,17 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              type="button"
               onClick={handleConnectUsb}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-bold transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-bold transition cursor-pointer active:scale-95"
             >
               <Usb className="w-3.5 h-3.5" /> Conectar USB (ESP32)
             </button>
 
             <button
+              type="button"
               onClick={handleConnectBluetooth}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 rounded-lg text-xs font-bold transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 rounded-lg text-xs font-bold transition cursor-pointer active:scale-95"
             >
               <Bluetooth className="w-3.5 h-3.5" /> Vincular BLE (GEOID / COLMI / Polar)
             </button>
@@ -549,19 +591,26 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
                 type="text"
                 value={wifiIp}
                 onChange={(e) => setWifiIp(e.target.value)}
+                placeholder="192.168.1.105"
+                aria-label="Dirección IP Wi-Fi"
                 className="bg-transparent text-xs text-slate-200 px-2 py-1 w-28 focus:outline-none font-mono"
               />
               <button
+                type="button"
                 onClick={handleConnectWifi}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer active:scale-95"
               >
                 <Wifi className="w-3 h-3 text-emerald-400" /> Wi-Fi
               </button>
             </div>
 
             <button
-              onClick={() => telemetryService.enableSimulation()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition cursor-pointer"
+              type="button"
+              onClick={() => {
+                telemetryService.enableSimulation();
+                showNotification('Modo de simulación biomédica activado.');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition cursor-pointer active:scale-95"
             >
               <Radio className="w-3.5 h-3.5" /> Simulación
             </button>
@@ -569,7 +618,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
 
         {notificationMsg && (
-          <div className="p-3 bg-slate-950 border border-cyan-500/40 rounded-xl text-cyan-200 text-xs font-semibold flex items-center gap-2 animate-fade-in">
+          <div className="p-3 bg-slate-950 border border-cyan-500/40 rounded-xl text-cyan-200 text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-200">
             <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0" />
             <span>{notificationMsg}</span>
           </div>
@@ -606,7 +655,7 @@ export const ScientificNeuroEvaluator: React.FC<ScientificNeuroEvaluatorProps> =
         </div>
       </div>
 
-      {/* 3. MÓDULO 2: TACOGRAMA */}
+      {/* 3. MÓDULO 2: TACOGRAMA PARAMÉTRICO */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
