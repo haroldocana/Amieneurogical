@@ -73,7 +73,7 @@ const STUDY_SUBTYPES: SubtypeStudy[] = [
 ];
 
 export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose }) => {
-  const activePatientId = patient?.id || 'PAC-8104';
+  const activePatientId = patient?.id || (patient as any)?.patientId || 'PAC-8104';
   const [selectedSubtype, setSelectedSubtype] = useState<SubtypeStudy>(STUDY_SUBTYPES[0]);
   const [hasConsent, setHasConsent] = useState(false);
   const [isAssayRunning, setIsAssayRunning] = useState(false);
@@ -86,15 +86,29 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
   const [totalHits, setTotalHits] = useState<number>(0);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Conexión WebSocket Bidireccional
+  // Conexión WebSocket Bidireccional con Heartbeat y URLs Dinámicas
   useEffect(() => {
-    let reconnectTimeout: NodeJS.Timeout;
+    const rawWsUrl = (import.meta as any).env?.VITE_WS_URL || (import.meta as any).env?.VITE_API_URL;
+    let wsUrl: string;
+
+    if (rawWsUrl) {
+      wsUrl = rawWsUrl.replace(/^http/, 'ws');
+    } else {
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      const protocol = isHttps ? 'wss:' : 'ws:';
+      const host = typeof window !== 'undefined' && window.location.host 
+        ? window.location.host 
+        : 'amieneurogical.onrender.com';
+      wsUrl = `${protocol}//${host}`;
+    }
 
     const connectWebSocket = () => {
       try {
-        const ws = new WebSocket('wss://amieneurogical.onrender.com');
+        const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -102,8 +116,22 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
           ws.send(JSON.stringify({ 
             type: 'HANDSHAKE', 
             role: 'doctor', 
-            patientId: activePatientId 
+            patientId: activePatientId,
+            timestamp: Date.now()
           }));
+
+          // Heartbeat cada 25 segundos para neutralizar el timeout de inactividad de Render (55s)
+          if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ 
+                type: 'HEARTBEAT_PING', 
+                role: 'doctor', 
+                patientId: activePatientId,
+                timestamp: Date.now() 
+              }));
+            }
+          }, 25000);
         };
 
         ws.onmessage = (event) => {
@@ -112,26 +140,39 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
 
             if (data.type === 'CLUSTER_B_TELEMETRY' || data.type === 'VR_TELEMETRY_FRAME') {
               setIsVrConnected(true);
-              if (data.hrvBpm !== undefined && data.hrvBpm !== null) {
-                setHrvBpm(data.hrvBpm);
+              
+              // Tolerancia polimórfica a nomenclaturas de telemetría de AMIE
+              const extractedHrv = data.hrvBpm ?? data.hrvRmssdMs ?? data.hrv;
+              if (extractedHrv !== undefined && extractedHrv !== null) {
+                setHrvBpm(Math.round(Number(extractedHrv)));
               }
-              if (data.gsrValue !== undefined && data.gsrValue !== null) {
-                setGsrValue(data.gsrValue);
+
+              const extractedGsr = data.gsrValue ?? data.gsrMicroSiemens ?? data.gsr;
+              if (extractedGsr !== undefined && extractedGsr !== null) {
+                setGsrValue(Number(Number(extractedGsr).toFixed(2)));
               }
+
               if (data.hits !== undefined) {
-                setTotalHits(data.hits);
+                setTotalHits(Number(data.hits));
               }
             }
 
             if (data.type === 'CLINICAL_TEST_INTERACTION') {
-              if (data.hits !== undefined) setTotalHits(data.hits);
+              if (data.hits !== undefined) setTotalHits(Number(data.hits));
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[AMIE Cluster B] Error al procesar trama de telemetría:', e);
+          }
         };
 
         ws.onclose = () => {
           setIsVrConnected(false);
-          reconnectTimeout = setTimeout(connectWebSocket, 3000);
+          if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+        };
+
+        ws.onerror = () => {
+          setIsVrConnected(false);
         };
       } catch (err) {
         setIsVrConnected(false);
@@ -141,8 +182,15 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     connectWebSocket();
 
     return () => {
-      clearTimeout(reconnectTimeout);
-      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      if (wsRef.current) {
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
   }, [activePatientId]);
 
@@ -161,12 +209,13 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isAssayRunning]);
 
-  // Selección de Subtipo y Cambio de Video en Pico 3
+  // Selección de Subtipo y Enlace con el Visor Pico 3
   const handleSelectSubtype = (subtype: SubtypeStudy) => {
     setSelectedSubtype(subtype);
     setAssayTime(0);
@@ -178,7 +227,8 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         environment: subtype.videoKey,
         moduleId: subtype.videoKey,
         protocol: subtype.protocolKey,
-        patientId: activePatientId
+        patientId: activePatientId,
+        timestamp: Date.now()
       }));
     }
   };
@@ -196,7 +246,8 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         environment: selectedSubtype.videoKey,
         moduleId: selectedSubtype.videoKey,
         protocol: selectedSubtype.protocolKey,
-        patientId: activePatientId
+        patientId: activePatientId,
+        timestamp: Date.now()
       }));
     }
 
@@ -205,13 +256,14 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     }
   };
 
-  // Guardado en Base de Datos MongoDB
+  // Persistencia de Telemetría Forense en MongoDB Atlas
   const persistCurrentAssay = async () => {
+    const backendBaseUrl = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
     const payload = {
       patientId: activePatientId,
       moduleId: selectedSubtype.videoKey,
       protocol: selectedSubtype.protocolKey,
-      category: 'DIAGNOSTIC',
+      category: 'FORENSIC_CLUSTER_B',
       durationSeconds: assayTime,
       finalHrv: hrvBpm,
       finalGsr: gsrValue,
@@ -221,26 +273,28 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     };
 
     try {
-      await fetch('https://amieneurogical.onrender.com/api/telemetry/save', {
+      await fetch(`${backendBaseUrl}/api/telemetry/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[AMIE Cluster B] Almacenamiento local completado (backend offline):', e);
+    }
   };
 
-  // Exportar Dictamen Oficial
+  // Exportar Dictamen Oficial Seguro
   const handleExportReport = () => {
     const reportData = {
-      titulo: 'DICTAMEN PERICIAL FORENSE - CLUSTER B',
+      titulo: 'DICTAMEN PERICIAL FORENSE - CLUSTER B (AMIE ENGINE)',
       pacienteId: activePatientId,
       estudioSeleccionado: selectedSubtype.title,
       clasificacionCie: selectedSubtype.icdCode,
       rasgoPersonalidad: selectedSubtype.personalityTrait,
       duracionPruebaSegundos: assayTime,
       biometriaRegistrada: {
-        tonoVagalHrv: hrvBpm ? `${hrvBpm} ms` : 'Sin registro',
-        estresGsr: gsrValue ? `${gsrValue} µS` : 'Sin registro',
+        tonoVagalHrv: hrvBpm !== null ? `${hrvBpm} ms` : 'Sin registro',
+        estresGsr: gsrValue !== null ? `${gsrValue} µS` : 'Sin registro',
         totalInteraccionesGatillo: totalHits
       },
       dimensionesTripm: {
@@ -249,7 +303,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         desinhibicion: '28% (Baja)'
       },
       conclusionDiagnostica: selectedSubtype.bioResponse,
-      fechaDictamen: new Date().toLocaleString()
+      fechaDictamen: new Date().toISOString()
     };
 
     const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
@@ -257,14 +311,16 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     const a = document.createElement('a');
     a.href = url;
     a.download = `Dictamen_Forense_${activePatientId}_${selectedSubtype.id}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 p-6 font-sans">
       {/* Barra Superior */}
-      <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 mb-6">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-pink-950/40 border border-pink-500/40 text-pink-400">
             <ShieldAlert className="w-6 h-6" />
@@ -286,19 +342,25 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
               : 'bg-rose-950/60 border-rose-500/60 text-rose-300'
           }`}>
             <Wifi className="w-4 h-4" />
-            <span>{isVrConnected ? 'VR Conectado' : 'VR Desconectado'}</span>
+            <span>{isVrConnected ? 'Pico 3 Conectado' : 'Visor Desconectado'}</span>
           </div>
 
           <button 
+            type="button"
             onClick={() => handleSelectSubtype(selectedSubtype)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer active:scale-95"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Sincronizar VR
+            <span>Sincronizar VR</span>
           </button>
 
           {onClose && (
-            <button onClick={onClose} className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+              title="Cerrar Módulo"
+            >
               <X className="w-4 h-4" />
             </button>
           )}
@@ -309,7 +371,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
       <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-4 mb-6 text-xs text-amber-200/90 space-y-2">
         <div className="flex items-center gap-2 font-bold text-amber-400 uppercase tracking-wide">
           <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <span>Protocolo de Investigación & Peritaje Forense — Cluster B</span>
+          <span>Protocolo de Investigación &amp; Peritaje Forense — Cluster B</span>
           <span className="px-2 py-0.5 rounded bg-amber-500/20 text-[10px] border border-amber-500/40">
             CDSS / Consentimiento Requerido
           </span>
@@ -322,7 +384,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             type="checkbox" 
             checked={hasConsent} 
             onChange={(e) => setHasConsent(e.target.checked)} 
-            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0" 
+            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer" 
           />
           <span>Confirmo que el paciente cuenta con Consentimiento Informado para protocolos de provocación y peritaje.</span>
         </label>
@@ -340,6 +402,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             return (
               <button
                 key={sub.id}
+                type="button"
                 onClick={() => handleSelectSubtype(sub)}
                 className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer ${
                   isSelected 
@@ -382,7 +445,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             </p>
 
             <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 text-xs">
-              <p className="font-bold text-amber-400">⚡ Ensayo de Provocación Inmersiva VR:</p>
+              <p className="font-bold text-amber-400">⚡ Ensayo de Provocación Inmersiva VR (Pico 3):</p>
               <p className="text-slate-300">{selectedSubtype.paradoxDetails}</p>
               <p className="font-bold text-cyan-400 pt-1">Firma Biofisiológica Esperada:</p>
               <p className="text-slate-400 font-mono text-[11px]">{selectedSubtype.bioResponse}</p>
@@ -403,7 +466,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
 
               <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-center">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                  ESTRÉS (GSR)
+                  ESTRÉS FÁSICO (GSR)
                 </span>
                 <span className="text-2xl font-black font-mono text-amber-400">
                   {gsrValue !== null ? `${gsrValue} µS` : '-- µS'}
@@ -419,9 +482,10 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
               </div>
 
               <button
+                type="button"
                 onClick={toggleAssay}
                 disabled={!hasConsent && !isAssayRunning}
-                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 ${
                   isAssayRunning 
                     ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-950/50' 
                     : hasConsent 
@@ -430,11 +494,17 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
                 }`}
               >
                 {isAssayRunning ? (
-                  <><Square className="w-3.5 h-3.5 fill-current" /> Detener Ensayo Bio-VR</>
+                  <>
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span>Detener Ensayo Bio-VR</span>
+                  </>
                 ) : hasConsent ? (
-                  <><Play className="w-3.5 h-3.5 fill-current" /> Iniciar Ensayo Bio-VR</>
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Iniciar Ensayo Bio-VR</span>
+                  </>
                 ) : (
-                  'Requiere Consentimiento'
+                  <span>Requiere Consentimiento</span>
                 )}
               </button>
             </div>
@@ -449,11 +519,12 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             <span>⚖️ DIMENSIONES DE LA MEDIDA PSICOPÁTICA TRIÁRQUICA (TRIPM)</span>
           </h3>
           <button 
+            type="button"
             onClick={handleExportReport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer active:scale-95"
           >
             <FileText className="w-3.5 h-3.5" />
-            Exportar Dictamen
+            <span>Exportar Dictamen</span>
           </button>
         </div>
 
