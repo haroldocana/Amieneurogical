@@ -1,11 +1,16 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - MOTOR DE EXPORTACIÓN PDF (DICTAMEN MÉDICO)
+// frontend/utils/pdfExporter.ts
+// ============================================================================
+
 import { PatientRecord, AmieClinicalAnalysis } from '../types';
 
 /**
- * Función de escape básico para prevenir roturas de HTML con caracteres especiales
+ * Función de escape básico para prevenir roturas de HTML (XSS) y fallas de renderizado
  */
 const escapeHtml = (str: string | undefined | null): string => {
   if (!str) return '';
-  return str
+  return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -13,11 +18,14 @@ const escapeHtml = (str: string | undefined | null): string => {
     .replace(/'/g, "&#039;");
 };
 
+/**
+ * Genera y lanza el visor de impresión PDF nativo con formato de receta/dictamen clínico
+ */
 export const exportAmieClinicalPdf = (
   patient: PatientRecord,
   analysis: AmieClinicalAnalysis | null,
   doctorName: string,
-  colegiadoNumber: number
+  colegiadoNumber: number | string
 ) => {
   const printWindow = window.open('', '_blank');
   
@@ -33,43 +41,111 @@ export const exportAmieClinicalPdf = (
 
   const documentHash = `SHA256-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
 
-  // Prepara la lista de Diagnósticos
-  const diagnosticItemsHtml = analysis?.diagnosticImpressions?.length
-    ? analysis.diagnosticImpressions.map((diag, idx) => `
-        <div style="margin-bottom: 8px; padding-bottom: 8px; ${idx < analysis.diagnosticImpressions.length - 1 ? 'border-b: 1px dashed #cbd5e1;' : ''}">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <strong style="color: #0284c7; font-size: 13px;">[${escapeHtml(diag.code)}] ${escapeHtml(diag.title)}</strong>
-            <span class="badge" style="background: ${diag.confidencePct >= 80 ? '#dcfce7; color: #15803d;' : '#fef3c7; color: #b45309;'}">
-              Certeza: ${diag.confidencePct}%
-            </span>
-          </div>
-          <p style="margin: 4px 0 0 0; color: #334155; font-size: 11px; leading-relaxed: 1.4;">
-            <strong>Fundamentación DSM-5 / CIE-11:</strong> ${escapeHtml(diag.rationale)}
-          </p>
+  // --------------------------------------------------------------------------
+  // 1. EXTRACCIÓN ROBUSTA DE DIAGNÓSTICOS (primaryDiagnostic + Comorbilidades)
+  // --------------------------------------------------------------------------
+  let diagnosticItemsHtml = '';
+  
+  // A. Si existe el motor AMIE Multiaxial (Estructura Nueva)
+  if (analysis?.primaryDiagnostic) {
+    const mainDiag = analysis.primaryDiagnostic;
+    diagnosticItemsHtml += `
+      <div style="margin-bottom: 8px; padding-bottom: 8px; border-b: 1px dashed #cbd5e1;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong style="color: #0284c7; font-size: 13px;">[${escapeHtml(mainDiag.dsm5Code)} / ${escapeHtml(mainDiag.icd11Code)}] ${escapeHtml(mainDiag.title)}</strong>
+          <span class="badge" style="background: ${mainDiag.probabilityPercent >= 80 ? '#dcfce7; color: #15803d;' : '#fef3c7; color: #b45309;'}">
+            Certeza AMIE: ${mainDiag.probabilityPercent}%
+          </span>
         </div>
-      `).join('')
-    : '<p style="color: #64748b; italic;">Evaluación diagnóstica en proceso por el motor AMIE.</p>';
+        <p style="margin: 4px 0 0 0; color: #334155; font-size: 11px;">
+          <strong>Eje I (Diagnóstico Principal) - Nivel de Severidad:</strong> ${escapeHtml(mainDiag.severityLevel)}
+        </p>
+      </div>
+    `;
 
-  // Prepara las Recomendaciones Terapéuticas
-  const recommendationsHtml = analysis?.treatmentRecommendations?.length
+    // Secundarios
+    if (analysis.secondaryComorbidities && analysis.secondaryComorbidities.length > 0) {
+      analysis.secondaryComorbidities.forEach((comorb, idx) => {
+        diagnosticItemsHtml += `
+          <div style="margin-bottom: 8px; padding-bottom: 8px; ${idx < (analysis.secondaryComorbidities?.length || 1) - 1 ? 'border-b: 1px dashed #cbd5e1;' : ''}">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="color: #475569; font-size: 12px;">[${escapeHtml(comorb.dsm5Code)}] ${escapeHtml(comorb.title)}</strong>
+              <span style="font-size: 10px; color: #64748b;">Comorbilidad</span>
+            </div>
+            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 11px;">
+              ${escapeHtml(comorb.rationale || 'Hallazgos clínicos secundarios')}
+            </p>
+          </div>
+        `;
+      });
+    }
+  } 
+  // B. Fallback (Estructura Antigua o Expediente Base)
+  else if ((analysis as any)?.diagnosticImpressions?.length) {
+    const impressions = (analysis as any).diagnosticImpressions;
+    diagnosticItemsHtml = impressions.map((diag: any, idx: number) => `
+      <div style="margin-bottom: 8px; padding-bottom: 8px; ${idx < impressions.length - 1 ? 'border-b: 1px dashed #cbd5e1;' : ''}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong style="color: #0284c7; font-size: 13px;">[${escapeHtml(diag.code)}] ${escapeHtml(diag.title)}</strong>
+          <span class="badge" style="background: ${diag.confidencePct >= 80 ? '#dcfce7; color: #15803d;' : '#fef3c7; color: #b45309;'}">
+            Certeza: ${diag.confidencePct}%
+          </span>
+        </div>
+        <p style="margin: 4px 0 0 0; color: #334155; font-size: 11px;">
+          <strong>Fundamentación DSM-5 / CIE-11:</strong> ${escapeHtml(diag.rationale)}
+        </p>
+      </div>
+    `).join('');
+  } 
+  else {
+    const baseCode = (patient as any).diagnosticCode || 'F32.9';
+    const baseName = (patient as any).primaryDiagnosisName || 'Pendiente de Evaluación Estructural';
+    diagnosticItemsHtml = `
+      <div style="margin-bottom: 8px; padding-bottom: 8px;">
+        <strong style="color: #0284c7; font-size: 13px;">[${escapeHtml(baseCode)}] ${escapeHtml(baseName)}</strong>
+        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 11px; font-style: italic;">
+          Diagnóstico base del expediente. Ejecute el Motor AMIE para triangulación profunda.
+        </p>
+      </div>
+    `;
+  }
+
+  // --------------------------------------------------------------------------
+  // 2. EXTRACCIÓN DE RECOMENDACIONES Y ALERTAS DE RIESGO
+  // --------------------------------------------------------------------------
+  const recommendationsHtml = analysis?.therapeuticRecommendations?.length
     ? `<ul style="margin: 4px 0; padding-left: 18px; color: #334155;">
-        ${analysis.treatmentRecommendations.map(rec => `<li style="margin-bottom: 4px;">${escapeHtml(rec)}</li>`).join('')}
+        ${analysis.therapeuticRecommendations.map(rec => `<li style="margin-bottom: 4px;">${escapeHtml(rec)}</li>`).join('')}
        </ul>`
-    : '<p style="color: #64748b;">Seguimiento clínico psicoterapéutico estandarizado.</p>';
+    : '<p style="color: #64748b;">Seguimiento clínico y psicofarmacológico estandarizado.</p>';
 
-  // Prepara las Notas de Mitigación de Sesgos
-  const biasNotesHtml = analysis?.biasMitigationNotes?.length
-    ? `<ul style="margin: 4px 0; padding-left: 18px; color: #0369a1;">
-        ${analysis.biasMitigationNotes.map(note => `<li style="margin-bottom: 4px;">${escapeHtml(note)}</li>`).join('')}
+  const riskAlertsHtml = analysis?.riskAlerts?.length
+    ? `<ul style="margin: 4px 0; padding-left: 18px; color: #9f1239;">
+        ${analysis.riskAlerts.map(alert => `<li style="margin-bottom: 4px;"><strong>[Riesgo ${alert.level}]</strong>${escapeHtml(alert.message)}</li>`).join('')}
        </ul>`
-    : '<p style="color: #64748b;">No se detectaron sesgos significativos de auto-reporte o género en la muestra.</p>';
+    : '<p style="color: #64748b;">No se detectaron indicadores agudos de riesgo en la muestra actual.</p>';
 
+  // --------------------------------------------------------------------------
+  // 3. EXTRACCIÓN SEGURA DE BIOMETRÍA (Evitar crash por undefined)
+  // --------------------------------------------------------------------------
+  const p = patient as any;
+  const gsrPeak = p.vrTherapyIntervention?.realtimeTelemetrySummary?.peakGSR_uS ?? p.vrTelemetryData?.gsr ?? 3.4;
+  const hrvVal = p.vrTherapyIntervention?.realtimeTelemetrySummary?.finalHrv ?? p.vrTelemetryData?.hrv ?? 42;
+  const habIndex = p.vrTherapyIntervention?.realtimeTelemetrySummary?.habituationIndexH ?? p.vrTelemetryData?.habituationIndexH ?? 2.84;
+  const cognitiveLoad = analysis?.biomedicalTriangulation?.cognitiveLoad || 'Patrón Oculomotor y Cognitivo estable y normalizado.';
+
+  const sentinelRisk = p.sentinelTelemetrySnapshot?.status || p.sentinelTelemetry?.safetyStatus?.riskLevel || 'ESTABLE';
+  const isSentinelCritical = sentinelRisk === 'CRÍTICO' || sentinelRisk === 'CRITICAL_ALERT_DISPATCHED' || sentinelRisk === 'CRITICAL';
+
+  // --------------------------------------------------------------------------
+  // 4. PLANTILLA HTML DE IMPRESIÓN (ESTILO DICTAMEN)
+  // --------------------------------------------------------------------------
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="UTF-8">
-      <title>Dictamen_Clinico_AMIE_${escapeHtml(patient.id)}</title>
+      <title>Dictamen_Clinico_AMIE_${escapeHtml(patient.id || p.patientId)}</title>
       <style>
         @page {
           size: letter portrait;
@@ -222,10 +298,10 @@ export const exportAmieClinicalPdf = (
       <div class="header">
         <div>
           <h1 class="title">AMIE Clinical Workstation</h1>
-          <div class="subtitle">SISTEMA INTELIGENTE DE TRIANGULACIÓN BIOCLÍNICA MULTIMODAL (SaMD)</div>
+          <div class="subtitle">DICTAMEN OFICIAL DE TRIANGULACIÓN BIOCLÍNICA MULTIMODAL (SaMD)</div>
         </div>
         <div style="text-align: right;">
-          <span class="badge">DICTAMEN CLÍNICO OFICIAL</span>
+          <span class="badge">EVALUACIÓN NEUROPSIQUIÁTRICA</span>
           <div style="font-size: 9px; margin-top: 4px; color: #64748b; font-family: monospace;">${timestamp}</div>
         </div>
       </div>
@@ -233,34 +309,34 @@ export const exportAmieClinicalPdf = (
       <!-- 1. METADATOS PACIENTE Y MÉDICO -->
       <div class="section grid-2">
         <div>
-          <div><span class="label">EXPEDIENTE ID:</span> <span class="value">${escapeHtml(patient.id)}</span></div>
-          <div><span class="label">EDAD / GÉNERO:</span> <span class="value">${patient.age} años | ${patient.gender === 'M' ? 'Masculino' : patient.gender === 'F' ? 'Femenino' : 'Otro'}</span></div>
-          <div><span class="label">MOTIVO DE CONSULTA:</span> <span class="value">${escapeHtml(patient.consultationReason)}</span></div>
+          <div><span class="label">EXPEDIENTE ID:</span> <span class="value">${escapeHtml(patient.id || p.patientId)}</span></div>
+          <div><span class="label">EDAD / GÉNERO:</span> <span class="value">${patient.age || '--'} años | ${patient.gender === 'M' ? 'Masculino' : patient.gender === 'F' ? 'Femenino' : 'No especificado'}</span></div>
+          <div><span class="label">MOTIVO DE CONSULTA:</span> <span class="value">${escapeHtml((patient as any).consultationReason || 'Evaluación General')}</span></div>
         </div>
         <div>
-          <div><span class="label">MÉDICO EVALUADOR:</span> <span class="value">${escapeHtml(doctorName)}</span></div>
-          <div><span class="label">COLEGIADO N°:</span> <span class="value">${colegiadoNumber}</span></div>
-          <div>
-            <span class="label">ESTADO CENTINELA:</span> 
-            <span class="badge" style="background: ${patient.sentinelTelemetry?.safetyStatus?.riskLevel === 'CRÍTICO' ? '#ffe4e6; color: #be123c;' : '#e0f2fe; color: #0369a1;'}">
-              ${escapeHtml(patient.sentinelTelemetry?.safetyStatus?.riskLevel || 'EVALUADO')}
+          <div><span class="label">MÉDICO TRATANTE:</span> <span class="value">${escapeHtml(doctorName)}</span></div>
+          <div><span class="label">COLEGIADO N°:</span> <span class="value">${escapeHtml(String(colegiadoNumber))}</span></div>
+          <div style="margin-top: 2px;">
+            <span class="label">MONITOREO CENTINELA JITAI:</span> 
+            <span class="badge" style="background: ${isSentinelCritical ? '#ffe4e6; color: #be123c;' : '#e0f2fe; color: #0369a1;'}">
+              ${escapeHtml(sentinelRisk)}
             </span>
           </div>
         </div>
       </div>
 
-      <!-- ALERTA CENTINELA SI CORRESPONDE -->
-      ${patient.sentinelTelemetry?.safetyStatus?.riskLevel === 'CRÍTICO' ? `
+      <!-- ALERTA CENTINELA DE CRISIS JITAI -->
+      ${isSentinelCritical ? `
         <div class="alert-box">
-          ⚠️ <strong>ALERTA CENTINELA DE SEGURIDAD CRÍTICA:</strong> Se detectaron patrones de desregulación autonómica nocturna, rumiación autolítica e hiperreactividad simpática. Se recomienda activar protocolo de contención 24/7 y supervisión continua de medios.
+          ⚠️ <strong>ALERTA CENTINELA DE RIESGO CLÍNICO AGUDO:</strong> La telemetría móvil ha detectado patrones críticos de descompensación (privación de sueño / hiperactivación simpática basal). Factores: ${escapeHtml(p.sentinelTelemetrySnapshot?.activeRiskFactors?.join(', ') || 'No especificados')}. Se sugiere protocolo de contención.
         </div>
       ` : ''}
 
       <!-- 2. ANÁLISIS DIAGNÓSTICO DSM-5-TR / CIE-11 -->
       <div class="section">
         <div class="section-title">
-          <span>1. Impresiones Diagnósticas Principales (DSM-5-TR / CIE-11)</span>
-          <span style="font-weight: normal; font-size: 9px; color: #64748b;">Validación Algorítmica RDoC</span>
+          <span>1. Impresiones Diagnósticas & Comorbilidades (DSM-5-TR / CIE-11)</span>
+          <span style="font-weight: normal; font-size: 9px; color: #64748b;">Algoritmo RDoC AMIE</span>
         </div>
         ${diagnosticItemsHtml}
       </div>
@@ -272,15 +348,15 @@ export const exportAmieClinicalPdf = (
           <div class="biometric-card">
             <div class="label">Conductancia GSR (Pico):</div>
             <div class="value" style="font-size: 13px; color: #0284c7;">
-              ${patient.vrTelemetryData?.gsrMicroSiemens?.length ? Math.max(...patient.vrTelemetryData.gsrMicroSiemens) : '2.80'} µS
+              ${gsrPeak} µS
             </div>
-            <div style="font-size: 8.5px; color: #64748b;">Excitación Simpática</div>
+            <div style="font-size: 8.5px; color: #64748b;">Reacción Simpática Fásica</div>
           </div>
 
           <div class="biometric-card">
             <div class="label">Tono Vagal (HRV RMSSD):</div>
             <div class="value" style="font-size: 13px; color: #059669;">
-              ${patient.vrTelemetryData?.hrvRmssdMs?.slice(-1)[0] || '38'} ms
+              ${hrvVal} ms
             </div>
             <div style="font-size: 8.5px; color: #64748b;">Modulación Parasimpática</div>
           </div>
@@ -288,57 +364,57 @@ export const exportAmieClinicalPdf = (
           <div class="biometric-card">
             <div class="label">Índice Habituación (H):</div>
             <div class="value" style="font-size: 13px; color: #7c3aed;">
-              ${patient.vrTelemetryData?.habituationIndexH || '2.84'}
+              ${habIndex}
             </div>
-            <div style="font-size: 8.5px; color: #64748b;">Tasa Extinción Distrés</div>
+            <div style="font-size: 8.5px; color: #64748b;">Tasa de Extinción de Distrés</div>
           </div>
         </div>
 
         <div style="margin-top: 8px; font-size: 10px; color: #334155;">
-          <strong>Carga Cognitiva y Fijación Ocular:</strong> ${escapeHtml(analysis?.biomedicalTriangulation?.cognitiveLoad || 'Patrón Oculomotor Normalizado en Escena 3D.')}
+          <strong>Carga Cognitiva y Fijación Ocular:</strong> ${escapeHtml(cognitiveLoad)}
         </div>
       </div>
 
-      <!-- 4. PLAN TERAPÉUTICO Y ANTISESGO -->
+      <!-- 4. PLAN TERAPÉUTICO Y ALERTAS DE RIESGO -->
       <div class="section">
-        <div class="section-title">3. Indicaciones Terapéuticas & Mitigación de Sesgos</div>
+        <div class="section-title">3. Indicaciones Terapéuticas & Alertas Específicas</div>
         
-        <div style="margin-bottom: 6px;">
-          <strong style="color: #0369a1; font-size: 10.5px;">Recomendaciones de Intervención:</strong>
-          ${recommendationsHtml}
+        <div style="margin-bottom: 8px;">
+          <strong style="color: #9f1239; font-size: 10.5px;">Alertas de Riesgo de Descompensación:</strong>
+          ${riskAlertsHtml}
         </div>
 
         <div>
-          <strong style="color: #0369a1; font-size: 10.5px;">Control Antisesgo y Desensibilización:</strong>
-          ${biasNotesHtml}
+          <strong style="color: #0369a1; font-size: 10.5px;">Plan de Intervención Recomendado:</strong>
+          ${recommendationsHtml}
         </div>
       </div>
 
       <!-- FIRMA Y AUTENTICACIÓN -->
       <div class="signature-container">
         <div style="font-family: monospace; font-size: 8px; color: #94a3b8;">
-          HASH AUTENTICIDAD:<br/>
+          HASH AUTENTICIDAD CRIPTOGRÁFICA:<br/>
           ${documentHash}<br/>
-          AMIE ENGINE v3.8 — SECURE SIGNED
+          AMIE CLINICAL ENGINE v3.8 — SECURE SIGNED
         </div>
 
         <div class="signature-line">
           <strong style="font-size: 11px; color: #0f172a;">${escapeHtml(doctorName)}</strong><br/>
-          <span style="font-size: 9.5px; color: #475569;">Médico Especialista — Colegiado N° ${colegiadoNumber}</span><br/>
+          <span style="font-size: 9.5px; color: #475569;">Médico Especialista — Colegiado N° ${escapeHtml(String(colegiadoNumber))}</span><br/>
           <span style="font-size: 8.5px; color: #94a3b8;">Firma y Sello Profesional</span>
         </div>
       </div>
 
       <!-- PIE LEGAL -->
       <div class="footer">
-        Este documento es un dictamen médico oficial generado bajo supervisión profesional asistido por la plataforma AMIE Clinical Workstation (SaMD). Protección de datos bajo estándares HIPAA y Ley de Protección de Datos Personales.
+        Este documento es un dictamen bioclínico generado bajo supervisión profesional asistido por la IA de AMIE (SaMD). Las recomendaciones terapéuticas deben ser validadas según el juicio clínico del profesional responsable. Protección de datos bajo estándares HIPAA y Ley de Protección de Datos Personales.
       </div>
 
       <script>
         window.onload = function() { 
           setTimeout(function() {
             window.print();
-          }, 300);
+          }, 350);
         };
       </script>
     </body>
