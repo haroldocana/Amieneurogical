@@ -1,3 +1,8 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - PUENTE WEBSOCKET VR (PICO 3 / META QUEST)
+// frontend/services/vrControlService.ts
+// ============================================================================
+
 import { MASTER_VR_ENVIRONMENTS } from '../constants';
 
 export interface VrCommandPayload {
@@ -67,7 +72,6 @@ export class VrControlService {
     this.isExplicitDisconnect = false;
     const targetUrl = customUrl || this.resolveDefaultWsUrl();
 
-    // Evita duplicar sockets si ya está conectado o en proceso de negociación
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       if (this.currentUrl === targetUrl) return;
       this.disconnect();
@@ -95,7 +99,6 @@ export class VrControlService {
         this.notifyStatus('CONNECTED');
         this.startHeartbeat();
 
-        // 1. Handshake inicial de registro médico
         const handshakePayload = {
           type: 'HANDSHAKE',
           role: 'sender',
@@ -105,7 +108,6 @@ export class VrControlService {
         };
         this.sendRaw(JSON.stringify(handshakePayload));
 
-        // 2. Despachar mensajes en cola que quedaron pendientes durante reconexiones
         while (this.pendingQueue.length > 0) {
           const queuedMsg = this.pendingQueue.shift();
           if (queuedMsg) {
@@ -125,7 +127,7 @@ export class VrControlService {
             }
           });
         } catch {
-          // Mensaje no JSON (p. ej. 'pong')
+          // Mensaje no JSON
         }
       };
 
@@ -153,16 +155,13 @@ export class VrControlService {
     }
   }
 
-  /**
-   * Mantiene vivo el socket en Render evitando que el balanceador termine la conexión por timeout
-   */
   private static startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now(), role: 'sender' }));
       }
-    }, 25000); // Cada 25s (menor al timeout de 55s de Render)
+    }, 25000);
   }
 
   private static stopHeartbeat(): void {
@@ -180,9 +179,6 @@ export class VrControlService {
     }
   }
 
-  /**
-   * Carga un Entorno Maestro enviando la configuración a las gafas VR o a Unity
-   */
   public static loadMasterEnvironment(
     environmentId: string, 
     patientId: string, 
@@ -223,9 +219,6 @@ export class VrControlService {
     }
   }
 
-  /**
-   * Actualiza parámetros biométricos o visuales en la escena activa de Unity/WebXR
-   */
   public static updateSceneParameters(
     parameters: Record<string, any>, 
     patientId?: string
@@ -240,8 +233,25 @@ export class VrControlService {
   }
 
   /**
-   * Dispara el protocolo de Grounding (retorno inmediato a sala de seguridad)
+   * Modula parámetros específicos de biofeedback continuo (p.ej. frecuencias binaurales y orbe 3D)
    */
+  public static sendMasterConfigParam(
+    environmentId: string,
+    paramKey: string,
+    value: any,
+    patientId?: string
+  ): void {
+    const payload = {
+      type: 'UPDATE_ENVIRONMENT_PARAM',
+      environmentId,
+      paramKey,
+      value,
+      patientId: patientId || this.activePatientId,
+      timestamp: Date.now()
+    };
+    this.sendRaw(JSON.stringify(payload));
+  }
+
   public static triggerGroundingProtocol(patientId?: string): void {
     const payload = {
       type: 'TRIGGER_GROUNDING_PROTOCOL',
@@ -251,9 +261,6 @@ export class VrControlService {
     this.sendRaw(JSON.stringify(payload));
   }
 
-  /**
-   * Detiene la prueba activa y devuelve el visor a la sala de espera
-   */
   public static stopActiveSession(patientId?: string): void {
     const payload = {
       type: 'STOP_TEST',
@@ -263,9 +270,6 @@ export class VrControlService {
     this.sendRaw(JSON.stringify(payload));
   }
 
-  /**
-   * Suscribe un listener para monitorear el estado de la conexión en interfaces React
-   */
   public static subscribeStatus(listener: StatusListener): () => void {
     this.statusListeners.add(listener);
     const initialStatus: VrConnectionStatus = 
@@ -275,9 +279,6 @@ export class VrControlService {
     return () => this.statusListeners.delete(listener);
   }
 
-  /**
-   * Suscribe un listener para recibir telemetría o confirmaciones desde Unity/Pico
-   */
   public static subscribeMessages(listener: MessageListener): () => void {
     this.messageListeners.add(listener);
     return () => this.messageListeners.delete(listener);
@@ -293,9 +294,6 @@ export class VrControlService {
     });
   }
 
-  /**
-   * Cierra de manera explícita la conexión WebSocket e inhabilita la auto-reconexión
-   */
   public static disconnect(): void {
     this.isExplicitDisconnect = true;
     this.stopHeartbeat();
