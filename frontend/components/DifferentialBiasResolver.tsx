@@ -8,15 +8,10 @@ import {
   Smartphone,
   ClipboardList,
   Sparkles,
-  ShieldAlert,
   Flame,
-  CheckCircle2,
   XCircle,
   TrendingDown,
-  Info,
-  Search,
   ScanEye,
-  Bot,
   Maximize2,
   Minimize2
 } from 'lucide-react';
@@ -68,9 +63,23 @@ interface ConflictPair {
 export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> = ({ patient }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedConflictId, setSelectedConflictId] = useState<string>('TDAH_VS_TAG');
-  const [customNoteToAnalyze, setCustomNoteToAnalyze] = useState<string>(
-    patient.sessionNotes.join('\n\n') || patient.anamnesis
-  );
+
+  const p = patient as any;
+
+  // Extracción defensiva del texto de notas de sesión
+  const resolveInitialNote = (): string => {
+    if (Array.isArray(p?.sessionNotes) && p.sessionNotes.length > 0) {
+      if (typeof p.sessionNotes[0] === 'string') {
+        return p.sessionNotes.join('\n\n');
+      }
+      if (typeof p.sessionNotes[0] === 'object') {
+        return p.sessionNotes.map((n: any) => n.noteText || n.content || '').filter(Boolean).join('\n\n');
+      }
+    }
+    return p?.anamnesis || p?.consultationReason || 'Paciente acude a evaluación neuropsiquiátrica integral por quejas de dispersión atencional y fatiga cognitiva.';
+  };
+
+  const [customNoteToAnalyze, setCustomNoteToAnalyze] = useState<string>(resolveInitialNote());
   const [nlpAnalysisRunning, setNlpAnalysisRunning] = useState(false);
   const [detectedBiases, setDetectedBiases] = useState<Array<{
     type: 'Sesgo de Confirmación' | 'Sesgo de Género' | 'Sesgo de Disponibilidad' | 'Anclaje Prematuro';
@@ -92,6 +101,28 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
     }
   ]);
 
+  // Resolutores seguros de biomarcadores para evitar caídas
+  const thetaBetaVal = p?.qeegZScores?.frontalThetaBetaRatio ?? 
+                       p?.qeegBiomarkers?.regionalZScores?.frontal?.thetaZ ?? 
+                       2.8;
+
+  const asrsScore = p?.psychometricScores?.asrs ?? 17;
+  const gad7Score = p?.psychometricScores?.gad7 ?? 11;
+  const phq9Score = p?.psychometricScores?.phq9 ?? 24;
+  const bdi2Score = p?.psychometricScores?.bdi2 ?? 42;
+  const sadScore = p?.psychometricScores?.sadPersons ?? 9;
+  const aq10Score = p?.psychometricScores?.aq10 ?? 8;
+
+  const wakeupsCount = p?.sentinelTelemetry?.sleepMetrics?.nightWakeups ?? 
+                       p?.sentinelTelemetry?.nightWakeups ?? 
+                       p?.sentinelTelemetrySnapshot?.sleepDisruptionsCount ?? 
+                       1;
+
+  const biomotorLatency = p?.sentinelTelemetry?.behavioralBiometrics?.typingLatencyMs ?? 
+                          p?.sentinelTelemetry?.biomotorLatencyMs ?? 
+                          p?.neuromotorBiomarkers?.reactionTimeMs ?? 
+                          485;
+
   const CONFLICT_PAIRS: ConflictPair[] = [
     {
       id: 'TDAH_VS_TAG',
@@ -104,7 +135,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
       qeegDiscrepancy: {
         disorderA: 'Ratio Theta/Beta Frontal > 2.5σ con hipocoherencia interhemisférica.',
         disorderB: 'Exceso de High-Beta (>21 Hz) generalizado en corteza prefrontal y temporal.',
-        patientFinding: `Ratio Theta/Beta en paciente: ${patient.qeegZScores?.frontalThetaBetaRatio ?? 2.8}σ. Predominio frontal con lentitud ejecutiva.`,
+        patientFinding: `Ratio Theta/Beta en paciente: ${thetaBetaVal}σ. Predominio frontal con lentitud ejecutiva.`,
         verdict: 'Favorece A'
       },
       acousticDiscrepancy: {
@@ -116,13 +147,13 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
       psychometricsDiscrepancy: {
         disorderA: 'ASRS >= 14 con síntomas consistentes antes de los 12 años; GAD-7 normal o reactivo a olvidos.',
         disorderB: 'GAD-7 >= 15 ("preocupación por todo") sin antecedente escolar de déficit atencional.',
-        patientFinding: `ASRS: ${patient.psychometricScores.asrs ?? 17}/18 (Muy Alto). GAD-7: ${patient.psychometricScores.gad7 ?? 11}/21 (Moderado-reactivo).`,
+        patientFinding: `ASRS: ${asrsScore}/18 (Muy Alto). GAD-7: ${gad7Score}/21 (Moderado-reactivo).`,
         verdict: 'Favorece A'
       },
       apkTelemetryDiscrepancy: {
         disorderA: 'Patrón de sueño regular pero con dispersión de uso de apps en vigilia (cambios cada 40s).',
         disorderB: 'Despertares nocturnos por rumiación (>3x) y consulta ansiosa de noticias/notificaciones.',
-        patientFinding: `Despertares: ${patient.sentinelTelemetry?.nightWakeups ?? 1}/noche. Sueño eficiente (82%).`,
+        patientFinding: `Despertares: ${wakeupsCount}/noche. Sueño eficiente (82%).`,
         verdict: 'Favorece A'
       },
       wrongDiagnosisIatrogenesis: {
@@ -160,13 +191,13 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
       psychometricsDiscrepancy: {
         disorderA: 'PHQ-9 >= 20, BDI-II >= 35, SAD PERSONS elevado por desesperanza profunda e insomnio terminal.',
         disorderB: 'Escalas de inestabilidad afectiva, impulsividad motora y conductas de manipulación vincular.',
-        patientFinding: `PHQ-9: ${patient.psychometricScores.phq9 ?? 24}/27, BDI-II: ${patient.psychometricScores.bdi2 ?? 42}/63, SAD PERSONS: ${patient.psychometricScores.sadPersons ?? 9}/10.`,
+        patientFinding: `PHQ-9: ${phq9Score}/27, BDI-II: ${bdi2Score}/63, SAD PERSONS: ${sadScore}/10.`,
         verdict: 'Favorece A'
       },
       apkTelemetryDiscrepancy: {
         disorderA: 'Despertares nocturnos tempranos consistentes (02:00 - 04:00 AM) con letargo biomotor extremo (>450ms).',
         disorderB: 'Ráfagas de mensajes nocturnos impulsivos seguidos de desactivación diurna reactiva.',
-        patientFinding: `Despertares: ${patient.sentinelTelemetry?.nightWakeups ?? 5}/noche. Latencia biomotora: ${patient.sentinelTelemetry?.biomotorLatencyMs ?? 485} ms.`,
+        patientFinding: `Despertares: ${wakeupsCount}/noche. Latencia biomotora: ${biomotorLatency} ms.`,
         verdict: 'Favorece A'
       },
       wrongDiagnosisIatrogenesis: {
@@ -203,7 +234,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
       psychometricsDiscrepancy: {
         disorderA: 'AQ-10 >= 7, déficit en comunicación social desde la infancia temprana.',
         disorderB: 'Y-BOCS elevado con obsesiones de contaminación o verificación; cognición social basal normal.',
-        patientFinding: `AQ-10: ${patient.psychometricScores.aq10 ?? 8}/10. Inicio documentado en etapa preescolar.`,
+        patientFinding: `AQ-10: ${aq10Score}/10. Inicio documentado en etapa preescolar.`,
         verdict: 'Favorece A'
       },
       apkTelemetryDiscrepancy: {
@@ -255,7 +286,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
   };
 
   return (
-    <div className={`space-y-6 transition-all duration-300 ${
+    <div className={`space-y-6 transition-all duration-300 text-slate-100 ${
       isFullscreen 
         ? 'fixed inset-0 z-50 bg-slate-950 p-6 overflow-y-auto' 
         : 'relative'
@@ -269,25 +300,26 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black text-white tracking-tight">
-                DifferentialBiasResolver • Matriz Antisesgo & Triangulación
+                DifferentialBiasResolver • Matriz Antisesgo &amp; Triangulación
               </h1>
               <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded-full">
                 MÓDULO DE SEGURIDAD CLÍNICA
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Cruce cuádruple (qEEG + Biometría de Voz + Psicometría + APK) & Decodificador NLP de Sesgos Diagnósticos
+              Cruce cuádruple (qEEG + Biometría de Voz + Psicometría + APK) &amp; Decodificador NLP de Sesgos Diagnósticos
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <span className="px-3 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-cyan-300">
-            Expediente: {patient.id}
+            Expediente: {patient?.id || 'PAC-8104'}
           </span>
           <button
+            type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
             title={isFullscreen ? 'Salir de Pantalla Completa' : 'Modo Pantalla Completa'}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4 text-amber-400" /> : <Maximize2 className="w-4 h-4 text-cyan-400" />}
@@ -296,7 +328,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
         </div>
       </div>
 
-      {/* Selector of Conflicting Disorders */}
+      {/* Selector de Pares en Conflicto */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
         <label className="text-[11px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5 mb-2.5">
           <ScanEye className="w-3.5 h-3.5 text-cyan-400" /> Seleccionar Matriz de Conflicto Diagnóstico a Resolver:
@@ -305,8 +337,9 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
           {CONFLICT_PAIRS.map((pair) => (
             <button
               key={pair.id}
+              type="button"
               onClick={() => setSelectedConflictId(pair.id)}
-              className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+              className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                 selectedConflictId === pair.id
                   ? 'bg-slate-800 border-cyan-400 ring-2 ring-cyan-500/30 shadow-lg'
                   : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
@@ -326,7 +359,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
         </div>
       </div>
 
-      {/* Cross-Telemetry Discard Table (4 Axes) */}
+      {/* Triangulación de 4 Ejes para Descarte */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -341,7 +374,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {/* Eje 1: qEEG Spectral Discrepancy */}
+          {/* Eje 1: qEEG */}
           <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-cyan-300 flex items-center gap-1.5 text-xs">
@@ -360,7 +393,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
             </div>
           </div>
 
-          {/* Eje 2: Voice & Acoustic Biometrics */}
+          {/* Eje 2: Biometría Acústica */}
           <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-indigo-300 flex items-center gap-1.5 text-xs">
@@ -379,7 +412,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
             </div>
           </div>
 
-          {/* Eje 3: Psychometrics DSM-5 */}
+          {/* Eje 3: Psicometría */}
           <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-amber-300 flex items-center gap-1.5 text-xs">
@@ -398,7 +431,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
             </div>
           </div>
 
-          {/* Eje 4: Sentinel APK Telemetry */}
+          {/* Eje 4: Telemetría APK Centinela */}
           <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
@@ -419,7 +452,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
         </div>
       </div>
 
-      {/* NOVELTY 1: Language Bias Decoder (NLP Note Analyzer) */}
+      {/* Decodificador de Sesgos del Lenguaje Clínico (NLP) */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -437,9 +470,10 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
           </div>
 
           <button
+            type="button"
             onClick={handleRunNlpBiasAudit}
             disabled={nlpAnalysisRunning}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20 transition active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer active:scale-95"
           >
             {nlpAnalysisRunning ? (
               <>
@@ -475,7 +509,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
                     <span className="font-bold text-purple-300 flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3 text-amber-400" /> {b.type}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
                       Severidad {b.severity}
                     </span>
                   </div>
@@ -488,7 +522,7 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
         </div>
       </div>
 
-      {/* NOVELTY 2: Digital Risk Twin (Iatrogenesis Simulator) */}
+      {/* Gemelo Digital de Riesgo Iatrogénico */}
       <div className="bg-slate-900 border border-rose-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden space-y-4">
         <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -539,3 +573,5 @@ export const DifferentialBiasResolver: React.FC<DifferentialBiasResolverProps> =
     </div>
   );
 };
+
+export default DifferentialBiasResolver;
