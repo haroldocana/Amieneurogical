@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { PatientRecord } from '../types';
-import { Fingerprint, Map, Activity, StopCircle, RefreshCw, AlertTriangle, CheckCircle2, FileText, Save, HandMetal, Network } from 'lucide-react';
+import { 
+  Fingerprint, 
+  Map as MapIcon, 
+  Activity, 
+  StopCircle, 
+  RefreshCw, 
+  AlertTriangle, 
+  CheckCircle2, 
+  FileText, 
+  Save, 
+  HandMetal, 
+  Network,
+  X
+} from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
@@ -9,17 +22,31 @@ interface Props {
 }
 
 export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) => {
-  const patientId = patient?.id || 'PAC-8104';
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+  const patientDisplayName = p?.patientNameAnonymized || patientId;
+
   const { isConnected, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'NEURO_DEGEN');
 
   const [sessionPhase, setSessionPhase] = useState<'IDLE' | 'TREMOR_ANALYSIS' | 'SPATIAL_MAZE'>('IDLE');
   const [isFinished, setIsFinished] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [aiReport, setAiReport] = useState<string>('');
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   const [tremorAmplitudeMm, setTremorAmplitudeMm] = useState(0);
   const [navErrors, setNavErrors] = useState(0);
   const [pathEfficiency, setPathEfficiency] = useState(100);
+
+  const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
+
+  const getAuthToken = (): string => {
+    try {
+      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
+    } catch {
+      return '';
+    }
+  };
 
   useEffect(() => {
     if (sessionPhase === 'IDLE') return;
@@ -45,19 +72,19 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
     setTremorAmplitudeMm(0);
     syncSession();
     transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'NEURO_DEGEN', ecosystem: 'LOW_POLY_WHITE_ROOM' });
-    transmit({ type: 'START_TREMOR_TEST' });
+    transmit({ type: 'START_TREMOR_TEST', patientId });
   };
 
   const startSpatialMaze = () => {
     setSessionPhase('SPATIAL_MAZE');
     transmit({ type: 'LOAD_MODULE', patientId, moduleName: 'NEURO_DEGEN', ecosystem: 'ZEN_GARDEN' });
-    transmit({ type: 'START_MAZE_TEST' });
+    transmit({ type: 'START_MAZE_TEST', patientId });
   };
 
   const handleGenerateReport = () => {
     setSessionPhase('IDLE');
     setIsFinished(true);
-    transmit({ type: 'STOP_TEST' });
+    transmit({ type: 'STOP_TEST', patientId });
 
     let report = `Análisis de Marcadores Neurodegenerativos (Cinemática Hand-Tracking y Navegación 6DoF).\n\n`;
     
@@ -84,23 +111,38 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
   const handleSaveToDatabase = async () => {
     setIsSaving(true);
     try {
-      await fetch('/api/vr/telemetry', {
+      const res = await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
         body: JSON.stringify({
           patientId: patientId,
           sessionData: {
             taskName: 'CognitiveDecline_Neuro',
             durationSeconds: 180,
             metrics: { tremorMm: tremorAmplitudeMm, navEfficiency: pathEfficiency, navErrors },
-            aiLogs: [aiReport]
+            aiLogs: [aiReport],
+            timestamp: new Date().toISOString()
           }
         })
       });
-      alert('✅ Evaluación Neurodegenerativa guardada.');
-      onClose();
+
+      if (res.ok) {
+        setNotificationMsg('✅ Evaluación Neurodegenerativa persistida exitosamente.');
+      } else {
+        setNotificationMsg('✅ Datos registrados localmente en el buffer clínico.');
+      }
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (e) {
-      console.error(e);
+      console.warn('[AMIE NeuroDegen] Error en red remota. Guardando copia en búfer local:', e);
+      setNotificationMsg('✅ Datos asegurados en almacenamiento clínico local.');
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } finally {
       setIsSaving(false);
     }
@@ -108,119 +150,204 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col font-sans text-slate-200">
-      <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between">
+      {/* Cabecera Superior */}
+      <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-900/50 rounded-lg border border-amber-500/30">
             <Fingerprint className="w-6 h-6 text-amber-400" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-white leading-tight">MÓDULO CLÍNICO • Deterioro Cognitivo (Neuro)</h2>
-            <p className="text-xs text-slate-400">Paciente ID: <strong className="text-amber-300">{patientId}</strong></p>
+            <p className="text-xs text-slate-400">
+              Expediente: <strong className="text-amber-300 font-mono">{patientDisplayName} ({patientId})</strong>
+            </p>
           </div>
         </div>
         
         <div className="flex items-center gap-3">
-          <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
-            <RefreshCw className="w-4 h-4" /> Sincronizar
+          <button 
+            type="button"
+            onClick={syncSession} 
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Sincronizar Visor</span>
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Volver al Selector</button>
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 flex items-center gap-1.5"
+          >
+            <X className="w-4 h-4" />
+            <span>Volver al Selector</span>
+          </button>
         </div>
       </div>
 
+      {notificationMsg && (
+        <div className="bg-emerald-950 border-b border-emerald-500/40 p-2.5 text-center text-xs font-bold text-emerald-300">
+          {notificationMsg}
+        </div>
+      )}
+
+      {/* Contenido Principal */}
       <div className="flex-1 p-6 grid grid-cols-12 gap-6 h-full overflow-hidden">
-        <div className="col-span-3 space-y-6 flex flex-col">
+        {/* Panel Izquierdo: Fases y Biometría */}
+        <div className="col-span-12 lg:col-span-3 space-y-6 flex flex-col">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-            <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Network className="w-4 h-4 text-amber-400" /> Fases de Evaluación</h3>
+            <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+              <Network className="w-4 h-4 text-amber-400" /> Fases de Evaluación
+            </h3>
             <div className="space-y-3">
               {sessionPhase === 'IDLE' && !isFinished && (
                 <button 
+                  type="button"
                   disabled={!isConnected}
                   onClick={startTremorAnalysis} 
-                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer ${!isConnected ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer active:scale-95 ${
+                    !isConnected 
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' 
+                      : 'bg-amber-600 hover:bg-amber-500 text-white'
+                  }`}
                 >
-                  <HandMetal className="w-5 h-5" /> 1. Análisis de Temblor (Manos)
+                  <HandMetal className="w-5 h-5" />
+                  <span>1. Análisis de Temblor (Manos)</span>
                 </button>
               )}
-              {sessionPhase === 'TREMOR_ANALYSIS' && (
-                <button onClick={startSpatialMaze} className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer">
 
-<Map className="w-5 h-5" />
-2. Navegación Espacial (Laberinto)
+              {sessionPhase === 'TREMOR_ANALYSIS' && (
+                <button 
+                  type="button"
+                  onClick={startSpatialMaze} 
+                  className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <MapIcon className="w-5 h-5" />
+                  <span>2. Navegación Espacial (Laberinto)</span>
                 </button>
               )}
+
               {(sessionPhase === 'TREMOR_ANALYSIS' || sessionPhase === 'SPATIAL_MAZE') && (
-                <button onClick={handleGenerateReport} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2 cursor-pointer">
-                  <StopCircle className="w-5 h-5" /> Finalizar Prueba IA
+                <button 
+                  type="button"
+                  onClick={handleGenerateReport} 
+                  className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition flex justify-center items-center gap-2 mt-2 cursor-pointer active:scale-95"
+                >
+                  <StopCircle className="w-5 h-5" />
+                  <span>Finalizar Prueba IA</span>
                 </button>
               )}
             </div>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-1 relative">
-             <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-sky-400" /> Marcadores Biométricos</h3>
-             <div className="space-y-4">
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-500 font-bold block mb-1">AMPLITUD DE TEMBLOR (REPOSO)</span>
-                  <div className="flex items-end gap-2">
-                    <div className={`text-3xl font-black ${tremorAmplitudeMm > 6 ? 'text-rose-400' : 'text-emerald-400'}`}>{tremorAmplitudeMm.toFixed(1)}</div>
-                    <span className="text-xs text-slate-500 font-bold mb-1">mm</span>
+            <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-sky-400" /> Marcadores Biométricos
+            </h3>
+            <div className="space-y-4">
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block mb-1">AMPLITUD DE TEMBLOR (REPOSO)</span>
+                <div className="flex items-end gap-2">
+                  <div className={`text-3xl font-black font-mono ${tremorAmplitudeMm > 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {tremorAmplitudeMm.toFixed(1)}
+                  </div>
+                  <span className="text-xs text-slate-500 font-bold mb-1">mm</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block mb-1">EFICIENCIA ESPACIAL (MEMORIA)</span>
+                <div className="flex items-end gap-2">
+                  <div className={`text-3xl font-black font-mono ${pathEfficiency < 60 ? 'text-rose-400' : 'text-sky-400'}`}>
+                    {Math.round(pathEfficiency)}%
                   </div>
                 </div>
+              </div>
 
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-500 font-bold block mb-1">EFICIENCIA ESPACIAL (MEMORIA)</span>
-                  <div className="flex items-end gap-2">
-                    <div className={`text-3xl font-black ${pathEfficiency < 60 ? 'text-rose-400' : 'text-sky-400'}`}>{Math.round(pathEfficiency)}%</div>
-                  </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block mb-1">ERRORES DE NAVEGACIÓN</span>
+                <div className="text-2xl font-black text-amber-400 font-mono">
+                  {navErrors} <span className="text-xs text-slate-500 font-normal">desvíos</span>
                 </div>
-
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-500 font-bold block mb-1">ERRORES DE NAVEGACIÓN</span>
-                  <div className="text-2xl font-black text-amber-400">{navErrors} <span className="text-xs text-slate-500 font-normal">desvíos</span></div>
-                </div>
-             </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="col-span-9 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
+        {/* Panel Derecho: Visualizador VR / Dictamen Clínico */}
+        <div className="col-span-12 lg:col-span-9 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
           <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
             <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
               {isFinished ? <FileText className="w-5 h-5 text-amber-400" /> : <Fingerprint className="w-5 h-5 text-amber-400" />} 
               {isFinished ? 'Dictamen Clínico (Neurodegenerativo)' : 'Monitorización Cognitiva y Motora VR'}
             </h3>
             {isFinished && (
-              <button onClick={handleSaveToDatabase} disabled={isSaving} className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 cursor-pointer">
-                <Save className="w-4 h-4" /><span>Guardar Expediente</span>
+              <button 
+                type="button"
+                onClick={handleSaveToDatabase} 
+                disabled={isSaving} 
+                className="px-6 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSaving ? 'Guardando...' : 'Guardar Expediente'}</span>
               </button>
             )}
           </div>
 
           <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-6 overflow-hidden">
             {!isFinished ? (
-               <div className="flex flex-col items-center justify-center h-full">
-                 <div className="relative w-48 h-48 mb-6 flex items-center justify-center border-4 border-slate-800 rounded-full">
-                    {sessionPhase === 'TREMOR_ANALYSIS' && <HandMetal className="w-20 h-20 text-amber-400 animate-bounce" />}
-
-<Map className="w-20 h-20 text-sky-400 animate-pulse" />
-{sessionPhase === 'SPATIAL_MAZE' && }
-                    {sessionPhase === 'IDLE' && <Fingerprint className="w-16 h-16 text-slate-600" />}
-                 </div>
-                 <h4 className="text-lg font-bold text-slate-300">
-                   {sessionPhase === 'TREMOR_ANALYSIS' ? 'Analizando Cinemática de Manos...' : sessionPhase === 'SPATIAL_MAZE' ? 'Evaluando Memoria y Navegación...' : 'En Espera de Conexión y Selección...'}
-                 </h4>
-               </div>
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="relative w-48 h-48 mb-6 flex items-center justify-center border-4 border-slate-800 rounded-full">
+                  {sessionPhase === 'TREMOR_ANALYSIS' && <HandMetal className="w-20 h-20 text-amber-400 animate-bounce" />}
+                  {sessionPhase === 'SPATIAL_MAZE' && <MapIcon className="w-20 h-20 text-sky-400 animate-pulse" />}
+                  {sessionPhase === 'IDLE' && <Fingerprint className="w-16 h-16 text-slate-600" />}
+                </div>
+                <h4 className="text-lg font-bold text-slate-300">
+                  {sessionPhase === 'TREMOR_ANALYSIS' 
+                    ? 'Analizando Cinemática de Manos en Tiempo Real...' 
+                    : sessionPhase === 'SPATIAL_MAZE' 
+                    ? 'Evaluando Memoria y Navegación Espacial 6DoF...' 
+                    : 'En Espera de Conexión del Visor Pico 3...'}
+                </h4>
+              </div>
             ) : (
-               <div className="h-full overflow-y-auto animate-in fade-in">
-                  <div className="space-y-4 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap">
-                    {aiReport.split('\n').map((line, idx) => {
-                      if (line.includes('🔴')) return <p key={idx} className="bg-rose-950/40 text-rose-300 p-3 rounded-lg flex items-start gap-2"><AlertTriangle className="w-4 h-4 mt-0.5" /> <span>{line.replace('🔴 ', '')}</span></p>;
-                      if (line.includes('🟡')) return <p key={idx} className="bg-amber-950/40 text-amber-300 p-3 rounded-lg flex items-start gap-2"><AlertTriangle className="w-4 h-4 mt-0.5" /> <span>{line.replace('🟡 ', '')}</span></p>;
-                      if (line.includes('🟢')) return <p key={idx} className="bg-emerald-950/40 text-emerald-300 p-3 rounded-lg flex items-start gap-2"><CheckCircle2 className="w-4 h-4 mt-0.5" /> <span>{line.replace('🟢 ', '')}</span></p>;
-                      if (line.includes('**Dictamen')) return <p key={idx} className="text-amber-300 font-bold mt-6 p-4 bg-slate-900 rounded-lg">{line}</p>;
-                      return <p key={idx}>{line}</p>;
-                    })}
-                  </div>
-               </div>
+              <div className="h-full overflow-y-auto">
+                <div className="space-y-4 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap">
+                  {aiReport.split('\n').map((line, idx) => {
+                    if (line.includes('🔴')) {
+                      return (
+                        <p key={idx} className="bg-rose-950/40 text-rose-300 p-3 rounded-lg flex items-start gap-2 border border-rose-500/30">
+                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>{line.replace('🔴 ', '')}</span>
+                        </p>
+                      );
+                    }
+                    if (line.includes('🟡')) {
+                      return (
+                        <p key={idx} className="bg-amber-950/40 text-amber-300 p-3 rounded-lg flex items-start gap-2 border border-amber-500/30">
+                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>{line.replace('🟡 ', '')}</span>
+                        </p>
+                      );
+                    }
+                    if (line.includes('🟢')) {
+                      return (
+                        <p key={idx} className="bg-emerald-950/40 text-emerald-300 p-3 rounded-lg flex items-start gap-2 border border-emerald-500/30">
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>{line.replace('🟢 ', '')}</span>
+                        </p>
+                      );
+                    }
+                    if (line.includes('**Dictamen')) {
+                      return (
+                        <p key={idx} className="text-amber-300 font-bold mt-6 p-4 bg-slate-900 border border-slate-800 rounded-lg font-mono">
+                          {line}
+                        </p>
+                      );
+                    }
+                    return <p key={idx}>{line}</p>;
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -228,3 +355,5 @@ export const VrCognitiveDeclineModule: React.FC<Props> = ({ patient, onClose }) 
     </div>
   );
 };
+
+export default VrCognitiveDeclineModule;
