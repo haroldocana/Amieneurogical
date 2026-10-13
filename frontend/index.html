@@ -1,27 +1,39 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AMIE - Copiloto Clínico Psiquiátrico y Neurológico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AMIE - Copiloto Clínico Psiquiátrico y Neurobiológico</title>
+  
+  <!-- Metadatos Clínicos y de Plataforma SaMD -->
+  <meta name="description" content="Plataforma de precisión clínica, psiquiatría computacional, telemetría biomédica y neuroterapia inmersiva WebXR." />
+  <meta name="theme-color" content="#020617" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- DESTRUCTOR DE CACHÉ Y SERVICE WORKERS (Obligatorio para visor Pico 3) -->
+  <!-- Favicon Clínico Vectorial Embebido (Previene errores 404) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E" />
+
+  <!-- GESTIÓN SEGURA DE CACHÉ PARA VISORES VR (Pico 3 / Meta Quest)
+       Desregistra Service Workers obsoletos SIN destruir tokens de autenticación en LocalStorage -->
   <script>
-    if ('serviceWorker' in navigator) {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (let registration of registrations) {
-          registration.unregister();
-          console.log('✅ Service Worker desregistrado para forzar actualización en VR');
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].unregister().then(function(success) {
+            if (success) {
+              console.log('🔄 [AMIE VR] Service Worker previo desregistrado para actualización limpia.');
+            }
+          });
         }
+      }).catch(function(err) {
+        console.warn('Aviso comprobando Service Workers:', err);
       });
     }
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch(e) {}
   </script>
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS Framework CDN (Configuración Clínica de Alta Fidelidad) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -49,35 +61,69 @@
             }
           },
           fontFamily: {
+            sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
             mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
           }
         }
       }
-    }
+    };
   </script>
 
   <style>
-    /* Custom subtle scrollbar */
+    /* Reset táctil y optimización visual para visores WebXR */
+    html, body {
+      background-color: #020617;
+      color: #f8fafc;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    /* Scrollbar sutil para consolas médicas táctiles y Chromebooks */
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
     ::-webkit-scrollbar-track {
-      background: #0f172a;
+      background: #020617;
     }
     ::-webkit-scrollbar-thumb {
-      background: #334155;
-      border-radius: 3px;
+      background: #1e293b;
+      border-radius: 4px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #475569;
+      background: #334155;
     }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-sky-500 selection:text-white">
-  <div id="root"></div>
+
+  <!-- AVISO DE JAVASCRIPT REQUERIDO -->
+  <noscript>
+    <div class="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center font-sans">
+      <div class="max-w-md p-6 bg-slate-900 border border-rose-500/40 rounded-2xl shadow-2xl space-y-3">
+        <h2 class="text-lg font-bold text-rose-400">Entorno Clínico Requiere JavaScript</h2>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Para operar los módulos de telemetría, WebXR y triangulación bioclínica de AMIE, active JavaScript en su navegador.
+        </p>
+      </div>
+    </div>
+  </noscript>
+
+  <!-- CONTENEDOR PRINCIPAL REACT CON SKELETON DE CARGA INICIAL -->
+  <div id="root">
+    <div class="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center space-y-4">
+      <div class="relative w-14 h-14 flex items-center justify-center">
+        <div class="absolute inset-0 border-2 border-sky-500/20 rounded-full animate-ping"></div>
+        <div class="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+      <div class="text-center space-y-1">
+        <h1 class="text-sm font-bold tracking-wider text-slate-200 uppercase font-mono">AMIE Neurobiological</h1>
+        <p class="text-[11px] text-sky-400 font-mono">Sincronizando Módulos Clínicos &amp; WebXR...</p>
+      </div>
+    </div>
+  </div>
   
-  <!-- Punto de entrada a la aplicación -->
+  <!-- Punto de Entrada a la Aplicación Vite -->
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
