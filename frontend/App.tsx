@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// ARCHIVO CORRECTO DEL VISOR PICO 3
+// ARCHIVO CORRECTO DEL VISOR PICO 3 (MOTOR THREE.JS / WEBXR)
 import { VrPatientExperience } from './components/VrPatientExperience';
 
 import { Header } from './components/Header';
@@ -105,16 +105,13 @@ function DoctorWorkstation() {
 
   useEffect(() => {
     const checkIsPatientApp = () => {
-      const hasCapacitor = typeof (window as any).Capacitor !== 'undefined' && Boolean((window as any).Capacitor?.isNativePlatform?.());
       const isPatientUrl = 
         window.location.search.includes('mode=paciente') || 
-        window.location.search.includes('paciente=true');
+        window.location.search.includes('paciente=true') ||
+        window.location.search.includes('rol=paciente');
 
-      // Activación segura solo si es app nativa instalada o URL explícita de paciente
-      if (hasCapacitor || isPatientUrl) {
+      if (isPatientUrl) {
         setIsPatientMode(true);
-      } else {
-        setIsPatientMode(false);
       }
       setIsCheckingPlatform(false);
     };
@@ -197,52 +194,53 @@ function DoctorWorkstation() {
     return () => unsubscribe();
   }, []);
 
+  // Objeto de paciente seguro y normalizado
+  const safePatient: PatientRecord = {
+    ...SAFE_DEFAULT_PATIENT,
+    ...(currentPatient || {}),
+    functionalAreas: currentPatient?.functionalAreas || SAFE_DEFAULT_PATIENT?.functionalAreas || {
+      sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50
+    },
+    neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT?.neuromotorBiomarkers || {
+      reactionTimeMs: 240,
+      omissionErrors: 0,
+      commissionErrors: 0,
+      motorStabilityScore: 85
+    },
+    audioRecordings: currentPatient?.audioRecordings || [],
+    psychometricScores: currentPatient?.psychometricScores || {},
+    qeegZScores: currentPatient?.qeegZScores || {
+      frontalThetaBetaRatio: 1.8,
+      temporalAsymmetry: 0.2,
+      deltaSlowActivityZ: 0.4,
+      alphaPeakFrequencyHz: 10.2
+    }
+  };
+
+  const safePatientId = safePatient.id || 'PAC-8104';
+  const safeAge = safePatient.age ?? 55;
+  const safeGender = safePatient.gender || 'M';
+
   if (isCheckingPlatform) {
     return <div className="min-h-screen bg-slate-950"></div>;
   }
 
+  // 🟢 MODO PACIENTE: CARGA DIRECTA DEL VISOR THREE.JS / WEBXR EN LA PICO 3
   if (isPatientMode) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
-        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-center">
-          <div className="mx-auto w-16 h-16 bg-emerald-950 border border-emerald-500/40 rounded-2xl flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
-            <ShieldCheck className="w-8 h-8 animate-pulse" />
-          </div>
+      <div className="relative w-screen h-screen">
+        <button
+          onClick={() => setIsPatientMode(false)}
+          className="absolute top-4 right-4 z-[999999] px-3.5 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xl backdrop-blur-md"
+        >
+          <LayoutDashboard className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Volver a Estación Médica</span>
+        </button>
 
-          <div className="space-y-2">
-            <h1 className="text-xl font-black text-white">Centinela Telemetry</h1>
-            <p className="text-xs text-slate-400">
-              Servicio de telemetría médica pasiva en segundo plano para evaluación biofenotípica.
-            </p>
-          </div>
-
-          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-left text-xs">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-slate-400">ID de Expediente:</span>
-              <span className="font-mono text-cyan-300 font-bold">ACTIVO</span>
-            </div>
-            
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-slate-400">Estado del Servicio:</span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Activo 24/7
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Sincronización Render:</span>
-              <span className="text-amber-300 font-mono">En línea</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-xl text-[11px] text-slate-300 leading-relaxed">
-            Esta aplicación no requiere intervención. Registra de forma pasiva la ritmicidad motora y la envía directamente al expediente clínico.
-          </div>
-
-          <p className="text-[10px] text-slate-500 font-mono">
-            Versión 2.5.0-JITAI • AMIE Clinical Diagnostic Engine
-          </p>
-        </div>
+        <VrPatientExperience 
+          patientId={safePatientId} 
+          onClose={() => setIsPatientMode(false)} 
+        />
       </div>
     );
   }
@@ -255,6 +253,17 @@ function DoctorWorkstation() {
     setActiveTab('workstation');
     setIsAuthenticated(true);
   };
+
+  // 🟢 SI NO ESTÁ AUTENTICADO: MODAL DE INICIO QUE PERMITE ENTRAR COMO PACIENTE AL VISOR VR
+  if (!isAuthenticated) {
+    return (
+      <LoginModal 
+        onSuccess={handleLoginSuccess}
+        onSelectPatientMode={() => setIsPatientMode(true)}
+        onPatientMode={() => setIsPatientMode(true)}
+      />
+    );
+  }
 
   const handleLogout = () => {
     try {
@@ -451,36 +460,6 @@ function DoctorWorkstation() {
     printWindow.document.close();
   };
 
-  if (!isAuthenticated) {
-    return <LoginModal onSuccess={handleLoginSuccess} />;
-  }
-
-  const safePatient: PatientRecord = {
-    ...SAFE_DEFAULT_PATIENT,
-    ...(currentPatient || {}),
-    functionalAreas: currentPatient?.functionalAreas || SAFE_DEFAULT_PATIENT?.functionalAreas || {
-      sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50
-    },
-    neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT?.neuromotorBiomarkers || {
-      reactionTimeMs: 240,
-      omissionErrors: 0,
-      commissionErrors: 0,
-      motorStabilityScore: 85
-    },
-    audioRecordings: currentPatient?.audioRecordings || [],
-    psychometricScores: currentPatient?.psychometricScores || {},
-    qeegZScores: currentPatient?.qeegZScores || {
-      frontalThetaBetaRatio: 1.8,
-      temporalAsymmetry: 0.2,
-      deltaSlowActivityZ: 0.4,
-      alphaPeakFrequencyHz: 10.2
-    }
-  };
-
-  const safePatientId = safePatient.id || 'PAC-8104';
-  const safeAge = safePatient.age ?? 55;
-  const safeGender = safePatient.gender || 'M';
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
       <Header
@@ -513,14 +492,25 @@ function DoctorWorkstation() {
             </span>
           </div>
 
-          <button
-            onClick={handlePrintIndividualReport}
-            className="flex items-center gap-1.5 px-3 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm"
-            title="Imprimir o exportar Reporte Objetivo Individual (ROI)"
-          >
-            <Printer className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Imprimir Reporte ROI</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsPatientMode(true)}
+              className="flex items-center gap-1.5 px-3 py-1 bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-500/40 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm"
+              title="Cambiar al Visor VR de Paciente"
+            >
+              <Glasses className="w-3.5 h-3.5 text-purple-400" />
+              <span>Modo Paciente (VR)</span>
+            </button>
+
+            <button
+              onClick={handlePrintIndividualReport}
+              className="flex items-center gap-1.5 px-3 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm"
+              title="Imprimir o exportar Reporte Objetivo Individual (ROI)"
+            >
+              <Printer className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Imprimir Reporte ROI</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -891,7 +881,6 @@ function DoctorWorkstation() {
           <ApaTherapeuticModule patient={safePatient} />
         )}
 
-        {/* 🟢 RENDERIZADO DIRECTO DEL MÓDULO FORENSE CLUSTER B */}
         {activeTab === 'cluster_b' && (
           <PsychopathyNarcissismModule 
             patient={safePatient} 
