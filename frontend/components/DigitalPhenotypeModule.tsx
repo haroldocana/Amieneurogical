@@ -91,6 +91,7 @@ export const DigitalPhenotypeModule: React.FC<Props> = ({ patient, onClose }) =>
   const [prediction, setPrediction] = useState<RelapsePrediction | null>(null);
   const [isPredicting, setIsPredicting] = useState<boolean>(false);
 
+  // Inferencia Predictiva con Gemini AI & Contingencia Algorítmica Local
   const handleRunPredictiveAi = async () => {
     setIsPredicting(true);
     try {
@@ -115,7 +116,7 @@ Eres el motor predictivo de Fenotipado Digital y Prevención de Recaídas de AMI
 Analiza la telemetría pasiva nocturna y biomotora para estimar el riesgo de recaída o descompensación afectiva/psicótica aguda.
 
 DATOS TELEMÉTRICOS DE ENTRADA:
-- Paciente ID: ${patientId} | Edad: ${patient?.age \vert{}\vert{} 45} \vert{} Género: ${patient?.gender || 'M'}
+- Paciente ID: ${patientId} | Edad: ${patient?.age || 45} | Género: ${patient?.gender || 'M'}
 - Motivo de Consulta: ${patient?.consultationReason || 'Evaluación general'}
 - Despertares Nocturnos: ${nightWakeups} por noche
 - Duración Promedio de Sueño: ${avgSleepDurationHours} hrs
@@ -148,6 +149,7 @@ Genera un JSON con esta estructura exacta:
           throw new Error('Estructura JSON no encontrada en la respuesta del modelo');
         }
       } else {
+        // Motor de contingencia local calibrado
         const calculatedRisk = Math.min(
           96, 
           Math.max(15, Math.round((nightWakeups * 11) + (screenOnNightTimeMinutes * 0.28) + (activityRestlessnessIndex * 0.2)))
@@ -200,6 +202,7 @@ Genera un JSON con esta estructura exacta:
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-5xl w-full mx-auto space-y-6">
+      {/* Encabezado Principal */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-tr from-cyan-600 via-teal-600 to-emerald-600 rounded-2xl text-white shadow-lg shadow-cyan-600/30">
@@ -232,6 +235,7 @@ Genera un JSON con esta estructura exacta:
         )}
       </div>
 
+      {/* Rejilla de Métricas Pasivas en Tiempo Real */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
@@ -274,6 +278,7 @@ Genera un JSON con esta estructura exacta:
         </div>
       </div>
 
+      {/* Red de Contacto de Emergencia */}
       <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl">
@@ -291,6 +296,7 @@ Genera un JSON con esta estructura exacta:
         </span>
       </div>
 
+      {/* Panel de Inferencia Predictiva de Recaídas */}
       <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
