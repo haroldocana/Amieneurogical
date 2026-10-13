@@ -4,37 +4,38 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Resolución segura de __dirname en módulos ES
+// Resolución segura de __dirname en ES Modules
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
-  // Carga todas las variables de entorno disponibles
+  // Carga variables de entorno locales y de Render
   const env = loadEnv(mode, process.cwd(), '');
 
-  const backendHttpTarget = env.VITE_API_URL || 'http://localhost:5000';
-  const backendWsTarget = env.VITE_WS_URL || 'ws://localhost:5000';
+  const backendHttpTarget = env.VITE_API_URL || 'http://localhost:10000';
+  const backendWsTarget = env.VITE_WS_URL || 'ws://localhost:10000';
+  const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || '';
 
   return {
     define: {
-      'process.env.API_KEY': JSON.stringify(''),
+      'process.env.API_KEY': JSON.stringify(apiKey),
+      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
     },
 
     // ------------------------------------------------------------------------
-    // SERVIDOR DE DESARROLLO (OPTIMIZADO PARA VISORES VR PICO / META QUEST)
+    // SERVIDOR DE DESARROLLO (WEBXR & ACCESO DESDE VISORES EN RED LOCAL)
     // ------------------------------------------------------------------------
     server: {
       port: 3000,
-      host: true, // Expone en 0.0.0.0 para acceso directo desde el visor VR en la misma red Wi-Fi
+      host: true, // Expone en 0.0.0.0 para conexión directa desde Meta Quest / Pico 3
       cors: true,
       proxy: {
-        // Enrutador HTTP hacia el backend Express / Microservicio de Telemetría
+        // Enrutador HTTP hacia el backend Express
         '/api-proxy': {
           target: backendHttpTarget,
           changeOrigin: true,
           secure: false,
-          rewrite: (pathStr) => pathStr,
         },
-        // Enrutador WebSocket para telemetría continua de 60 Hz
+        // Enrutador WebSocket para telemetría de 60 Hz en tiempo real
         '/ws-proxy': {
           target: backendWsTarget,
           ws: true,
@@ -45,7 +46,7 @@ export default defineConfig(({ mode }) => {
     },
 
     // ------------------------------------------------------------------------
-    // PIPELINE DE PLUGINS (REACT + PROGRESSIVE WEB APP CLINICA)
+    // PIPELINE DE PLUGINS (REACT + PWA CLÍNICA)
     // ------------------------------------------------------------------------
     plugins: [
       react(),
@@ -53,10 +54,10 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         strategies: 'generateSW',
         workbox: {
-          // Permite empaquetar librerías pesadas como Three.js y WASM sin abortar el build
+          // Permite cachear librerías 3D pesadas y assets WebXR sin abortar el build
           maximumFileSizeToCacheInBytes: 12 * 1024 * 1024, // 12 MB
           globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,wasm}'],
-          // Excluye las rutas de WebSockets y API de telemetría para evitar interferencias
+          // Excluye sockets y endpoints dinámicos del cache offline
           navigateFallbackDenylist: [/^\/api-proxy/, /^\/ws-proxy/, /^\/api/],
           cleanupOutdatedCaches: true,
         },
@@ -89,7 +90,7 @@ export default defineConfig(({ mode }) => {
     ],
 
     // ------------------------------------------------------------------------
-    // RESOLUCIÓN DE RUTAS Y ALIASES (ESTRUCTURA SIN CARPETA SRC)
+    // RESOLUCIÓN DE RUTAS (ESTRUCTURA SIN CARPETA SRC)
     // ------------------------------------------------------------------------
     resolve: {
       alias: {
@@ -98,32 +99,42 @@ export default defineConfig(({ mode }) => {
     },
 
     // ------------------------------------------------------------------------
-    // COMPILACIÓN Y CODE-SPLITTING DEFENSIVO PARA RENDIMIENTO EN VISORES
+    // COMPILACIÓN Y CODE-SPLITTING POR FUNCIÓN (CERO CONFLICTOS EN THREE.JS)
     // ------------------------------------------------------------------------
     build: {
-      target: 'esnext', // Obligatorio para soportar top-level await en index.tsx
+      target: 'esnext',
+      outDir: 'dist',
       chunkSizeWarningLimit: 2500,
       rollupOptions: {
         output: {
-          // Desacopla Three.js, Recharts y SDK de IA en fragmentos independientes
-          manualChunks: {
-            'vendor-three': [
-              'three',
-              '@react-three/fiber',
-              '@react-three/drei',
-              '@react-three/xr',
-            ],
-            'vendor-react': [
-              'react',
-              'react-dom',
-              'react-router-dom',
-            ],
-            'vendor-charts': [
-              'recharts',
-            ],
-            'vendor-ai': [
-              '@google/generative-ai',
-            ],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              // Confinamiento integral de Three.js y sus extensiones JSM
+              if (
+                id.includes('three') ||
+                id.includes('@react-three/fiber') ||
+                id.includes('@react-three/drei') ||
+                id.includes('@react-three/xr')
+              ) {
+                return 'vendor-three';
+              }
+              // Núcleo de React y enrutamiento
+              if (
+                id.includes('react') ||
+                id.includes('react-dom') ||
+                id.includes('react-router-dom')
+              ) {
+                return 'vendor-react';
+              }
+              // Gráficas de bioseñales
+              if (id.includes('recharts') || id.includes('d3')) {
+                return 'vendor-charts';
+              }
+              // SDK de Inteligencia Artificial
+              if (id.includes('@google/generative-ai')) {
+                return 'vendor-ai';
+              }
+            }
           },
         },
       },
