@@ -1,454 +1,499 @@
-import React, { useState, useEffect } from 'react';
-import { PatientRecord, VrTelemetryData } from '../types';
-import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
+import React, { useState, useEffect, useRef } from 'react';
+import { PatientRecord } from '../types';
 import { 
-  ShieldAlert, Activity, Brain, Eye, HeartPulse, FileText, 
-  Download, Zap, UserCheck, AlertTriangle, Scale, Lock, Info, CheckCircle2, X, RefreshCw, Glasses
+  ShieldAlert, 
+  Wifi, 
+  RefreshCw, 
+  X, 
+  Play, 
+  Square, 
+  FileText, 
+  AlertTriangle 
 } from 'lucide-react';
 
 interface Props {
-  patient: PatientRecord;
-  onClose: () => void;
+  patient?: PatientRecord;
+  onClose?: () => void;
 }
 
-interface PhenotypeProfile {
-  key: string;
+interface SubtypeStudy {
+  id: string;
+  videoKey: string;
+  protocolKey: string;
   title: string;
-  cluster: string;
-  affinityScore: number;
   dsmCode: string;
-  icd11Code: string;
+  affinity: number;
+  icdCode: string;
+  personalityTrait: string;
   description: string;
-  provocationScenario: string;
-  biomarkerSignature: string;
-  metrics: {
-    startleReactivityGSR: string;
-    empathyResonanceHRV: string;
-    gazeDistressFixation: string;
-    triarchicBoldness: string;
-    triarchicMeanness: string;
-    triarchicDisinhibition: string;
-  };
-  graphGsr: number[];
-  graphHrv: number[];
-  clinicalPsychologyReading: string;
-  forensicPsychiatryReading: string;
+  paradoxDetails: string;
+  bioResponse: string;
 }
 
-const CLUSTER_B_PHENOTYPES: PhenotypeProfile[] = [
+const STUDY_SUBTYPES: SubtypeStudy[] = [
   {
-    key: 'NARC_GRANDIOSE',
+    id: 'OVERT',
+    videoKey: 'overt_provocation',
+    protocolKey: 'OVERT_EGO_THREAT',
     title: 'Perfilado Narcisista Grandioso / Exhibicionista (Overt)',
-    cluster: 'Cluster B / F60.81',
-    affinityScore: 94,
-    dsmCode: '301.81 (NPD)',
-    icd11Code: '6D11 (Dominancia)',
+    dsmCode: 'Cluster B / F60.81',
+    affinity: 94,
+    icdCode: '301.81 (NPD)',
+    personalityTrait: '6D11 (Dominancia)',
     description: 'Autoestima hipertrofiada, dominancia interpersonal, búsqueda de admiración y baja reactividad al rechazo social en reposo, con picos adrenérgicos reactivos ante la amenaza percibida al ego.',
-    provocationScenario: 'Paradoja 3D de Devaluación Pública y Crítica Directa al Estatus en Entorno Virtual.',
-    biomarkerSignature: 'GSR Basal Normal + Pico Adrenérgico Severo ante Afrenta al Ego + Supresión Vagal Inmediata.',
-    metrics: {
-      startleReactivityGSR: '5.2 µS (Pico de Amenaza al Ego)',
-      empathyResonanceHRV: '14 ms RMSSD (Labilidad por Ira)',
-      gazeDistressFixation: '12% (Evitación / Desprecio Visual)',
-      triarchicBoldness: '88% (Audacia Elevada)',
-      triarchicMeanness: '62% (Dureza Moderada)',
-      triarchicDisinhibition: '28% (Baja Desinhibición)'
-    },
-    graphGsr: [1.2, 1.5, 5.8, 5.2, 4.1, 3.0, 2.2, 1.8, 1.4],
-    graphHrv: [42, 40, 14, 18, 22, 28, 35, 39, 41],
-    clinicalPsychologyReading: 'Defensa enfocada en la fantasía de éxito ilimitado. Ante la crítica virtual, reacciona con rabia compensatoria u ostentación.',
-    forensicPsychiatryReading: 'Bajo riesgo de conducta impulsiva no provocada; riesgo incrementado de agresión reactiva ante la humillación pública o pérdida de estatus.'
+    paradoxDetails: 'Paradoja 3D de Devaluación Pública y Crítica Directa al Estatus en Entorno Virtual.',
+    bioResponse: 'GSR Basal Normal + Pico Adrenérgico Severo ante Afrenta al Ego + Supresión Vagal Inmediata.'
   },
   {
-    key: 'NARC_COVERT',
+    id: 'COVERT',
+    videoKey: 'covert_rejection',
+    protocolKey: 'COVERT_SHAME_REJECTION',
     title: 'Perfilado Narcisista Vulnerable / Encubierto (Covert)',
-    cluster: 'Cluster B / F60.81',
-    affinityScore: 92,
-    dsmCode: '301.81 (NPD Vulnerable)',
-    icd11Code: '6D11 (Vulnerabilidad)',
-    description: 'Hipersensibilidad al juicio ajeno, victimización, envidia latente e inestabilidad afectiva. Estrés vegetativo basal elevado con alta hipervigilancia.',
-    provocationScenario: 'Exclusión Social Sutil y Ambigüedad de Feedback Evaluativo en VR.',
-    biomarkerSignature: 'GSR Basal Elevado (Hipervigilancia) + Colapso Sustentado de HRV + Rastreo Ocular Paranoide.',
-    metrics: {
-      startleReactivityGSR: '4.8 µS (Meseta de Ansiedad)',
-      empathyResonanceHRV: '18 ms RMSSD (Estrés Crónico)',
-      gazeDistressFixation: '78% (Hipervigilancia Ocular)',
-      triarchicBoldness: '22% (Audacia Baja)',
-      triarchicMeanness: '54% (Rencor Latente)',
-      triarchicDisinhibition: '64% (Inestabilidad Moderada)'
-    },
-    graphGsr: [2.8, 3.5, 4.8, 4.6, 4.2, 4.0, 3.8, 3.2, 2.9],
-    graphHrv: [28, 22, 18, 16, 20, 21, 24, 26, 28],
-    clinicalPsychologyReading: 'Sostiene expectativas de grandiosidad no reconocida. Cuadro suele solaparse con Ansiedad Social.',
-    forensicPsychiatryReading: 'Riesgo de conductas vindicativas indirectas (sabotaje, difamación) o autolesión reactiva en contextos de alto estrés.'
+    dsmCode: 'Cluster B / F60.81',
+    affinity: 92,
+    icdCode: '301.81 (NPD-V)',
+    personalityTrait: '6D10 (Hipersensibilidad)',
+    description: 'Fragilidad interna, reactividad ansiosa ante juicios sociales sutiles, hipervigilancia interpersonal y sentimientos de vergüenza compensados con rumiación defensiva.',
+    paradoxDetails: 'Paradoja 3D de Murmullo Grupal, Descalificación Silenciosa y Aislamiento Interpersonal.',
+    bioResponse: 'Desregulación Autonómica Marcada + Caída de HRV por Tensión Inhibitoria + GSR Elevado Progresivo.'
   },
   {
-    key: 'PSYCHO_PRIMARY',
+    id: 'ANTISOCIAL',
+    videoKey: 'antisocial_distress',
+    protocolKey: 'ANTISOCIAL_EMPATHY_FLAT',
     title: 'Rasgos Antisociales con Aplanamiento Empático (Factor 1 PCL-R)',
-    cluster: 'Cluster B / F60.2',
-    affinityScore: 96,
-    dsmCode: '301.7 (Antisocial)',
-    icd11Code: '6D11 / 6D10 (Disocial)',
-    description: 'Aplanamiento afectivo, encanto superficial, marcada reducción de la resonancia empática. Hiporreactividad autonómica ante estresores aversivos.',
-    provocationScenario: 'Exposición Inmersiva Controlada a Imágenes de Sufrimiento Humano / Amenaza Física.',
-    biomarkerSignature: 'Aplanamiento de GSR (< 0.5 µS) + Rigidez Vagal sin caída reactiva + Foveación Ausente de Pistas de Distrés.',
-    metrics: {
-      startleReactivityGSR: '0.3 µS (Hiporreactividad)',
-      empathyResonanceHRV: '48 ms RMSSD (Invariable)',
-      gazeDistressFixation: '4% (Fijación Nula en Dolor Ajeno)',
-      triarchicBoldness: '94% (Audacia Extrema)',
-      triarchicMeanness: '92% (Dureza Afectiva Eleva)',
-      triarchicDisinhibition: '35% (Control Calculado)'
-    },
-    graphGsr: [0.8, 0.7, 0.8, 0.9, 0.8, 0.7, 0.8, 0.8, 0.7],
-    graphHrv: [48, 49, 47, 48, 50, 48, 47, 49, 48],
-    clinicalPsychologyReading: 'Ausencia estructural de resonancia empática autonómica. Procesamiento emocional puramente cognitivo y estratégico.',
-    forensicPsychiatryReading: 'Riesgo de reincidencia instrumental. Ineficacia de psicoterapias grupales no estructuradas por riesgo de aprendizaje manipulativo.'
+    dsmCode: 'Cluster B / F60.2',
+    affinity: 96,
+    icdCode: '301.7 (ASPD)',
+    personalityTrait: 'Factor 1 (Insensibilidad)',
+    description: 'Insensibilidad emocional, ausencia de resonancia empática somática ante el sufrimiento ajeno, alta audacia y modulación vagal rígida indiferente al contexto de dolor.',
+    paradoxDetails: 'Exposición Inmersiva a Sufrimiento Agudo, Llanto Desesperado y Súplica de Ayuda Directa.',
+    bioResponse: 'GSR y HRV en Línea Plana Sin Modulación Reactiva ante el Dolor Ajeno (Aplanamiento Afectivo).'
   }
 ];
 
 export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose }) => {
-  const patientId = patient?.id || 'PAC-8104';
-  
-  // CORRECCIÓN CLAVE: Cambiado de 'receiver' a 'sender' para tener permisos de enviar comandos
-  const { isConnected, liveData, syncSession, transmit } = useVrTelemetryBridge('sender', patientId, 'CLUSTER_B_FORENSIC');
+  const activePatientId = patient?.id || 'PAC-8104';
+  const [selectedSubtype, setSelectedSubtype] = useState<SubtypeStudy>(STUDY_SUBTYPES[0]);
+  const [hasConsent, setHasConsent] = useState(false);
+  const [isAssayRunning, setIsAssayRunning] = useState(false);
+  const [assayTime, setAssayTime] = useState(0);
+  const [isVrConnected, setIsVrConnected] = useState(false);
 
-  // Extracción de datos en vivo
-  const rawHrv = liveData?.metrics?.hrvRmssdMs;
-  const currentHrv = Array.isArray(rawHrv) ? rawHrv[rawHrv.length - 1] : (rawHrv || '--');
+  // Estados de Telemetría Biológica en Vivo
+  const [hrvBpm, setHrvBpm] = useState<number | null>(null);
+  const [gsrValue, setGsrValue] = useState<number | null>(null);
+  const [totalHits, setTotalHits] = useState<number>(0);
 
-  const rawGsr = liveData?.metrics?.gsrMicroSiemens;
-  const currentGsr = Array.isArray(rawGsr) ? rawGsr[rawGsr.length - 1] : (rawGsr || '--');
+  const wsRef = useRef<WebSocket | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [selectedPhenotypeKey, setSelectedPhenotypeKey] = useState<string>('NARC_GRANDIOSE');
-  const [hasConsentAccepted, setHasConsentAccepted] = useState<boolean>(false);
-  const activeProfile = CLUSTER_B_PHENOTYPES.find(p => p.key === selectedPhenotypeKey) || CLUSTER_B_PHENOTYPES[0];
-
-  const [isProvocationActive, setIsProvocationActive] = useState(false);
-  const [testTimer, setTestTimer] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
-
+  // Conexión WebSocket Bidireccional
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    if (isProvocationActive) {
-      timer = setInterval(() => setTestTimer(prev => prev + 1), 1000);
-    } else {
-      setTestTimer(0);
-    }
-    return () => { if (timer) clearInterval(timer); };
-  }, [isProvocationActive]);
+    let reconnectTimeout: NodeJS.Timeout;
 
-  const handleStartProvocation = () => {
-    setIsProvocationActive(true);
-    syncSession();
-    
-    // CORRECCIÓN: Agregado el "ecosystem" para que las gafas carguen la sala forense
-    transmit({ 
-      type: 'LOAD_MODULE', 
-      patientId, 
-      moduleName: 'CLUSTER_B_FORENSIC',
-      ecosystem: 'CLUSTER_B_FORENSIC' // La textura/sala pericial en el Visor
-    });
-    
-    transmit({ type: 'START_PROVOCATION', phenotype: selectedPhenotypeKey });
+    const connectWebSocket = () => {
+      try {
+        const ws = new WebSocket('wss://amieneurogical.onrender.com');
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          setIsVrConnected(true);
+          ws.send(JSON.stringify({ 
+            type: 'HANDSHAKE', 
+            role: 'doctor', 
+            patientId: activePatientId 
+          }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'CLUSTER_B_TELEMETRY' || data.type === 'VR_TELEMETRY_FRAME') {
+              setIsVrConnected(true);
+              if (data.hrvBpm !== undefined && data.hrvBpm !== null) {
+                setHrvBpm(data.hrvBpm);
+              }
+              if (data.gsrValue !== undefined && data.gsrValue !== null) {
+                setGsrValue(data.gsrValue);
+              }
+              if (data.hits !== undefined) {
+                setTotalHits(data.hits);
+              }
+            }
+
+            if (data.type === 'CLINICAL_TEST_INTERACTION') {
+              if (data.hits !== undefined) setTotalHits(data.hits);
+            }
+          } catch (e) {}
+        };
+
+        ws.onclose = () => {
+          setIsVrConnected(false);
+          reconnectTimeout = setTimeout(connectWebSocket, 3000);
+        };
+      } catch (err) {
+        setIsVrConnected(false);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, [activePatientId]);
+
+  // Cronómetro del Ensayo Clínico
+  useEffect(() => {
+    if (isAssayRunning) {
+      timerRef.current = setInterval(() => {
+        setAssayTime((prev) => {
+          if (prev >= 300) {
+            setIsAssayRunning(false);
+            return 300;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isAssayRunning]);
+
+  // Selección de Subtipo y Cambio de Video en Pico 3
+  const handleSelectSubtype = (subtype: SubtypeStudy) => {
+    setSelectedSubtype(subtype);
+    setAssayTime(0);
+    setIsAssayRunning(false);
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'CHANGE_ENVIRONMENT',
+        environment: subtype.videoKey,
+        moduleId: subtype.videoKey,
+        protocol: subtype.protocolKey,
+        patientId: activePatientId
+      }));
+    }
   };
 
-  const handleStopProvocation = async () => {
-    setIsProvocationActive(false);
-    transmit({ type: 'STOP_TEST' }); // Devuelve al paciente a la sala de espera inmersiva
-    
-    // Guardado silencioso en DB al detener la prueba con datos reales
-    setIsSaving(true);
+  // Iniciar / Detener Ensayo Bio-VR
+  const toggleAssay = () => {
+    if (!hasConsent && !isAssayRunning) return;
+
+    const nextState = !isAssayRunning;
+    setIsAssayRunning(nextState);
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: nextState ? 'START_ASSAY' : 'STOP_ASSAY',
+        environment: selectedSubtype.videoKey,
+        moduleId: selectedSubtype.videoKey,
+        protocol: selectedSubtype.protocolKey,
+        patientId: activePatientId
+      }));
+    }
+
+    if (!nextState) {
+      persistCurrentAssay();
+    }
+  };
+
+  // Guardado en Base de Datos MongoDB
+  const persistCurrentAssay = async () => {
+    const payload = {
+      patientId: activePatientId,
+      moduleId: selectedSubtype.videoKey,
+      protocol: selectedSubtype.protocolKey,
+      category: 'DIAGNOSTIC',
+      durationSeconds: assayTime,
+      finalHrv: hrvBpm,
+      finalGsr: gsrValue,
+      totalHits: totalHits,
+      tripm: { boldness: 88, meanness: 62, disinhibition: 28 },
+      timestamp: new Date().toISOString()
+    };
+
     try {
-      await fetch('/api/vr/telemetry', {
+      await fetch('https://amieneurogical.onrender.com/api/telemetry/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId: patientId,
-          sessionData: {
-            taskName: `Forensic_ClusterB_${selectedPhenotypeKey}`,
-            durationSeconds: testTimer,
-            metrics: { 
-              affinityScore: activeProfile.affinityScore,
-              finalHrv: currentHrv,
-              finalGsr: currentGsr
-            },
-            aiLogs: [`Evaluación pericial completada. Perfil: ${activeProfile.title}. TriPM Audacia: ${activeProfile.metrics.triarchicBoldness}`],
-            completedAt: new Date().toISOString()
-          }
-        })
+        body: JSON.stringify(payload)
       });
-    } catch (e) {
-      console.error("Error guardando en DB", e);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e) {}
   };
 
-  const handleExportForensicReport = () => {
-    const reportText = `
-================================================================================
-AMIE CLINICAL ENGINE — DICTAMEN PERICIAL Y PERFILADO DE CLUSTER B
-================================================================================
-AVISO LEGAL: Documento de soporte a la decisión clínica (CDSS). Uso Pericial.
-PACIENTE ID: ${patientId}
-PERFIL EVALUADO: ${activeProfile.title}
-CÓDIGO DSM-5-TR: ${activeProfile.dsmCode} | CIE-11: ${activeProfile.icd11Code}
-SCORE DE AFINIDAD BIOCLÍNICA: ${activeProfile.affinityScore}/100
-FECHA DE EVALUACIÓN: ${new Date().toLocaleDateString()}
---------------------------------------------------------------------------------
-1. FIRMA BIOMÉTRICA:
-${activeProfile.description}
+  // Exportar Dictamen Oficial
+  const handleExportReport = () => {
+    const reportData = {
+      titulo: 'DICTAMEN PERICIAL FORENSE - CLUSTER B',
+      pacienteId: activePatientId,
+      estudioSeleccionado: selectedSubtype.title,
+      clasificacionCie: selectedSubtype.icdCode,
+      rasgoPersonalidad: selectedSubtype.personalityTrait,
+      duracionPruebaSegundos: assayTime,
+      biometriaRegistrada: {
+        tonoVagalHrv: hrvBpm ? `${hrvBpm} ms` : 'Sin registro',
+        estresGsr: gsrValue ? `${gsrValue} µS` : 'Sin registro',
+        totalInteraccionesGatillo: totalHits
+      },
+      dimensionesTripm: {
+        audacia: '88% (Elevada)',
+        durezaAfectiva: '62% (Moderada)',
+        desinhibicion: '28% (Baja)'
+      },
+      conclusionDiagnostica: selectedSubtype.bioResponse,
+      fechaDictamen: new Date().toLocaleString()
+    };
 
-2. ENSAYO DE PROVOCACIÓN INMERSIVA EN VR:
-- Escenario: ${activeProfile.provocationScenario}
-- Patrón Biométrico Esperado: ${activeProfile.biomarkerSignature}
-- Última Métrica HRV Registrada: ${currentHrv} ms
-- Última Métrica GSR Registrada: ${currentGsr} µS
-
-3. MEDIDA PSICOPÁTICA TRIÁRQUICA (TriPM):
-- Audacia (Boldness): ${activeProfile.metrics.triarchicBoldness}
-- Dureza Afectiva (Meanness): ${activeProfile.metrics.triarchicMeanness}
-- Desinhibición (Disinhibition): ${activeProfile.metrics.triarchicDisinhibition}
-
-4. ORIENTACIÓN FORENSE Y PERITAJE:
-${activeProfile.forensicPsychiatryReading}
---------------------------------------------------------------------------------
-Dictamen emitido bajo norma HIPAA/RGPD y cifrado de grado médico.
-`;
-
-    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Dictamen_ClusterB_${selectedPhenotypeKey}_${patientId}.txt`;
-    link.click();
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Dictamen_Forense_${activePatientId}_${selectedSubtype.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col font-sans text-slate-100 overflow-y-auto">
-      
-      {/* HEADER DE CIERRE CON INDICADOR DE CONEXIÓN */}
-      <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
+    <div className="min-h-screen bg-[#070b14] text-slate-100 p-6 font-sans">
+      {/* Barra Superior */}
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-tr from-purple-600 via-rose-600 to-indigo-600 rounded-lg text-white shadow-lg shadow-purple-600/20">
+          <div className="p-2.5 rounded-xl bg-pink-950/40 border border-pink-500/40 text-pink-400">
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white leading-tight">MÓDULO FORENSE • Perfilado Cluster B (Psicopatía/Narcisismo)</h2>
-            <p className="text-xs text-slate-400">Paciente ID: <strong className="text-purple-300">{patientId}</strong></p>
+            <h1 className="text-lg font-black tracking-wide uppercase">
+              MÓDULO FORENSE • Perfilado Cluster B (Psicopatía/Narcisismo)
+            </h1>
+            <p className="text-xs text-slate-400">
+              Paciente ID: <span className="font-mono text-cyan-400 font-bold">{activePatientId}</span>
+            </p>
           </div>
         </div>
-        <div className="flex gap-3">
-          {/* INDICADOR EN VIVO DE CONEXIÓN */}
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+
+        <div className="flex items-center gap-3">
+          <div className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-2 ${
+            isVrConnected 
+              ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300' 
+              : 'bg-rose-950/60 border-rose-500/60 text-rose-300'
+          }`}>
+            <Wifi className="w-4 h-4" />
+            <span>{isVrConnected ? 'VR Conectado' : 'VR Desconectado'}</span>
           </div>
 
-          <button onClick={syncSession} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-purple-300 rounded-xl text-xs font-bold transition flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" /> Sincronizar VR
+          <button 
+            onClick={() => handleSelectSubtype(selectedSubtype)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Sincronizar VR
           </button>
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-xl transition border border-rose-500/20">
-            <X className="w-5 h-5" />
-          </button>
+
+          {onClose && (
+            <button onClick={onClose} className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition">
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="p-6 max-w-7xl mx-auto w-full space-y-6">
-        
-        {/* BANNER RIESGO/DISCLAIMER ÉTICO */}
-        <div className="p-4 bg-amber-950/40 border border-amber-500/40 rounded-2xl flex items-start gap-3 shadow-lg">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <div className="text-xs space-y-1">
-            <div className="font-bold text-amber-200 flex items-center gap-2">
-              <span>Protocolo de Investigación & Peritaje Forense — Cluster B</span>
-              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-[10px] rounded font-mono">CDSS / Consentimiento Requerido</span>
-            </div>
-            <p className="text-slate-300 leading-relaxed">
-              Las pruebas inmersivas de provocación estresante deben realizarse únicamente bajo <strong>Consentimiento Informado explícito</strong>, en contexto de peritaje o consulta forense especializada.
-            </p>
-            <div className="pt-1 flex items-center gap-2">
-              <input type="checkbox" id="informedConsentCheck" checked={hasConsentAccepted} onChange={(e) => setHasConsentAccepted(e.target.checked)} className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500 cursor-pointer w-4 h-4" />
-              <label htmlFor="informedConsentCheck" className="text-[11px] text-amber-300 font-medium cursor-pointer">
-                Confirmo que el paciente cuenta con Consentimiento Informado para protocolos de provocación y peritaje.
-              </label>
-            </div>
-          </div>
+      {/* Alerta de Protocolo y Consentimiento */}
+      <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-4 mb-6 text-xs text-amber-200/90 space-y-2">
+        <div className="flex items-center gap-2 font-bold text-amber-400 uppercase tracking-wide">
+          <AlertTriangle className="w-4 h-4 text-amber-400" />
+          <span>Protocolo de Investigación & Peritaje Forense — Cluster B</span>
+          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-[10px] border border-amber-500/40">
+            CDSS / Consentimiento Requerido
+          </span>
         </div>
+        <p className="text-slate-300 leading-relaxed">
+          Las pruebas inmersivas de provocación estresante deben realizarse únicamente bajo Consentimiento Informado explícito, en contexto de peritaje o consulta forense especializada.
+        </p>
+        <label className="flex items-center gap-2 text-slate-200 font-medium cursor-pointer pt-1">
+          <input 
+            type="checkbox" 
+            checked={hasConsent} 
+            onChange={(e) => setHasConsent(e.target.checked)} 
+            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0" 
+          />
+          <span>Confirmo que el paciente cuenta con Consentimiento Informado para protocolos de provocación y peritaje.</span>
+        </label>
+      </div>
 
-        {/* SELECTOR DE PERFIL Y DETALLES */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          
-          {/* Lista de Selección */}
-          <div className="lg:col-span-5 space-y-3">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Seleccionar Subtipo de Estudio:</label>
-            <div className="space-y-2">
-              {CLUSTER_B_PHENOTYPES.map(proto => (
-                <button
-                  key={proto.key}
-                  onClick={() => setSelectedPhenotypeKey(proto.key)}
-                  className={`w-full text-left p-3.5 rounded-xl text-xs font-semibold transition border cursor-pointer ${
-                    selectedPhenotypeKey === proto.key
-                      ? 'bg-gradient-to-r from-purple-950/80 to-slate-900 text-white border-purple-500/60 shadow-lg shadow-purple-950/40'
-                      : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-white text-xs">{proto.title}</span>
-                    <span className="text-[10px] text-purple-300 font-mono bg-purple-950 px-2 py-0.5 rounded border border-purple-800/50">
-                      Afinidad: {proto.affinityScore}/100
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 block font-mono">{proto.cluster}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Panel Informativo */}
-          <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-purple-400" />
-                  {activeProfile.title}
-                </h3>
-                <div className="flex items-center gap-2 text-[10px] font-mono">
-                  <span className="bg-slate-950 text-slate-300 px-2 py-0.5 rounded border border-slate-800">{activeProfile.dsmCode}</span>
-                  <span className="bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-800/50">{activeProfile.icd11Code}</span>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed">{activeProfile.description}</p>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-1.5 font-mono">
-                <div className="text-purple-300 font-bold flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" /> <span>Ensayo de Provocación Inmersiva VR:</span>
-                </div>
-                <p className="text-slate-300 text-[11px] font-sans">{activeProfile.provocationScenario}</p>
-                <div className="text-cyan-300 font-bold pt-1">Firma Biofisiológica Esperada:</div>
-                <p className="text-slate-400 text-[11px] font-sans">{activeProfile.biomarkerSignature}</p>
-              </div>
-
-              {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
-              {!isConnected && !isProvocationActive && (
-                <div className="mt-3 p-3 bg-slate-900/80 border border-purple-500/30 border-dashed rounded-xl flex items-center gap-3">
-                  <div className="p-2 bg-slate-800 rounded-lg shrink-0">
-                    <Glasses className="w-5 h-5 text-purple-400 animate-pulse" />
-                  </div>
-                  <div className="text-xs text-slate-300 leading-relaxed">
-                    <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
-                    Para habilitar el ensayo, el paciente debe colocarse el visor <strong className="text-purple-300">Meta Quest 3S</strong> e iniciar la sesión vinculando su expediente: <span className="text-purple-300 font-mono bg-purple-900/30 px-1 rounded">{patientId}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* PANEL EN VIVO: Se muestra solo cuando inicia la prueba */}
-              {isProvocationActive && (
-                <div className="mt-3 p-3 bg-slate-950 border border-emerald-500/30 rounded-xl flex items-center justify-around shadow-inner animate-pulse">
-                  <div className="text-center">
-                    <span className="block text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-center gap-1">
-                      <HeartPulse className="w-3 h-3 text-emerald-400"/> Tono Vagal (HRV)
-                    </span>
-                    <span className="text-xl font-black text-emerald-400">{currentHrv} ms</span>
-                  </div>
-                  <div className="w-px h-10 bg-slate-800"></div>
-                  <div className="text-center">
-                    <span className="block text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-center gap-1">
-                      <Activity className="w-3 h-3 text-amber-400"/> Estrés (GSR)
-                    </span>
-                    <span className="text-xl font-black text-amber-400">{currentGsr} µS</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-mono">
-                Tiempo Ensayo VR: <strong className="text-purple-300">{testTimer}s / 300s</strong>
-              </span>
-
+      {/* Panel Principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+        {/* Selector de Subtipo Izquierdo */}
+        <div className="lg:col-span-4 space-y-3">
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            SELECCIONAR SUBTIPO DE ESTUDIO:
+          </h2>
+          {STUDY_SUBTYPES.map((sub) => {
+            const isSelected = selectedSubtype.id === sub.id;
+            return (
               <button
-                disabled={!hasConsentAccepted}
-                onClick={!isProvocationActive ? handleStartProvocation : handleStopProvocation}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  !hasConsentAccepted ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 
-                  (!isConnected && !isProvocationActive) ? 'bg-purple-900/30 text-purple-300 border border-purple-500/30' :
-                  isProvocationActive ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/20'
+                key={sub.id}
+                onClick={() => handleSelectSubtype(sub)}
+                className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer ${
+                  isSelected 
+                    ? 'bg-purple-950/40 border-purple-500/80 shadow-lg shadow-purple-950/50' 
+                    : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-900/80'
                 }`}
               >
-                {!hasConsentAccepted ? 'Requiere Consentimiento' : 
-                 (!isConnected && !isProvocationActive) ? 'Esperando Visor VR...' : 
-                 isProvocationActive ? 'Detener Ensayo Bio-VR' : 'Iniciar Provocación en VR Quest 3S'}
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="text-xs font-bold text-slate-100">{sub.title}</h3>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-900/50 border border-purple-500/40 text-purple-300">
+                    Afinidad: {sub.affinity}/100
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-mono">{sub.dsmCode}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Detalles de la Prueba Activa */}
+        <div className="lg:col-span-8 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <h3 className="text-sm font-bold text-slate-100">{selectedSubtype.title}</h3>
+              </div>
+              <div className="flex gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                  {selectedSubtype.icdCode}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-950 border border-purple-500/40 text-purple-300">
+                  {selectedSubtype.personalityTrait}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {selectedSubtype.description}
+            </p>
+
+            <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+              <p className="font-bold text-amber-400">⚡ Ensayo de Provocación Inmersiva VR:</p>
+              <p className="text-slate-300">{selectedSubtype.paradoxDetails}</p>
+              <p className="font-bold text-cyan-400 pt-1">Firma Biofisiológica Esperada:</p>
+              <p className="text-slate-400 font-mono text-[11px]">{selectedSubtype.bioResponse}</p>
+            </div>
+          </div>
+
+          {/* Tarjetas de Telemetría Biológica en Tiempo Real */}
+          <div className="pt-6 border-t border-slate-800/80 mt-6">
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                  TONO VAGAL (HRV)
+                </span>
+                <span className="text-2xl font-black font-mono text-cyan-400">
+                  {hrvBpm !== null ? `${hrvBpm} ms` : '-- ms'}
+                </span>
+              </div>
+
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                  ESTRÉS (GSR)
+                </span>
+                <span className="text-2xl font-black font-mono text-amber-400">
+                  {gsrValue !== null ? `${gsrValue} µS` : '-- µS'}
+                </span>
+              </div>
+            </div>
+
+            {/* Controles del Ensayo */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="text-xs text-slate-400 font-mono">
+                Tiempo Ensayo VR: <strong className="text-slate-100">{assayTime}s</strong> / 300s
+                {totalHits > 0 && <span className="ml-3 text-cyan-400">Impactos Gatillo: {totalHits}</span>}
+              </div>
+
+              <button
+                onClick={toggleAssay}
+                disabled={!hasConsent && !isAssayRunning}
+                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+                  isAssayRunning 
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-950/50' 
+                    : hasConsent 
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/50' 
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                }`}
+              >
+                {isAssayRunning ? (
+                  <><Square className="w-3.5 h-3.5 fill-current" /> Detener Ensayo Bio-VR</>
+                ) : hasConsent ? (
+                  <><Play className="w-3.5 h-3.5 fill-current" /> Iniciar Ensayo Bio-VR</>
+                ) : (
+                  'Requiere Consentimiento'
+                )}
               </button>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* BARRAS DE LA TRÍADA TriPM */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-              <Scale className="w-4 h-4 text-purple-400" /> Dimensiones de la Medida Psicopática Triárquica (TriPM)
-            </h3>
-            <button onClick={handleExportForensicReport} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-purple-300 rounded-lg font-bold text-[10px] transition cursor-pointer">
-              <Download className="w-3 h-3" /> Exportar Dictamen
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-slate-300">Audacia (Boldness)</span>
-                <span className="text-purple-400">{activeProfile.metrics.triarchicBoldness}</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div className="bg-purple-500 h-full rounded-full" style={{ width: activeProfile.metrics.triarchicBoldness }} />
-              </div>
-              <span className="text-[9px] text-slate-500 block">Tolerancia al estrés e inmunidad al miedo.</span>
-            </div>
-
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-slate-300">Dureza Afectiva (Meanness)</span>
-                <span className="text-rose-400">{activeProfile.metrics.triarchicMeanness}</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div className="bg-rose-500 h-full rounded-full" style={{ width: activeProfile.metrics.triarchicMeanness }} />
-              </div>
-              <span className="text-[9px] text-slate-500 block">Reducción de empatía y frialdad interpersonal.</span>
-            </div>
-
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-slate-300">Desinhibición (Disinhibition)</span>
-                <span className="text-amber-400">{activeProfile.metrics.triarchicDisinhibition}</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div className="bg-amber-500 h-full rounded-full" style={{ width: activeProfile.metrics.triarchicDisinhibition }} />
-              </div>
-              <span className="text-[9px] text-slate-500 block">Dificultad de control de impulsos y labilidad.</span>
-            </div>
-          </div>
+      {/* Dimensiones TRIPM */}
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+            <span>⚖️ DIMENSIONES DE LA MEDIDA PSICOPÁTICA TRIÁRQUICA (TRIPM)</span>
+          </h3>
+          <button 
+            onClick={handleExportReport}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Exportar Dictamen
+          </button>
         </div>
 
-        {/* LECTURA CLÍNICA DUAL */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-slate-900 border border-emerald-500/30 rounded-2xl space-y-2">
-            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-              <UserCheck className="w-4 h-4" /> Orientación para Psicología Clínica
-            </span>
-            <p className="text-xs text-slate-300 leading-relaxed">{activeProfile.clinicalPsychologyReading}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <span className="font-bold text-slate-300">Audacia (Boldness)</span>
+              <span className="font-mono text-purple-400 font-bold">88% (Audacia Elevada)</span>
+            </div>
+            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div className="bg-purple-500 h-full rounded-full" style={{ width: '88%' }} />
+            </div>
+            <span className="text-[10px] text-slate-400 mt-1 block">Tolerancia al estrés e inmunidad al miedo.</span>
           </div>
 
-          <div className="p-4 bg-slate-900 border border-purple-500/30 rounded-2xl space-y-2">
-            <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4" /> Orientación para Psiquiatría Forense
-            </span>
-            <p className="text-xs text-slate-300 leading-relaxed">{activeProfile.forensicPsychiatryReading}</p>
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <span className="font-bold text-slate-300">Dureza Afectiva (Meanness)</span>
+              <span className="font-mono text-rose-400 font-bold">62% (Dureza Moderada)</span>
+            </div>
+            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div className="bg-rose-500 h-full rounded-full" style={{ width: '62%' }} />
+            </div>
+            <span className="text-[10px] text-slate-400 mt-1 block">Reducción de empatía y frialdad interpersonal.</span>
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <span className="font-bold text-slate-300">Desinhibición (Disinhibition)</span>
+              <span className="font-mono text-amber-400 font-bold">28% (Baja Desinhibición)</span>
+            </div>
+            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div className="bg-amber-500 h-full rounded-full" style={{ width: '28%' }} />
+            </div>
+            <span className="text-[10px] text-slate-400 mt-1 block">Dificultad de control de impulsos y labilidad.</span>
           </div>
         </div>
-
       </div>
     </div>
   );
 };
+
+export default PsychopathyNarcissismModule;
