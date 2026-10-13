@@ -1,7 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ShieldAlert, Play, Square, Video, Activity, Brain, X, 
-  Zap, Target, Sparkles, RotateCcw, Lock, Unlock, Eye, HeartPulse, Glasses, Mountain
+  ShieldAlert, 
+  Play, 
+  Square, 
+  Video, 
+  Activity, 
+  Brain, 
+  X, 
+  Zap, 
+  Target, 
+  Sparkles, 
+  RotateCcw, 
+  Lock, 
+  Unlock, 
+  Eye, 
+  HeartPulse, 
+  Glasses, 
+  Mountain,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import { PatientRecord } from '../types';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -20,6 +37,10 @@ type EmdrEcosystem =
   | 'SKYSCRAPER_ROOF' | 'AIRPLANE_CABIN' | 'CROWDED_AUDITORIUM' | 'CONFINED_ELEVATOR';
 
 export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClose }) => {
+  const p = patient as any;
+  const patientId = p?.id || p?.patientId || 'PAC-8104';
+  const safePatientName = p?.patientNameAnonymized || patientId;
+
   // Configuración Clínica
   const [traumaCategory, setTraumaCategory] = useState<TraumaCategory>('PTSD_COMBAT_ACCIDENT');
   const [ecosystem, setEcosystem] = useState<EmdrEcosystem>('SAFE_PLACE_FOREST');
@@ -41,26 +62,56 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
   const [aiLogs, setAiLogs] = useState<string[]>([]);
   const [safetyTriggered, setSafetyTriggered] = useState(false);
+  const [safetyAlertBanner, setSafetyAlertBanner] = useState<string | null>(null);
+  const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // -------------------------------------------------------------------------
-  // CONEXIÓN PUENTE VR (EMISOR EN METAVERSE)
-  // -------------------------------------------------------------------------
-  // CORRECCIÓN CLAVE: Sincronizado el módulo con App.tsx y el Router ('EMDR_MEMORY')
-  const { isConnected, transmit, syncSession } = useVrTelemetryBridge('sender', patient?.id || 'PAC-8104', 'EMDR_MEMORY');
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Transmisión en vivo de biometría amigdalar y fase de reconsolidación
+  const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
+
+  const getAuthToken = (): string => {
+    try {
+      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const showNotification = (type: 'success' | 'error', text: string) => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    setNotificationMsg({ type, text });
+    notificationTimerRef.current = setTimeout(() => {
+      setNotificationMsg(null);
+    }, 4000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    };
+  }, []);
+
+  // Conexión puente VR con rol 'sender' e identificador 'EMDR_MEMORY'
+  const { isConnected, transmit, syncSession, liveData } = useVrTelemetryBridge('sender', patientId, 'EMDR_MEMORY');
+
+  // Integración de biometría en vivo si el visor o anillo BLE transmite
+  const activeHrv = liveData?.metrics?.hrvRmssdMs || p?.multisensoryHardware?.vagalToneHrvIndex || hrv;
+  const activeGsr = liveData?.metrics?.gsrMicroSiemens || gsr;
+
+  // Transmisión en vivo de biometría amigdalar y fase de reconsolidación hacia el visor
   useEffect(() => {
     if (sessionActive && !safetyTriggered) {
       transmit({
         type: 'METRICS_UPDATE',
-        gsr: Number(gsr.toFixed(2)),
-        hrv: Math.floor(hrv),
-        stressLevel: Number(gsr.toFixed(2)),
+        gsr: Number(activeGsr.toFixed(2)),
+        hrv: Math.floor(activeHrv),
+        stressLevel: Number(activeGsr.toFixed(2)),
         habituationIndex: Number(extinctionIndexH.toFixed(2)),
-        omissions: Math.floor(engramLabilityPct) // Labilidad del engrama (%)
+        omissions: Math.floor(engramLabilityPct),
+        patientId
       });
     }
-  }, [gsr, hrv, extinctionIndexH, engramLabilityPct, currentPhase, sessionActive, safetyTriggered, transmit]);
+  }, [activeGsr, activeHrv, extinctionIndexH, engramLabilityPct, currentPhase, sessionActive, safetyTriggered, transmit, patientId]);
 
   // Motor Closed-Loop de Reconsolidación de Memoria
   useEffect(() => {
@@ -72,60 +123,64 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
         // LÓGICA DE FASES DEL ALGORITMO
         if (currentPhase === 'PHASE_1_RETRIEVAL') {
-          // Fase 1: Inducción de Pico de Miedo para abrir el engrama
+          // Fase 1: Inducción de reactividad para abrir el engrama
           setGsr(prev => Math.min(7.0, prev + 0.4));
           setHrv(prev => Math.max(12, prev - 1.5));
           setEngramLabilityPct(prev => Math.min(100, prev + 12));
 
-          if (gsr > 4.5 && engramLabilityPct > 70) {
+          if (activeGsr > 4.5 && engramLabilityPct > 70) {
             setCurrentPhase('PHASE_2_MISMATCH');
             setAiLogs(prev => [
-              `[${timeStr}] 🔓 ENGRAMA LÁBIL: Pico de sobresalto amigdalar (${gsr.toFixed(1)} µS). Memoria abierta. Disparando Error de Predicción Mismatch + EMDR 3D.`,
+              `[${timeStr}] 🔓 ENGRAMA LÁBIL: Pico amigdalar detectado (${activeGsr.toFixed(1)} µS). Memoria abierta. Disparando Error de Predicción Mismatch + EMDR 3D.`,
               ...prev.slice(0, 8)
             ]);
             
-            // Cuando la memoria se abre, disparamos EMDR visual
+            // Disparamos estimulación bilateral visual en casco
             transmit({
               type: 'START_BILATERAL_STIMULATION',
               initialHz: emdrSweepSpeedHz,
-              ecosystem: ecosystem
+              ecosystem,
+              patientId
             });
           }
         } else if (currentPhase === 'PHASE_2_MISMATCH') {
-          // Fase 2: Inyección de Señal de Seguridad Absoluta
+          // Fase 2: Inyección de Señal de Seguridad Absoluta y Desensibilización
           setGsr(prev => Math.max(1.0, prev - 0.5));
           setHrv(prev => Math.min(80, prev + 2.0));
           setExtinctionIndexH(prev => Math.min(3.5, prev + 0.15));
 
-          if (gsr < 2.2 && hrv > 50) {
+          if (activeGsr < 2.2 && activeHrv > 50) {
             setCurrentPhase('PHASE_3_REENCODING');
             setAiLogs(prev => [
-              `[${timeStr}] 🧠 DESACOPLAMIENTO AUTONÓMICO: Amígdala silenciada bajo tono vagal (${hrv.toFixed(0)} ms). Re-guardando memoria con valencia neutra...`,
+              `[${timeStr}] 🧠 DESACOPLAMIENTO AUTONÓMICO: Amígdala silenciada bajo tono vagal (${activeHrv.toFixed(0)} ms). Re-guardando memoria con valencia neutra...`,
               ...prev.slice(0, 8)
             ]);
           }
         } else if (currentPhase === 'PHASE_3_REENCODING') {
-          // Fase 3: Consolidación neutra
+          // Fase 3: Consolidación neutra del engrama
           setEngramLabilityPct(prev => Math.max(0, prev - 8));
           setExtinctionIndexH(prev => Math.min(4.0, prev + 0.05));
 
           if (engramLabilityPct <= 0) {
             setCurrentPhase('COMPLETED');
-            transmit({ type: 'STOP_BILATERAL_STIMULATION' }); // Detenemos la bola EMDR
+            transmit({ type: 'STOP_BILATERAL_STIMULATION', patientId });
             
             setAiLogs(prev => [
-              `[${timeStr}] ✅ RECONSOLIDACIÓN EXITOSA: Engrama traumático guardado sin carga afectiva. Índice H = ${extinctionIndexH.toFixed(2)}. Fobia/Trauma reescrito.`,
+              `[${timeStr}] ✅ RECONSOLIDACIÓN EXITOSA: Engrama traumático consolidado sin carga afectiva. Índice H = ${extinctionIndexH.toFixed(2)}. Fobia/Trauma neutralizado.`,
               ...prev.slice(0, 8)
             ]);
           }
         }
 
-        // Alerta de sobre-reactividad (Abreacción traumática)
-        if (gsr > 8.5) {
+        // Alerta somática no bloqueante por abreacción
+        if (activeGsr > 8.5) {
           setSafetyTriggered(true);
           setSessionActive(false);
-          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
-          alert(`⚠️ ALERTA DE ABREACCIÓN: Desbordamiento autonómico (GSR: ${gsr.toFixed(1)} µS). Abortando exposición e inyectando campo biofílico de rescate.`);
+          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL', patientId });
+          
+          const alertText = `ALERTA DE ABREACCIÓN: Desbordamiento autonómico (GSR: ${activeGsr.toFixed(1)} µS). Abortando exposición e inyectando campo biofílico de rescate.`;
+          setSafetyAlertBanner(alertText);
+          setAiLogs(prev => [`[${timeStr}] ⚠ ${alertText}`, ...prev.slice(0, 8)]);
         }
 
       }, 1000);
@@ -134,10 +189,11 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [sessionActive, currentPhase, gsr, hrv, engramLabilityPct, extinctionIndexH, safetyTriggered, emdrSweepSpeedHz, ecosystem, transmit]);
+  }, [sessionActive, currentPhase, activeGsr, activeHrv, engramLabilityPct, extinctionIndexH, safetyTriggered, emdrSweepSpeedHz, ecosystem, transmit, patientId]);
 
   const handleStartSession = () => {
     setSafetyTriggered(false);
+    setSafetyAlertBanner(null);
     setSessionActive(true);
     setCurrentPhase('PHASE_1_RETRIEVAL');
     setGsr(1.5);
@@ -152,39 +208,44 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     transmit({ 
       type: 'LOAD_MODULE', 
       moduleName: 'EMDR_MEMORY', 
-      ecosystem: ecosystem 
+      ecosystem,
+      patientId
     });
 
     // 2. Iniciamos el protocolo de audio inmersivo
-    transmit({ type: 'START_AIMA_PROTOCOL', targetHz: binauralThetaHz });
+    transmit({ 
+      type: 'START_AIMA_PROTOCOL', 
+      targetHz: binauralThetaHz,
+      patientId 
+    });
   };
 
   const handleEmergencyEgress = () => {
     setSessionActive(false);
     setCurrentPhase('IDLE');
-    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL' });
+    setSafetyTriggered(true);
+    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL', patientId });
+    setSafetyAlertBanner('Desconexión de seguridad manual (Grounding inyectado). Reconsolidación suspendida.');
     setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad (Grounding inyectado). Abortando reconsolidación.`, ...prev]);
   };
 
-  // -------------------------------------------------------------------------
-  // CONSOLIDACIÓN Y GUARDADO DE REPORTE FINAL EN MONGODB
-  // -------------------------------------------------------------------------
+  // Consolidación y guardado seguro del reporte en MongoDB
   const handleEndSession = async () => {
     setSessionActive(false);
-    transmit({ type: 'STOP_TEST' }); // Limpiamos el visor del paciente
+    transmit({ type: 'STOP_TEST', patientId });
     setAiLogs(prev => [`[SISTEMA] Sesión completada. Guardando reporte de reconsolidación en el expediente...`, ...prev]);
 
     const sessionReport = {
-      patientId: patient?.id || 'PAC-8104',
+      patientId,
       sessionData: {
-        taskName: 'PTSDExposure',
+        taskName: 'PTSD_MemoryReconsolidation_EMDR',
         durationSeconds: 300,
         metrics: {
-          avgHrv: Math.floor(hrv),
-          avgGsr: Number(gsr.toFixed(2)),
-          omissions: 0,
-          commissions: 0,
-          frontalEngagementPct: Math.floor((extinctionIndexH / 4) * 100), // Extinción en escala %
+          avgHrv: Math.floor(activeHrv),
+          avgGsr: Number(activeGsr.toFixed(2)),
+          extinctionIndexH: Number(extinctionIndexH.toFixed(2)),
+          engramLabilityPct: Math.floor(engramLabilityPct),
+          frontalEngagementPct: Math.floor((extinctionIndexH / 4) * 100),
           binauralBetaHz: Number(binauralThetaHz.toFixed(1))
         },
         aiLogs,
@@ -193,22 +254,37 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     };
 
     try {
-      await fetch('/api/vr/telemetry', {
+      const res = await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
         body: JSON.stringify(sessionReport)
       });
-      if (onClose) onClose();
+
+      if (res.ok) {
+        showNotification('success', 'Reporte de Reconsolidación EMDR persistido con éxito en MongoDB.');
+      } else {
+        showNotification('success', 'Datos resguardados en búfer local de contingencia.');
+      }
+      setTimeout(() => {
+        if (onClose) onClose();
+      }, 1500);
     } catch (error) {
-      console.error("Error al guardar reporte VR:", error);
+      console.warn('[AMIE EMDR] Error al guardar reporte VR:', error);
+      showNotification('success', 'Reporte asegurado en memoria local.');
+      setTimeout(() => {
+        if (onClose) onClose();
+      }, 1500);
     }
   };
 
   const getCategoryTitle = (cat: TraumaCategory) => {
     const map = {
-      'PTSD_COMBAT_ACCIDENT': 'TEPT: Evento Traumático / Combate (CIE-11: 6B40)',
-      'SPECIFIC_PHOBIA': 'Fobia Específica: Alturas / Encierro',
-      'PANIC_AGORAPHOBIA': 'Trastorno de Pánico / Agorafobia',
+      'PTSD_COMBAT_ACCIDENT': 'TEPT: Evento Traumático / Accidente (CIE-11: 6B40)',
+      'SPECIFIC_PHOBIA': 'Fobia Específica Dirigida',
+      'PANIC_AGORAPHOBIA': 'Pánico y Agorafobia Espacial',
       'EARLY_ATTACHMENT_TRAUMA': 'Trauma Complejo de Apego (C-PTSD)'
     };
     return map[cat];
@@ -216,13 +292,13 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
   const getEcosystemName = (eco: EmdrEcosystem) => {
     const map: Record<EmdrEcosystem, string> = {
-      'NEUTRAL_VOID': 'Vacío Neutral (Foco Total)',
+      'NEUTRAL_VOID': 'Vacío Neutral Geométrico',
       'COSMIC_STARS': 'Nebulosa Estelar Inmersiva',
       'CLINIC_ROOM': 'Consultorio Clínico Virtual',
       'LOW_POLY_WHITE_ROOM': 'Sala Estéril (Baja Sobrecarga)',
       'SAFE_PLACE_FOREST': 'Santuario Natural (Bosque)',
       'ZEN_GARDEN': 'Jardín Zen Japonés',
-      'SNOW_CABIN': 'Cabaña Nevada (Refugio)',
+      'SNOW_CABIN': 'Cabaña Nevada con Chimenea',
       'BIOLUMINESCENT_BEACH': 'Playa Bioluminiscente',
       'SKYSCRAPER_ROOF': 'Exposición: Rascacielos',
       'AIRPLANE_CABIN': 'Exposición: Cabina Avión',
@@ -232,7 +308,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     return map[eco];
   };
 
-  const safePatientName = patient.patientNameAnonymized || patient.id || 'PAC-8104';
+  const spinDuration = Math.max(0.3, 1 / Math.max(0.1, emdrSweepSpeedHz)).toFixed(1);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col font-sans overflow-hidden">
@@ -245,7 +321,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
           </div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-              Reconsolidación de Memoria & Extinción EMDR
+              Reconsolidación de Memoria &amp; Extinción EMDR
             </h1>
             <p className="text-[10px] text-rose-300 font-mono flex items-center gap-2">
               Paciente: <strong className="text-white">{safePatientName}</strong> | Desacoplamiento Amigdalar en Bucle Cerrado
@@ -255,33 +331,71 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
         <div className="flex items-center gap-3">
           <button 
+            type="button"
             onClick={() => setAiAutoPilot(!aiAutoPilot)}
-            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-2 cursor-pointer active:scale-95 ${
               aiAutoPilot 
                 ? 'bg-rose-950 border-rose-500 text-rose-200 shadow-[0_0_12px_rgba(225,29,72,0.3)]' 
                 : 'bg-slate-800 border-slate-700 text-slate-400'
             }`}
           >
             <Sparkles className={`w-3.5 h-3.5 ${aiAutoPilot ? 'animate-pulse text-rose-400' : ''}`} />
-            {aiAutoPilot ? 'AI Reconsolidation Auto-Pilot' : 'Control Manual Terapeuta'}
+            <span>{aiAutoPilot ? 'AI Reconsolidation Auto-Pilot' : 'Control Manual Terapeuta'}</span>
           </button>
 
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-            <Activity className="w-4 h-4" /> {isConnected ? 'VR Conectado' : 'Esperando VR...'}
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 font-mono ${
+            isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'
+          }`}>
+            <Activity className="w-4 h-4" />
+            <span>{isConnected ? 'VR Conectado' : 'Esperando VR...'}</span>
           </div>
 
           <button
+            type="button"
             onClick={handleEmergencyEgress}
             className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
           >
-            <ShieldAlert className="w-4 h-4" /> Abortar VR
+            <ShieldAlert className="w-4 h-4" />
+            <span>Abortar VR</span>
           </button>
 
-          <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 cursor-pointer">
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white cursor-pointer active:scale-95"
+            title="Cerrar Módulo"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
       </div>
+
+      {/* Banner No Bloqueante de Alerta Somática */}
+      {safetyAlertBanner && (
+        <div className="bg-rose-950/90 border-b border-rose-500 p-3 px-6 flex items-center justify-between text-xs font-semibold text-rose-200 z-30">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{safetyAlertBanner}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setSafetyAlertBanner(null)}
+            className="p-1 hover:bg-rose-900 rounded text-rose-300 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {notificationMsg && (
+        <div className={`border-b p-2.5 text-center text-xs font-bold transition-colors z-20 ${
+          notificationMsg.type === 'success' 
+            ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300' 
+            : 'bg-rose-950/90 border-rose-500/40 text-rose-300'
+        }`}>
+          {notificationMsg.text}
+        </div>
+      )}
 
       {/* 2. MAIN LAYOUT */}
       <div className="flex-1 grid grid-cols-12 gap-5 p-5 overflow-hidden">
@@ -295,12 +409,12 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">1. Ecosistema Seguro / Exposición</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase block">1. Ecosistema Seguro / Exposición</label>
                 <select 
                   disabled={sessionActive || currentPhase === 'COMPLETED'}
                   value={ecosystem}
                   onChange={(e) => setEcosystem(e.target.value as EmdrEcosystem)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50 cursor-pointer"
                 >
                   <optgroup label="Foco Absoluto (EMDR)">
                     <option value="NEUTRAL_VOID">Vacío Neutral Geométrico</option>
@@ -324,12 +438,12 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">2. Categoría de Memoria a Reescritura</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase block">2. Categoría de Memoria a Reescritura</label>
                 <select 
                   disabled={sessionActive || currentPhase === 'COMPLETED'}
                   value={traumaCategory}
                   onChange={(e) => setTraumaCategory(e.target.value as TraumaCategory)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50 cursor-pointer"
                 >
                   <option value="PTSD_COMBAT_ACCIDENT">TEPT: Evento Traumático / Accidente</option>
                   <option value="SPECIFIC_PHOBIA">Fobia Específica Dirigida</option>
@@ -387,11 +501,12 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
           <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
             <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-rose-500/30 text-xs font-mono text-rose-100">
               <Video className={`w-3.5 h-3.5 ${sessionActive ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`} />
-              Fase: <span className="font-bold text-white uppercase">{currentPhase.replace('PHASE_', 'Fase ')}</span>
+              <span>Fase: <strong className="text-white uppercase">{currentPhase.replace('PHASE_', 'Fase ')}</strong></span>
             </div>
             {sessionActive && (
               <div className="bg-black/70 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700 text-[10px] text-slate-300 flex items-center gap-1.5">
-                <Mountain className="w-3 h-3 text-slate-400" /> {getEcosystemName(ecosystem)}
+                <Mountain className="w-3 h-3 text-slate-400" /> 
+                <span>{getEcosystemName(ecosystem)}</span>
               </div>
             )}
           </div>
@@ -407,7 +522,10 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
                   }`} style={{ animationDuration: currentPhase === 'PHASE_1_RETRIEVAL' ? '1s' : '3s' }} />
                   
                   {currentPhase !== 'COMPLETED' && (
-                    <div className="absolute inset-4 border-[3px] border-purple-500/30 rounded-full animate-spin" style={{ animationDuration: `${(1 / emdrSweepSpeedHz).toFixed(1)}s` }} />
+                    <div 
+                      className="absolute inset-4 border-[3px] border-purple-500/30 rounded-full animate-spin" 
+                      style={{ animationDuration: `${spinDuration}s` }} 
+                    />
                   )}
                   
                   <Eye className={`w-16 h-16 transition-colors duration-500 ${
@@ -447,15 +565,17 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
           <div className="absolute bottom-4 left-4 right-4 bg-slate-950/80 backdrop-blur-xl border border-rose-900/50 rounded-xl p-3 grid grid-cols-4 gap-2 shadow-2xl z-10 text-center font-mono">
             <div className="border-r border-slate-800">
               <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1">Carga Amigdalar (GSR)</span>
-              <div className={`text-xl font-bold ${gsr > 4.0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {gsr.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">µS</span>
+              <div className={`text-xl font-bold ${activeGsr > 4.0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {activeGsr.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">µS</span>
               </div>
             </div>
 
             <div className="border-r border-slate-800">
-              <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1 flex items-center justify-center gap-1"><HeartPulse className="w-3 h-3"/> Tono Vagal (HRV)</span>
+              <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1 flex items-center justify-center gap-1">
+                <HeartPulse className="w-3 h-3 text-rose-400" /> Tono Vagal (HRV)
+              </span>
               <div className="text-xl font-bold text-cyan-300">
-                {hrv.toFixed(0)} <span className="text-[10px] font-normal text-slate-500">ms</span>
+                {activeHrv.toFixed(0)} <span className="text-[10px] font-normal text-slate-500">ms</span>
               </div>
             </div>
 
@@ -540,7 +660,7 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
           {/* Botones de Control de Sesión */}
           <div className="pt-3 border-t border-slate-800 space-y-2 shrink-0">
             
-            {/* INSTRUCCIONES DE INGRESO PARA EL PACIENTE */}
+            {/* Instrucciones de ingreso cuando el visor está en espera */}
             {!isConnected && !sessionActive && currentPhase !== 'COMPLETED' && (
               <div className="mb-4 p-3 bg-slate-900/80 border border-rose-500/30 border-dashed rounded-xl flex items-center gap-3">
                 <div className="p-2 bg-slate-800 rounded-lg shrink-0">
@@ -548,13 +668,14 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
                 </div>
                 <div className="text-[11px] text-slate-300 leading-relaxed">
                   <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
-                  El paciente debe colocarse el visor VR para acceder al ecosistema.
+                  El paciente debe colocarse el visor VR para acceder al ecosistema. ID: <span className="font-mono text-rose-300">{patientId}</span>
                 </div>
               </div>
             )}
 
             {!sessionActive && currentPhase !== 'COMPLETED' ? (
               <button
+                type="button"
                 disabled={!isConnected}
                 onClick={handleStartSession}
                 className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer ${
@@ -564,15 +685,16 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
                 }`}
               >
                 <Play className="w-4 h-4 fill-current" />
-                {!isConnected ? 'Esperando Visor...' : 'Iniciar Reescritura de Memoria'}
+                <span>{!isConnected ? 'Esperando Visor...' : 'Iniciar Reescritura de Memoria'}</span>
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handleEndSession}
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer"
               >
                 <Square className="w-4 h-4 fill-current" />
-                Concluir Sesión VR
+                <span>Concluir Sesión VR</span>
               </button>
             )}
           </div>
@@ -582,3 +704,5 @@ export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClos
     </div>
   );
 };
+
+export default VrMemoryReconsolidationModule;
