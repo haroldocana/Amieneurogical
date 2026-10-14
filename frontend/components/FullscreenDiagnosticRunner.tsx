@@ -1,6 +1,5 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - SUITE CLÍNICA MAESTRA (30 ENTIDADES EN 7 MÓDULOS)
-// CON CARGA DE MEDIOS 360° PERSONALIZADOS, NEUROHIPNOSIS Y SEGURIDAD CLÍNICA
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -77,7 +76,7 @@ export const CLINICAL_MODULES: ModuleCategoryDefinition[] = [
 ];
 
 // ----------------------------------------------------------------------------
-// 2. MATRIZ NOSOLÓGICA DE 30 TRASTORNOS CLÍNICOS
+// 2. MATRIZ NOSOLÓGICA DE 30 TRASTORNOS (DIAGNÓSTICO HABILITADO EN EL 100%)
 // ----------------------------------------------------------------------------
 export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   // MÓDULO I: NEURODESARROLLO
@@ -116,23 +115,23 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   },
   {
     id: 'ALZHEIMER_GAMMA', moduleId: 'MOD_NEURODEV', name: 'Alzheimer & Deterioro Neurocognitivo', cie11: '6D80', dsm5: '331.0',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'cosmic_stars', treatmentEcosystem: 'cosmic_stars',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'cosmic_stars',
     targetKpiName: 'Acoplamiento de Fase PLV', kpiUnit: '%', defaultHz: 40.0, phase1Sec: 30, phase2Sec: 120, phase3Sec: 30,
     internationalGuideline: 'Protocolo MIT Li-Huei Tsai / Arrastre Gamma 40 Hz',
     scriptBaseline: 'Calibración fisiológica basal previa a estimulación fótica.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Test de fluidez y fijación ocular en reposo. Mantenga la atención en el estímulo estacionario.',
     guidelineScriptTreatment: 'Iniciando estimulación opto-acústica Gamma a 40 Hz para facilitar sincronización de redes neuronales tálamo-corticales.',
     scriptRecovery: 'Pulsación fótica concluida. Consolidando acoplamiento de oscilación lenta.',
     loincCode: '72106-8', goldStandardScale: 'MoCA / MMSE', meanHealthy: 78.5, sdHealthy: 9.2
   },
   {
     id: 'PARKINSON_MOTOR', moduleId: 'MOD_NEURODEV', name: 'Parkinson: Temblor Postural y FOG', cie11: '8A00.0', dsm5: '332.0',
-    supportedModes: ['DIAGNOSTIC'], diagnosticEcosystem: 'sterile_room', treatmentEcosystem: 'sterile_room',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'sterile_room', treatmentEcosystem: 'fnd_mirror',
     targetKpiName: 'Estabilidad Cinemática', kpiUnit: 'Score', phase1Sec: 30, phase2Sec: 120, phase3Sec: 30,
     internationalGuideline: 'MDS Clinical Practice Guidelines for Movement Disorders',
     scriptBaseline: 'Registro de reposo motor basal. Sostén el controlador con tu extremidad dominante.',
     guidelineScriptDiagnostic: 'Extiende el brazo y mantén el cursor alineado en el objetivo. Registrando frecuencia y amplitud cinemática del temblor en 6DoF.',
-    guidelineScriptTreatment: '',
+    guidelineScriptTreatment: 'Reestructuración cinemática visual. Mueve el controlador rítmicamente siguiendo el patrón del entorno.',
     scriptRecovery: 'Registro completado. Descansa tu extremidad en el apoyo.',
     loincCode: '96780-2', goldStandardScale: 'MDS-UPDRS Parte III', meanHealthy: 4.2, sdHealthy: 1.1
   },
@@ -140,22 +139,22 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   // MÓDULO II: AFECTIVOS, PSICOSIS & TRAUMA
   {
     id: 'TDM_DEPRESSION', moduleId: 'MOD_AFFECTIVE', name: 'Depresión Mayor: Retardo Psicomotor', cie11: '6A70', dsm5: '296.22',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'bioluminescent_beach', treatmentEcosystem: 'bioluminescent_beach',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'bioluminescent_beach',
     targetKpiName: 'Simetría Frontal Alpha', kpiUnit: 'Ratio', defaultHz: 10.0, phase1Sec: 30, phase2Sec: 180, phase3Sec: 30,
     internationalGuideline: 'Guía CanMAT para Trastornos del Ánimo / APA Depression Guidelines',
     scriptBaseline: 'Calibración basal de reposo. Respira con ritmo libre y natural.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Test de apatía motora y reactividad. Realice un seguimiento visual del objeto en movimiento continuo.',
     guidelineScriptTreatment: 'Sincroniza tu respiración con la pulsación lumínica de 10 Hz para estimular asimetría hemisférica frontal izquierda.',
     scriptRecovery: 'Integración autonómica. Preserva este estado de activación tranquila.',
     loincCode: '89211-7', goldStandardScale: 'HAM-D / BDI-II', meanHealthy: 1.05, sdHealthy: 0.12
   },
   {
     id: 'DISTIMIA_CHRONIC', moduleId: 'MOD_AFFECTIVE', name: 'Distimia & Depresión Persistente', cie11: '6A72', dsm5: '300.4',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'safe_place_forest', treatmentEcosystem: 'safe_place_forest',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'safe_place_forest',
     targetKpiName: 'Tono Vagal Sostenido', kpiUnit: 'ms', phase1Sec: 30, phase2Sec: 180, phase3Sec: 30,
     internationalGuideline: 'Guía NICE CG90 / Terapia de Activación Conductual',
-    scriptBaseline: 'Entorno de refugio forestal. Toma conciencia de tu apoyo corporal.',
-    guidelineScriptDiagnostic: '',
+    scriptBaseline: 'Entorno de refugio. Toma conciencia de tu apoyo corporal.',
+    guidelineScriptDiagnostic: 'Evaluación de labilidad afectiva en reposo basal.',
     guidelineScriptTreatment: 'Permite que la iluminación cálida disuelva la tensión somática crónica. Respira en 4 tiempos inflando suavemente el abdomen.',
     scriptRecovery: 'Anclaje parasimpático instalado. El sistema neurovegetativo retoma su equilibrio.',
     loincCode: '80404-7', goldStandardScale: 'MADRS', meanHealthy: 52.0, sdHealthy: 11.5
@@ -173,11 +172,11 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   },
   {
     id: 'PTSD_EMDR', moduleId: 'MOD_AFFECTIVE', name: 'TEPT: Reprocesamiento Sacádico EMDR', cie11: '6B40', dsm5: '309.81',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'emdr_memory', treatmentEcosystem: 'emdr_memory',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'emdr_memory',
     targetKpiName: 'Desensibilización Galvánica', kpiUnit: 'µS', defaultHz: 1.4, phase1Sec: 30, phase2Sec: 150, phase3Sec: 30,
     internationalGuideline: 'Estándar Internacional EMDRIA / Francine Shapiro Protocol',
     scriptBaseline: 'Instalación de Lugar Seguro. Respira y conecta con una sensación corporal de protección.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Provocación inmersiva inicial. Visualice el entorno de seguridad y reporte su nivel de disconfort autónomo.',
     guidelineScriptTreatment: 'Evoca el recuerdo traumático diana mientras sigues con tus ojos la barra de estimulación bilateral horizontal.',
     scriptRecovery: 'Detén el movimiento ocular. Inhala profundamente, suelta el aire y nota los cambios en tu cuerpo.',
     loincCode: '75276-6', goldStandardScale: 'CAPS-5 / PCL-5', meanHealthy: 1.2, sdHealthy: 0.4
@@ -241,22 +240,22 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   },
   {
     id: 'GAD_GENERALIZED', moduleId: 'MOD_ANXIETY', name: 'Ansiedad Generalizada: Biofeedback 0.1Hz', cie11: '6B00', dsm5: '300.02',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'neuro_hypnosis', treatmentEcosystem: 'neuro_hypnosis',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'neuro_hypnosis',
     targetKpiName: 'Tasa de Habituación (H)', kpiUnit: '%', phase1Sec: 30, phase2Sec: 180, phase3Sec: 30,
     internationalGuideline: 'AAPB Guidelines for HRV Biofeedback / Lehrer Model',
     scriptBaseline: 'Registro de variabilidad cardíaca y reposo somático basal.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Test de sobreactivación en reposo. Monitoreo de descompensación de HRV sin estímulo externo.',
     guidelineScriptTreatment: 'Sigue la expansión y contracción del orbe luminoso exactamente a 6 respiraciones por minuto para inducir resonancia autonómica.',
     scriptRecovery: 'Coherencia cardiovascular lograda. Conserva esta cadencia respiratoria profunda.',
     loincCode: '69725-0', goldStandardScale: 'GAD-7 / HAM-A', meanHealthy: 58.0, sdHealthy: 10.2
   },
   {
     id: 'OCD_OBSESSIVE', moduleId: 'MOD_ANXIETY', name: 'TOC: Exposición & Prevención de Respuesta', cie11: '6B20', dsm5: '300.3',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'cosmic_stars', treatmentEcosystem: 'cosmic_stars',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'cosmic_stars',
     targetKpiName: 'Ruptura de Rumiación', kpiUnit: 'PLV %', phase1Sec: 30, phase2Sec: 180, phase3Sec: 30,
     internationalGuideline: 'APA Practice Guideline for OCD / Foa & Kozak Protocol (EPR)',
     scriptBaseline: 'Anclaje atencional primario en espacio de neutralidad.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Inducción de rumiación obsesiva. Registrando persistencia y latencia de interferencia cognitiva.',
     guidelineScriptTreatment: 'Exposición y Prevención de Respuesta: Evoca el pensamiento obsesivo sin realizar el ritual de neutralización. Observa la inmensidad estelar hasta que la urgencia disminuya.',
     scriptRecovery: 'Prevención de respuesta completada. La urgencia compulsiva ha descendido biológicamente.',
     loincCode: '70569-9', goldStandardScale: 'Yale-Brown (Y-BOCS)', meanHealthy: 72.0, sdHealthy: 8.5
@@ -322,12 +321,12 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   },
   {
     id: 'NARCISSISM_MALE', moduleId: 'MOD_FORENSIC', name: 'Narcisismo Grandioso (Overt)', cie11: '6D10.0', dsm5: '301.81',
-    supportedModes: ['DIAGNOSTIC'], diagnosticEcosystem: 'boardroom_provocation', treatmentEcosystem: 'boardroom_provocation',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'boardroom_provocation', treatmentEcosystem: 'clinical_office',
     targetKpiName: 'Umbral de Ira Narcisista', kpiUnit: 'µS', phase1Sec: 30, phase2Sec: 120, phase3Sec: 30,
     internationalGuideline: 'APA Guidelines for Personality Assessment / Ronningstam Model',
     scriptBaseline: 'Registro de constantes basales de control previo.',
     guidelineScriptDiagnostic: 'Prueba pericial de tolerancia al estatus: Exposición a evaluadores virtuales que cuestionan directamente tus logros y autoridad.',
-    guidelineScriptTreatment: '',
+    guidelineScriptTreatment: 'Terapia de reestructuración: Enfrentamiento guiado ante críticas constructivas sin desborde autonómico.',
     scriptRecovery: 'Provocación pericial finalizada. Normalizando registro.',
     loincCode: '95402-4', goldStandardScale: 'NPI', meanHealthy: 1.4, sdHealthy: 0.5
   },
@@ -344,23 +343,23 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   },
   {
     id: 'SOCIOPATHY_ASPD', moduleId: 'MOD_FORENSIC', name: 'Trastorno Antisocial / Sociopatía', cie11: '6D10.1', dsm5: '301.7',
-    supportedModes: ['DIAGNOSTIC'], diagnosticEcosystem: 'authority_conflict', treatmentEcosystem: 'authority_conflict',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'authority_conflict', treatmentEcosystem: 'clinical_office',
     targetKpiName: 'Frialdad / Agresividad', kpiUnit: 'ΔGSR', phase1Sec: 30, phase2Sec: 150, phase3Sec: 30,
     internationalGuideline: 'Forensic Clinical Protocols / Widiger Personality Dimension Guidelines',
     scriptBaseline: 'Fase de observación neutra de constantes vitales.',
     guidelineScriptDiagnostic: 'Simulación pericial de confrontación de límites legales y normas sociales. Medición de ausencia de ansiedad anticipatoria.',
-    guidelineScriptTreatment: '',
+    guidelineScriptTreatment: 'Entrenamiento en consecuencias causales mediante biofeedback.',
     scriptRecovery: 'Simulación de conflicto concluida.',
     loincCode: '95404-0', goldStandardScale: 'ASPD Criteria', meanHealthy: 2.5, sdHealthy: 0.8
   },
   {
     id: 'PSYCHOPATHY', moduleId: 'MOD_FORENSIC', name: 'Psicopatía Forense (Factor 1 PCL-R)', cie11: '6D10.1', dsm5: '301.7',
-    supportedModes: ['DIAGNOSTIC'], diagnosticEcosystem: 'distress_empathy_test', treatmentEcosystem: 'distress_empathy_test',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'distress_empathy_test', treatmentEcosystem: 'clinical_office',
     targetKpiName: 'Aplanamiento Empático', kpiUnit: 'ΔGSR=0', phase1Sec: 30, phase2Sec: 150, phase3Sec: 30,
     internationalGuideline: 'Hare Psychopathy Checklist-Revised Standards (PCL-R)',
     scriptBaseline: 'Preparación para presentación de estímulos visuales afectivos.',
     guidelineScriptDiagnostic: 'Paradigma de reactividad empática refleja ante escenas 360° de sufrimiento humano. Registrando hiporreactividad galvánica involuntaria.',
-    guidelineScriptTreatment: '',
+    guidelineScriptTreatment: 'Entrenamiento en neuro-asociación afectiva.',
     scriptRecovery: 'Registro de empatía somática finalizado. Análisis pericial compilado.',
     loincCode: '95404-0', goldStandardScale: 'PCL-R', meanHealthy: 3.2, sdHealthy: 0.8
   },
@@ -368,55 +367,55 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   // MÓDULO VI: NEUROHIPNOSIS & PSICOSOMÁTICA
   {
     id: 'CLINICAL_HYPNOSIS_DEEP', moduleId: 'MOD_HYPNOSIS_PAIN', name: 'Neurohipnosis Profunda en Bucle Cerrado', cie11: 'MB23.4', dsm5: '300.11',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'neuro_hypnosis', treatmentEcosystem: 'neuro_hypnosis',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'neuro_hypnosis', treatmentEcosystem: 'neuro_hypnosis',
     targetKpiName: 'Profundidad de Trance (Vagal/PLV)', kpiUnit: '%', defaultHz: 3.5, phase1Sec: 30, phase2Sec: 240, phase3Sec: 30,
     internationalGuideline: 'Sociedad Internacional de Hipnosis (ISH) / Milton Erickson Foundation',
     scriptBaseline: 'Fijación de la mirada en el centro del orbe de luz. Permite que tus párpados se relajen suavemente.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Test de sugestionabilidad de Spiegel. Analizando latencia de respuesta motora bajo arrastre fótico ligero.',
     guidelineScriptTreatment: 'Inducción Ericksoniana en bucle cerrado: A medida que tu respiración se ralentiza, el orbe disminuye su brillo... descendiendo de 10 a 4 Hz... cada sonido exterior te conduce a una calma dos veces más profunda... el cuerpo flota sin esfuerzo.',
     scriptRecovery: 'Contando del 1 al 5. Regresando con sensación de completa vitalidad, descanso y despejo mental.',
     loincCode: '95405-7', goldStandardScale: 'SHSS (Stanford Scale)', meanHealthy: 80.0, sdHealthy: 10.0
   },
   {
     id: 'FND_CONVERSION', moduleId: 'MOD_HYPNOSIS_PAIN', name: 'Trastorno Neurológico Funcional (FND)', cie11: '6C20', dsm5: '300.11',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'fnd_mirror', treatmentEcosystem: 'fnd_mirror',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'fnd_mirror', treatmentEcosystem: 'fnd_mirror',
     targetKpiName: 'Simetría de Control 6DoF', kpiUnit: '%', phase1Sec: 30, phase2Sec: 180, phase3Sec: 30,
     internationalGuideline: 'Stone Criteria for Functional Neurological Disorder / Mirror Therapy Guidelines',
     scriptBaseline: 'Calibración del avatar cinemático en espejo 6DoF.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Mapeo de disociación motora y signo de Hoover en realidad virtual.',
     guidelineScriptTreatment: 'Terapia en espejo adaptativa: Mueve tu extremidad no afectada mientras el avatar proyecta movimiento bilateral armónico y perfecto.',
     scriptRecovery: 'Recalibración del mapa somatosensorial completada.',
     loincCode: '96782-8', goldStandardScale: 'Hoover Sign', meanHealthy: 92.0, sdHealthy: 4.5
   },
   {
     id: 'CHRONIC_PAIN', moduleId: 'MOD_HYPNOSIS_PAIN', name: 'Dolor Crónico Generalizado / Fibromialgia', cie11: 'MG30.0', dsm5: '307.89',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'pain_management', treatmentEcosystem: 'pain_management',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'pain_management',
     targetKpiName: 'Alivio Nociceptivo Sub-Delta', kpiUnit: 'Score/10', defaultHz: 0.5, phase1Sec: 30, phase2Sec: 180, phase3Sec: 30,
     internationalGuideline: 'IASP Global Year Against Pain Guidelines / Hoffman VR Analgesia Protocol',
     scriptBaseline: 'Registro basal de tensión muscular isométrica.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Evaluación de hiperalgesia y mapeo de conductancia térmica en reposo.',
     guidelineScriptTreatment: 'Desfocalización nociceptiva criogénica: La inmersión en el abismo polar reduce la activación talámica y bloquea señales de dolor ascendente.',
     scriptRecovery: 'Consolidación analgésica. Mantén la sensación de alivio y liviandad corporal.',
     loincCode: '72514-3', goldStandardScale: 'FIQR / EVA', meanHealthy: 8.5, sdHealthy: 1.1
   },
   {
     id: 'CRPS_NEUROPATHIC', moduleId: 'MOD_HYPNOSIS_PAIN', name: 'Síndrome de Dolor Regional Complejo', cie11: '8E43', dsm5: '354.4',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'pain_management', treatmentEcosystem: 'pain_management',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'pain_management',
     targetKpiName: 'Amortiguación Simpática Regional', kpiUnit: 'µS', phase1Sec: 30, phase2Sec: 150, phase3Sec: 30,
     internationalGuideline: 'Budapest IASP Diagnostic and Interventional Criteria',
     scriptBaseline: 'Posición articular protegida en reposo.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Test de provocación simpática periférica. Registro de respuesta vasomotora.',
     guidelineScriptTreatment: 'Aplicación de filtros cromáticos criogénicos para reducir la hiperexcitabilidad vasomotora y el dolor neuropático periférico.',
     scriptRecovery: 'Desensibilización periférica alcanzada. Flujo sanguíneo regional regularizado.',
     loincCode: '86469-4', goldStandardScale: 'Budapest Criteria', meanHealthy: 1.1, sdHealthy: 0.3
   },
   {
     id: 'INSOMNIA_SLEEP', moduleId: 'MOD_HYPNOSIS_PAIN', name: 'Trastorno de Insomnio Crónico Severo', cie11: '7A00', dsm5: '307.42',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'neuro_hypnosis', treatmentEcosystem: 'neuro_hypnosis',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'clinical_office', treatmentEcosystem: 'neuro_hypnosis',
     targetKpiName: 'Inducción de Ondas Delta 2Hz', kpiUnit: '%', defaultHz: 2.0, phase1Sec: 30, phase2Sec: 240, phase3Sec: 30,
     internationalGuideline: 'AASM Clinical Practice Guideline for Insomnia / Edinger Protocol',
     scriptBaseline: 'Atenuación lumínica progresiva y preparación metabólica para el sueño.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Monitoreo de hiperarousal prefrontal en estado de reposo nocturno.',
     guidelineScriptTreatment: 'Neurohipnosis por arrastre Delta a 2 Hz: Desaceleración metabólica, supresión de hiperarousal prefrontal y facilitación del sueño de ondas lentas.',
     scriptRecovery: 'Transición completada hacia la fase de reposo biológico regenerativo.',
     loincCode: '95405-7', goldStandardScale: 'ISI / PSQI', meanHealthy: 74.0, sdHealthy: 8.2
@@ -425,22 +424,22 @@ export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   // MÓDULO VII: SALUD SEXUAL & MODELO DUAL
   {
     id: 'SEXUAL_INHIBITION', moduleId: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (Modelo Dual SIS)', cie11: 'HA01', dsm5: '302.72',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'dual_control', treatmentEcosystem: 'dual_control',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'dual_control', treatmentEcosystem: 'dual_control',
     targetKpiName: 'Desactivación Freno SIS', kpiUnit: '%', phase1Sec: 30, phase2Sec: 150, phase3Sec: 30,
     internationalGuideline: 'Kinsey Institute Dual Control Model / Bancroft & Janssen Guidelines',
     scriptBaseline: 'Focalización en el plano propioceptivo corporal libre de juicio.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Evaluación del freno simpático inhibitorio ante estímulos de proximidad.',
     guidelineScriptTreatment: 'Focalización sensorial sin demanda de rendimiento: Inhala calidez corporal y disuelve la autoobservación crítica evaluativa.',
     scriptRecovery: 'Freno inhibitorio simpático desactivado. Consolidación de tono parasimpático.',
     loincCode: '95406-5', goldStandardScale: 'SIS/SES Questionnaire', meanHealthy: 65.0, sdHealthy: 9.5
   },
   {
     id: 'SEXUAL_DESIRE', moduleId: 'MOD_SEXOLOGY', name: 'Deseo Sexual Hipoactivo (Modelo Dual SES)', cie11: 'HA00', dsm5: '302.71',
-    supportedModes: ['TREATMENT'], diagnosticEcosystem: 'dual_control', treatmentEcosystem: 'dual_control',
+    supportedModes: ['DIAGNOSTIC', 'TREATMENT'], diagnosticEcosystem: 'dual_control', treatmentEcosystem: 'dual_control',
     targetKpiName: 'Activación Excitatoria SES', kpiUnit: 'Score', phase1Sec: 30, phase2Sec: 150, phase3Sec: 30,
     internationalGuideline: 'ISSM Guidelines for Hypoactive Sexual Desire / Basson Model',
     scriptBaseline: 'Sintonización afectiva y corporal libre de demanda.',
-    guidelineScriptDiagnostic: '',
+    guidelineScriptDiagnostic: 'Evaluación del umbral de activación excitatoria SES ante señales sensoriales.',
     guidelineScriptTreatment: 'Reconexión con señales corporales interoceptivas placenteras para reactivar gradualmente el sistema de excitación sexual.',
     scriptRecovery: 'Respuesta excitatoria facilitada dentro de un rango afectivo seguro.',
     loincCode: '95407-3', goldStandardScale: 'FSFI / IIEF', meanHealthy: 78.0, sdHealthy: 10.4
@@ -477,7 +476,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
   const [selectedMode, setSelectedMode] = useState<ClinicalMode>(initialMode || 'DIAGNOSTIC');
   const [guidanceMode, setGuidanceMode] = useState<GuidanceMode>('AUTOMATIC_GUIDELINES');
 
-  // Integración de Medios 360° Personalizados en el Runner
+  // Integración de Medios 360° Personalizados
   const [mediaSourceMode, setMediaSourceMode] = useState<MediaSourceMode>('OFFICIAL_CATALOG');
   const [customMediaType, setCustomMediaType] = useState<'image' | 'video'>('image');
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
@@ -490,18 +489,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
   const [customScript, setCustomScript] = useState<string>('');
 
-  // Biometría y Curvas Continuas
+  // Biometría y Curvas
   const [currentGsr, setCurrentGsr] = useState<number>(2.4);
   const [currentHrv, setCurrentHrv] = useState<number>(40);
   const [currentKpi, setCurrentKpi] = useState<number>(10);
   const [liveCurve, setLiveCurve] = useState<Array<{ t: number; gsr: number; hrv: number; kpi: number; phase: PipelinePhase }>>([]);
 
-  // Estados de Hipnosis Segura, Regulación de Salida y Abreacción
+  // Estados de Neurohipnosis, Regulación de Salida y Abreacción (Emergencia)
   const [isDeinducting, setIsDeinducting] = useState<boolean>(false);
   const [isEmergencyAborted, setIsEmergencyAborted] = useState<boolean>(false);
   const [stressWatchdogAlert, setStressWatchdogAlert] = useState<string | null>(null);
 
-  // Historial Acumulativo de Ensayos del Paciente para la Triangulación Global
+  // Historial Acumulativo de Ensayos para la Triangulación Global
   const [sessionHistory, setSessionHistory] = useState<Array<{
     disorderName: string;
     mode: ClinicalMode;
@@ -533,7 +532,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     };
   }, [pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted, mediaSourceMode, customMediaUrl, customMediaType]);
 
-  // Sincronización del módulo activo con el trastorno
+  // Sincronización del módulo inicial
   useEffect(() => {
     if (initialDisorderId) {
       const match = CLINICAL_MASTER_CATALOG.find(d => d.id === initialDisorderId);
@@ -544,14 +543,14 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     }
   }, [initialDisorderId]);
 
-  // Asegurar compatibilidad de modo
+  // Asegurar compatibilidad de modo (Diagnóstico vs Tratamiento)
   useEffect(() => {
     if (!currentDisorder.supportedModes.includes(selectedMode)) {
       setSelectedMode(currentDisorder.supportedModes[0]);
     }
   }, [currentDisorder]);
 
-  // Actualización del Guion IA según guía internacional o edición manual
+  // Actualización Automática del Guion IA según la Guía Internacional
   useEffect(() => {
     if (guidanceMode === 'AUTOMATIC_GUIDELINES') {
       const script = selectedMode === 'DIAGNOSTIC' 
@@ -566,13 +565,14 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     setStressWatchdogAlert(null);
   }, [currentDisorder, selectedMode, guidanceMode]);
 
+  // Conexión WebSockets Pico
   useEffect(() => {
     if (!VrControlService.isConnected()) VrControlService.connect(undefined, patientId);
     const unsub = VrControlService.subscribeStatus((status) => setIsVisorLinked(status === 'CONNECTED'));
     return () => { if(unsub) unsub(); };
   }, [patientId]);
 
-  // Manejador de carga de archivo local (Foto o Video 360°)
+  // Gestor de Archivos Locales para Entornos 360 Propios
   const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -596,7 +596,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     setTimeout(() => setVisorStatusMsg(null), 3500);
   };
 
-  // Despliegue de Entorno y Audio al Casco Pico 3 Pro
+  // Enviar el Entorno 360 al Visor Pico
   const handleDeployEnvironment = () => {
     if (!isVisorLinked) {
       setVisorStatusMsg('⚠️ Enciende el visor Pico e ingresa a la sesión del paciente primero.');
@@ -604,7 +604,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       return;
     }
 
-    // Si se opta por medio propio
     if (mediaSourceMode === 'CUSTOM_STIMULUS' && customMediaUrl.trim()) {
       VrControlService.sendCommand({
         type: 'LOAD_CUSTOM_MEDIA',
@@ -619,7 +618,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       return;
     }
 
-    // Si se opta por catálogo oficial
     const targetEcosystem = selectedMode === 'DIAGNOSTIC' 
       ? currentDisorder.diagnosticEcosystem 
       : currentDisorder.treatmentEcosystem;
@@ -639,7 +637,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       }
     });
 
-    setVisorStatusMsg(`🟢 Entorno /${targetEcosystem}.jpeg y Guion IA cargados en el visor.`);
+    setVisorStatusMsg(`🟢 Entorno oficial /${targetEcosystem}.jpeg cargado en el visor.`);
     setTimeout(() => setVisorStatusMsg(null), 4000);
   };
 
@@ -655,7 +653,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     setStressWatchdogAlert(null);
     setPipelinePhase('PHASE_1_BASELINE');
 
-    // Despachar estímulo inicial o propio
     if (mediaSourceMode === 'CUSTOM_STIMULUS' && customMediaUrl.trim()) {
       VrControlService.sendCommand({
         type: 'LOAD_CUSTOM_MEDIA',
@@ -677,7 +674,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     });
   };
 
-  // Salida Regulada Progresiva (Des-inducción Ericksoniana 1 a 5)
+  // ------------------------------------------------------------------------
+  // PROTOCOLOS DE SEGURIDAD EN NEUROHIPNOSIS Y ESTRÉS
+  // ------------------------------------------------------------------------
   const handleStartDeinduction = () => {
     if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED') return;
     setIsDeinducting(true);
@@ -689,17 +688,16 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       phase: 'PHASE_3_RECOVERY',
       speechScript: deinductionText,
       category: 'TREATMENT',
-      frequencyHz: 10.0, // Elevar a ritmo Alfa
+      frequencyHz: 10.0, 
       patientId
     });
 
-    setVisorStatusMsg('🧭 Des-inducción hipnótica en curso (Escala 1 a 5). Reorientando...');
+    setVisorStatusMsg('🧭 Des-inducción hipnótica en curso (Escala 1 a 5). Reorientando al paciente...');
     setTimeout(() => {
       finishPipelineAndCompileReports(false, 'Emersión progresiva regulada completada según protocolo Ericksoniano.');
     }, 18000);
   };
 
-  // Interrupción Médica de Emergencia (Abreacción o Estrés Paroxístico)
   const handleEmergencyAbort = (reason = 'Interrupción manual de seguridad por facultativo ante signos de distrés.') => {
     setIsEmergencyAborted(true);
     setIsDeinducting(false);
@@ -723,7 +721,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     finishPipelineAndCompileReports(true, reason);
   };
 
-  // Motor del Pipeline Fisiológico en 3 Fases con Watchdog de Estrés en Bucle Cerrado
+  // Motor del Pipeline en 3 Fases
   useEffect(() => {
     if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED' || isEmergencyAborted) return;
 
@@ -734,12 +732,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
       setTotalElapsedTime(nextTotal);
 
-      // Transición Fase 1 -> Fase 2 (Desafío Activo / Intervención)
       if (s.pipelinePhase === 'PHASE_1_BASELINE' && nextPhaseTime >= s.currentDisorder.phase1Sec) {
         setPipelinePhase('PHASE_2_ACTIVE');
         setPhaseTime(0);
 
-        // Si se usa medio personalizado, garantizar que esté cargado en Fase 2
         if (s.mediaSourceMode === 'CUSTOM_STIMULUS' && s.customMediaUrl.trim()) {
           VrControlService.sendCommand({
             type: 'LOAD_CUSTOM_MEDIA',
@@ -760,7 +756,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           patientId
         });
       } 
-      // Transición Fase 2 -> Fase 3 (Habituación / Retorno Vagal)
       else if (s.pipelinePhase === 'PHASE_2_ACTIVE' && nextPhaseTime >= s.currentDisorder.phase2Sec && !s.isDeinducting) {
         setPipelinePhase('PHASE_3_RECOVERY');
         setPhaseTime(0);
@@ -774,30 +769,24 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           patientId
         });
       } 
-      // Conclusión del Ensayo
       else if (s.pipelinePhase === 'PHASE_3_RECOVERY' && nextPhaseTime >= s.currentDisorder.phase3Sec && !s.isDeinducting) {
         finishPipelineAndCompileReports(false);
       } else {
         setPhaseTime(nextPhaseTime);
       }
 
-      // Cinemática adaptativa con bucle cerrado para hipnosis
+      // Cinemática adaptativa con Watchdog en Hipnosis
       let deltaGsr = (Math.random() - 0.48) * 0.14;
-      if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP') {
-        deltaGsr -= 0.08;
-      } else if (s.pipelinePhase === 'PHASE_2_ACTIVE') {
-        deltaGsr += s.selectedMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
-      } else if (s.pipelinePhase === 'PHASE_3_RECOVERY') {
-        deltaGsr -= 0.06;
-      }
+      if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP') deltaGsr -= 0.08; 
+      else if (s.pipelinePhase === 'PHASE_2_ACTIVE') deltaGsr += s.selectedMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
+      else if (s.pipelinePhase === 'PHASE_3_RECOVERY') deltaGsr -= 0.06;
       
       const newGsr = Math.max(0.6, Number((s.currentGsr + deltaGsr).toFixed(2)));
       setCurrentGsr(newGsr);
 
       let deltaHrv = Math.floor((Math.random() - 0.45) * 4);
-      if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP' || s.pipelinePhase === 'PHASE_3_RECOVERY') {
-        deltaHrv += 1;
-      }
+      if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP' || s.pipelinePhase === 'PHASE_3_RECOVERY') deltaHrv += 1;
+      
       const newHrv = Math.max(18, Math.min(98, s.currentHrv + deltaHrv));
       setCurrentHrv(newHrv);
 
@@ -809,11 +798,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       }
 
       let newKpi = s.currentKpi;
-      if (s.currentDisorder.id === 'TDAH_CPT') {
-        newKpi = Math.floor(220 + Math.random() * 80);
-      } else {
-        newKpi = Number(Math.min(98, s.currentKpi + (Math.random() * 2.2)).toFixed(1));
-      }
+      if (s.currentDisorder.id === 'TDAH_CPT') newKpi = Math.floor(220 + Math.random() * 80);
+      else newKpi = Number(Math.min(98, s.currentKpi + (Math.random() * 2.2)).toFixed(1));
+      
       setCurrentKpi(newKpi);
 
       setLiveCurve(prev => [...prev, { t: nextTotal, gsr: newGsr, hrv: newHrv, kpi: newKpi, phase: s.pipelinePhase }]);
@@ -822,7 +809,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     return () => clearInterval(timer);
   }, [pipelinePhase, patientId, isEmergencyAborted]);
 
-  // Compilación de Reporte Individual y Acumulación en la Triangulación Global
+  // Reporte Individual (ROI)
   const finishPipelineAndCompileReports = (wasEmergency = false, customNote = '') => {
     setPipelinePhase('FINISHED');
     VrControlService.stopLightStimulation(patientId);
@@ -913,6 +900,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     }
   };
 
+  // Reporte Global Triangulado Acumulativo
   const compileGlobalTriangulationReport = () => {
     let global = `================================================================================\n`;
     global += `EXPEDIENTE PERICIAL GLOBAL TRIANGULADO • HISTORIA CLÍNICA INTEGRAL\n`;
@@ -1020,7 +1008,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           {/* COLUMNA 1: CONFIGURACIÓN DEL TRASTORNO, MEDIOS 360 Y GUIONES IA */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3 overflow-y-auto pr-1">
             
-            {/* 1. Selector de Trastorno */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 shadow-inner">
               <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5 mb-1.5">
                 <Stethoscope className="w-3.5 h-3.5 text-cyan-400" />
@@ -1048,7 +1035,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* 2. Selector de Modo Clínico (Diagnóstico vs Tratamiento) */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-inner">
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -1077,7 +1063,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* 3. SELECCIÓN DE ENTORNO: CATÁLOGO OFICIAL VS. ESTÍMULO PERSONALIZADO */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-inner space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
@@ -1152,7 +1137,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
               )}
             </div>
 
-            {/* 4. Panel de Guion IA y Despliegue */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
@@ -1184,7 +1168,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-slate-200 outline-none resize-none focus:border-cyan-500 mb-2 leading-relaxed font-sans"
               />
 
-              {/* Botonera de Acción */}
               <div className="mt-auto space-y-2">
                 <button
                   type="button"
@@ -1293,84 +1276,4 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                   <Activity className="w-4 h-4 text-emerald-400" />
                   Monitor Fisiológico 6DoF (Closed-Loop)
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-900 border border-slate-800 rounded text-amber-400">
-                  {pipelinePhase} ({totalElapsedTime}s / {totalProtocolDuration}s)
-                </span>
-              </div>
-
-              <div className="flex-1 w-full bg-slate-900 rounded-xl border border-slate-800 p-2 relative flex items-end overflow-hidden">
-                {liveCurve.length > 1 ? (
-                  <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${totalProtocolDuration} 100`} preserveAspectRatio="none">
-                    <line x1={currentDisorder.phase1Sec} y1="0" x2={currentDisorder.phase1Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
-                    <line x1={currentDisorder.phase1Sec + currentDisorder.phase2Sec} y1="0" x2={currentDisorder.phase1Sec + currentDisorder.phase2Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
-                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.gsr * 12))}`).join(' ')} />
-                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.hrv * 0.9))}`).join(' ')} />
-                  </svg>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[11px] font-mono">
-                    <Clock className="w-6 h-6 mb-2 opacity-30 animate-pulse" />
-                    <span>Pulsa 'INICIAR PRUEBA CLÍNICA' para registrar biometría</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-2 flex justify-between text-[9px] text-slate-500 font-mono">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-full"></span> GSR Conductancia (µS)</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full"></span> HRV Vagal (ms)</span>
-                <span>Líneas punteadas: Fases</span>
-              </div>
-            </div>
-          </section>
-
-          {/* COLUMNA 3: REPORTES (INDIVIDUAL ROI & TRIANGULACIÓN GLOBAL) */}
-          <section className="col-span-12 lg:col-span-3 flex flex-col gap-3.5">
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
-              
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2.5">
-                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px]">
-                  <button
-                    onClick={() => setReportTypeView('INDIVIDUAL_ROI')}
-                    className={`px-2 py-1 rounded font-bold transition flex items-center gap-1 ${
-                      reportTypeView === 'INDIVIDUAL_ROI' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <FileText className="w-3 h-3" />
-                    <span>ROI Individual</span>
-                  </button>
-                  <button
-                    onClick={() => setReportTypeView('GLOBAL_TRIANGULATION')}
-                    className={`px-2 py-1 rounded font-bold transition flex items-center gap-1 ${
-                      reportTypeView === 'GLOBAL_TRIANGULATION' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <GitMerge className="w-3 h-3" />
-                    <span>Triangulación ({sessionHistory.length})</span>
-                  </button>
-                </div>
-
-                <button
-                  onClick={handlePrint}
-                  className="px-2.5 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-200 rounded text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer"
-                >
-                  <Printer className="w-3 h-3" />
-                  <span>Imprimir A4</span>
-                </button>
-              </div>
-
-              <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-3 overflow-y-auto font-mono text-[9.5px] leading-relaxed text-slate-300 shadow-inner whitespace-pre-wrap">
-                {reportTypeView === 'INDIVIDUAL_ROI' ? (
-                  roiReportText || 'El dictamen pericial individual se generará automáticamente al concluir las 3 fases del ensayo clínico.'
-                ) : (
-                  compileGlobalTriangulationReport()
-                )}
-              </div>
-            </div>
-          </section>
-
-        </main>
-      </div>
-    </div>
-  );
-};
-
-export default FullscreenDiagnosticRunner;
+                <span
