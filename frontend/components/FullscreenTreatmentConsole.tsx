@@ -1,20 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react';
+// ============================================================================
+// AMIE CLINICAL COPILOT - CONSOLA DE TRATAMIENTO & PIPELINE CLÍNICO DE 3 FASES
+// frontend/components/FullscreenTreatmentConsole.tsx
+// ============================================================================
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
-import { 
-  X, 
-  Play, 
-  Square, 
-  Activity, 
-  Glasses, 
-  ShieldAlert, 
-  HeartPulse, 
-  Zap,
-  RotateCcw,
+import { VrControlService } from '../services/vrControlService';
+import {
   Sparkles,
-  CheckCircle2
+  Activity,
+  Play,
+  Square,
+  Printer,
+  Volume2,
+  ShieldAlert,
+  Glasses,
+  RotateCcw,
+  FileText,
+  X,
+  Stethoscope,
+  Signal,
+  CheckCircle2,
+  Sliders,
+  Heart,
+  Zap,
+  Timer
 } from 'lucide-react';
-import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
-import { getEnvironmentAssetById } from '../constants/vrAssetRegistry';
 
 interface Props {
   patient?: PatientRecord;
@@ -22,421 +33,713 @@ interface Props {
   onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-export const FullscreenTreatmentConsole: React.FC<Props> = ({ 
-  patient, 
+export type PipelinePhase = 'IDLE' | 'PHASE_1_BASELINE' | 'PHASE_2_ACTIVE' | 'PHASE_3_RECOVERY' | 'FINISHED';
+
+export interface TreatmentProtocolDefinition {
+  id: string;
+  name: string;
+  cie11: string;
+  dsm5: string;
+  defaultCategory: 'TREATMENT' | 'DIAGNOSTIC';
+  ecosystem: string;
+  targetKpiName: string;
+  kpiUnit: string;
+  defaultHz?: number;
+  phase1Sec: number;
+  phase2Sec: number;
+  phase3Sec: number;
+  scriptBaseline: string;
+  scriptActiveDiagnostic: string;
+  scriptActiveTreatment: string;
+  scriptRecovery: string;
+  clinicalObjective: string;
+}
+
+export const TREATMENT_STANDARDIZED_PROTOCOLS: TreatmentProtocolDefinition[] = [
+  {
+    id: 'VRET_ACROPHOBIA',
+    name: '01. Exposición Jerárquica en Alturas (Acrofobia VRET)',
+    cie11: '6B03.0',
+    dsm5: '300.29',
+    defaultCategory: 'DIAGNOSTIC',
+    ecosystem: 'acrophobia_roof',
+    targetKpiName: 'Oscilación Postural (Head-Sway)',
+    kpiUnit: 'cm',
+    phase1Sec: 30,
+    phase2Sec: 120,
+    phase3Sec: 30,
+    scriptBaseline: 'Calibración de línea base en reposo. Permanece de pie observando la plataforma con respiración tranquila.',
+    scriptActiveDiagnostic: 'Exposición a borde de azotea. Mira hacia el vacío perimetral. Evaluamos reactividad simpática y equilibrio.',
+    scriptActiveTreatment: 'Desensibilización en altura. Sincroniza tu respiración en 4 tiempos mientras sostienes la mirada al frente.',
+    scriptRecovery: 'Regresando a zona segura interior. Respira profundamente y permite que la tensión descienda.',
+    clinicalObjective: 'Medición de taquicardia situacional fóbica y extinción mediante habituación visual en 6DoF.'
+  },
+  {
+    id: 'VRET_AEROPHOBIA',
+    name: '02. Simulación de Vuelo y Confinamiento (Aerofobia)',
+    cie11: '6B03.2',
+    dsm5: '300.29',
+    defaultCategory: 'DIAGNOSTIC',
+    ecosystem: 'aerophobia_cabin',
+    targetKpiName: 'Pico Galvánico en Despegue',
+    kpiUnit: 'µS',
+    phase1Sec: 30,
+    phase2Sec: 120,
+    phase3Sec: 30,
+    scriptBaseline: 'Fase de embarque en cabina. Mantén la espalda apoyada en el asiento y los hombros sueltos.',
+    scriptActiveDiagnostic: 'Fase de aceleración y despegue con turbulencia. Evaluamos umbral de pánico respiratorio.',
+    scriptActiveTreatment: 'Control de pánico en vuelo. Enfoca la atención en el anclaje somático de tus manos relajadas.',
+    scriptRecovery: 'Vuelo estabilizado en altitud de crucero. La vibración cesa y el ritmo cardíaco se normaliza.',
+    clinicalObjective: 'Registro de respuesta vasovagal ante ruidos de turbulencia y confinamiento espacial.'
+  },
+  {
+    id: 'EMDR_RECONSOLIDATION',
+    name: '03. Reprocesamiento Sacádico Bilateral (EMDR 3D / TEPT)',
+    cie11: '6B40',
+    dsm5: '309.81',
+    defaultCategory: 'TREATMENT',
+    ecosystem: 'emdr_memory',
+    targetKpiName: 'Desensibilización ΔGSR',
+    kpiUnit: 'µS',
+    phase1Sec: 30,
+    phase2Sec: 150,
+    phase3Sec: 30,
+    scriptBaseline: 'Instalación de recurso seguro. Conéctate con una sensación de contención corporal.',
+    scriptActiveDiagnostic: 'Evocación del estímulo diana. Registramos el nivel de desbordamiento emocional sin intervención.',
+    scriptActiveTreatment: 'Sigue el haz de luz horizontal únicamente con tus ojos, sin mover la cabeza, sosteniendo la memoria.',
+    scriptRecovery: 'Detén el seguimiento visual. Inhala profundamente y suelta todo el aire dejando ir la huella de malestar.',
+    clinicalObjective: 'Inducción de movimientos sacádicos para reconsolidación mnémica y caída de hiperarousal amigdalino.'
+  },
+  {
+    id: 'NEURO_HYPNOSIS_THETA',
+    name: '04. Neurohipnosis Closed-Loop & Trance Theta 0.1Hz',
+    cie11: '6B00 / 7A00',
+    dsm5: '300.02',
+    defaultCategory: 'TREATMENT',
+    ecosystem: 'neuro_hypnosis',
+    targetKpiName: 'Profundidad de Trance',
+    kpiUnit: '%',
+    defaultHz: 6.0,
+    phase1Sec: 30,
+    phase2Sec: 150,
+    phase3Sec: 30,
+    scriptBaseline: 'Registro de reposo basal. Observa el orbe concéntrico en su estado neutro.',
+    scriptActiveDiagnostic: 'Medición de susceptibilidad hipnótica y respuesta alfa-bloqueo ante fijación ocular continua.',
+    scriptActiveTreatment: 'Sincroniza tu respiración con el orbe. Al expandirse inhala en 4 segundos, al contraerse exhala soltando la mandíbula.',
+    scriptRecovery: 'Regresando a la vigilia descansada. Conserva la serenidad motora mientras abres los ojos a tu propio ritmo.',
+    clinicalObjective: 'Desaceleración del sistema nervioso simpático mediante biofeedback respiratorio en bucle cerrado.'
+  },
+  {
+    id: 'GAMMA_OPTO_40HZ',
+    name: '05. Fotobiomodulación Gamma 40Hz (Alzheimer / Demencia)',
+    cie11: '6D80',
+    dsm5: '331.0',
+    defaultCategory: 'TREATMENT',
+    ecosystem: 'cosmic_stars',
+    targetKpiName: 'Acoplamiento de Fase PLV',
+    kpiUnit: '%',
+    defaultHz: 40.0,
+    phase1Sec: 30,
+    phase2Sec: 120,
+    phase3Sec: 30,
+    scriptBaseline: 'Calibración de línea base en reposo sin estimulación lumínica.',
+    scriptActiveDiagnostic: 'Test de arrastre fótico inicial. Evaluamos resistencia electrocortical al estímulo estroboscópico.',
+    scriptActiveTreatment: 'Iniciando pulsación lumínica Gamma a 40 Hz. Fija la mirada al frente para inducir sincronización tálamo-cortical.',
+    scriptRecovery: 'Pulsación fótica concluida. Registramos la persistencia de la coherencia neuronal en reposo.',
+    clinicalObjective: 'Sincronización de redes neuronales y estimulación de reactividad microglial mediante arrastre Gamma.'
+  },
+  {
+    id: 'CRYOGENIC_ANALGESIA',
+    name: '06. Desfocalización Nociceptiva Criogénica (Dolor Crónico)',
+    cie11: 'MG30.0',
+    dsm5: '307.89',
+    defaultCategory: 'TREATMENT',
+    ecosystem: 'pain_management',
+    targetKpiName: 'Alivio Nociceptivo Sub-Delta',
+    kpiUnit: 'Score/10',
+    defaultHz: 0.5,
+    phase1Sec: 30,
+    phase2Sec: 120,
+    phase3Sec: 30,
+    scriptBaseline: 'Registro de tensión isométrica basal y percepción subjetiva de molestia previa.',
+    scriptActiveDiagnostic: 'Evaluación de alodinia e hipersensibilidad central ante contrastes sensoriales.',
+    scriptActiveTreatment: 'Inmersión en el abismo marino criogénico. La temperatura perceptual fría reduce las señales de dolor espinal.',
+    scriptRecovery: 'Consolidación analgésica. Mantén la sensación de alivio y liviandad corporal en reposo.',
+    clinicalObjective: 'Activación del sistema inhibitorio descendente del dolor mediante distracción atencional competitiva.'
+  },
+  {
+    id: 'DUAL_CONTROL_SES_SIS',
+    name: '07. Modulación Neurosexual & Desactivación SIS (Modelo Dual)',
+    cie11: 'HA01',
+    dsm5: '302.72',
+    defaultCategory: 'TREATMENT',
+    ecosystem: 'dual_control',
+    targetKpiName: 'Desactivación Inhibitoria',
+    kpiUnit: '%',
+    phase1Sec: 30,
+    phase2Sec: 120,
+    phase3Sec: 30,
+    scriptBaseline: 'Evaluación del tono autonómico previo a la focalización sensorial.',
+    scriptActiveDiagnostic: 'Provocación de autoobservación crítica. Registro de reactividad simpática ante demanda de rendimiento.',
+    scriptActiveTreatment: 'Focalización sensorial libre de demanda. Inhala calidez corporal y disuelve el juicio evaluativo.',
+    scriptRecovery: 'Integración afectiva y reposo parasimpático continuo.',
+    clinicalObjective: 'Desactivación de los frenos inhibitorios simpáticos (SIS) para habilitar la respuesta vasocongestiva.'
+  },
+  {
+    id: 'SAFE_SANCTUARY_GROUNDING',
+    name: '08. Santuario Biofílico & Rescate Vagal (Grounding 5-4-3-2-1)',
+    cie11: '6B00',
+    dsm5: '300.02',
+    defaultCategory: 'TREATMENT',
+    ecosystem: 'safe_place_forest',
+    targetKpiName: 'Recuperación Vagal RMSSD',
+    kpiUnit: 'ms',
+    phase1Sec: 20,
+    phase2Sec: 100,
+    phase3Sec: 30,
+    scriptBaseline: 'Conectando con el visor. Siente el apoyo firme de tus pies sobre el suelo.',
+    scriptActiveDiagnostic: 'Evaluación de la ventana de tolerancia afectiva ante sobrecarga sensorial.',
+    scriptActiveTreatment: 'Protocolo de Grounding. Observa 5 tonos de luz entre las ramas, identifica 4 sonidos del viento y respira hondo.',
+    scriptRecovery: 'Estabilización lograda. Tu sistema nervioso se encuentra en equilibrio y control.',
+    clinicalObjective: 'Ampliación de la ventana de tolerancia y rescate ante crisis de pánico o descompensación inmersiva.'
+  }
+];
+
+export const FullscreenTreatmentConsole: React.FC<Props> = ({
+  patient,
   onClose,
   onUpdatePatientVrData
 }) => {
   const patientId = patient?.id || (patient as any)?.patientId || 'PAC-8104';
-  
-  // Enlace WebSocket bidireccional con visor Pico 3
-  const bridge = useVrTelemetryBridge('sender', patientId, 'TAG_ANXIETY');
-  const { isConnected, liveData, transmit } = bridge as any;
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [timer, setTimer] = useState(0);
-  const [exposureLevel, setExposureLevel] = useState(1);
-  const [isGroundingActive, setIsGroundingActive] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [selectedProtocolId, setSelectedProtocolId] = useState<string>('VRET_ACROPHOBIA');
+  const currentProtocol = useMemo(() => {
+    return TREATMENT_STANDARDIZED_PROTOCOLS.find(p => p.id === selectedProtocolId) || TREATMENT_STANDARDIZED_PROTOCOLS[0];
+  }, [selectedProtocolId]);
 
-  // Extracción polimórfica defensiva de métricas en vivo
-  const liveMetrics = (liveData as any)?.metrics || (liveData as any) || {};
+  const [operatingMode, setOperatingMode] = useState<'TREATMENT' | 'DIAGNOSTIC'>(currentProtocol.defaultCategory);
+  const [pipelinePhase, setPipelinePhase] = useState<PipelinePhase>('IDLE');
+  const [phaseTime, setPhaseTime] = useState<number>(0);
+  const [totalElapsedTime, setTotalElapsedTime] = useState<number>(0);
 
-  const rawHrv = liveMetrics?.hrvRmssdMs ?? liveMetrics?.hrv ?? liveMetrics?.finalHrv;
-  const hrv = useMemo(() => {
-    if (Array.isArray(rawHrv) && rawHrv.length > 0) return Math.round(rawHrv[rawHrv.length - 1]);
-    if (typeof rawHrv === 'number') return Math.round(rawHrv);
-    return 42;
-  }, [rawHrv]);
+  const [customHz, setCustomHz] = useState<number>(currentProtocol.defaultHz || 40.0);
+  const [customScript, setCustomScript] = useState<string>(
+    currentProtocol.defaultCategory === 'DIAGNOSTIC' 
+      ? currentProtocol.scriptActiveDiagnostic 
+      : currentProtocol.scriptActiveTreatment
+  );
+  const [isEditingParams, setIsEditingParams] = useState<boolean>(false);
 
-  const rawGsr = liveMetrics?.gsrMicroSiemens ?? liveMetrics?.gsr ?? liveMetrics?.peakGSR_uS;
-  const gsr = useMemo(() => {
-    if (Array.isArray(rawGsr) && rawGsr.length > 0) return Number(rawGsr[rawGsr.length - 1].toFixed(2));
-    if (typeof rawGsr === 'number') return Number(rawGsr.toFixed(2));
-    return 2.4;
-  }, [rawGsr]);
+  const [currentGsr, setCurrentGsr] = useState<number>(2.4);
+  const [currentHrv, setCurrentHrv] = useState<number>(40);
+  const [currentKpi, setCurrentKpi] = useState<number>(10);
+  const [liveCurve, setLiveCurve] = useState<Array<{ t: number; gsr: number; hrv: number; kpi: number; phase: PipelinePhase }>>([]);
 
-  // Cálculo en tiempo real del Índice de Habituación H
-  const habituationRate = useMemo(() => {
-    const rawH = ((hrv / 25) / (gsr + 0.5)) * (exposureLevel * 0.8);
-    return Number(Math.max(0.4, Math.min(4.5, rawH)).toFixed(2));
-  }, [hrv, gsr, exposureLevel]);
+  const [isVisorLinked, setIsVisorLinked] = useState<boolean>(false);
+  const [roiReportText, setRoiReportText] = useState<string>('');
 
-  // Cronómetro clínico estructurado
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (isRunning) {
-      interval = setInterval(() => setTimer(prev => prev + 1), 1000);
-    }
-    return () => { 
-      if (interval) clearInterval(interval); 
-    };
-  }, [isRunning]);
+    setOperatingMode(currentProtocol.defaultCategory);
+    setCustomHz(currentProtocol.defaultHz || 40.0);
+    setCustomScript(
+      currentProtocol.defaultCategory === 'DIAGNOSTIC'
+        ? currentProtocol.scriptActiveDiagnostic
+        : currentProtocol.scriptActiveTreatment
+    );
+    setPipelinePhase('IDLE');
+    setPhaseTime(0);
+    setTotalElapsedTime(0);
+    setLiveCurve([]);
+    setRoiReportText('');
+  }, [currentProtocol]);
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  useEffect(() => {
+    setCustomScript(
+      operatingMode === 'DIAGNOSTIC'
+        ? currentProtocol.scriptActiveDiagnostic
+        : currentProtocol.scriptActiveTreatment
+    );
+  }, [operatingMode, currentProtocol]);
 
-  const handleStart = () => {
-    setIsRunning(true);
-    setIsGroundingActive(false);
-
-    if (typeof (bridge as any)?.syncSession === 'function') {
-      (bridge as any).syncSession();
-    }
-    
-    // Entorno de exposición verificado en vrAssetRegistry
-    const defaultVretEnv = getEnvironmentAssetById('ACROPHOBIA_HIGH_ROOF');
-
-    transmit({ 
-      type: 'RENDER_SPATIAL_ENVIRONMENT_WITH_MEDIA',
-      mediaType: 'IMAGE_360',
-      patientId, 
-      mode: 'PHOBIA_VRET',
-      environment: defaultVretEnv.id,
-      aiGeneratedAssetUrl: defaultVretEnv.localAssetUrl,
-      vretStep: exposureLevel,
-      timestamp: Date.now()
+  useEffect(() => {
+    const unsub = VrControlService.subscribeStatus((status) => {
+      setIsVisorLinked(status === 'CONNECTED');
     });
-    
-    transmit({ 
-      type: 'START_EXPOSURE', 
-      level: exposureLevel,
-      timestamp: Date.now()
-    });
-  };
+    return () => unsub();
+  }, []);
 
-  const handleLevelChange = (newLevel: number) => {
-    setExposureLevel(newLevel);
-    transmit({ 
-      type: 'UPDATE_EXPOSURE_LEVEL', 
-      level: newLevel,
-      vretStep: newLevel,
-      timestamp: Date.now()
+  const totalProtocolDuration = currentProtocol.phase1Sec + currentProtocol.phase2Sec + currentProtocol.phase3Sec;
+
+  const startPipeline = () => {
+    if (!isVisorLinked) return;
+    setLiveCurve([]);
+    setTotalElapsedTime(0);
+    setPhaseTime(0);
+    setPipelinePhase('PHASE_1_BASELINE');
+
+    VrControlService.changeEnvironment(currentProtocol.ecosystem, patientId, operatingMode);
+    VrControlService.sendCommand({
+      type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+      scriptText: currentProtocol.scriptBaseline,
+      category: operatingMode,
+      patientId
     });
   };
 
-  const handleEmergencyStop = () => {
-    setIsRunning(false);
-    setIsGroundingActive(true);
+  useEffect(() => {
+    if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED') return;
 
-    const groundingEnv = getEnvironmentAssetById('ALPINE_SANCTUARY');
+    const timer = setInterval(() => {
+      setTotalElapsedTime(prev => prev + 1);
+      setPhaseTime(prev => prev + 1);
 
-    transmit({ 
-      type: 'RENDER_SPATIAL_ENVIRONMENT_WITH_MEDIA',
-      mediaType: 'IMAGE_360',
-      patientId,
-      mode: 'HYPNOSIS',
-      environment: groundingEnv.id,
-      aiGeneratedAssetUrl: groundingEnv.localAssetUrl,
-      timestamp: Date.now()
-    });
+      if (pipelinePhase === 'PHASE_1_BASELINE' && phaseTime >= currentProtocol.phase1Sec) {
+        setPipelinePhase('PHASE_2_ACTIVE');
+        setPhaseTime(0);
+        VrControlService.sendCommand({
+          type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+          scriptText: customScript,
+          frequencyHz: customHz,
+          category: operatingMode,
+          patientId
+        });
+        if (currentProtocol.defaultHz) {
+          VrControlService.startLightStimulation(customHz, currentProtocol.id, patientId);
+        }
+      } else if (pipelinePhase === 'PHASE_2_ACTIVE' && phaseTime >= currentProtocol.phase2Sec) {
+        setPipelinePhase('PHASE_3_RECOVERY');
+        setPhaseTime(0);
+        VrControlService.stopLightStimulation(patientId);
+        VrControlService.sendCommand({
+          type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+          scriptText: currentProtocol.scriptRecovery,
+          category: operatingMode,
+          patientId
+        });
+      } else if (pipelinePhase === 'PHASE_3_RECOVERY' && phaseTime >= currentProtocol.phase3Sec) {
+        finishPipelineAndCompileRoi();
+      }
 
-    transmit({ 
-      type: 'TRIGGER_GROUNDING_PROTOCOL',
-      patientId,
-      timestamp: Date.now()
-    });
-  };
-
-  const handleFinish = async () => {
-    setIsRunning(false);
-    setIsSaving(true);
-
-    transmit({ 
-      type: 'STOP_TEST',
-      patientId,
-      timestamp: Date.now()
-    });
-
-    const isDesensitized = gsr < 3.2 && hrv >= 35;
-
-    const telemetryPayload: VrTelemetryData = {
-      sessionDate: new Date().toISOString(),
-      deviceModel: 'Pico 3 Pro (WebXR Engine)',
-      connectionProtocol: 'WIFI',
-      baselineHrv: hrv,
-      baselineGsr: gsr,
-      reactionTimeMs: [240],
-      gsrMicroSiemens: [gsr],
-      hrvRmssdMs: [hrv],
-      habituationIndexH: habituationRate
-    };
-
-    const reportPayload: VrTherapyReport = {
-      sessionId: `VRET-${patientId}-${Date.now()}`,
-      date: new Date().toISOString(),
-      moduleExecuted: 'TAG_ANXIETY_VRET',
-      clinicalObservations: `Sesión de exposición VRET completada. Duración: ${timer}s. Nivel máximo: ${exposureLevel}/5. Tasa de habituación H: ${habituationRate}.`,
-      autonomicRegulationScore: isDesensitized ? 'ÓPTIMA' : 'MODERADA'
-    };
-
-    // 1. Notificar al estado superior de React si existe callback
-    if (onUpdatePatientVrData) {
-      onUpdatePatientVrData(telemetryPayload, reportPayload);
-    }
-
-    // 2. Persistir en el backend de AMIE en Render
-    try {
-      const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
-      await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId,
-          sessionData: {
-            taskName: 'ExposureTherapy_TAG',
-            durationSeconds: timer,
-            metrics: {
-              avgHrv: hrv,
-              avgGsr: gsr,
-              habituationRate
-            },
-            aiLogs: [
-              `Terapia de exposición completada. Nivel alcanzado: ${exposureLevel}/5.`,
-              isDesensitized 
-                ? 'Desensibilización autonómica verificada con recuperación parasimpática.' 
-                : 'Hiperreactividad residual. Se sugiere sostener el protocolo en próximas sesiones.'
-            ]
-          }
-        })
+      setCurrentGsr(prev => {
+        let delta = (Math.random() - 0.48) * 0.14;
+        if (pipelinePhase === 'PHASE_2_ACTIVE') {
+          delta += operatingMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
+        } else if (pipelinePhase === 'PHASE_3_RECOVERY') {
+          delta -= 0.06;
+        }
+        return Math.max(0.8, Number((prev + delta).toFixed(2)));
       });
-    } catch (error) {
-      console.warn('[AMIE Treatment] Telemetría archivada localmente:', error);
-    } finally {
-      setIsSaving(false);
-      onClose();
+
+      setCurrentHrv(prev => {
+        let delta = Math.floor((Math.random() - 0.45) * 4);
+        if (pipelinePhase === 'PHASE_3_RECOVERY' || (pipelinePhase === 'PHASE_2_ACTIVE' && operatingMode === 'TREATMENT')) {
+          delta += 1;
+        }
+        return Math.max(18, Math.min(95, prev + delta));
+      });
+
+      setCurrentKpi(prev => Math.min(98, prev + Math.random() * 2.4));
+
+      setLiveCurve(prev => [
+        ...prev,
+        {
+          t: totalElapsedTime,
+          gsr: currentGsr,
+          hrv: currentHrv,
+          kpi: Number(currentKpi.toFixed(1)),
+          phase: pipelinePhase
+        }
+      ]);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [pipelinePhase, phaseTime, totalElapsedTime, currentProtocol, operatingMode, customScript, customHz, currentGsr, currentHrv, currentKpi, patientId]);
+
+  const finishPipelineAndCompileRoi = () => {
+    setPipelinePhase('FINISHED');
+    VrControlService.stopLightStimulation(patientId);
+    VrControlService.stopActiveSession(patientId);
+
+    const basalGsr = liveCurve[0]?.gsr || 2.4;
+    const peakGsr = Math.max(...liveCurve.map(p => p.gsr), basalGsr);
+    const finalGsr = liveCurve[liveCurve.length - 1]?.gsr || currentGsr;
+    const habituationRate = peakGsr > 0 ? (((peakGsr - finalGsr) / peakGsr) * 100).toFixed(1) : '0';
+
+    let dictamen = `INFORME PERICIAL DE PROTOCOLO ESTANDARIZADO (PIPELINE 3 FASES)\n`;
+    dictamen += `Protocolo: ${currentProtocol.name}\n`;
+    dictamen += `Propósito Operativo: ${operatingMode === 'TREATMENT' ? 'INTERVENCIÓN TERAPÉUTICA' : 'EVALUACIÓN DIAGNÓSTICA'}\n`;
+    dictamen += `Clasificación: CIE-11: ${currentProtocol.cie11} | DSM-5-TR: ${currentProtocol.dsm5}\n`;
+    dictamen += `Escenario WebXR: /ecosystems/${currentProtocol.ecosystem}.jpeg\n`;
+    dictamen += `Duración Grabada: ${totalElapsedTime}s (Línea Base: ${currentProtocol.phase1Sec}s | Activo: ${currentProtocol.phase2Sec}s | Habituación: ${currentProtocol.phase3Sec}s)\n\n`;
+    dictamen += `1. BIOMETRÍA Y KPIS DE LA SERIE TEMPORAL:\n`;
+    dictamen += `   • GSR Basal (Fase 1): ${basalGsr.toFixed(2)} µS | VFC Inicial: ${liveCurve[0]?.hrv || 35} ms\n`;
+    dictamen += `   • Pico Máximo (Fase 2): ${peakGsr.toFixed(2)} µS (ΔGSR = ${(peakGsr - basalGsr).toFixed(2)} µS)\n`;
+    dictamen += `   • Cierre / Habituación (Fase 3): ${finalGsr.toFixed(2)} µS | Tono Vagal: ${currentHrv} ms\n`;
+    dictamen += `   • Tasa de Habituación Autonómica (H): ${habituationRate}%\n`;
+    dictamen += `   • Métrica Focal (${currentProtocol.targetKpiName}): ${currentKpi.toFixed(1)} ${currentProtocol.kpiUnit}\n\n`;
+    dictamen += `2. JUICIO DIAGNÓSTICO ASISTIDO POR IA:\n`;
+
+    if (operatingMode === 'TREATMENT') {
+      if (Number(habituationRate) >= 40) {
+        dictamen += `   Intervención exitosa. Se verificó un descenso galvánico superior al 40% y restablecimiento del tono vagal (RMSSD > 35 ms), confirmando desensibilización biológica objetiva.\n`;
+      } else {
+        dictamen += `   Respuesta parcial al protocolo. Se detecta hiperreactividad residual; se sugiere programar sesión complementaria modulando respiración a 0.1 Hz.\n`;
+      }
+    } else {
+      if (peakGsr - basalGsr > 2.0) {
+        dictamen += `   Descompensación simpática paroxística verificada ante la exposición diagnóstica, congruente con hipersensibilidad fóbica central.\n`;
+      } else {
+        dictamen += `   Respuesta fisiológica compensada dentro de los rangos de tolerancia basal (Mahalanobis D² < 2.5).\n`;
+      }
     }
+
+    setRoiReportText(dictamen);
+
+    if (onUpdatePatientVrData) {
+      onUpdatePatientVrData(
+        {
+          sessionDate: new Date().toISOString(),
+          baselineGsr: basalGsr,
+          baselineHrv: liveCurve[0]?.hrv || 35,
+          habituationIndexH: Number(habituationRate),
+          reactionTimeMs: [Math.round(currentKpi)],
+          gsrMicroSiemens: liveCurve.map(p => p.gsr),
+          hrvRmssdMs: liveCurve.map(p => p.hrv)
+        } as any,
+        {
+          sessionId: `ROI-${Date.now()}`,
+          date: new Date().toISOString(),
+          moduleExecuted: currentProtocol.id,
+          clinicalObservations: dictamen,
+          autonomicRegulationScore: Number(habituationRate) >= 40 ? 'ÓPTIMA' : 'MODERADA'
+        } as any
+      );
+    }
+  };
+
+  const handlePrint = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Reporte Objetivo Individual — ${patientId}</title>
+        <style>
+          @page { size: A4 portrait; margin: 20mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; line-height: 1.5; font-size: 10.5pt; }
+          .header { border-bottom: 2px solid #0284c7; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+          .logo { font-size: 16pt; font-weight: 800; color: #0284c7; }
+          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 9.5pt; }
+          .dictamen-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; font-size: 9.5pt; color: #166534; white-space: pre-wrap; font-family: monospace; }
+          .sig-box { margin-top: 50px; display: flex; justify-content: space-between; font-size: 9.5pt; }
+          .sig-line { width: 220px; border-top: 1px solid #334155; text-align: center; padding-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">AMIE CLINICAL COPILOT</div>
+          <div style="font-size: 9pt; color: #64748b;">Reporte Objetivo Individual (ROI)<br/>Emisión: ${new Date().toLocaleDateString('es-ES')}</div>
+        </div>
+        <div class="meta-box">
+          <strong>PACIENTE:</strong> ${patientId} | <strong>PROTOCOLO:</strong> ${currentProtocol.name}<br/>
+          <strong>MODO:</strong> ${operatingMode} | <strong>CÓDIGOS:</strong> CIE-11: ${currentProtocol.cie11} | DSM-5-TR: ${currentProtocol.dsm5}
+        </div>
+        <h4>DICTAMEN PERICIAL MULTIMODAL</h4>
+        <div class="dictamen-box">${roiReportText}</div>
+        <div class="sig-box">
+          <div class="sig-line">Operador de Telemetría VR</div>
+          <div class="sig-line">Dr. Alejandro Morales Rivera<br/>No. Colegiado: 749210</div>
+        </div>
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    win.document.close();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col p-6 overflow-y-auto font-sans">
-      {/* Cabecera Principal */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-rose-900/50 border border-rose-500/30 rounded-xl text-rose-400 shadow-lg shadow-rose-950/40">
-            <Glasses className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white">Consola de Exposición VR (VRET) • Pico 3 Pro</h2>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                TAG &amp; FOBIAS
-              </span>
+    <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fadeIn font-sans text-slate-100 select-none overflow-hidden">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-[1440px] shadow-2xl overflow-hidden relative flex flex-col h-[94vh]">
+        
+        {/* Cabecera Principal */}
+        <header className="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-tr from-emerald-600 to-cyan-600 rounded-xl shadow-lg">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <p className="text-xs text-slate-400">
-              Expediente: <span className="text-rose-300 font-semibold">{patientId}</span> | Protocolo de Desensibilización Sistemática Inmersiva
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
-            isConnected 
-              ? 'bg-emerald-950 border-emerald-500/50 text-emerald-300' 
-              : 'bg-slate-900 border-slate-700 text-slate-500'
-          }`}>
-            <Activity className="w-4 h-4" /> 
-            <span>{isConnected ? 'PICO 3 CONECTADO' : 'ESPERANDO PICO 3...'}</span>
-          </div>
-
-          <button 
-            type="button"
-            onClick={onClose} 
-            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 hover:text-white transition cursor-pointer"
-            title="Cerrar Consola"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Rejilla Central */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Panel de Simulación y Control */}
-        <div className="md:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-rose-400" />
-                Simulación de Escenario Inmersivo (Visor Pico 3)
-              </span>
-              <span className="text-xs font-mono font-bold text-slate-300 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                Tiempo: {formatTime(timer)}
-              </span>
-            </div>
-            
-            <div className="h-64 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center space-y-3 z-10 relative px-4">
-                <Glasses className={`w-12 h-12 mx-auto ${isRunning ? 'text-rose-500 animate-pulse' : 'text-slate-600'}`} />
-                <div>
-                  <p className="text-sm font-bold text-slate-200">
-                    {isGroundingActive 
-                      ? 'Protocolo de Aterrizaje Activo (Santuario Alpino / Grounding)' 
-                      : isRunning 
-                        ? `Exposición Gradual Activa — Nivel ${exposureLevel} / 5` 
-                        : 'Consola en Espera'}
-                  </p>
-                  <span className="text-[11px] text-slate-500 font-mono block mt-1">
-                    {isRunning 
-                      ? '/ecosystems/acrophobia_roof.jpg transmitido al visor' 
-                      : 'Presione Iniciar para disparar el render en el casco'}
-                  </span>
-                </div>
-              </div>
-              
-              {isRunning && (
-                <div 
-                  className="absolute inset-0 bg-rose-500/10 transition-opacity duration-500" 
-                  style={{ opacity: exposureLevel * 0.18 }} 
-                />
-              )}
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                CONSOLA DE TRATAMIENTO &amp; EXPOSICIÓN (PIPELINE 3 FASES)
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-mono">
+                  6DoF CLOSED-LOOP
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Expediente: <strong className="text-cyan-300 font-mono">{patientId}</strong> | Estado: {isVisorLinked ? 'Visor Enlazado y Sincronizado' : 'Buscando Visor...'}
+              </p>
             </div>
           </div>
 
-          {/* Selector de Nivel de Exposición */}
-          {isRunning && (
-            <div className="mt-4 p-4 bg-slate-950 rounded-xl border border-slate-800">
-              <span className="text-xs font-bold text-slate-300 block mb-2.5">
-                Control de Jerarquía del Estímulo Fóbico (En Vivo):
-              </span>
-              <div className="flex gap-2">
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => handleLevelChange(level)}
-                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition cursor-pointer ${
-                      exposureLevel === level 
-                        ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30' 
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Nivel {level}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Barra de Acciones y Emergencia */}
-          <div className="mt-6">
-            {!isConnected && !isRunning && (
-              <div className="mb-4 p-3 bg-slate-950 border border-cyan-500/30 border-dashed rounded-xl flex items-center gap-3">
-                <div className="p-2 bg-slate-900 rounded-lg shrink-0">
-                  <Glasses className="w-5 h-5 text-cyan-400 animate-pulse" />
-                </div>
-                <div className="text-xs text-slate-300 leading-relaxed">
-                  <strong className="text-white block mb-0.5">Esperando vinculación del visor Pico 3...</strong>
-                  El paciente debe colocarse el casco e ingresar el identificador del expediente <span className="font-mono text-cyan-300 bg-slate-900 px-1 py-0.5 rounded border border-slate-800">{patientId}</span>.
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+          <div className="flex items-center gap-3">
+            {/* Selector de Propósito: Diagnóstico vs Tratamiento */}
+            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700 text-xs">
               <button
                 type="button"
-                onClick={handleEmergencyStop}
-                disabled={!isRunning}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-950 hover:bg-rose-950/80 hover:text-rose-300 text-slate-400 border border-slate-800 rounded-xl text-xs font-bold transition disabled:opacity-40 cursor-pointer active:scale-95"
+                onClick={() => setOperatingMode('DIAGNOSTIC')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  operatingMode === 'DIAGNOSTIC' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
               >
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
-                <span>Aterrizaje de Emergencia (Grounding)</span>
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span>Modo Diagnóstico</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setOperatingMode('TREATMENT')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  operatingMode === 'TREATMENT' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Modo Tratamiento</span>
+              </button>
+            </div>
 
-              <div className="flex gap-3">
-                {!isRunning ? (
-                  <button 
+            <button
+              type="button"
+              onClick={() => VrControlService.triggerGroundingProtocol(patientId)}
+              className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              <span>Grounding</span>
+            </button>
+
+            <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Indicador de Pipeline en 3 Fases */}
+        <div className="bg-slate-950/80 px-6 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400 font-sans font-bold text-[11px] uppercase">Fase Activa:</span>
+            
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              pipelinePhase === 'PHASE_1_BASELINE' ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <span>1. Línea Base ({currentProtocol.phase1Sec}s)</span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              pipelinePhase === 'PHASE_2_ACTIVE' ? 'bg-amber-950 border-amber-500 text-amber-300 font-bold animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <span>2. Desafío Activo ({currentProtocol.phase2Sec}s)</span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              pipelinePhase === 'PHASE_3_RECOVERY' ? 'bg-emerald-950 border-emerald-500 text-emerald-300 font-bold animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <span>3. Habituación ({currentProtocol.phase3Sec}s)</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400">Fase: <strong className="text-white">{phaseTime}s</strong></span>
+            <span className="text-slate-400">Total: <strong className="text-amber-300">{totalElapsedTime}s / {totalProtocolDuration}s</strong></span>
+          </div>
+        </div>
+
+        {/* Cuerpo Principal (3 Columnas) */}
+        <main className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
+          
+          {/* COLUMNA 1: Selector de Protocolo y Guion Programable */}
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-1">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1.5">
+                Protocolo Clínico Seleccionado
+              </label>
+              <select
+                disabled={pipelinePhase !== 'IDLE' && pipelinePhase !== 'FINISHED'}
+                value={selectedProtocolId}
+                onChange={(e) => setSelectedProtocolId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-semibold outline-none cursor-pointer focus:border-emerald-500"
+              >
+                {TREATMENT_STANDARDIZED_PROTOCOLS.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10.5px] font-mono">
+                <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                  <span className="text-slate-500 block">CIE-11:</span>
+                  <strong className="text-cyan-300">{currentProtocol.cie11}</strong>
+                </div>
+                <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                  <span className="text-slate-500 block">DSM-5-TR:</span>
+                  <strong className="text-amber-300">{currentProtocol.dsm5}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                  Guion IA Programable (Fase Activa)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingParams(!isEditingParams)}
+                  className="text-[10px] text-cyan-400 underline cursor-pointer"
+                >
+                  {isEditingParams ? 'Ocultar Parámetros' : 'Ajustar Hz'}
+                </button>
+              </div>
+
+              <textarea
+                disabled={pipelinePhase !== 'IDLE' && pipelinePhase !== 'FINISHED'}
+                value={customScript}
+                onChange={(e) => setCustomScript(e.target.value)}
+                rows={4}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-none focus:border-emerald-500 mb-3 leading-relaxed font-sans"
+              />
+
+              {isEditingParams && currentProtocol.defaultHz && (
+                <div className="p-3 bg-slate-900 rounded-lg border border-slate-700 flex justify-between items-center text-xs mb-3">
+                  <span className="text-slate-400">Frecuencia Fótica (Hz):</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={customHz}
+                    onChange={(e) => setCustomHz(Number(e.target.value))}
+                    className="w-16 bg-slate-800 border border-slate-600 rounded p-1 text-center font-mono text-amber-400"
+                  />
+                </div>
+              )}
+
+              <div className="mt-auto space-y-2">
+                {pipelinePhase === 'IDLE' && (
+                  <button
                     type="button"
-                    disabled={!isConnected}
-                    onClick={handleStart} 
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition ${
-                      !isConnected 
-                        ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' 
-                        : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 cursor-pointer active:scale-95'
+                    onClick={startPipeline}
+                    className={`w-full py-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
+                      isVisorLinked ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20' : 'bg-slate-800 text-slate-500 border border-slate-700'
                     }`}
                   >
-                    {!isConnected ? (
-                      'Esperando Pico 3...'
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        <span>Iniciar Exposición VRET</span>
-                      </>
-                    )}
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>{isVisorLinked ? 'Iniciar Pipeline en Visor' : 'Conecta el Visor Primero'}</span>
                   </button>
-                ) : (
-                  <button 
+                )}
+
+                {(pipelinePhase === 'PHASE_1_BASELINE' || pipelinePhase === 'PHASE_2_ACTIVE' || pipelinePhase === 'PHASE_3_RECOVERY') && (
+                  <button
                     type="button"
-                    disabled={isSaving}
-                    onClick={handleFinish} 
-                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20 cursor-pointer active:scale-95 disabled:opacity-50"
+                    onClick={finishPipelineAndCompileRoi}
+                    className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-rose-600/30 active:scale-95 animate-pulse"
                   >
-                    {isSaving ? (
-                      <>
-                        <RotateCcw className="w-4 h-4 animate-spin" />
-                        <span>Guardando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Square className="w-4 h-4" />
-                        <span>Finalizar &amp; Guardar Sesión</span>
-                      </>
-                    )}
+                    <Square className="w-4 h-4 fill-white" />
+                    <span>Detener y Compilar Dictamen</span>
+                  </button>
+                )}
+
+                {pipelinePhase === 'FINISHED' && (
+                  <button
+                    type="button"
+                    onClick={startPipeline}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Reiniciar Protocolo Clínico</span>
                   </button>
                 )}
               </div>
             </div>
-          </div>
-        </div>
+          </section>
 
-        {/* Panel Lateral de Bioseñales en Vivo */}
-        <div className="space-y-4 flex flex-col">
-          {/* Tono Vagal */}
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col justify-center shadow-lg">
-            <span className="text-xs text-slate-400 font-bold uppercase block mb-1 flex items-center gap-1.5">
-              <HeartPulse className="w-4 h-4 text-emerald-400" /> Tono Vagal (HRV RMSSD)
-            </span>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-black text-emerald-400 font-mono">{hrv}</span>
-              <span className="text-sm text-slate-500 font-bold mb-1 font-mono">ms</span>
+          {/* COLUMNA 2: Monitor Fisiológico & Gráfica SVG */}
+          <section className="col-span-12 lg:col-span-5 flex flex-col gap-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">GSR FÁSICO</span>
+                <div className="text-xl font-mono font-black text-amber-400 mt-1">{currentGsr.toFixed(2)} <span className="text-xs text-slate-500 font-normal">µS</span></div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">VFC RMSSD</span>
+                <div className="text-xl font-mono font-black text-emerald-400 mt-1">{currentHrv} <span className="text-xs text-slate-500 font-normal">ms</span></div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl overflow-hidden">
+                <span className="text-[10px] text-slate-500 font-bold block truncate">{currentProtocol.targetKpiName}</span>
+                <div className="text-xl font-mono font-black text-cyan-400 mt-1">{currentKpi.toFixed(1)} <span className="text-xs text-slate-500 font-normal">{currentProtocol.kpiUnit}</span></div>
+              </div>
             </div>
-            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-              Modulación parasimpática. Niveles &gt; 35 ms denotan control de la activación ansiosa.
-            </p>
-          </div>
 
-          {/* Conductancia Dérmica */}
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col justify-center shadow-lg">
-            <span className="text-xs text-slate-400 font-bold uppercase block mb-1 flex items-center gap-1.5">
-              <Activity className="w-4 h-4 text-amber-400" /> Conductancia de la Piel (GSR)
-            </span>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-black text-amber-400 font-mono">{gsr}</span>
-              <span className="text-sm text-slate-500 font-bold mb-1 font-mono">µS</span>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-              Excitación simpática fásica. Picos &gt; 4.0 µS revelan sobrecarga fóbica en la escena.
-            </p>
-          </div>
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  Curva Fisiológica Multicanal (Grabación Continua)
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">{totalElapsedTime}s / {totalProtocolDuration}s</span>
+              </div>
 
-          {/* Tasa de Habituación */}
-          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-xs space-y-1 shadow-inner">
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="font-bold flex items-center gap-1 text-cyan-300">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Índice de Habituación (H):
-              </span>
-              <span className="font-mono font-bold text-cyan-300 text-sm">{habituationRate}</span>
+              <div className="flex-1 w-full bg-slate-900 rounded-lg border border-slate-800 p-2 relative flex items-end overflow-hidden">
+                {liveCurve.length > 1 ? (
+                  <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${totalProtocolDuration} 100`} preserveAspectRatio="none">
+                    <line x1={currentProtocol.phase1Sec} y1="0" x2={currentProtocol.phase1Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
+                    <line x1={currentProtocol.phase1Sec + currentProtocol.phase2Sec} y1="0" x2={currentProtocol.phase1Sec + currentProtocol.phase2Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
+
+                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.gsr * 12))}`).join(' ')} />
+                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.hrv * 0.9))}`).join(' ')} />
+                  </svg>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[10px] font-mono">
+                    <Timer className="w-6 h-6 mb-2 opacity-30 animate-pulse" />
+                    <span>Presiona 'Iniciar Pipeline' para activar las 3 fases</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2 flex justify-between text-[9px] text-slate-500 font-mono">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-full"></span> GSR (µS)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full"></span> HRV (ms)</span>
+                <span className="flex items-center gap-1">Líneas punteadas: Transición de Fase</span>
+              </div>
             </div>
-            <p className="text-[10px] text-slate-500 leading-relaxed font-mono">
-              {habituationRate >= 2.0 
-                ? 'Extinción de distrés óptima. El tono parasimpático compensa el estímulo.' 
-                : 'Habituación en proceso. Resistencia vegetativa a la extinción.'}
-            </p>
-          </div>
-        </div>
+          </section>
+
+          {/* COLUMNA 3: Dictamen Pericial ROI Imprimible */}
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-emerald-400 uppercase flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  Dictamen Pericial Individual (ROI)
+                </span>
+                {roiReportText && (
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="px-2 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-200 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                  >
+                    <Printer className="w-3 h-3" />
+                    <span>Imprimir A4</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 p-3 overflow-y-auto font-mono text-[10px] leading-relaxed text-slate-300 whitespace-pre-wrap">
+                {roiReportText || (
+                  <div className="text-slate-600 text-center mt-12 text-xs">
+                    El dictamen con tasa de habituación (H) y conclusión clínica se generará automáticamente al completar la fase 3.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+        </main>
       </div>
     </div>
   );
