@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - HOOK REACTIVO DE CONTROL DE AUDIO GUIADO
+// AMIE CLINICAL COPILOT - HOOK REACTIVO DE CONTROL DE AUDIO GUIADO (CLOSED-LOOP VR)
 // frontend/hooks/useClinicalAudioGuidance.ts
 // ============================================================================
 
@@ -11,6 +11,7 @@ import {
   AudioGuidanceProtocol, 
   AudioGuidancePhase 
 } from '../services/clinicalAudioGuidanceService';
+import { VrControlService } from '../services/vrControlService';
 
 export interface UseClinicalAudioGuidanceReturn {
   isSpeaking: boolean;
@@ -56,12 +57,22 @@ export const useClinicalAudioGuidance = (
   useEffect(() => {
     return () => {
       ClinicalAudioGuidanceEngine.stop();
+      VrControlService.sendCommand({
+        type: 'STOP_AUDIO_GUIDANCE',
+        timestamp: Date.now()
+      });
     };
   }, []);
 
   const stopVoice = useCallback(() => {
     ClinicalAudioGuidanceEngine.stop();
     setIsSpeaking(false);
+
+    // Notificar al visor Pico 3 que detenga la locución
+    VrControlService.sendCommand({
+      type: 'STOP_AUDIO_GUIDANCE',
+      timestamp: Date.now()
+    });
   }, []);
 
   const playPhaseByIndex = useCallback((index: number) => {
@@ -71,6 +82,20 @@ export const useClinicalAudioGuidance = (
     setCurrentPhaseIndex(index);
     setIsSpeaking(true);
 
+    // 1. TRANSMISIÓN INMEDIATA AL VISOR PICO 3 VIA WEBSOCKET
+    const phaseTypes = ['PHASE_1_BASELINE', 'PHASE_2_ACTIVE', 'PHASE_3_RECOVERY'];
+    VrControlService.sendCommand({
+      type: 'START_PIPELINE_PHASE',
+      phase: phaseTypes[index] || 'PHASE_2_ACTIVE',
+      speechScript: phase.spokenScript,
+      durationSec: (phase as any).durationSeconds || 60,
+      ecosystem: (activeProtocol as any).ecosystem || 'safe_place_forest',
+      category: (activeProtocol as any).category || 'TREATMENT',
+      frequencyHz: (phase as any).recommendedHz || 0,
+      timestamp: Date.now()
+    });
+
+    // 2. REPRODUCCIÓN EN ALTAVOCES LOCALES DE LA LAPTOP
     ClinicalAudioGuidanceEngine.speak(phase.spokenScript, {
       rate: phase.recommendedCadenceRate || speechRate,
       pitch: phase.recommendedPitch || 0.95,
@@ -79,7 +104,7 @@ export const useClinicalAudioGuidance = (
       onEnd: () => setIsSpeaking(false),
       onError: () => setIsSpeaking(false)
     });
-  }, [activeProtocol.phases, speechRate, volume]);
+  }, [activeProtocol, speechRate, volume]);
 
   const playCurrentPhase = useCallback(() => {
     playPhaseByIndex(currentPhaseIndex);
@@ -90,6 +115,20 @@ export const useClinicalAudioGuidance = (
     const proto = CLINICAL_PROTOCOLS[protocolId] || CLINICAL_PROTOCOLS.VRET_EXPOSURE;
     setActiveProtocol(proto);
     setCurrentPhaseIndex(0);
+
+    // Informar al visor del cambio de protocolo
+    VrControlService.syncClinicalContext({
+      moduleId: proto.id || protocolId,
+      category: (proto as any).category || 'TREATMENT',
+      disorderId: proto.id || protocolId,
+      disorderName: proto.title || protocolId,
+      ecosystem: (proto as any).ecosystem || 'clinical_office',
+      audioGuidance: {
+        baselineScript: proto.phases[0]?.spokenScript || '',
+        activeScript: proto.phases[1]?.spokenScript || '',
+        recoveryScript: proto.phases[2]?.spokenScript || ''
+      }
+    });
   }, [stopVoice]);
 
   const nextPhase = useCallback(() => {
@@ -128,6 +167,10 @@ export const useClinicalAudioGuidance = (
 
   const triggerEmergencyGroundingVoice = useCallback(() => {
     setIsSpeaking(true);
+
+    // Activar Grounding en el visor Pico 3
+    VrControlService.triggerGroundingProtocol();
+
     ClinicalAudioGuidanceEngine.triggerEmergencyGroundingVoice(() => {
       setIsSpeaking(false);
     });
@@ -136,6 +179,15 @@ export const useClinicalAudioGuidance = (
   const speakCustomScript = useCallback((script: string) => {
     if (isMutedRef.current || !script.trim()) return;
     setIsSpeaking(true);
+
+    // Transmitir guion personalizado al casco
+    VrControlService.sendCommand({
+      type: 'START_PIPELINE_PHASE',
+      phase: 'PHASE_2_ACTIVE',
+      speechScript: script,
+      timestamp: Date.now()
+    });
+
     ClinicalAudioGuidanceEngine.speak(script, {
       rate: speechRate,
       pitch: 0.95,
