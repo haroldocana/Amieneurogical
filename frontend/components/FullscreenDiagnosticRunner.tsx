@@ -1,6 +1,6 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - SUITE CLÍNICA MAESTRA (30 ENTIDADES EN 7 MÓDULOS)
-// CON NEUROHIPNOSIS CLOSED-LOOP, REGULACIÓN DE SALIDA Y RESCATE DE EMERGENCIA
+// CON CARGA DE MEDIOS 360° PERSONALIZADOS, NEUROHIPNOSIS Y SEGURIDAD CLÍNICA
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -12,7 +12,8 @@ import {
   ShieldAlert, FileText, Stethoscope, Clock, Database, CheckCircle2, Eye, 
   Send, Layers, Shield, Flame, Glasses, ThermometerSnowflake, UserCheck, 
   Crosshair, Radio, Sliders, BookOpen, User, GitMerge, AlertOctagon, 
-  Compass, ShieldCheck, HeartPulse
+  Compass, ShieldCheck, HeartPulse, UploadCloud, FolderPlus, Film, 
+  Image as ImageIcon, RefreshCw
 } from 'lucide-react';
 
 interface Props {
@@ -27,6 +28,7 @@ export type PipelinePhase = 'IDLE' | 'PHASE_1_BASELINE' | 'PHASE_2_ACTIVE' | 'PH
 export type ClinicalEvidenceTier = 'TIER_1_CLASS_A' | 'TIER_2_CLASS_B' | 'TIER_3_CLASS_C';
 export type ClinicalMode = 'DIAGNOSTIC' | 'TREATMENT';
 export type GuidanceMode = 'AUTOMATIC_GUIDELINES' | 'CUSTOM_PROFESSIONAL';
+export type MediaSourceMode = 'OFFICIAL_CATALOG' | 'CUSTOM_STIMULUS';
 
 export interface ModuleCategoryDefinition {
   id: string;
@@ -475,6 +477,13 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
   const [selectedMode, setSelectedMode] = useState<ClinicalMode>(initialMode || 'DIAGNOSTIC');
   const [guidanceMode, setGuidanceMode] = useState<GuidanceMode>('AUTOMATIC_GUIDELINES');
 
+  // Integración de Medios 360° Personalizados en el Runner
+  const [mediaSourceMode, setMediaSourceMode] = useState<MediaSourceMode>('OFFICIAL_CATALOG');
+  const [customMediaType, setCustomMediaType] = useState<'image' | 'video'>('image');
+  const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [pipelinePhase, setPipelinePhase] = useState<PipelinePhase>('IDLE');
   const [phaseTime, setPhaseTime] = useState<number>(0);
   const [totalElapsedTime, setTotalElapsedTime] = useState<number>(0);
@@ -489,7 +498,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
   // Estados de Hipnosis Segura, Regulación de Salida y Abreacción
   const [isDeinducting, setIsDeinducting] = useState<boolean>(false);
-  const [deinductionStep, setDeinductionStep] = useState<number>(0);
   const [isEmergencyAborted, setIsEmergencyAborted] = useState<boolean>(false);
   const [stressWatchdogAlert, setStressWatchdogAlert] = useState<string | null>(null);
 
@@ -502,6 +510,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     kpiUnit: string;
     zScore: number;
     date: string;
+    mediaUsed: string;
     emergencyAborted?: boolean;
   }>>([]);
 
@@ -511,12 +520,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
   const [visorStatusMsg, setVisorStatusMsg] = useState<string | null>(null);
 
   const stateRef = useRef({
-    pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted
+    pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, 
+    currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted,
+    mediaSourceMode, customMediaUrl, customMediaType
   });
 
   useEffect(() => {
-    stateRef.current = { pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted };
-  }, [pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted]);
+    stateRef.current = { 
+      pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, 
+      currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted,
+      mediaSourceMode, customMediaUrl, customMediaType
+    };
+  }, [pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted, mediaSourceMode, customMediaUrl, customMediaType]);
 
   // Sincronización del módulo activo con el trastorno
   useEffect(() => {
@@ -557,6 +572,30 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     return () => { if(unsub) unsub(); };
   }, [patientId]);
 
+  // Manejador de carga de archivo local (Foto o Video 360°)
+  const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+
+    if (customMediaType === 'image' && !isImage) {
+      setVisorStatusMsg('⚠️ El archivo debe ser una imagen válida (JPEG, PNG).');
+      return;
+    }
+    if (customMediaType === 'video' && !isVideo) {
+      setVisorStatusMsg('⚠️ El archivo debe ser un video MP4 equirrectangular.');
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setCustomMediaUrl(objectUrl);
+    setSelectedFileName(file.name);
+    setVisorStatusMsg(`Archivo local listo: ${file.name}`);
+    setTimeout(() => setVisorStatusMsg(null), 3500);
+  };
+
   // Despliegue de Entorno y Audio al Casco Pico 3 Pro
   const handleDeployEnvironment = () => {
     if (!isVisorLinked) {
@@ -565,6 +604,22 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       return;
     }
 
+    // Si se opta por medio propio
+    if (mediaSourceMode === 'CUSTOM_STIMULUS' && customMediaUrl.trim()) {
+      VrControlService.sendCommand({
+        type: 'LOAD_CUSTOM_MEDIA',
+        mediaUrl: customMediaUrl.trim(),
+        mediaType: customMediaType,
+        scenarioName: `${currentDisorder.name} [Personalizado]`,
+        patientId,
+        timestamp: Date.now()
+      });
+      setVisorStatusMsg(`🟢 Estímulo 360° propio proyectado en el casco (${customMediaType.toUpperCase()}).`);
+      setTimeout(() => setVisorStatusMsg(null), 4000);
+      return;
+    }
+
+    // Si se opta por catálogo oficial
     const targetEcosystem = selectedMode === 'DIAGNOSTIC' 
       ? currentDisorder.diagnosticEcosystem 
       : currentDisorder.treatmentEcosystem;
@@ -600,6 +655,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     setStressWatchdogAlert(null);
     setPipelinePhase('PHASE_1_BASELINE');
 
+    // Despachar estímulo inicial o propio
+    if (mediaSourceMode === 'CUSTOM_STIMULUS' && customMediaUrl.trim()) {
+      VrControlService.sendCommand({
+        type: 'LOAD_CUSTOM_MEDIA',
+        mediaUrl: customMediaUrl.trim(),
+        mediaType: customMediaType,
+        scenarioName: `${currentDisorder.name} [Estímulo Propio]`,
+        patientId,
+        timestamp: Date.now()
+      });
+    }
+
     VrControlService.sendCommand({
       type: 'START_PIPELINE_PHASE',
       phase: 'PHASE_1_BASELINE',
@@ -610,46 +677,37 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     });
   };
 
-  // =========================================================================
-  // PROTOCOLOS DE SEGURIDAD CLÍNICA EN HIPNOSIS
-  // =========================================================================
-
-  // 1. Salida Regulada Progresiva (Des-inducción Ericksoniana 1 a 5)
+  // Salida Regulada Progresiva (Des-inducción Ericksoniana 1 a 5)
   const handleStartDeinduction = () => {
     if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED') return;
     setIsDeinducting(true);
-    setDeinductionStep(1);
 
-    const deinductionText = "Iniciando regreso consciente y gradual del trance. Cuento del uno al cinco. Uno: la energía y la sensación regresan a tus manos y pies. Dos: tu respiración se vuelve clara y refrescante. Tres: la mente despejada, con profundo bienestar y descanso. Cuatro: párpados ligeros, listos para abrirse. Cinco: ojos abiertos, completamente despierto, ubicado en el consultorio, sintiéndote extraordinariamente bien.";
+    const deinductionText = "Iniciando regreso consciente y gradual del trance. Cuento del uno al cinco. Uno: la sensación y vitalidad regresan a tus manos y pies. Dos: tu respiración es despejada y natural. Tres: mente clara y tranquila. Cuatro: párpados ligeros, listos para abrirse. Cinco: ojos abiertos, completamente despierto, ubicado en el consultorio, en perfecta calma.";
 
     VrControlService.sendCommand({
       type: 'START_PIPELINE_PHASE',
       phase: 'PHASE_3_RECOVERY',
       speechScript: deinductionText,
       category: 'TREATMENT',
-      frequencyHz: 10.0, // Elevar a ritmo Alfa para despertar
+      frequencyHz: 10.0, // Elevar a ritmo Alfa
       patientId
     });
 
-    setVisorStatusMsg('🧭 Des-inducción hipnótica en curso (Escala 1 a 5). Reorientando al paciente...');
+    setVisorStatusMsg('🧭 Des-inducción hipnótica en curso (Escala 1 a 5). Reorientando...');
     setTimeout(() => {
-      finishPipelineAndCompileReports(false, 'Emersión progresiva regulada completada bajo protocolo Ericksoniano.');
-    }, 20000);
+      finishPipelineAndCompileReports(false, 'Emersión progresiva regulada completada según protocolo Ericksoniano.');
+    }, 18000);
   };
 
-  // 2. Interrupción Médica de Emergencia (Abreacción o Estrés Paroxístico)
+  // Interrupción Médica de Emergencia (Abreacción o Estrés Paroxístico)
   const handleEmergencyAbort = (reason = 'Interrupción manual de seguridad por facultativo ante signos de distrés.') => {
     setIsEmergencyAborted(true);
     setIsDeinducting(false);
     setPipelinePhase('FINISHED');
 
-    // 1. Detener inmediatamente frecuencias fóticas estroboscópicas
     VrControlService.stopLightStimulation(patientId);
-
-    // 2. Activar protocolo de grounding visual y auditivo de rescate inmediato
     VrControlService.triggerGroundingProtocol(patientId);
 
-    // 3. Locución de reorientación sensorial inmediata
     const abortScript = "Abre los ojos ahora. Estás en un lugar seguro. Respira profundo. Siente tus pies firmes en el suelo. Mira a tu alrededor, estás en la clínica con tu médico tratante. Todo está en calma y completamente bajo control.";
     VrControlService.sendCommand({
       type: 'START_PIPELINE_PHASE',
@@ -680,6 +738,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       if (s.pipelinePhase === 'PHASE_1_BASELINE' && nextPhaseTime >= s.currentDisorder.phase1Sec) {
         setPipelinePhase('PHASE_2_ACTIVE');
         setPhaseTime(0);
+
+        // Si se usa medio personalizado, garantizar que esté cargado en Fase 2
+        if (s.mediaSourceMode === 'CUSTOM_STIMULUS' && s.customMediaUrl.trim()) {
+          VrControlService.sendCommand({
+            type: 'LOAD_CUSTOM_MEDIA',
+            mediaUrl: s.customMediaUrl.trim(),
+            mediaType: s.customMediaType,
+            scenarioName: `${s.currentDisorder.name} [Fase 2 Personalizada]`,
+            patientId,
+            timestamp: Date.now()
+          });
+        }
 
         VrControlService.sendCommand({
           type: 'START_PIPELINE_PHASE',
@@ -714,7 +784,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       // Cinemática adaptativa con bucle cerrado para hipnosis
       let deltaGsr = (Math.random() - 0.48) * 0.14;
       if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP') {
-        deltaGsr -= 0.08; // Inducción parasimpática
+        deltaGsr -= 0.08;
       } else if (s.pipelinePhase === 'PHASE_2_ACTIVE') {
         deltaGsr += s.selectedMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
       } else if (s.pipelinePhase === 'PHASE_3_RECOVERY') {
@@ -731,8 +801,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       const newHrv = Math.max(18, Math.min(98, s.currentHrv + deltaHrv));
       setCurrentHrv(newHrv);
 
-      // WATCHDOG CLÍNICO DE ESTRÉS DURANTE HIPNOSIS:
-      // Si el paciente presenta un salto simpático no controlado (abreacción oculta)
       if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP' && s.pipelinePhase === 'PHASE_2_ACTIVE') {
         const basal = liveCurve[0]?.gsr || 2.4;
         if (newGsr - basal > 2.0 && newHrv < 25) {
@@ -763,6 +831,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     const habituationRate = peakGsr > 0 ? (((peakGsr - currentGsr) / peakGsr) * 100).toFixed(1) : '0';
     const zScore = Number(((currentKpi - currentDisorder.meanHealthy) / currentDisorder.sdHealthy).toFixed(2));
 
+    const mediaLabel = mediaSourceMode === 'CUSTOM_STIMULUS' 
+      ? `Estímulo Propio (${selectedFileName || customMediaUrl})` 
+      : `Catálogo Oficial (/${selectedMode === 'DIAGNOSTIC' ? currentDisorder.diagnosticEcosystem : currentDisorder.treatmentEcosystem}.jpeg)`;
+
     const newSessionEntry = {
       disorderName: currentDisorder.name,
       mode: selectedMode,
@@ -770,6 +842,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       targetKpi: currentKpi,
       kpiUnit: currentDisorder.kpiUnit,
       zScore,
+      mediaUsed: mediaLabel,
       emergencyAborted: wasEmergency,
       date: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
     };
@@ -787,7 +860,8 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     roi += `TRASTORNO: ${currentDisorder.name}\n`;
     roi += `CLASIFICACIÓN NOSOLÓGICA: CIE-11: ${currentDisorder.cie11} | DSM-5-TR: ${currentDisorder.dsm5}\n`;
     roi += `MODALIDAD: ${selectedMode === 'DIAGNOSTIC' ? 'EVALUACIÓN / TEST DE ESTRÉS' : 'INTERVENCIÓN TERAPÉUTICA'}\n`;
-    roi += `GUÍA INTERNACIONAL HOMOLOGADA: ${currentDisorder.internationalGuideline}\n`;
+    roi += `MEDIO VISUAL UTILIZADO: ${mediaLabel}\n`;
+    roi += `GUÍA INTERNACIONAL: ${currentDisorder.internationalGuideline}\n`;
     roi += `PROTOCOLO DE AUDIO: ${guidanceMode === 'AUTOMATIC_GUIDELINES' ? 'Oficial Estandarizado' : 'Personalizado por Facultativo'}\n\n`;
     
     roi += `1. BIOMETRÍA Y MARCADORES REGISTRADOS:\n`;
@@ -839,7 +913,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     }
   };
 
-  // Generador del Informe Global Consolidado (Triangulación Multidimensional)
   const compileGlobalTriangulationReport = () => {
     let global = `================================================================================\n`;
     global += `EXPEDIENTE PERICIAL GLOBAL TRIANGULADO • HISTORIA CLÍNICA INTEGRAL\n`;
@@ -853,6 +926,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     } else {
       sessionHistory.forEach((s, i) => {
         global += `   [${i + 1}] ${s.date} - ${s.disorderName} (${s.mode})\n`;
+        global += `       • Estímulo: ${s.mediaUsed}\n`;
         global += `       • Habituación: ${s.habituationRate}% | Métrica: ${s.targetKpi} ${s.kpiUnit} | Z-Score: ${s.zScore} SD\n`;
         if (s.emergencyAborted) {
           global += `       • NOTA DE SEGURIDAD: Terminación por protocolo de rescate médico.\n`;
@@ -943,12 +1017,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
         {/* CUERPO PRINCIPAL */}
         <main className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
           
-          {/* COLUMNA 1: CONFIGURACIÓN DEL TRASTORNO Y GUIONES IA */}
-          <section className="col-span-12 lg:col-span-4 flex flex-col gap-3.5 overflow-y-auto pr-1">
+          {/* COLUMNA 1: CONFIGURACIÓN DEL TRASTORNO, MEDIOS 360 Y GUIONES IA */}
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-3 overflow-y-auto pr-1">
             
-            {/* Selector de Trastorno */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-              <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5 mb-2">
+            {/* 1. Selector de Trastorno */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 shadow-inner">
+              <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5 mb-1.5">
                 <Stethoscope className="w-3.5 h-3.5 text-cyan-400" />
                 Trastorno Seleccionado en este Módulo
               </label>
@@ -956,66 +1030,137 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                 disabled={pipelinePhase !== 'IDLE' && pipelinePhase !== 'FINISHED'}
                 value={selectedDisorderId}
                 onChange={(e) => setSelectedDisorderId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500"
               >
                 {CLINICAL_MASTER_CATALOG.filter(d => d.moduleId === activeModuleTab).map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
 
-              <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10px] font-mono">
-                <div className="p-2 bg-slate-900 rounded border border-slate-800"><span className="text-slate-500">CIE-11:</span> <strong className="text-cyan-300">{currentDisorder.cie11}</strong></div>
-                <div className="p-2 bg-slate-900 rounded border border-slate-800"><span className="text-slate-500">DSM-5-TR:</span> <strong className="text-amber-300">{currentDisorder.dsm5}</strong></div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] font-mono">
+                <div className="p-1.5 bg-slate-900 rounded border border-slate-800"><span className="text-slate-500">CIE-11:</span> <strong className="text-cyan-300">{currentDisorder.cie11}</strong></div>
+                <div className="p-1.5 bg-slate-900 rounded border border-slate-800"><span className="text-slate-500">DSM-5-TR:</span> <strong className="text-amber-300">{currentDisorder.dsm5}</strong></div>
               </div>
 
-              <div className="mt-2 p-2 bg-slate-900/60 rounded border border-slate-800 text-[9.5px] text-slate-400 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <div className="mt-1.5 p-1.5 bg-slate-900/60 rounded border border-slate-800 text-[9px] text-slate-400 flex items-center gap-1.5">
+                <BookOpen className="w-3 h-3 text-indigo-400 shrink-0" />
                 <span className="truncate"><strong>Guía:</strong> {currentDisorder.internationalGuideline}</span>
               </div>
             </div>
 
-            {/* Selector de Modo Clínico */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-              <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5 mb-2">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                Propósito del Ejercicio Clínico
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
+            {/* 2. Selector de Modo Clínico (Diagnóstico vs Tratamiento) */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-inner">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   disabled={!currentDisorder.supportedModes.includes('DIAGNOSTIC')}
                   onClick={() => setSelectedMode('DIAGNOSTIC')}
-                  className={`py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                  className={`py-2 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                     selectedMode === 'DIAGNOSTIC' ? 'bg-cyan-950 border-cyan-500 text-cyan-300 shadow-md' : 'bg-slate-900 border-slate-800 text-slate-500 opacity-50 hover:opacity-100'
                   }`}
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3.5 h-3.5" />
                   <span>DIAGNÓSTICO</span>
-                  <span className="text-[9px] font-normal text-slate-400">(Test / Provocación)</span>
+                  <span className="text-[8.5px] font-normal text-slate-400">(Test / Provocación)</span>
                 </button>
 
                 <button
                   disabled={!currentDisorder.supportedModes.includes('TREATMENT')}
                   onClick={() => setSelectedMode('TREATMENT')}
-                  className={`py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                  className={`py-2 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                     selectedMode === 'TREATMENT' ? 'bg-emerald-950 border-emerald-500 text-emerald-300 shadow-md' : 'bg-slate-900 border-slate-800 text-slate-500 opacity-50 hover:opacity-100'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-3.5 h-3.5" />
                   <span>TRATAMIENTO</span>
-                  <span className="text-[9px] font-normal text-slate-400">(Terapia / Habituación)</span>
+                  <span className="text-[8.5px] font-normal text-slate-400">(Terapia / Habituación)</span>
                 </button>
               </div>
             </div>
 
-            {/* Panel de Guion IA y Despliegue */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-2">
+            {/* 3. SELECCIÓN DE ENTORNO: CATÁLOGO OFICIAL VS. ESTÍMULO PERSONALIZADO */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-inner space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                  <Film className="w-3.5 h-3.5 text-cyan-400" />
+                  Estímulo Visual 360° en Visor
+                </label>
+                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[9.5px]">
+                  <button
+                    onClick={() => setMediaSourceMode('OFFICIAL_CATALOG')}
+                    className={`px-2 py-0.5 rounded font-bold transition ${mediaSourceMode === 'OFFICIAL_CATALOG' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}
+                  >
+                    Oficial
+                  </button>
+                  <button
+                    onClick={() => setMediaSourceMode('CUSTOM_STIMULUS')}
+                    className={`px-2 py-0.5 rounded font-bold transition ${mediaSourceMode === 'CUSTOM_STIMULUS' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                  >
+                    Propio (360°)
+                  </button>
+                </div>
+              </div>
+
+              {mediaSourceMode === 'OFFICIAL_CATALOG' ? (
+                <div className="p-2 bg-slate-900/70 border border-slate-800 rounded-lg text-[10px] text-slate-400 font-mono">
+                  Ecosistema asignado: <strong className="text-cyan-300">/{selectedMode === 'DIAGNOSTIC' ? currentDisorder.diagnosticEcosystem : currentDisorder.treatmentEcosystem}.jpeg</strong>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <button
+                      onClick={() => setCustomMediaType('image')}
+                      className={`flex-1 py-1 rounded-lg border flex items-center justify-center gap-1 transition ${customMediaType === 'image' ? 'bg-cyan-950 border-cyan-500 text-cyan-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+                    >
+                      <ImageIcon className="w-3 h-3" /> Foto 360
+                    </button>
+                    <button
+                      onClick={() => setCustomMediaType('video')}
+                      className={`flex-1 py-1 rounded-lg border flex items-center justify-center gap-1 transition ${customMediaType === 'video' ? 'bg-indigo-950 border-indigo-500 text-indigo-200' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+                    >
+                      <Film className="w-3 h-3" /> Video 360
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="URL remota HTTPS / S3..."
+                      value={selectedFileName ? `[Archivo Local]: ${selectedFileName}` : customMediaUrl}
+                      onChange={(e) => {
+                        setSelectedFileName(null);
+                        setCustomMediaUrl(e.target.value);
+                      }}
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-cyan-500 font-mono"
+                    />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleLocalFileChange}
+                      accept={customMediaType === 'video' ? 'video/mp4,video/webm' : 'image/jpeg,image/png,image/webp'}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <FolderPlus className="w-3 h-3 text-cyan-400" />
+                      <span>Examinar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 4. Panel de Guion IA y Despliegue */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
                   <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-                  Voz Terapéutica IA (Auriculares Visor)
+                  Voz Terapéutica IA (Auriculares)
                 </label>
                 
-                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[9.5px]">
                   <button
                     onClick={() => setGuidanceMode('AUTOMATIC_GUIDELINES')}
                     className={`px-2 py-0.5 rounded font-bold transition ${guidanceMode === 'AUTOMATIC_GUIDELINES' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
@@ -1035,8 +1180,8 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                 disabled={pipelinePhase !== 'IDLE' && pipelinePhase !== 'FINISHED'}
                 value={customScript}
                 onChange={(e) => setCustomScript(e.target.value)}
-                rows={4}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 outline-none resize-none focus:border-cyan-500 mb-3 leading-relaxed font-sans"
+                rows={3}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-slate-200 outline-none resize-none focus:border-cyan-500 mb-2 leading-relaxed font-sans"
               />
 
               {/* Botonera de Acción */}
@@ -1044,14 +1189,14 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={handleDeployEnvironment}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border border-slate-600 shadow-md"
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border border-slate-600 shadow-md"
                 >
                   <Send className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Cargar Entorno y Guion en Visor Pico</span>
                 </button>
 
                 {visorStatusMsg && (
-                  <div className="text-center text-[10px] font-mono text-emerald-400 animate-pulse bg-emerald-950/40 py-1 rounded-lg border border-emerald-500/30">
+                  <div className="text-center text-[9.5px] font-mono text-emerald-400 animate-pulse bg-emerald-950/40 py-1 rounded-lg border border-emerald-500/30">
                     {visorStatusMsg}
                   </div>
                 )}
@@ -1060,7 +1205,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={startPipeline}
-                    className={`w-full py-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
+                    className={`w-full py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
                       isVisorLinked ? 'bg-gradient-to-r from-cyan-600 via-sky-600 to-indigo-600 text-white shadow-cyan-600/30' : 'bg-slate-800 text-slate-500 border border-slate-700'
                     }`}
                   >
@@ -1071,15 +1216,13 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
                 {(pipelinePhase === 'PHASE_1_BASELINE' || pipelinePhase === 'PHASE_2_ACTIVE' || pipelinePhase === 'PHASE_3_RECOVERY') && (
                   <div className="space-y-2">
-                    
-                    {/* BOTÓN ESPECÍFICO DE DES-INDUCCIÓN REGULADA 1-5 PARA HIPNOSIS */}
                     {currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP' && (
                       <button
                         type="button"
                         onClick={handleStartDeinduction}
-                        className="w-full py-2.5 bg-indigo-900 hover:bg-indigo-800 border border-indigo-500/50 text-indigo-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                        className="w-full py-2 bg-indigo-900 hover:bg-indigo-800 border border-indigo-500/50 text-indigo-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md"
                       >
-                        <Compass className="w-4 h-4 text-indigo-300" />
+                        <Compass className="w-3.5 h-3.5 text-indigo-300" />
                         <span>Iniciar Salida Guiada del Trance (1 a 5)</span>
                       </button>
                     )}
@@ -1088,24 +1231,22 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => finishPipelineAndCompileReports(false)}
-                        className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/30"
+                        className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/30"
                       >
                         <Square className="w-3.5 h-3.5 fill-white" />
                         <span>Detener y Compilar</span>
                       </button>
 
-                      {/* BOTÓN DE INTERRUPCIÓN MÉDICA DE RESCATE INMEDIATO */}
                       <button
                         type="button"
                         onClick={() => handleEmergencyAbort('Activación manual por sobreactivación simpática en visor')}
-                        className="px-3 py-3 bg-red-950 hover:bg-red-900 border border-red-500 text-red-200 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer"
+                        className="px-3 py-2.5 bg-red-950 hover:bg-red-900 border border-red-500 text-red-200 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer"
                         title="Interrupción segura ante distrés o abreacción"
                       >
-                        <AlertOctagon className="w-4 h-4 text-red-400" />
+                        <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
                         <span>Rescate</span>
                       </button>
                     </div>
-
                   </div>
                 )}
               </div>
@@ -1129,7 +1270,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Alerta de Watchdog Fisiológico */}
             {stressWatchdogAlert && (
               <div className="p-3 bg-red-950/80 border border-red-500 rounded-xl text-red-200 text-xs flex items-center justify-between shadow-lg animate-pulse">
                 <div className="flex items-center gap-2">
