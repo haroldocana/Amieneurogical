@@ -5,17 +5,26 @@
 
 import { MASTER_VR_ENVIRONMENTS } from '../constants';
 
+export type VrConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
+export type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
+
 export interface VrCommandPayload {
   type: string;
-  environmentId: string;
-  unitySceneName: string;
-  parameters: Record<string, any>;
+  environmentId?: string;
+  ecosystem?: string;
+  moduleId?: string;
+  moduleName?: string;
+  unitySceneName?: string;
+  parameters?: Record<string, any>;
+  category?: ModuleCategory;
+  frequencyHz?: number;
+  protocol?: string;
   patientId: string;
+  role?: 'sender' | 'receiver';
   timestamp: number;
   token?: string;
+  [key: string]: any;
 }
-
-export type VrConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
 
 type StatusListener = (status: VrConnectionStatus, url: string) => void;
 type MessageListener = (data: any) => void;
@@ -32,7 +41,7 @@ export class VrControlService {
   private static isExplicitDisconnect: boolean = false;
 
   /**
-   * Resuelve la URL del WebSocket priorizando variables de entorno y fallback seguro a Render
+   * Resuelve la URL del WebSocket priorizando variables de entorno y fallback seguro a WSS
    */
   public static resolveDefaultWsUrl(): string {
     const envWsUrl = (import.meta as any).env?.VITE_WS_URL;
@@ -62,7 +71,7 @@ export class VrControlService {
   }
 
   /**
-   * Conecta automáticamente al WebSocket del backend de Render o a la URL especificada
+   * Conecta automáticamente al WebSocket del backend de Render
    */
   public static connect(customUrl?: string, patientId?: string): void {
     if (patientId) {
@@ -159,7 +168,12 @@ export class VrControlService {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now(), role: 'sender' }));
+        this.ws.send(JSON.stringify({ 
+          type: 'PING', 
+          timestamp: Date.now(), 
+          role: 'sender',
+          patientId: this.activePatientId 
+        }));
       }
     }, 25000);
   }
@@ -179,29 +193,117 @@ export class VrControlService {
     }
   }
 
+  /**
+   * Envía un paquete de comando genérico agregando metadatos de auditoría
+   */
+  public static sendCommand(payload: Partial<VrCommandPayload> & Record<string, any>): void {
+    const fullPayload: VrCommandPayload = {
+      type: payload.type || 'CHANGE_ENVIRONMENT',
+      patientId: payload.patientId || this.activePatientId,
+      role: 'sender',
+      token: this.getAuthToken(),
+      timestamp: Date.now(),
+      ...payload
+    };
+    this.sendRaw(JSON.stringify(fullPayload));
+  }
+
+  /**
+   * Cambia el entorno del visor asociando su modo (Diagnóstico o Tratamiento)
+   */
+  public static changeEnvironment(
+    environmentId: string, 
+    patientId?: string, 
+    category: ModuleCategory = 'TREATMENT'
+  ): void {
+    if (patientId) this.activePatientId = patientId;
+
+    this.sendCommand({
+      type: 'CHANGE_ENVIRONMENT',
+      environmentId,
+      ecosystem: environmentId,
+      moduleId: environmentId,
+      moduleName: environmentId,
+      category,
+      patientId: this.activePatientId
+    });
+    console.log(`🚀 [AMIE VR] Cambio de entorno ordenado: ${environmentId} [${category}]`);
+  }
+
+  /**
+   * Conmuta el modo clínico visible en el visor (Diagnóstico vs Tratamiento)
+   */
+  public static setModuleMode(
+    category: ModuleCategory, 
+    environmentId?: string, 
+    patientId?: string
+  ): void {
+    if (patientId) this.activePatientId = patientId;
+
+    this.sendCommand({
+      type: 'SET_MODULE_MODE',
+      category,
+      environmentId,
+      patientId: this.activePatientId
+    });
+  }
+
+  /**
+   * Dispara el parpadeo fótico en el visor (Fotobiomodulación Gamma 40Hz u otros ritmos)
+   */
+  public static startLightStimulation(
+    frequencyHz: number = 40.0, 
+    protocol: string = 'ALZHEIMER_40HZ', 
+    patientId?: string
+  ): void {
+    if (patientId) this.activePatientId = patientId;
+
+    this.sendCommand({
+      type: 'START_LIGHT_STIMULATION',
+      frequencyHz,
+      protocol,
+      category: 'TREATMENT',
+      environmentId: 'cosmic_stars',
+      patientId: this.activePatientId
+    });
+    console.log(`💡 [AMIE VR] Fotobiomodulación iniciada a ${frequencyHz} Hz (${protocol})`);
+  }
+
+  /**
+   * Detiene la pulsación lumínica en el visor
+   */
+  public static stopLightStimulation(patientId?: string): void {
+    this.sendCommand({
+      type: 'STOP_LIGHT_STIMULATION',
+      patientId: patientId || this.activePatientId
+    });
+  }
+
+  /**
+   * Carga un entorno maestro desde la lista canónica, con fallback automático si no existe
+   */
   public static loadMasterEnvironment(
     environmentId: string, 
     patientId: string, 
-    customParams?: Record<string, any>
+    customParams?: Record<string, any>,
+    category: ModuleCategory = 'TREATMENT'
   ): void {
+    this.activePatientId = patientId;
+
     const envList = Array.isArray(MASTER_VR_ENVIRONMENTS) 
       ? MASTER_VR_ENVIRONMENTS 
       : (MASTER_VR_ENVIRONMENTS as any)?.masterEnvironments || [];
 
     const envConfig = envList.find((e: any) => e.id === environmentId);
 
-    if (!envConfig) {
-      console.error(`[AMIE VR CONTROL] Entorno '${environmentId}' no encontrado en constantes clínicas.`);
-      return;
-    }
-
-    this.activePatientId = patientId;
-
     const payload: VrCommandPayload = {
       type: 'LOAD_MASTER_ENVIRONMENT',
-      environmentId: envConfig.id,
-      unitySceneName: envConfig.unitySceneName || envConfig.id,
-      parameters: customParams || envConfig.controllableParameters || {},
+      environmentId: envConfig ? envConfig.id : environmentId,
+      ecosystem: envConfig ? envConfig.id : environmentId,
+      moduleId: envConfig ? envConfig.id : environmentId,
+      unitySceneName: envConfig?.unitySceneName || environmentId,
+      parameters: customParams || envConfig?.controllableParameters || {},
+      category,
       patientId,
       token: this.getAuthToken(),
       timestamp: Date.now()
@@ -211,9 +313,9 @@ export class VrControlService {
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(payloadStr);
-      console.log(`🚀 [AMIE VR] Enviado comando de carga: ${envConfig.name || envConfig.id}`, payload);
+      console.log(`🚀 [AMIE VR] Despachado entorno: ${environmentId} [${category}]`);
     } else {
-      console.warn('⚠️ WebSocket no conectado aún. Encolando comando para despacho inmediato al conectar...');
+      console.warn('⚠️ WebSocket desconectado. Encolando para despacho automático...');
       this.pendingQueue.push(payloadStr);
       this.connect();
     }
@@ -223,51 +325,47 @@ export class VrControlService {
     parameters: Record<string, any>, 
     patientId?: string
   ): void {
-    const payload = {
+    this.sendCommand({
       type: 'UPDATE_SCENE_PARAMETERS',
       parameters,
-      patientId: patientId || this.activePatientId,
-      timestamp: Date.now()
-    };
-    this.sendRaw(JSON.stringify(payload));
+      patientId: patientId || this.activePatientId
+    });
   }
 
-  /**
-   * Modula parámetros específicos de biofeedback continuo (p.ej. frecuencias binaurales y orbe 3D)
-   */
   public static sendMasterConfigParam(
     environmentId: string,
     paramKey: string,
     value: any,
     patientId?: string
   ): void {
-    const payload = {
+    this.sendCommand({
       type: 'UPDATE_ENVIRONMENT_PARAM',
       environmentId,
       paramKey,
       value,
-      patientId: patientId || this.activePatientId,
-      timestamp: Date.now()
-    };
-    this.sendRaw(JSON.stringify(payload));
+      patientId: patientId || this.activePatientId
+    });
   }
 
+  /**
+   * Grounding Integral de Emergencia: fuerza al visor a ir al bosque de calma y modo tratamiento
+   */
   public static triggerGroundingProtocol(patientId?: string): void {
-    const payload = {
+    const pid = patientId || this.activePatientId;
+    this.sendCommand({
       type: 'TRIGGER_GROUNDING_PROTOCOL',
-      patientId: patientId || this.activePatientId,
-      timestamp: Date.now()
-    };
-    this.sendRaw(JSON.stringify(payload));
+      environmentId: 'safe_place_forest',
+      category: 'TREATMENT',
+      patientId: pid
+    });
+    console.log(`🛡️ [AMIE VR] GROUNDING DE EMERGENCIA DESPACHADO AL PACIENTE: ${pid}`);
   }
 
   public static stopActiveSession(patientId?: string): void {
-    const payload = {
+    this.sendCommand({
       type: 'STOP_TEST',
-      patientId: patientId || this.activePatientId,
-      timestamp: Date.now()
-    };
-    this.sendRaw(JSON.stringify(payload));
+      patientId: patientId || this.activePatientId
+    });
   }
 
   public static subscribeStatus(listener: StatusListener): () => void {
