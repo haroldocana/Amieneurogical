@@ -40,9 +40,6 @@ export class VrControlService {
   private static activePatientId: string = 'PAC-8104';
   private static isExplicitDisconnect: boolean = false;
 
-  /**
-   * Resuelve la URL del WebSocket priorizando variables de entorno y fallback seguro a WSS
-   */
   public static resolveDefaultWsUrl(): string {
     const envWsUrl = (import.meta as any).env?.VITE_WS_URL;
     if (envWsUrl) return envWsUrl;
@@ -64,15 +61,10 @@ export class VrControlService {
       if (typeof window !== 'undefined' && window.localStorage) {
         return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
       }
-    } catch {
-      // Contexto aislado
-    }
+    } catch {}
     return '';
   }
 
-  /**
-   * Conecta automáticamente al WebSocket del backend de Render
-   */
   public static connect(customUrl?: string, patientId?: string): void {
     if (patientId) {
       this.activePatientId = patientId;
@@ -104,7 +96,7 @@ export class VrControlService {
       this.ws = new WebSocket(this.currentUrl);
 
       this.ws.onopen = () => {
-        console.log('✅ [AMIE VR CONTROL] Conectado exitosamente al puente VR (Render)');
+        console.log('✅ [AMIE VR CONTROL] Conectado exitosamente al puente VR');
         this.notifyStatus('CONNECTED');
         this.startHeartbeat();
 
@@ -135,9 +127,7 @@ export class VrControlService {
               console.error('[AMIE VR CONTROL] Error en listener de mensaje:', err);
             }
           });
-        } catch {
-          // Mensaje no JSON
-        }
+        } catch {}
       };
 
       this.ws.onerror = (err) => {
@@ -151,15 +141,15 @@ export class VrControlService {
           return;
         }
 
-        console.warn('⚠️ [AMIE VR CONTROL] Conexión cerrada. Reconectando en 3s...');
+        console.warn('⚠️ [AMIE VR CONTROL] Conexión cerrada. Reconectando en 2.5s...');
         this.notifyStatus('RECONNECTING');
-        this.reconnectTimer = setTimeout(() => this.connectInternal(), 3000);
+        this.reconnectTimer = setTimeout(() => this.connectInternal(), 2500);
       };
     } catch (e) {
       console.error('[AMIE VR CONTROL] Excepción al instanciar WebSocket:', e);
       this.notifyStatus('DISCONNECTED');
       if (!this.isExplicitDisconnect) {
-        this.reconnectTimer = setTimeout(() => this.connectInternal(), 3000);
+        this.reconnectTimer = setTimeout(() => this.connectInternal(), 2500);
       }
     }
   }
@@ -171,11 +161,11 @@ export class VrControlService {
         this.ws.send(JSON.stringify({ 
           type: 'PING', 
           timestamp: Date.now(), 
-          role: 'sender',
+          role: 'sender', 
           patientId: this.activePatientId 
         }));
       }
-    }, 25000);
+    }, 20000);
   }
 
   private static stopHeartbeat(): void {
@@ -193,9 +183,6 @@ export class VrControlService {
     }
   }
 
-  /**
-   * Envía un paquete de comando genérico agregando metadatos de auditoría
-   */
   public static sendCommand(payload: Partial<VrCommandPayload> & Record<string, any>): void {
     const fullPayload: VrCommandPayload = {
       type: payload.type || 'CHANGE_ENVIRONMENT',
@@ -209,8 +196,29 @@ export class VrControlService {
   }
 
   /**
-   * Cambia el entorno del visor asociando su modo (Diagnóstico o Tratamiento)
+   * Sincronización proactiva de módulo, modo, patología, audio y pipeline al visor
    */
+  public static syncClinicalContext(context: {
+    moduleId: string;
+    category: ModuleCategory;
+    disorderId: string;
+    disorderName: string;
+    ecosystem: string;
+    patientId?: string;
+    pipeline?: { phase1Sec: number; phase2Sec: number; phase3Sec: number };
+    audioGuidance?: { baselineScript: string; activeScript: string; recoveryScript: string };
+    frequencyHz?: number;
+  }): void {
+    if (context.patientId) this.activePatientId = context.patientId;
+    this.sendCommand({
+      type: 'SYNC_CLINICAL_CONTEXT',
+      patientId: this.activePatientId,
+      ...context,
+      timestamp: Date.now()
+    });
+    console.log(`📡 [AMIE VR] Contexto clínico sincronizado al visor: ${context.disorderName} [${context.category}]`);
+  }
+
   public static changeEnvironment(
     environmentId: string, 
     patientId?: string, 
@@ -227,12 +235,8 @@ export class VrControlService {
       category,
       patientId: this.activePatientId
     });
-    console.log(`🚀 [AMIE VR] Cambio de entorno ordenado: ${environmentId} [${category}]`);
   }
 
-  /**
-   * Conmuta el modo clínico visible en el visor (Diagnóstico vs Tratamiento)
-   */
   public static setModuleMode(
     category: ModuleCategory, 
     environmentId?: string, 
@@ -248,9 +252,6 @@ export class VrControlService {
     });
   }
 
-  /**
-   * Dispara el parpadeo fótico en el visor (Fotobiomodulación Gamma 40Hz u otros ritmos)
-   */
   public static startLightStimulation(
     frequencyHz: number = 40.0, 
     protocol: string = 'ALZHEIMER_40HZ', 
@@ -266,12 +267,8 @@ export class VrControlService {
       environmentId: 'cosmic_stars',
       patientId: this.activePatientId
     });
-    console.log(`💡 [AMIE VR] Fotobiomodulación iniciada a ${frequencyHz} Hz (${protocol})`);
   }
 
-  /**
-   * Detiene la pulsación lumínica en el visor
-   */
   public static stopLightStimulation(patientId?: string): void {
     this.sendCommand({
       type: 'STOP_LIGHT_STIMULATION',
@@ -279,86 +276,15 @@ export class VrControlService {
     });
   }
 
-  /**
-   * Carga un entorno maestro desde la lista canónica, con fallback automático si no existe
-   */
-  public static loadMasterEnvironment(
-    environmentId: string, 
-    patientId: string, 
-    customParams?: Record<string, any>,
-    category: ModuleCategory = 'TREATMENT'
-  ): void {
-    this.activePatientId = patientId;
-
-    const envList = Array.isArray(MASTER_VR_ENVIRONMENTS) 
-      ? MASTER_VR_ENVIRONMENTS 
-      : (MASTER_VR_ENVIRONMENTS as any)?.masterEnvironments || [];
-
-    const envConfig = envList.find((e: any) => e.id === environmentId);
-
-    const payload: VrCommandPayload = {
-      type: 'LOAD_MASTER_ENVIRONMENT',
-      environmentId: envConfig ? envConfig.id : environmentId,
-      ecosystem: envConfig ? envConfig.id : environmentId,
-      moduleId: envConfig ? envConfig.id : environmentId,
-      unitySceneName: envConfig?.unitySceneName || environmentId,
-      parameters: customParams || envConfig?.controllableParameters || {},
-      category,
-      patientId,
-      token: this.getAuthToken(),
-      timestamp: Date.now()
-    };
-
-    const payloadStr = JSON.stringify(payload);
-
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(payloadStr);
-      console.log(`🚀 [AMIE VR] Despachado entorno: ${environmentId} [${category}]`);
-    } else {
-      console.warn('⚠️ WebSocket desconectado. Encolando para despacho automático...');
-      this.pendingQueue.push(payloadStr);
-      this.connect();
-    }
-  }
-
-  public static updateSceneParameters(
-    parameters: Record<string, any>, 
-    patientId?: string
-  ): void {
-    this.sendCommand({
-      type: 'UPDATE_SCENE_PARAMETERS',
-      parameters,
-      patientId: patientId || this.activePatientId
-    });
-  }
-
-  public static sendMasterConfigParam(
-    environmentId: string,
-    paramKey: string,
-    value: any,
-    patientId?: string
-  ): void {
-    this.sendCommand({
-      type: 'UPDATE_ENVIRONMENT_PARAM',
-      environmentId,
-      paramKey,
-      value,
-      patientId: patientId || this.activePatientId
-    });
-  }
-
-  /**
-   * Grounding Integral de Emergencia: fuerza al visor a ir al bosque de calma y modo tratamiento
-   */
   public static triggerGroundingProtocol(patientId?: string): void {
     const pid = patientId || this.activePatientId;
     this.sendCommand({
       type: 'TRIGGER_GROUNDING_PROTOCOL',
       environmentId: 'safe_place_forest',
+      ecosystem: 'safe_place_forest',
       category: 'TREATMENT',
       patientId: pid
     });
-    console.log(`🛡️ [AMIE VR] GROUNDING DE EMERGENCIA DESPACHADO AL PACIENTE: ${pid}`);
   }
 
   public static stopActiveSession(patientId?: string): void {
@@ -414,7 +340,6 @@ export class VrControlService {
 
     this.pendingQueue = [];
     this.notifyStatus('DISCONNECTED');
-    console.log('🛑 [AMIE VR CONTROL] Desconexión explícita completada.');
   }
 
   public static isConnected(): boolean {
