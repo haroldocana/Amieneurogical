@@ -88,13 +88,11 @@ export class VrControlService {
     }
 
     this.notifyStatus('CONNECTING');
-    console.log(`🔌 [AMIE VR CONTROL] Conectando a ${this.currentUrl}...`);
 
     try {
       this.ws = new WebSocket(this.currentUrl);
 
       this.ws.onopen = () => {
-        console.log('✅ [AMIE VR CONTROL] Enlace establecido con el servidor');
         this.notifyStatus('CONNECTED');
         this.startHeartbeat();
 
@@ -121,15 +119,13 @@ export class VrControlService {
           this.messageListeners.forEach(listener => {
             try {
               listener(parsed);
-            } catch (err) {
-              console.error('[AMIE VR CONTROL] Error en listener:', err);
-            }
+            } catch (err) {}
           });
         } catch {}
       };
 
-      this.ws.onerror = (err) => {
-        console.warn('❌ [AMIE VR CONTROL] Error en socket:', err);
+      this.ws.onerror = () => {
+        this.notifyStatus('DISCONNECTED');
       };
 
       this.ws.onclose = () => {
@@ -139,7 +135,6 @@ export class VrControlService {
           return;
         }
 
-        console.warn('⚠️ [AMIE VR CONTROL] Reconexión automática en 2.5s...');
         this.notifyStatus('RECONNECTING');
         this.reconnectTimer = setTimeout(() => this.connectInternal(), 2500);
       };
