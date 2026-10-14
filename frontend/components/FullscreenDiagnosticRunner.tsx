@@ -10,7 +10,7 @@ import {
   Signal, 
   X, 
   RotateCcw, 
-  Activity, 
+  Activity,    // <-- AQUÍ ESTÁ EL ÍCONO QUE FALTABA
   Glasses, 
   Brain, 
   Play, 
