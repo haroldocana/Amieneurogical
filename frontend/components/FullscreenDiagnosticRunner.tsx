@@ -123,9 +123,7 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
   
   const [generatedRoiReport, setGeneratedRoiReport] = useState<string>('');
 
-  // ------------------------------------------------------------------------
-  // ¡CLAVE! SUSCRIPCIÓN BLINDADA AL WEBSOCKET PARA EVITAR "unsub is not a function"
-  // ------------------------------------------------------------------------
+  // Suscripción blindada contra excepciones de limpieza
   useEffect(() => {
     let unsub: any = null;
     try {
@@ -344,7 +342,7 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
       <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-[1440px] shadow-2xl overflow-hidden relative text-slate-100 flex flex-col h-[94vh]">
         
         {/* Cabecera Principal */}
-        <div className="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <header className="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg border ${isVisorLinked ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-600/20 text-amber-400 border-amber-500/30'}`}>
               <Signal className={`w-5 h-5 ${isVisorLinked ? 'animate-pulse' : ''}`} />
@@ -376,13 +374,13 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
               <X className="w-5 h-5" />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Cuerpo Principal (3 Columnas) */}
-        <div className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
+        {/* Cuerpo Principal (3 Columnas con <main> correctamente cerrado) */}
+        <main className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
           
           {/* COLUMNA 1: Selector y Parámetros Programables */}
-          <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-1">
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-1">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
               <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1.5 flex items-center gap-1.5">
                 <Stethoscope className="w-3.5 h-3.5 text-cyan-400" /> Seleccionar Patología (24 Trastornos)
@@ -461,10 +459,10 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
                 )}
               </div>
             </div>
-          </div>
+          </section>
 
           {/* COLUMNA 2: Monitor de KPIs y Gráfico Temporal */}
-          <div className="col-span-12 lg:col-span-5 flex flex-col gap-4">
+          <section className="col-span-12 lg:col-span-5 flex flex-col gap-4">
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
                 <span className="text-[10px] text-slate-500 font-bold block">GSR FÁSICO</span>
@@ -509,7 +507,7 @@ export const FullscreenDiagnosticRunner: React.FC<FullscreenDiagnosticRunnerProp
                 <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-rose-500"></span> Umbral Alerta</span>
               </div>
             </div>
-          </div>
+          </section>
 
           {/* COLUMNA 3: Dictamen Pericial e Historial de Eventos */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-4">
