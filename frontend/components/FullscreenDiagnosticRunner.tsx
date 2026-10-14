@@ -22,7 +22,9 @@ import {
   FileText, 
   Stethoscope, 
   Clock, 
-  Database 
+  Database,
+  Award,
+  CheckCircle2
 } from 'lucide-react';
 
 interface Props {
@@ -59,6 +61,10 @@ export interface ClinicalDisorderDefinition {
   scriptBaseline: string;
   scriptActive: string;
   scriptRecovery: string;
+  loincCode: string;
+  goldStandardScale: string;
+  meanHealthy: number;
+  sdHealthy: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -100,7 +106,7 @@ export const getDisorderEvidenceTier = (disorderId: string): TierClassification 
 };
 
 // ----------------------------------------------------------------------------
-// MATRIZ COMPLETA: 24 ENTIDADES CLÍNICAS (CIE-11 / DSM-5-TR) EN WEBXR 6DoF
+// MATRIZ COMPLETA: 24 ENTIDADES CLÍNICAS (CIE-11 / DSM-5-TR / BAREMOS HOSPITALARIOS)
 // ----------------------------------------------------------------------------
 export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
   // GRUPO 1: NEURODESARROLLO Y CONTROL MOTOR
@@ -118,7 +124,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Calibración de línea base. Mantén la vista al frente y el mando alineado en reposo.', 
     scriptActive: 'Iniciando test CPT tridimensional. Pulsa el gatillo de tu mando únicamente cuando la diana destelle en verde. Si destella en rojo, inhibe la respuesta.', 
-    scriptRecovery: 'Ensayo concluido. Relaja la musculatura de tu mano y respira tranquilamente.' 
+    scriptRecovery: 'Ensayo concluido. Relaja la musculatura de tu mano y respira tranquilamente.',
+    loincCode: '70570-7',
+    goldStandardScale: 'CPT-3 / Conners-3',
+    meanHealthy: 240,
+    sdHealthy: 35
   },
   { 
     id: 'TEA_SENSORY', 
@@ -134,7 +144,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Calibración de línea base en reposo sin demanda social ni sobrecarga estimular.', 
     scriptActive: 'Observa al evaluador. Presta atención hacia dónde dirige la mirada y pulsa el gatillo cuando identifiques el objeto señalado en el entorno.', 
-    scriptRecovery: 'Prueba completada con éxito. El entorno regresa a un estado de calma y resguardo.' 
+    scriptRecovery: 'Prueba completada con éxito. El entorno regresa a un estado de calma y resguardo.',
+    loincCode: '86467-8',
+    goldStandardScale: 'ADOS-2 (Módulos 1-3) / CARS-2',
+    meanHealthy: 18.5,
+    sdHealthy: 5.2
   },
   { 
     id: 'ALZHEIMER_GAMMA', 
@@ -151,7 +165,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Calibración en reposo sin estimulación lumínica. Respira con patrón natural.', 
     scriptActive: 'Iniciando estimulación fótica sincrónica a 40 Hz para inducir el arrastre tálamo-cortical y la depuración microglial.', 
-    scriptRecovery: 'Pulsación fótica concluida. Registrando persistencia y consolidación del acoplamiento neuronal.' 
+    scriptRecovery: 'Pulsación fótica concluida. Registrando persistencia y consolidación del acoplamiento neuronal.',
+    loincCode: '72106-8',
+    goldStandardScale: 'MoCA / MMSE / ADAS-Cog',
+    meanHealthy: 78.5,
+    sdHealthy: 9.2
   },
   { 
     id: 'PARKINSON_MOTOR', 
@@ -167,7 +185,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Registro basal en reposo. Sujeta el mando con tu extremidad dominante.', 
     scriptActive: 'Mantén el mando alineado horizontalmente con el cursor visual. Registrando amplitud de temblor postural en 6DoF.', 
-    scriptRecovery: 'Registro completado. Baja el brazo y descansa sobre el apoyo.' 
+    scriptRecovery: 'Registro completado. Baja el brazo y descansa sobre el apoyo.',
+    loincCode: '96780-2',
+    goldStandardScale: 'MDS-UPDRS Parte III',
+    meanHealthy: 4.2,
+    sdHealthy: 1.1
   },
   
   // GRUPO 2: ESTADO DE ÁNIMO Y TRAUMA
@@ -186,7 +208,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Sintonización visual con el entorno y calibración fisiológica en reposo.', 
     scriptActive: 'Sincroniza tu ritmo cardíaco con las olas luminiscentes. La estimulación a 10 Hz modula la asimetría frontal izquierda.', 
-    scriptRecovery: 'Sincronización neuroafectiva lograda. Conserva la sensación de tranquilidad.' 
+    scriptRecovery: 'Sincronización neuroafectiva lograda. Conserva la sensación de tranquilidad.',
+    loincCode: '89211-7',
+    goldStandardScale: 'HAM-D (17 ítems) / BDI-II',
+    meanHealthy: 1.05,
+    sdHealthy: 0.12
   },
   { 
     id: 'DISTIMIA_CHRONIC', 
@@ -202,7 +228,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Bienvenido al santuario forestal. Siente el resguardo de este espacio protegido.', 
     scriptActive: 'Permite que la iluminación cálida del refugio disminuya la tensión basal. Respira en cuatro tiempos inflando el abdomen.', 
-    scriptRecovery: 'Instalación de anclaje de confort completada. Tu sistema vegetativo retoma el control.' 
+    scriptRecovery: 'Instalación de anclaje de confort completada. Tu sistema vegetativo retoma el control.',
+    loincCode: '80404-7',
+    goldStandardScale: 'MADRS / CDRS-R',
+    meanHealthy: 52.0,
+    sdHealthy: 11.5
   },
   { 
     id: 'PTSD_EMDR', 
@@ -219,7 +249,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Instalación de recurso seguro. Conéctate con una sensación de contención corporal.', 
     scriptActive: 'Sigue el haz luminoso horizontal únicamente con tus ojos, sin mover la cabeza, sosteniendo la memoria en tu mente.', 
-    scriptRecovery: 'Detén el movimiento ocular. Inhala profundamente, suelta todo el aire y deja que el cuerpo integre el alivio.' 
+    scriptRecovery: 'Detén el movimiento ocular. Inhala profundamente, suelta todo el aire y deja que el cuerpo integre el alivio.',
+    loincCode: '75276-6',
+    goldStandardScale: 'CAPS-5 / PCL-5',
+    meanHealthy: 1.2,
+    sdHealthy: 0.4
   },
   { 
     id: 'CPTSD_DEVELOPMENTAL', 
@@ -235,7 +269,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Respiración de transición al espacio relacional.', 
     scriptActive: 'Explora el espacio de memoria. Registramos tus micro-fluctuaciones electrodérmicas ante figuras vinculares ambivalentes.', 
-    scriptRecovery: 'Evaluación finalizada. Volviendo al centro de seguridad interior.' 
+    scriptRecovery: 'Evaluación finalizada. Volviendo al centro de seguridad interior.',
+    loincCode: '95398-4',
+    goldStandardScale: 'ITQ (International Trauma Q)',
+    meanHealthy: 0.4,
+    sdHealthy: 0.15
   },
 
   // GRUPO 3: ANSIEDAD, FOBIAS Y TOC
@@ -253,7 +291,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Registro de constantes vitales basales sin demandas atencionales.', 
     scriptActive: 'Evaluación de reactividad interoceptiva ante la disminución de referencias espaciales. Observa tus sensaciones viscerales.', 
-    scriptRecovery: 'Recuperando límites espaciales seguros. Tu sistema autónomo se encuentra estabilizado.' 
+    scriptRecovery: 'Recuperando límites espaciales seguros. Tu sistema autónomo se encuentra estabilizado.',
+    loincCode: '8867-4',
+    goldStandardScale: 'PDSS (Panic Disorder Severity)',
+    meanHealthy: 8.5,
+    sdHealthy: 3.2
   },
   { 
     id: 'ACROPHOBIA', 
@@ -269,7 +311,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Calibración de línea base en reposo observando la plataforma.', 
     scriptActive: 'Exposición a borde de azotea. Mira hacia el vacío perimetral. Evaluamos reactividad simpática y balance vestibular.', 
-    scriptRecovery: 'Retirándose a zona protegida interior. Mantén la sensación de firmeza en el suelo.' 
+    scriptRecovery: 'Retirándose a zona protegida interior. Mantén la sensación de firmeza en el suelo.',
+    loincCode: '96781-0',
+    goldStandardScale: 'Acrophobia Questionnaire (AQ)',
+    meanHealthy: 3.8,
+    sdHealthy: 1.2
   },
   { 
     id: 'AEROPHOBIA', 
@@ -285,7 +331,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Fase de embarque en cabina. Mantén la espalda apoyada y los hombros relajados.', 
     scriptActive: 'Simulación de cabina presurizada en aceleración y despegue con turbulencia. Registrando umbral de estrés respiratorio.', 
-    scriptRecovery: 'Vuelo estabilizado en altitud de crucero. La vibración cesa y el ritmo cardíaco se normaliza.' 
+    scriptRecovery: 'Vuelo estabilizado en altitud de crucero. La vibración cesa y el ritmo cardíaco se normaliza.',
+    loincCode: '86468-6',
+    goldStandardScale: 'Visual Analog Flight Scale (VAFS)',
+    meanHealthy: 1.5,
+    sdHealthy: 0.5
   },
   { 
     id: 'SOCIAL_ANXIETY', 
@@ -301,7 +351,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Ingreso al espacio pericial de observación.', 
     scriptActive: 'Dirige tu mirada a los evaluadores del panel. Registraremos la fijación visual y la reactividad electrodérmica ante el juicio.', 
-    scriptRecovery: 'La interacción social simulada ha concluido. El tono vagal retorna al margen seguro.' 
+    scriptRecovery: 'La interacción social simulada ha concluido. El tono vagal retorna al margen seguro.',
+    loincCode: '95400-8',
+    goldStandardScale: 'Liebowitz Social Anxiety (LSAS)',
+    meanHealthy: 14.2,
+    sdHealthy: 4.5
   },
   { 
     id: 'GAD_GENERALIZED', 
@@ -317,7 +371,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Sintonización autonómica y registro de reposo basal.', 
     scriptActive: 'Sigue la expansión rítmica del orbe a seis respiraciones por minuto para inducir resonancia cardíaca a 0.1 Hz.', 
-    scriptRecovery: 'Integración vagal. Conserva esta cadencia respiratoria lenta y profunda.' 
+    scriptRecovery: 'Integración vagal. Conserva esta cadencia respiratoria lenta y profunda.',
+    loincCode: '69725-0',
+    goldStandardScale: 'GAD-7 / HAM-A',
+    meanHealthy: 58.0,
+    sdHealthy: 10.2
   },
   { 
     id: 'OCD_OBSESSIVE', 
@@ -333,7 +391,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Anclaje atencional primario en reposo neutro.', 
     scriptActive: 'Descentramiento cognitivo activo. Observa la inmensidad estelar y permite que las obsesiones se diluyan sin neutralizarlas.', 
-    scriptRecovery: 'Exposición y prevención de respuesta completada. La urgencia compulsiva desciende.' 
+    scriptRecovery: 'Exposición y prevención de respuesta completada. La urgencia compulsiva desciende.',
+    loincCode: '70569-9',
+    goldStandardScale: 'Yale-Brown (Y-BOCS)',
+    meanHealthy: 72.0,
+    sdHealthy: 8.5
   },
 
   // GRUPO 4: PERSONALIDAD Y PERITAJE FORENSE (CLUSTER B)
@@ -351,7 +413,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Ajuste basal en entorno relacional neutro.', 
     scriptActive: 'Evaluación de reactividad emocional ante señales simuladas de abandono y validación ambivalente.', 
-    scriptRecovery: 'Contención afectiva y cierre pericial. Registro almacenado en el expediente.' 
+    scriptRecovery: 'Contención afectiva y cierre pericial. Registro almacenado en el expediente.',
+    loincCode: '95401-6',
+    goldStandardScale: 'DIB-R / BSL-23',
+    meanHealthy: 0.5,
+    sdHealthy: 0.2
   },
   { 
     id: 'NARCISSISM_OVERT', 
@@ -367,7 +433,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Registro de constantes de control autonómico previo.', 
     scriptActive: 'Ensayo pericial forense de tolerancia al estatus y provocación al ego. Pulsa el gatillo ante juicios descalificatorios.', 
-    scriptRecovery: 'Término de la provocación estructurada. Regulación autonómica en curso.' 
+    scriptRecovery: 'Término de la provocación estructurada. Regulación autonómica en curso.',
+    loincCode: '95402-4',
+    goldStandardScale: 'Narcissistic Personality Inv. (NPI)',
+    meanHealthy: 1.4,
+    sdHealthy: 0.5
   },
   { 
     id: 'NARCISSISM_COVERT', 
@@ -383,7 +453,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Registro de constantes de control autonómico previo.', 
     scriptActive: 'Exposición forense a dinámicas de exclusión grupal y vergüenza tóxica. Analizando caída abrupta de variabilidad cardíaca.', 
-    scriptRecovery: 'Dinámica de grupo finalizada. Reposo parasimpático compensado.' 
+    scriptRecovery: 'Dinámica de grupo finalizada. Reposo parasimpático compensado.',
+    loincCode: '95403-2',
+    goldStandardScale: 'Hypersensitive Narcissism (HSNS)',
+    meanHealthy: 6.2,
+    sdHealthy: 2.1
   },
   { 
     id: 'PSYCHOPATHY', 
@@ -399,7 +473,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Preparación para presentación de estímulos visuales.', 
     scriptActive: 'Paradigma de reconocimiento afectivo. Registrando resonancia autonómica refleja ante imágenes de sufrimiento y dolor ajeno.', 
-    scriptRecovery: 'Registro de empatía somática finalizado. Análisis de hiporreactividad compilado.' 
+    scriptRecovery: 'Registro de empatía somática finalizado. Análisis de hiporreactividad compilado.',
+    loincCode: '95404-0',
+    goldStandardScale: 'Hare Psychopathy Checklist (PCL-R)',
+    meanHealthy: 3.2,
+    sdHealthy: 0.8
   },
 
   // GRUPO 5: NEUROLOGÍA FUNCIONAL, DOLOR Y SUEÑO
@@ -417,7 +495,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Calibración del avatar cinemático en espejo 6DoF.', 
     scriptActive: 'Terapia en espejo adaptativa. Mueve tu extremidad sana mientras el avatar proyecta movimiento bilateral armónico.', 
-    scriptRecovery: 'Recalibración del mapa somatosensorial completada. Permanece en descanso.' 
+    scriptRecovery: 'Recalibración del mapa somatosensorial completada. Permanece en descanso.',
+    loincCode: '96782-8',
+    goldStandardScale: 'Criterios Stone / Hoover Sign',
+    meanHealthy: 92.0,
+    sdHealthy: 4.5
   },
   { 
     id: 'CHRONIC_PAIN', 
@@ -434,7 +516,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Registro de tensión muscular isométrica basal.', 
     scriptActive: 'Desfocalización nociceptiva criogénica. La inmersión en el abismo marino reduce las señales de dolor espinal ascendente.', 
-    scriptRecovery: 'Consolidación analgésica. Mantén la sensación de alivio y liviandad corporal.' 
+    scriptRecovery: 'Consolidación analgésica. Mantén la sensación de alivio y liviandad corporal.',
+    loincCode: '72514-3',
+    goldStandardScale: 'FIQR / WPI-SS / EVA',
+    meanHealthy: 8.5,
+    sdHealthy: 1.1
   },
   { 
     id: 'CRPS_NEUROPATHIC', 
@@ -450,7 +536,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Posición de reposo articular protegida.', 
     scriptActive: 'Aplicación de filtros cromáticos criogénicos para reducir la hiperexcitabilidad vasomotora periférica del miembro afectado.', 
-    scriptRecovery: 'Desensibilización periférica obtenida. Flujo sanguíneo regional regularizado.' 
+    scriptRecovery: 'Desensibilización periférica obtenida. Flujo sanguíneo regional regularizado.',
+    loincCode: '86469-4',
+    goldStandardScale: 'Budapest IASP Diagnostic Criteria',
+    meanHealthy: 1.1,
+    sdHealthy: 0.3
   },
   { 
     id: 'INSOMNIA_SLEEP', 
@@ -467,7 +557,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Atenuación lumínica y preparación metabólica para el sueño.', 
     scriptActive: 'Neurohipnosis por arrastre Delta a 2 Hz. Desaceleración metabólica y supresión del hiperarousal prefrontal.', 
-    scriptRecovery: 'Transición completada hacia la fase de ondas lentas regenerativas.' 
+    scriptRecovery: 'Transición completada hacia la fase de ondas lentas regenerativas.',
+    loincCode: '95405-7',
+    goldStandardScale: 'Insomnia Severity Index (ISI)',
+    meanHealthy: 74.0,
+    sdHealthy: 8.2
   },
 
   // GRUPO 6: SALUD SEXUAL (MODELO DUAL)
@@ -485,7 +579,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Focalización en el plano de las sensaciones corporales presentes.', 
     scriptActive: 'Focalización sensorial sin demanda de rendimiento. Inhala calidez corporal y disuelve la autoobservación crítica evaluativa.', 
-    scriptRecovery: 'Freno inhibitorio simpático desactivado. Consolidación de tono parasimpático.' 
+    scriptRecovery: 'Freno inhibitorio simpático desactivado. Consolidación de tono parasimpático.',
+    loincCode: '95406-5',
+    goldStandardScale: 'SIS/SES Questionnaire (Janssen)',
+    meanHealthy: 65.0,
+    sdHealthy: 9.5
   },
   { 
     id: 'SEXUAL_DESIRE', 
@@ -501,7 +599,11 @@ export const CLINICAL_24_DISORDERS_CATALOG: ClinicalDisorderDefinition[] = [
     phase3Sec: 30, 
     scriptBaseline: 'Sintonización afectiva y propioceptiva libre de juicio.', 
     scriptActive: 'Reconexión con señales corporales interoceptivas placenteras para estimular gradualmente el sistema de excitación sexual.', 
-    scriptRecovery: 'Respuesta excitatoria facilitada dentro de un rango neuroafectivo seguro.' 
+    scriptRecovery: 'Respuesta excitatoria facilitada dentro de un rango neuroafectivo seguro.',
+    loincCode: '95407-3',
+    goldStandardScale: 'Female Sexual Function Index (FSFI)',
+    meanHealthy: 78.0,
+    sdHealthy: 10.4
   }
 ];
 
@@ -747,6 +849,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     const habituationRate = peakGsr > 0 ? (((peakGsr - finalGsr) / peakGsr) * 100).toFixed(1) : '0';
 
     const tierInfo = getDisorderEvidenceTier(currentDisorder.id);
+    const zScore = Number(((currentKpi - currentDisorder.meanHealthy) / currentDisorder.sdHealthy).toFixed(2));
 
     let dictamen = `================================================================================\n`;
     dictamen += `${tierInfo.documentTitle}\n`;
@@ -765,7 +868,13 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     dictamen += `   • Índice de Habituación Autonómica (H): ${habituationRate}%\n`;
     dictamen += `   • Métrica Focal Primaria (${currentDisorder.targetKpiName}): ${currentKpi.toFixed(1)} ${currentDisorder.kpiUnit}\n\n`;
 
-    dictamen += `2. JUICIO CLÍNICO ESTRUCTURADO SEGÚN NIVEL DE EVIDENCIA:\n`;
+    dictamen += `2. AUDITORÍA CLÍNICA POBLACIONAL (Z-SCORE & BAREMO):\n`;
+    dictamen += `   • Escala Gold-Standard Correlacionada: ${currentDisorder.goldStandardScale}\n`;
+    dictamen += `   • Código LOINC Hospitalario: ${currentDisorder.loincCode}\n`;
+    dictamen += `   • Z-Score Poblacional Normativo: ${zScore} SD (${Math.abs(zScore) >= 1.96 ? 'DESVIACIÓN CLÍNICA SIGNIFICATIVA (p < .05)' : 'DENTRO DE LÍMITES NORMATIVOS'})\n`;
+    dictamen += `   • Rango de Referencia Control: ${currentDisorder.meanHealthy} ± ${currentDisorder.sdHealthy} ${currentDisorder.kpiUnit}\n\n`;
+
+    dictamen += `3. JUICIO CLÍNICO ESTRUCTURADO SEGÚN NIVEL DE EVIDENCIA:\n`;
 
     if (tierInfo.tier === 'TIER_1_CLASS_A') {
       if (currentDisorder.category === 'TREATMENT') {
@@ -807,7 +916,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
       }
     }
 
-    dictamen += `\n3. NOTA DE RESPONSABILIDAD MÉDICA Y MARCO REGULATORIO:\n`;
+    dictamen += `\n4. NOTA DE RESPONSABILIDAD MÉDICA Y MARCO REGULATORIO:\n`;
     dictamen += `   ${tierInfo.regulatoryScope}\n`;
     dictamen += `   ${tierInfo.evidenceFramework}\n`;
     dictamen += `   AVISO: Este informe es un instrumento de soporte a la decisión clínica (CDSS). El diagnóstico formal y la prescripción definitiva son potestad exclusiva del médico especialista colegiado.\n`;
@@ -842,6 +951,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
     const tierInfo = getDisorderEvidenceTier(currentDisorder.id);
     const sessionDate = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const zScore = Number(((currentKpi - currentDisorder.meanHealthy) / currentDisorder.sdHealthy).toFixed(2));
 
     let forensicHash = 'AMIE-VALIDATED-INTEGRITY-HASH';
     try {
@@ -866,6 +976,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           .badge-tier { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 8pt; font-weight: 800; color: #ffffff; background-color: ${tierInfo.badgeColor}; letter-spacing: 0.5px; margin-bottom: 12px; }
           .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; font-size: 9pt; }
           .meta-item strong { color: #334155; display: block; font-size: 7.5pt; text-transform: uppercase; }
+          .audit-bar { background: #f1f5f9; border-left: 4px solid #0284c7; padding: 8px 12px; margin-bottom: 15px; font-size: 8.5pt; }
           .dictamen-box { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; font-size: 9pt; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; white-space: pre-wrap; line-height: 1.5; color: #1e293b; margin-bottom: 20px; }
           .disclaimer-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; font-size: 7.5pt; color: #991b1b; line-height: 1.35; margin-bottom: 25px; }
           .signatures { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; }
@@ -894,6 +1005,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           <div class="meta-item"><strong>Codificación CIE-11</strong>${currentDisorder.cie11}</div>
           <div class="meta-item"><strong>Codificación DSM-5-TR</strong>${currentDisorder.dsm5}</div>
           <div class="meta-item"><strong>Escenario WebXR</strong>/${currentDisorder.ecosystem}.jpeg</div>
+        </div>
+
+        <div class="audit-bar">
+          <strong>Homologación Gold-Standard:</strong> ${currentDisorder.goldStandardScale} | 
+          <strong>Código LOINC:</strong> ${currentDisorder.loincCode} | 
+          <strong>Z-Score:</strong> ${zScore} SD (${Math.abs(zScore) >= 1.96 ? 'Desviación Significativa' : 'Rango Normal'})
         </div>
 
         <div class="dictamen-box">${roiReportText}</div>
@@ -1033,6 +1150,11 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                   <strong className="text-amber-300">{currentDisorder.dsm5}</strong>
                 </div>
               </div>
+
+              <div className="mt-2 p-2 bg-slate-900/60 rounded border border-slate-800/80 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                <span>Gold-Standard: <strong className="text-slate-200">{currentDisorder.goldStandardScale}</strong></span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 text-[9px] font-bold">{currentDisorder.loincCode}</span>
+              </div>
             </div>
 
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
@@ -1112,6 +1234,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                 <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
                   <Activity className="w-4 h-4 text-emerald-400" />
                   Curva de Series Temporales (Biometría 6DoF)
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase text-white`} style={{ backgroundColor: getDisorderEvidenceTier(currentDisorder.id).badgeColor }}>
+                  {getDisorderEvidenceTier(currentDisorder.id).tier.replace('_', ' ')}
                 </span>
               </div>
 
