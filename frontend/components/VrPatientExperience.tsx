@@ -15,7 +15,9 @@ import {
   Database, 
   Zap, 
   Glasses, 
-  X 
+  X,
+  VolumeX,
+  Play
 } from 'lucide-react';
 
 interface Props { 
@@ -44,6 +46,9 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [phaseLabel, setPhaseLabel] = useState('En espera de inicio...');
   const [isFlickerActive, setIsFlickerActive] = useState<boolean>(false);
   const [flickerHz, setFlickerHz] = useState<number>(40.0);
+  
+  // ESTADO CLAVE: Controla si el navegador ya permite emitir audio
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -57,8 +62,34 @@ export const VrPatientExperience: React.FC<Props> = ({
   const flickerHzRef = useRef(flickerHz);
   flickerHzRef.current = flickerHz;
 
+  // 1. Desbloqueo Físico del Audio (Bypass de Autoplay Policy)
+  const unlockAudioContext = () => {
+    try {
+      // Forzar la creación de un contexto de audio falso para despertar el navegador
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext) {
+        const ctx = new AudioContext();
+        ctx.resume();
+      }
+      
+      // Lanzar una voz de prueba silenciosa para habilitar el motor TTS
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance('');
+        utterance.volume = 0;
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      setIsAudioUnlocked(true);
+    } catch (e) {
+      console.warn("Error al desbloquear audio:", e);
+    }
+  };
+
+  // 2. Síntesis de voz terapéutica
   const speakVoiceInstruction = useCallback((text: string) => {
+    if (!isAudioUnlocked) return; // Si no está desbloqueado, no intenta hablar
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -71,9 +102,12 @@ export const VrPatientExperience: React.FC<Props> = ({
       if (esVoice) utterance.voice = esVoice;
 
       window.speechSynthesis.speak(utterance);
-    } catch (e) {}
-  }, []);
+    } catch (e) {
+      console.warn('[AMIE Audio Pico] Error en síntesis:', e);
+    }
+  }, [isAudioUnlocked]);
 
+  // 3. WebSocket bidireccional estable
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isComponentMounted = true;
@@ -210,6 +244,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
   }, [activePatientId, speakVoiceInstruction]);
 
+  // 4. Motor WebXR
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -297,6 +332,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
   }, [activePatientId]);
 
+  // 5. Gestor de Entornos 360
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
@@ -344,6 +380,30 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
+      
+      {/* 🔴 ESCUDO DE DESBLOQUEO DE AUDIO (OBLIGATORIO PARA PICO) */}
+      {!isAudioUnlocked && (
+        <div className="absolute inset-0 z-[999999] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-8">
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-md text-center space-y-6">
+            <div className="w-20 h-20 bg-emerald-900/50 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30">
+              <VolumeX className="w-10 h-10 text-emerald-400 animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white mb-2">Activar Audio Clínico</h2>
+              <p className="text-slate-400 text-sm">El visor requiere tu permiso explícito para reproducir las instrucciones del terapeuta en los auriculares.</p>
+            </div>
+            <button
+              onClick={unlockAudioContext}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-600/20 active:scale-95 transition flex items-center justify-center gap-3"
+            >
+              <Play className="w-6 h-6 fill-white" />
+              INICIAR SESIÓN VR
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Panel Superior */}
       <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/90 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800 text-xs">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-cyan-400" />
@@ -352,7 +412,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         <div className="h-4 w-px bg-slate-800" />
         <div className="flex items-center gap-1.5 text-slate-300">
           <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Audio: <strong>Activo</strong></span>
+          <span>Audio: <strong className={isAudioUnlocked ? 'text-emerald-400' : 'text-amber-400'}>{isAudioUnlocked ? 'Activo' : 'Bloqueado'}</strong></span>
         </div>
         {isFlickerActive && (
           <>
@@ -375,6 +435,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         </button>
       )}
 
+      {/* Cartel Flotante Informativo en el Visor */}
       <div className="absolute z-10 bottom-32 flex flex-col items-center gap-3 pointer-events-none">
         <div className="text-center space-y-2 bg-slate-950/90 p-5 rounded-3xl border border-slate-800 shadow-2xl max-w-sm">
           <div className="flex items-center gap-2 justify-center">
