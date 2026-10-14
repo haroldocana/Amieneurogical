@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR DEL VISOR (PICO 3 PRO / META QUEST)
+// AMIE CLINICAL COPILOT - EXPERIENCIA INMERSIVA WEBXR (PICO 3 / META QUEST)
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -17,6 +17,7 @@ import {
   Database, 
   Brain,
   Zap,
+  VolumeX,
   X
 } from 'lucide-react';
 
@@ -26,7 +27,7 @@ interface Props {
   onClose?: () => void; 
 }
 
-type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
+export type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
 
 export const VrPatientExperience: React.FC<Props> = ({ 
   patientId: propsPatientId, 
@@ -41,7 +42,6 @@ export const VrPatientExperience: React.FC<Props> = ({
   const activePatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
   const initialModule = propsModuleId || getUrlParam('modulo') || getUrlParam('moduleId') || 'clinical_office';
   
-  // Detección del modo solicitado por URL ('DIAGNOSTIC' | 'TREATMENT')
   const initialUrlMode = (getUrlParam('modo') || getUrlParam('mode') || '').toUpperCase();
   const parsedCategory: ModuleCategory | null = 
     initialUrlMode.includes('TRAT') || initialUrlMode.includes('TREAT') ? 'TREATMENT' :
@@ -53,8 +53,9 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [statusMessage, setStatusMessage] = useState('Iniciando Sistema Clínico...');
   const [mediaType, setMediaType] = useState<'video' | 'image' | 'loading' | 'error'>('loading');
   const [tranceDepth, setTranceDepth] = useState<number>(0);
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
 
-  // Estados de Opto-Neuromodulación fótica en tiempo real
+  // Opto-Neuromodulación fótica (Arrastre cortical)
   const [isFlickerActive, setIsFlickerActive] = useState<boolean>(false);
   const [flickerHz, setFlickerHz] = useState<number>(40.0);
 
@@ -88,7 +89,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     flickerHzRef.current = flickerHz;
   }, [isFlickerActive, flickerHz]);
 
-  // Variables de Telemetría Acumulada
+  // Telemetría acumulada
   const packetCountRef = useRef<number>(0);
   const hitsRef = useRef<number>(0);
   const commissionsRef = useRef<number>(0);
@@ -101,21 +102,56 @@ export const VrPatientExperience: React.FC<Props> = ({
 
   const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
 
-  const getAuthToken = (): string => {
+  // =====================================================================
+  // 1. DESBLOQUEO DE AUDIO Y TONO ACÚSTICO DE ANCLAJE (528 Hz)
+  // =====================================================================
+  const ensureAudioContext = useCallback(() => {
     try {
-      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
-    } catch {
-      return '';
+      if (!audioCtxRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          audioCtxRef.current = new AudioCtx();
+        }
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().then(() => setIsAudioUnlocked(true)).catch(() => {});
+      } else if (audioCtxRef.current && audioCtxRef.current.state === 'running') {
+        setIsAudioUnlocked(true);
+      }
+    } catch (e) {
+      console.warn('[AMIE Audio] Error inicializando AudioContext:', e);
     }
-  };
+  }, []);
+
+  const playChimeTone = useCallback((freq = 528) => {
+    try {
+      ensureAudioContext();
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.2);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 1.2);
+    } catch (e) {}
+  }, [ensureAudioContext]);
 
   // =====================================================================
-  // 1. DICCIONARIO CLÍNICO INTEGRAL (RUTAS EMPAREJADAS CON GITHUB)
+  // 2. MATRIZ TAXONÓMICA: ESCENARIOS SEGÚN DIAGNÓSTICO O TRATAMIENTO
   // =====================================================================
   const getClinicalConfig = useCallback((envKey: string) => {
     const up = envKey.toUpperCase().trim();
     
-    // --- OPTO-NEUROMODULACIÓN Y ESTIMULACIÓN GAMMA 40HZ ---
+    // --- PROTOCOLOS DE TRATAMIENTO ---
     if (up.includes('GAMMA') || up.includes('OPTO') || up.includes('ALZHEIMER') || up.includes('COSMIC')) {
       return { 
         key: 'cosmic_stars', 
@@ -123,98 +159,10 @@ export const VrPatientExperience: React.FC<Props> = ({
         isVideo: false, 
         path: '/ecosystems/cosmic_stars.jpeg', 
         category: 'TREATMENT' as ModuleCategory, 
-        name: 'Opto-Neuromodulación Gamma 40Hz', 
-        aiVoiceScript: 'Sincronización fótica y arrastre cortical activado. Mantén la mirada fija en el espacio.' 
+        name: 'Tratamiento: Opto-Neuromodulación Gamma 40Hz', 
+        aiVoiceScript: 'Iniciando estimulación fótica sincrónica. Enfoca la mirada al centro del campo estelar para inducir el arrastre de fase tálamo-cortical.' 
       };
     }
-
-    // --- EVALUACIÓN FORENSE CLUSTER B (VIDEOS MP4) ---
-    if (up.includes('OVERT') || up.includes('GRANDIOSO') || up.includes('EXHIBICIONISTA')) {
-      return { 
-        key: 'overt_provocation', 
-        protocol: 'OVERT_EGO_THREAT', 
-        isVideo: true, 
-        path: '/video/overt_provocation.mp4', 
-        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        name: 'Ensayo Forense: Provocación Overt',
-        aiVoiceScript: 'Iniciando prueba de reactividad. Mantén la mirada fija y pulsa el disparador ante juicios hostiles.'
-      };
-    }
-    if (up.includes('COVERT') || up.includes('VULNERABLE') || up.includes('ENCUBIERTO')) {
-      return { 
-        key: 'covert_rejection', 
-        protocol: 'COVERT_SHAME_REJECTION', 
-        isVideo: true, 
-        path: '/video/covert_rejection.mp4', 
-        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        name: 'Ensayo Forense: Rechazo Social Covert',
-        aiVoiceScript: 'Evaluación de hipersensibilidad. Presiona el gatillo ante signos de exclusión.'
-      };
-    }
-    if (up.includes('ANTISOCIAL') || up.includes('PCLR') || up.includes('PSICOPATIA') || up.includes('FACTOR1')) {
-      return { 
-        key: 'antisocial_distress', 
-        protocol: 'ANTISOCIAL_EMPATHY_FLAT', 
-        isVideo: true, 
-        path: '/video/antisocial_distress.mp4', 
-        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        name: 'Ensayo Forense: Aplanamiento Empático',
-        aiVoiceScript: 'Prueba de reconocimiento afectivo. Presiona el gatillo al detectar manifestación de sufrimiento.'
-      };
-    }
-    if (up.includes('COLLAPSE') || up.includes('COLAPSO')) {
-      return { 
-        key: 'narcissism_collapse', 
-        protocol: 'CLUSTER_B_GENERIC', 
-        isVideo: true, 
-        path: '/video/narcissism_collapse.mp4', 
-        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        name: 'Forense: Colapso Narcisista', 
-        aiVoiceScript: 'Evaluación de descompensación emocional reactiva en proceso.' 
-      };
-    }
-    if (up.includes('CLUSTER_B') || up.includes('NARCISS') || up.includes('FORENSI')) {
-      return { 
-        key: 'cluster_b_forensic', 
-        protocol: 'CLUSTER_B_GENERIC', 
-        isVideo: false, 
-        path: '/ecosystems/cluster_b_forensic.jpg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        name: 'Forense: Perfilado General', 
-        aiVoiceScript: 'Peritaje inmersivo forense Cluster B iniciado.' 
-      };
-    }
-
-    // --- MÓDULOS DIAGNÓSTICOS EN IMAGEN (.JPEG) ---
-    if (up.includes('TDAH') || up.includes('EXECUTIVE')) {
-      return { 
-        key: 'tdah_executive', 
-        protocol: 'TDAH_CPT', 
-        isVideo: false, 
-        path: '/ecosystems/tdah_executive.jpeg', 
-        category: 'DIAGNOSTIC' as ModuleCategory, 
-        name: 'TDAH: Control Ejecutivo y CPT',
-        aiVoiceScript: 'Test de atención sostenida. Presiona el gatillo únicamente cuando la diana destelle verde.'
-      };
-    }
-    if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA')) {
-      return { key: 'dev_trauma', protocol: 'TRAUMA_AIMA', isVideo: false, path: '/ecosystems/dev_trauma.jpeg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Trauma Evolutivo & Apego', aiVoiceScript: 'Exploración de reactividad y esquemas de apego.' };
-    }
-    if (up.includes('ACROPHOBIA') || up.includes('ALTURAS') || up.includes('ROOF')) {
-      return { key: 'acrophobia_roof', protocol: 'PHOBIA_BASE', isVideo: false, path: '/ecosystems/acrophobia_roof.jpeg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Acrofobia: Exposición en Altura', aiVoiceScript: 'Exposición graduada. Respira profundamente y mantén la calma.' };
-    }
-    if (up.includes('AEROPHOBIA') || up.includes('AVION') || up.includes('CABIN')) {
-      return { key: 'aerophobia_cabin', protocol: 'PHOBIA_BASE', isVideo: false, path: '/ecosystems/aerophobia_cabin.jpeg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Aerofobia: Simulación de Vuelo', aiVoiceScript: 'Aclimatación en cabina de vuelo comercial.' };
-    }
-    if (up.includes('STERILE')) {
-      return { key: 'sterile_room', protocol: 'ISOLATION', isVideo: false, path: '/ecosystems/sterile_room.jpeg', category: 'DIAGNOSTIC' as ModuleCategory, name: 'Cuarto Estéril Sensorial', aiVoiceScript: 'Aislamiento de interferencias periféricas activado.' };
-    }
-
-    // --- MÓDULOS DE TRATAMIENTO Y NEUROMODULACIÓN ---
     if (up.includes('HYPNOSIS') || up.includes('NEURO_HYP')) {
       return { 
         key: 'neuro_hypnosis', 
@@ -222,8 +170,8 @@ export const VrPatientExperience: React.FC<Props> = ({
         isVideo: false, 
         path: '/ecosystems/neuro_hypnosis.jpeg', 
         category: 'TREATMENT' as ModuleCategory, 
-        name: 'Neurohipnosis Clínica: Inducción Theta',
-        aiVoiceScript: 'Iniciando inducción. Fija tu mirada en el centro del orbe concéntrico.'
+        name: 'Tratamiento: Neurohipnosis & Trance Theta', 
+        aiVoiceScript: 'Iniciando inducción neurohipnótica. Sincroniza tu respiración con la pulsación del orbe concéntrico. Al expandirse inhala, al contraerse suelta el aire.' 
       };
     }
     if (up.includes('EMDR') || up.includes('MEMORY')) {
@@ -233,41 +181,173 @@ export const VrPatientExperience: React.FC<Props> = ({
         isVideo: false, 
         path: '/ecosystems/emdr_memory.jpeg', 
         category: 'TREATMENT' as ModuleCategory, 
-        name: 'EMDR: Estimulación Bilateral Óptica',
-        aiVoiceScript: 'Estimulación visual bilateral activada. Sigue el haz de luz únicamente con los ojos.'
+        name: 'Tratamiento: Reconsolidación EMDR 3D', 
+        aiVoiceScript: 'Estimulación visual bilateral activada. Sigue el haz de luz únicamente con los ojos, manteniendo la cabeza completamente firme.' 
       };
     }
     if (up.includes('PAIN') || up.includes('ANALGESIA')) {
-      return { key: 'pain_management', protocol: 'PAIN_MGMT', isVideo: false, path: '/ecosystems/pain_management.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Analgesia Neurofuncional', aiVoiceScript: 'Activando modulación inhibitoria periférica de dolor.' };
+      return { 
+        key: 'pain_management', 
+        protocol: 'PAIN_MGMT', 
+        isVideo: false, 
+        path: '/ecosystems/pain_management.jpeg', 
+        category: 'TREATMENT' as ModuleCategory, 
+        name: 'Tratamiento: Analgesia & Desfocalización Somática', 
+        aiVoiceScript: 'Activando modulación inhibitoria periférica de dolor. Permite que la temperatura y la textura visual del entorno desactiven la tensión somatosensorial.' 
+      };
+    }
+    if (up.includes('DUAL_CONTROL') || up.includes('SES') || up.includes('SEXUAL')) {
+      return { 
+        key: 'dual_control', 
+        protocol: 'DUAL_CONTROL', 
+        isVideo: false, 
+        path: '/ecosystems/dual_control.jpeg', 
+        category: 'TREATMENT' as ModuleCategory, 
+        name: 'Tratamiento: Control Dual Neurosexual (SES / SIS)', 
+        aiVoiceScript: 'Calibración de tono parasimpático activada. Respira en cadencia profunda para desactivar los frenos inhibitorios del sistema nervioso.' 
+      };
     }
     if (up.includes('FND') || up.includes('MIRROR')) {
-      return { key: 'fnd_mirror', protocol: 'FND_MIRROR', isVideo: false, path: '/ecosystems/fnd_mirror.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Espejo Neurofuncional', aiVoiceScript: 'Rehabilitación y entrenamiento de neuronas espejo en curso.' };
+      return { 
+        key: 'fnd_mirror', 
+        protocol: 'FND_MIRROR', 
+        isVideo: false, 
+        path: '/ecosystems/fnd_mirror.jpeg', 
+        category: 'TREATMENT' as ModuleCategory, 
+        name: 'Tratamiento: Terapia de Espejo Neurofuncional', 
+        aiVoiceScript: 'Entrenamiento de neuronas espejo en curso. Observa el reflejo cinemático adaptativo para recalibrar el mapa sensoriomotor.' 
+      };
     }
-    if (up.includes('DUAL_CONTROL') || up.includes('SES')) {
-      return { key: 'dual_control', protocol: 'DUAL_CONTROL', isVideo: false, path: '/ecosystems/dual_control.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Regulador Dual Simpático/Vagal', aiVoiceScript: 'Módulo de biofeedback activo.' };
-    }
-
-    // --- SANTUARIOS DE AUTORREGULACIÓN ---
-    if (up.includes('SAFE_PLACE') || up.includes('FOREST') || up.includes('SANCTUARY')) {
-      return { key: 'safe_place_forest', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/safe_place_forest.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Bosque Seguro', aiVoiceScript: 'Espacio de calma y contención neurobiológica.' };
+    if (up.includes('SAFE_PLACE') || up.includes('FOREST') || up.includes('SANCTUARY') || up.includes('GROUNDING')) {
+      return { 
+        key: 'safe_place_forest', 
+        protocol: 'SANCTUARY', 
+        isVideo: false, 
+        path: '/ecosystems/safe_place_forest.jpeg', 
+        category: 'TREATMENT' as ModuleCategory, 
+        name: 'Tratamiento: Santuario Biofílico & Grounding', 
+        aiVoiceScript: 'Protocolo de estabilización y calma activado. Siente el suelo bajo tus pies, respira hondo y contempla la iluminación del bosque protegido.' 
+      };
     }
     if (up.includes('BIOLUMINESCENT') || up.includes('BEACH')) {
-      return { key: 'bioluminescent_beach', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/bioluminescent_beach.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Playa Bioluminiscente', aiVoiceScript: 'Ritmo ondulatorio para estabilización autonómica.' };
-    }
-    if (up.includes('ZEN') || up.includes('GARDEN')) {
-      return { key: 'zen_garden', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/zen_garden.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Jardín Zen', aiVoiceScript: 'Regulación de reactividad emocional y templanza.' };
-    }
-    if (up.includes('WARM') || up.includes('HEARTH')) {
-      return { key: 'warm_hearth', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/warm_hearth.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Hogar Cálido', aiVoiceScript: 'Entorno de calidez y seguridad somatosensorial.' };
-    }
-    if (up.includes('TREEHOUSE') || up.includes('PROTECTIVE')) {
-      return { key: 'protective_treehouse', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/protective_treehouse.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Casa del Árbol', aiVoiceScript: 'Refugio protegido para integración interna.' };
-    }
-    if (up.includes('WOMB') || up.includes('CAVE')) {
-      return { key: 'womb_like_cave', protocol: 'SANCTUARY', isVideo: false, path: '/ecosystems/womb_like_cave.jpeg', category: 'TREATMENT' as ModuleCategory, name: 'Santuario: Cueva Receptáculo', aiVoiceScript: 'Contención basal y desaceleración del sistema nervioso.' };
+      return { 
+        key: 'bioluminescent_beach', 
+        protocol: 'SANCTUARY', 
+        isVideo: false, 
+        path: '/ecosystems/bioluminescent_beach.jpeg', 
+        category: 'TREATMENT' as ModuleCategory, 
+        name: 'Tratamiento: Playa Bioluminiscente (Grounding)', 
+        aiVoiceScript: 'Sincroniza tu pulso cardíaco con el oleaje bioluminiscente. Este es un entorno bioseguro de descanso y restauración vagal.' 
+      };
     }
 
-    // POR DEFECTO: CONSULTORIO CLÍNICO BASE (.JPEG)
+    // --- PROTOCOLOS DE DIAGNÓSTICO ---
+    if (up.includes('TDAH') || up.includes('EXECUTIVE') || up.includes('CPT')) {
+      return { 
+        key: 'tdah_executive', 
+        protocol: 'TDAH_CPT', 
+        isVideo: false, 
+        path: '/ecosystems/tdah_executive.jpeg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico: Test de Rendimiento Continuo (CPT TDAH)', 
+        aiVoiceScript: 'Evaluación de control inhibitorio y atención sostenida. Pulsa el gatillo de tu mando únicamente cuando la diana destelle verde. Si destella roja, no dispares.' 
+      };
+    }
+    if (up.includes('ACROPHOBIA') || up.includes('ALTURAS') || up.includes('ROOF')) {
+      return { 
+        key: 'acrophobia_roof', 
+        protocol: 'PHOBIA_BASE', 
+        isVideo: false, 
+        path: '/ecosystems/acrophobia_roof.jpeg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico: Exposición Jerárquica en Altura (Acrofobia)', 
+        aiVoiceScript: 'Iniciando test de habituación fóbica en altura. Mantén la vista al frente mientras registramos tu variabilidad de frecuencia cardíaca y conductancia galvánica.' 
+      };
+    }
+    if (up.includes('AEROPHOBIA') || up.includes('AVION') || up.includes('CABIN')) {
+      return { 
+        key: 'aerophobia_cabin', 
+        protocol: 'PHOBIA_BASE', 
+        isVideo: false, 
+        path: '/ecosystems/aerophobia_cabin.jpeg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico: Simulación de Cabina de Vuelo (Aerofobia)', 
+        aiVoiceScript: 'Evaluación de confinamiento y despegue en cabina comercial. Mantén una postura corporal neutra y relaja los hombros.' 
+      };
+    }
+    if (up.includes('DEV_TRAUMA') || up.includes('TRAUMA') || up.includes('AIMA')) {
+      return { 
+        key: 'dev_trauma', 
+        protocol: 'TRAUMA_AIMA', 
+        isVideo: false, 
+        path: '/ecosystems/dev_trauma.jpeg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico: Trauma Evolutivo & Esquemas de Apego', 
+        aiVoiceScript: 'Exploración de reactividad fisiológica ante estímulos afectivos tempranos. Observa el escenario sin forzar juicios.' 
+      };
+    }
+    if (up.includes('STERILE') || up.includes('ISOLATION')) {
+      return { 
+        key: 'sterile_room', 
+        protocol: 'ISOLATION', 
+        isVideo: false, 
+        path: '/ecosystems/sterile_room.jpeg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico: Sala Estéril de Registro Basal', 
+        aiVoiceScript: 'Calibración de línea base sensorial sin distractores periféricos.' 
+      };
+    }
+
+    // --- EVALUACIÓN FORENSE CLUSTER B ---
+    if (up.includes('OVERT') || up.includes('GRANDIOSO')) {
+      return { 
+        key: 'overt_provocation', 
+        protocol: 'OVERT_EGO_THREAT', 
+        isVideo: true, 
+        path: '/video/overt_provocation.mp4', 
+        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico Forense: Provocación Directa al Ego', 
+        aiVoiceScript: 'Prueba de reactividad y tolerancia al estatus. Mantén la mirada fija y pulsa el gatillo ante juicios descalificatorios.' 
+      };
+    }
+    if (up.includes('COVERT') || up.includes('VULNERABLE')) {
+      return { 
+        key: 'covert_rejection', 
+        protocol: 'COVERT_SHAME_REJECTION', 
+        isVideo: true, 
+        path: '/video/covert_rejection.mp4', 
+        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico Forense: Rechazo Social Encubierto', 
+        aiVoiceScript: 'Evaluación de hipersensibilidad al rechazo grupal. Observa la dinámica y presiona el gatillo ante signos de exclusión.' 
+      };
+    }
+    if (up.includes('ANTISOCIAL') || up.includes('PCLR') || up.includes('PSICOPATIA')) {
+      return { 
+        key: 'antisocial_distress', 
+        protocol: 'ANTISOCIAL_EMPATHY_FLAT', 
+        isVideo: true, 
+        path: '/video/antisocial_distress.mp4', 
+        fallbackImg: '/ecosystems/cluster_b_forensic.jpg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico Forense: Aplanamiento Afectivo', 
+        aiVoiceScript: 'Prueba de reconocimiento empático. Presiona el disparador de inmediato al percibir sufrimiento en el sujeto.' 
+      };
+    }
+    if (up.includes('CLUSTER_B') || up.includes('FORENSI')) {
+      return { 
+        key: 'cluster_b_forensic', 
+        protocol: 'CLUSTER_B_GENERIC', 
+        isVideo: false, 
+        path: '/ecosystems/cluster_b_forensic.jpg', 
+        category: 'DIAGNOSTIC' as ModuleCategory, 
+        name: 'Diagnóstico Forense: Sala Pericial Cluster B', 
+        aiVoiceScript: 'Evaluación de defensas disociales y estilo relacional en curso.' 
+      };
+    }
+
+    // BASE POR DEFECTO
     return { 
       key: 'clinical_office', 
       protocol: 'BASE', 
@@ -275,53 +355,59 @@ export const VrPatientExperience: React.FC<Props> = ({
       path: '/ecosystems/clinical_office.jpeg', 
       category: 'DIAGNOSTIC' as ModuleCategory, 
       name: 'Consultorio Clínico Base', 
-      aiVoiceScript: 'Bienvenido a la plataforma neuroclínica AMIE. Dispositivo enlazado.' 
+      aiVoiceScript: 'Bienvenido a AMIE Clinical Copilot. Estación inmersiva enlazada. Permanece en posición cómoda.' 
     };
   }, []);
 
   const currentConfig = getClinicalConfig(activeEcosystem);
-  // Categoría efectiva: prevalece el override del doctor o URL sobre el default del catálogo
   const effectiveCategory: ModuleCategory = overrideCategory || currentConfig.category;
 
   // =====================================================================
-  // 2. MOTOR DE VOZ IA (SÍNTESIS SEGURA POR VOZ EN ESPAÑOL)
+  // 3. MOTOR DE LOCUCIÓN IA CON AUTO-REINTENTO Y ASIGNACIÓN DE VOZ
   // =====================================================================
-  const speakAiInstruction = (text: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const speakAiInstruction = useCallback((text: string) => {
+    if (typeof window === 'undefined') return;
+
+    // Ejecuta el tono suave de campana primero
+    playChimeTone(528);
+
+    if (!('speechSynthesis' in window)) return;
+
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'es-ES';
-      utterance.rate = 0.92;
-      utterance.pitch = 0.95;
+      utterance.rate = 0.90;
+      utterance.pitch = 0.96;
 
-      const assignVoice = () => {
+      const assignAndSpeak = () => {
         const voices = window.speechSynthesis.getVoices();
         const spanishVoice = voices.find(v => 
           v.lang.startsWith('es') && 
-          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))
+          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Castilian'))
         ) || voices.find(v => v.lang.startsWith('es'));
+        
         if (spanishVoice) utterance.voice = spanishVoice;
         window.speechSynthesis.speak(utterance);
       };
 
       if (window.speechSynthesis.getVoices().length > 0) {
-        assignVoice();
+        assignAndSpeak();
       } else {
         window.speechSynthesis.onvoiceschanged = () => {
-          assignVoice();
+          assignAndSpeak();
           window.speechSynthesis.onvoiceschanged = null;
         };
       }
     } catch (e) {
-      console.warn('[AMIE WebXR] Fallo de audio guía por voz:', e);
+      console.warn('[AMIE TTS] Error en síntesis de voz:', e);
     }
-  };
+  }, [playChimeTone]);
 
   // =====================================================================
-  // 3. GENERADOR DE AUDIO BINAURAL CON RESUME SEGURO
+  // 4. GENERADOR DE AUDIO BINAURAL (THETA 6 Hz / PORTADORA 432 Hz)
   // =====================================================================
-  const toggleBinauralHypnosisAudio = (enable: boolean) => {
+  const toggleBinauralHypnosisAudio = useCallback((enable: boolean) => {
     try {
       if (!enable) {
         if (binauralNodesRef.current) {
@@ -332,19 +418,9 @@ export const VrPatientExperience: React.FC<Props> = ({
         return;
       }
 
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          audioCtxRef.current = new AudioCtx();
-        }
-      }
-      
+      ensureAudioContext();
       const ctx = audioCtxRef.current;
       if (!ctx) return;
-
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
 
       if (binauralNodesRef.current) return;
 
@@ -352,12 +428,12 @@ export const VrPatientExperience: React.FC<Props> = ({
       const oscR = ctx.createOscillator();
       const merger = ctx.createChannelMerger(2);
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
 
       oscL.type = 'sine';
-      oscL.frequency.setValueAtTime(432, ctx.currentTime);
+      oscL.frequency.setValueAtTime(432, ctx.currentTime); // Portadora armónica
       oscR.type = 'sine';
-      oscR.frequency.setValueAtTime(438, ctx.currentTime);
+      oscR.frequency.setValueAtTime(438, ctx.currentTime); // Diferencial Theta (6 Hz)
 
       oscL.connect(merger, 0, 0);
       oscR.connect(merger, 0, 1);
@@ -368,12 +444,12 @@ export const VrPatientExperience: React.FC<Props> = ({
       oscR.start();
       binauralNodesRef.current = { oscL, oscR, gain };
     } catch (err) {
-      console.warn('[AMIE WebXR] Error iniciando audio binaural:', err);
+      console.warn('[AMIE WebXR] Error en audio binaural:', err);
     }
-  };
+  }, [ensureAudioContext]);
 
   // =====================================================================
-  // 4. WEBSOCKET BIDIRECCIONAL: CONTROL REMOTO DIAGNÓSTICO / TRATAMIENTO
+  // 5. WEBSOCKET BIDIRECCIONAL: ENLACE PERMANENTE CON LA LAPTOP
   // =====================================================================
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -406,16 +482,16 @@ export const VrPatientExperience: React.FC<Props> = ({
             try {
               const data = JSON.parse(event.data);
               
-              // 1. Comando de Grounding de emergencia
+              // Grounding de emergencia
               if (data.type === 'TRIGGER_GROUNDING_PROTOCOL') {
                 setActiveEcosystem('safe_place_forest');
                 setOverrideCategory('TREATMENT');
                 setIsFlickerActive(false);
-                speakAiInstruction('Protocolo de calma activado. Respira hondo y fija la mirada.');
+                speakAiInstruction('Protocolo de calma activado. Respira hondo y contempla el entorno seguro.');
                 return;
               }
 
-              // 2. Inicio de Fotobiomodulación (Pulsación lumínica)
+              // Inicio de Fotobiomodulación (Pulsación lumínica Gamma 40Hz)
               if (data.type === 'START_LIGHT_STIMULATION') {
                 setActiveEcosystem('cosmic_stars');
                 setOverrideCategory('TREATMENT');
@@ -423,21 +499,22 @@ export const VrPatientExperience: React.FC<Props> = ({
                   setFlickerHz(data.frequencyHz);
                 }
                 setIsFlickerActive(true);
+                playChimeTone(852);
                 return;
               }
 
-              // 3. Parada de estimulación
+              // Parada de estimulación
               if (data.type === 'STOP_LIGHT_STIMULATION' || data.type === 'STOP_TEST') {
                 setIsFlickerActive(false);
                 return;
               }
 
-              // 4. Cambio explícito de modo (Diagnóstico vs Tratamiento)
+              // Cambio explícito de modo (Diagnóstico vs Tratamiento)
               if (data.type === 'SET_MODULE_MODE' && data.category) {
                 setOverrideCategory(data.category === 'TREATMENT' ? 'TREATMENT' : 'DIAGNOSTIC');
               }
 
-              // 5. Cambio dinámico de entorno solicitado por la estación médica
+              // Cambio dinámico de escenario enviado desde la laptop
               const targetEnv = data.environmentId || data.ecosystem || data.moduleId || data.moduleName;
               if (targetEnv) {
                 setActiveEcosystem(targetEnv);
@@ -464,7 +541,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     connect();
 
-    // Heartbeat cada 25s para mantener el túnel abierto en Render
+    // Heartbeat PING cada 25s
     pingInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ 
@@ -476,7 +553,7 @@ export const VrPatientExperience: React.FC<Props> = ({
       }
     }, 25000);
 
-    // Ráfaga continua de telemetría hacia la consola médica (300 ms)
+    // Ráfaga continua de telemetría hacia el médico (300 ms)
     const telemetryInterval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         packetCountRef.current += 1;
@@ -561,10 +638,10 @@ export const VrPatientExperience: React.FC<Props> = ({
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [activePatientId, BACKEND_URL, getClinicalConfig, overrideCategory]);
+  }, [activePatientId, BACKEND_URL, getClinicalConfig, overrideCategory, playChimeTone, speakAiInstruction]);
 
   // =====================================================================
-  // 5. MOTOR THREE.JS Y WEBXR CON PULSACIÓN FÓTICA EN VIVO
+  // 6. THREE.JS & WEBXR: DESBLOQUEO POR GESTO Y SESSIONSTART
   // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -640,16 +717,14 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     // Disparador de Interacción Unificado (Gatillo VR + Táctil)
     const handleInteractionTrigger = () => {
-      const now = performance.now();
-      const config = getClinicalConfig(activeEcosystemRef.current);
-
-      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume().catch(() => {});
-      }
+      ensureAudioContext();
 
       if (videoElementRef.current && videoElementRef.current.paused) {
         videoElementRef.current.play().catch(() => {});
       }
+
+      const now = performance.now();
+      const config = getClinicalConfig(activeEcosystemRef.current);
 
       if (config.protocol === 'TDAH_CPT') {
         if (isTargetVisibleRef.current) {
@@ -698,6 +773,18 @@ export const VrPatientExperience: React.FC<Props> = ({
     const domElement = renderer.domElement;
     domElement.addEventListener('pointerdown', handleInteractionTrigger);
 
+    // Desbloqueo acústico formal en WebXR sessionstart
+    const handleXrSessionStart = () => {
+      ensureAudioContext();
+      const config = getClinicalConfig(activeEcosystemRef.current);
+      speakAiInstruction(config.aiVoiceScript);
+
+      if (config.protocol === 'HYPNOSIS_LOOP') {
+        toggleBinauralHypnosisAudio(true);
+      }
+    };
+    renderer.xr.addEventListener('sessionstart', handleXrSessionStart);
+
     let vrBtn: HTMLElement | null = null;
     try {
       vrBtn = VRButton.createButton(renderer);
@@ -725,7 +812,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         cursorRef.current.lookAt(pCam.position);
       }
 
-      // Modulación fótica en tiempo real (Fotobiomodulación Gamma 40Hz)
+      // Modulación fótica continua (Opto-Neuromodulación Gamma 40Hz)
       if (ambientLightRef.current) {
         if (isFlickerActiveRef.current) {
           const hz = flickerHzRef.current || 40.0;
@@ -788,7 +875,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         }
       }
 
-      // Actualización de video estereoscópico
+      // Video estereoscópico 360
       if (videoElementRef.current && videoTextureRef.current && envMeshRef.current) {
         const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
         if (videoElementRef.current.readyState >= 3) {
@@ -808,6 +895,7 @@ export const VrPatientExperience: React.FC<Props> = ({
       window.removeEventListener('resize', handleResize);
       xrController.removeEventListener('select', handleInteractionTrigger);
       domElement.removeEventListener('pointerdown', handleInteractionTrigger);
+      renderer.xr.removeEventListener('sessionstart', handleXrSessionStart);
       renderer.setAnimationLoop(null);
 
       envGeo.dispose(); 
@@ -825,10 +913,10 @@ export const VrPatientExperience: React.FC<Props> = ({
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       if (vrBtn && container.contains(vrBtn)) container.removeChild(vrBtn);
     };
-  }, [activePatientId, getClinicalConfig]);
+  }, [activePatientId, ensureAudioContext, getClinicalConfig, speakAiInstruction, toggleBinauralHypnosisAudio]);
 
   // =====================================================================
-  // 6. GESTOR DE TEXTURAS RESILIENTE (.JPEG CON SALA PROCEDURAL FALLBACK)
+  // 7. GESTOR DE TEXTURAS RESILIENTE Y DISPARO AUTOMÁTICO DE GUÍA
   // =====================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
@@ -853,6 +941,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     const config = getClinicalConfig(activeEcosystem);
 
+    // Disparo inmediato de la guía auditiva y autorregulación por IA
     speakAiInstruction(config.aiVoiceScript);
 
     if (config.protocol === 'HYPNOSIS_LOOP') {
@@ -989,11 +1078,13 @@ export const VrPatientExperience: React.FC<Props> = ({
     return () => {
       toggleBinauralHypnosisAudio(false);
     };
-  }, [activeEcosystem, getClinicalConfig]);
+  }, [activeEcosystem, getClinicalConfig, speakAiInstruction, toggleBinauralHypnosisAudio]);
 
   return (
-    <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
-      
+    <div 
+      onClick={ensureAudioContext}
+      className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden"
+    >
       {/* Panel Superior Izquierdo de Estado */}
       <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/85 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800 text-xs">
         <div className="flex items-center gap-2">
@@ -1002,8 +1093,8 @@ export const VrPatientExperience: React.FC<Props> = ({
         </div>
         <div className="h-4 w-px bg-slate-800" />
         <div className="flex items-center gap-1.5 text-slate-400">
-          <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>Voz IA: <strong className="text-slate-200">Español</strong></span>
+          {isAudioUnlocked ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-amber-400 animate-pulse" />}
+          <span>Audio Guía: <strong className="text-slate-200">{isAudioUnlocked ? 'Activo (ES)' : 'Toca pantalla'}</strong></span>
         </div>
         {isFlickerActive && (
           <>
