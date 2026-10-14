@@ -35,6 +35,9 @@ import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentCons
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 
+// GESTOR DE ESCENARIOS MULTIMEDIA (FOTOS Y VIDEOS 360°)
+import { CustomMediaUploader } from './components/CustomMediaUploader';
+
 // CONSOLA UNIFICADA IA + VR
 import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
 
@@ -222,7 +225,7 @@ function DoctorWorkstation() {
     }
   }, []);
 
-  // 1. Suscripción Segura a Créditos
+  // Suscripción Segura a Créditos
   useEffect(() => {
     let unsub: any = null;
     try {
@@ -238,7 +241,7 @@ function DoctorWorkstation() {
     };
   }, []);
 
-  // 2. Suscripción Segura a USB
+  // Suscripción Segura a USB
   useEffect(() => {
     let unsub: any = null;
     try {
@@ -263,7 +266,7 @@ function DoctorWorkstation() {
     };
   }, []);
 
-  // 3. Suscripción Segura a Telemetría
+  // Suscripción Segura a Telemetría
   useEffect(() => {
     let unsubStatus: any = null;
     let unsubData: any = null;
@@ -289,7 +292,7 @@ function DoctorWorkstation() {
     };
   }, []);
 
-  // 4. Suscripción Segura a WebSocket VR
+  // Suscripción Segura a WebSocket VR
   useEffect(() => {
     let unsubVr: any = null;
     try {
@@ -338,9 +341,7 @@ function DoctorWorkstation() {
     return <div className="min-h-screen bg-slate-950"></div>;
   }
 
-  // --------------------------------------------------------------------------
-  // VISTA MODO PACIENTE (FULLSCREEN VR)
-  // --------------------------------------------------------------------------
+  // Vista Modo Paciente (Fullscreen VR)
   if (isPatientMode) {
     return (
       <div className="relative w-screen h-screen">
@@ -360,9 +361,7 @@ function DoctorWorkstation() {
     );
   }
 
-  // --------------------------------------------------------------------------
-  // AUTENTICACIÓN
-  // --------------------------------------------------------------------------
+  // Autenticación Médica
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -391,9 +390,7 @@ function DoctorWorkstation() {
     setIsAuthenticated(false);
   };
 
-  // --------------------------------------------------------------------------
-  // ACCIONES PRINCIPALES DE LA ESTACIÓN
-  // --------------------------------------------------------------------------
+  // Acciones Principales
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
 
@@ -572,9 +569,6 @@ function DoctorWorkstation() {
     setTimeout(() => setSyncSuccessMsg(null), 4000);
   };
 
-  // --------------------------------------------------------------------------
-  // RENDER PRINCIPAL DE LA ESTACIÓN MÉDICA
-  // --------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
       
@@ -655,7 +649,7 @@ function DoctorWorkstation() {
               onClick={handleTriggerGrounding}
               className="flex items-center gap-1 px-2.5 py-1 bg-rose-950/90 hover:bg-rose-900 text-rose-200 rounded-lg text-[10.5px] font-bold border border-rose-500/60 shadow-sm transition cursor-pointer animate-pulse"
             >
-              <ShieldAlert className="w-3 h-3 text-rose-400" />
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
               <span>Grounding VR + Voz</span>
             </button>
 
@@ -1062,7 +1056,7 @@ function DoctorWorkstation() {
         {activeTab === 'vr_therapy' && (
           <div className="space-y-5">
             
-            {/* BARRA DE AUDIO GUÍA TERAPÉUTICO (Ahora despacha comandos y habla a la vez) */}
+            {/* BARRA DE AUDIO GUÍA TERAPÉUTICO */}
             <ClinicalAudioGuidanceBar 
               initialProtocolId="VRET_EXPOSURE"
               onGroundingTriggered={() => {
@@ -1070,6 +1064,9 @@ function DoctorWorkstation() {
                 setSyncSuccessMsg('Protocolo de Grounding Visual activado junto con la locución de calma.');
               }}
             />
+
+            {/* GESTOR DE ESCENARIOS MULTIMEDIA (FOTOS Y VIDEOS 360°) */}
+            <CustomMediaUploader patientId={safePatientId} />
 
             {/* BOTONERA DE ACCESO A CONSOLAS Y MODALES */}
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
@@ -1136,6 +1133,14 @@ function DoctorWorkstation() {
               >
                 <Sparkles className="w-4 h-4 text-purple-200" />
                 <span>Neurohipnosis Closed-Loop</span>
+              </button>
+
+              <button
+                onClick={() => setActiveVrModuleId('DEV_TRAUMA')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 via-pink-700 to-rose-700 hover:from-purple-700 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
+              >
+                <Brain className="w-4 h-4 text-pink-200" />
+                <span>Consola Trauma Evolutivo & AIMA</span>
               </button>
 
               <button
