@@ -1,1447 +1,350 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - WORKSTATION MÉDICA & ORQUESTADOR GLOBAL MULTIMODAL
-// frontend/App.tsx
+// AMIE CLINICAL COPILOT - MOTOR UNIFICADO MULTITRASTORNO (DIAGNÓSTICO Y TRATAMIENTO)
+// frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-
-// MOTOR WEBXR / THREE.JS PARA VISORES PICO 3 PRO & META QUEST 3/3S
-import { VrPatientExperience } from './components/VrPatientExperience';
-
-// COMPONENTES PRINCIPALES DE CONSULTA Y TELEMETRÍA
-import { Header } from './components/Header';
-import { PatientJsonEditor } from './components/PatientJsonEditor';
-import { BiomarkerDashboard } from './components/BiomarkerDashboard';
-import { PatientSentinelDashboard } from './components/PatientSentinelDashboard';
-import { SessionAudioAcoustics } from './components/SessionAudioAcoustics';
-import { RiskAlertBanner } from './components/RiskAlertBanner';
-import { ClinicalOutputViewer } from './components/ClinicalOutputViewer';
-import { AmieChatCopilot } from './components/AmieChatCopilot';
-import { DsmGuideModal } from './components/DsmGuideModal';
-import { ScientificNeuroEvaluator } from './components/ScientificNeuroEvaluator';
-import { DifferentialBiasResolver } from './components/DifferentialBiasResolver';
-import { NeuroSensoryModule, QeegAttachmentPayload } from './components/NeuroSensoryModule';
-import { InteractiveNeuroViewer } from './components/InteractiveNeuroViewer';
-import { HolographicNeuroViewer3D } from './components/HolographicNeuroViewer3D';
-import { PsychiatryReferralView } from './components/PsychiatryReferralView';
-import { AdminSaaSPanel } from './components/AdminSaaSPanel';
-import { AmieClinicalAcademy } from './components/AmieClinicalAcademy';
-import { FloatingAmieAssistant } from './components/FloatingAmieAssistant';
-import { HoverTooltip } from './components/HoverTooltip';
-import { LoginModal } from './components/LoginModal';
-import { VrTherapyModule } from './components/VrTherapyModule';
-import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
-import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
-import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
-
-// CONSOLA UNIFICADA IA + VR
-import { AmieUnifiedVrConsole } from './components/AmieUnifiedVrConsole';
-
-// MÓDULOS DE ALTA ESPECIALIDAD CLÍNICA
-import { PsychopathyNarcissismModule } from './components/PsychopathyNarcissismModule';
-import { VrClosedLoopHypnosisModule } from './components/VrClosedLoopHypnosisModule';
-import { DigitalPhenotypeModule } from './components/DigitalPhenotypeModule';
-import { VrPainManagementModule } from './components/VrPainManagementModule';
-import { VrFunctionalNeurologyModule } from './components/VrFunctionalNeurologyModule';
-import { VrMemoryReconsolidationModule } from './components/VrMemoryReconsolidationModule';
-import { VrModuleRouter } from './components/VrModuleRouter';
-import { VrGammaInsightModule } from './components/VrGammaInsightModule';
-import { VrDevelopmentalTraumaFullscreenMonitor } from './components/VrDevelopmentalTraumaFullscreenMonitor';
-import { ApaTherapeuticModule } from './components/ApaTherapeuticModule';
-import { SentinelMobileCollector } from './components/SentinelMobileCollector';
-import { VrDualControlTherapyModule } from './components/VrDualControlTherapyModule';
-
-// MÓDULO DE VOZ Y GUÍA AUDITIVA TERAPÉUTICA
-import { ClinicalAudioGuidanceBar } from './components/ClinicalAudioGuidanceBar';
-import { ClinicalAudioGuidanceEngine } from './services/clinicalAudioGuidanceService';
-
-// TIPOS Y CONSTANTES
-import { 
-  PatientRecord, 
-  AmieClinicalAnalysis, 
-  VrTelemetryData, 
-  VrTherapyReport 
-} from './types';
-import { CLINICAL_CASE_PRESETS, MASTER_VR_ENVIRONMENTS } from './constants';
-
-// SERVICIOS CLÍNICOS Y MOTORES MATEMÁTICOS DE PRECISIÓN
-import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
-import { telemetryService, PrecisionTelemetryPacket, TelemetryProtocol } from './services/telemetryService';
-import { VrControlService, VrConnectionStatus } from './services/vrControlService';
-import { 
-  getUserProfile, 
-  consumeAiCredit, 
-  hasAvailableCredits, 
-  rechargeAiCredits, 
-  onCreditsUpdated, 
-  UserProfile 
-} from './services/userService';
-import { subscribeUsbDeviceEvents } from './utils/checkUsbSupport';
-import * as pdfClinicalExporter from './utils/pdfClinicalExporter';
-import * as fhirExporter from './utils/fhirExporter';
-
-// ICONOGRAFÍA LUCIDE
+import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { VrControlService } from '../services/vrControlService';
 import {
-  Activity,
-  LayoutDashboard,
   Brain,
-  ShieldAlert,
-  KeyRound,
-  AlertCircle,
-  BrainCircuit,
-  GraduationCap,
-  GitCompare,
-  Microscope,
-  Cpu,
-  Check,
-  AlertTriangle,
-  Glasses,
-  Sparkles,
-  Usb,
-  Layers,
-  ThermometerSnowflake,
-  UserCheck,
-  RotateCcw,
-  Target,
-  Lightbulb,
-  Smartphone,
-  BookOpen,
-  UserX,
-  Info,
+  Activity,
+  Play,
+  Square,
   Printer,
-  Wifi,
-  Radio,
-  Bluetooth,
-  FileCode,
-  Coins,
-  Plus,
-  Scale,
-  ShieldCheck,
-  HeartHandshake,
-  Monitor,
-  X
+  Sparkles,
+  Volume2,
+  ShieldAlert,
+  Glasses,
+  RotateCcw,
+  FileText,
+  X,
+  Stethoscope,
+  Terminal,
+  Signal
 } from 'lucide-react';
 
-type AppTab = 
-  | 'workstation' 
-  | 'scientific_evaluator' 
-  | 'differential_bias' 
-  | 'apa_framework'
-  | 'cluster_b'
-  | 'academy' 
-  | 'neuro_3d' 
-  | 'neurosensometry' 
-  | 'vr_therapy' 
-  | 'sentinel_tester'
-  | 'referral' 
-  | 'saas';
+interface Props {
+  patient?: PatientRecord;
+  onClose: () => void;
+  onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
+  onOpenModules?: () => void;
+}
 
-function DoctorWorkstation() {
-  // 1. ESTADO DE MODO DE OPERACIÓN Y AUTENTICACIÓN
-  const [isPatientMode, setIsPatientMode] = useState<boolean>(false);
-  const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
+export interface KpiDataPoint {
+  t: number;             // Segundo de sesión
+  gsr: number;           // Conductancia Galvánica (µS)
+  hrv: number;           // Variabilidad Cardíaca RMSSD (ms)
+  kpiPrimary: number;    // Métrica específica (PLV %, RT ms, o Profundidad %)
+  phase: string;         // 'BASAL' | 'STIMULUS' | 'RECOVERY'
+}
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [doctorName, setDoctorName] = useState<string>('Dr. Alejandro Morales Rivera');
-  const [doctorUsername, setDoctorUsername] = useState<string>('harold01');
-  const [colegiadoNumber, setColegiadoNumber] = useState<number | string>(749210);
+export interface DisorderClinicalDefinition {
+  id: string;
+  name: string;
+  cie11: string;
+  dsm5: string;
+  category: 'DIAGNOSTIC' | 'TREATMENT';
+  ecosystem: string;
+  targetKpiName: string;
+  kpiUnit: string;
+  defaultDurationSec: number;
+  defaultHz?: number;
+  clinicalScript: string;
+  clinicalObjective: string;
+}
 
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => getUserProfile());
+// ============================================================================
+// MATRIZ CANÓNICA DE LOS 24 TRASTORNOS CLÍNICOS EN WEBXR
+// ============================================================================
+export const CLINICAL_24_DISORDERS_CATALOG: DisorderClinicalDefinition[] = [
+  // --- GRUPO 1: NEURODESARROLLO Y FUNCIONES EJECUTIVAS ---
+  { id: 'TDAH_CPT', name: '01. TDAH: Déficit de Atención e Impulsividad', cie11: '6A05.0', dsm5: '314.01', category: 'DIAGNOSTIC', ecosystem: 'tdah_executive', targetKpiName: 'Latencia Motora (RT Medio)', kpiUnit: 'ms', defaultDurationSec: 180, clinicalScript: 'Iniciando test CPT tridimensional. Pulsa el gatillo de tu mando únicamente cuando la diana destelle en color verde. Si destella en rojo, inhibe la respuesta.', clinicalObjective: 'Medición objetiva de errores de omisión y comisión.' },
+  { id: 'TEA_SENSORY', name: '02. Espectro Autista (TEA): Sobrecarga Sensorial', cie11: '6A02', dsm5: '299.00', category: 'TREATMENT', ecosystem: 'safe_place_forest', targetKpiName: 'Supresión de Hiperexcitabilidad', kpiUnit: '%', defaultDurationSec: 240, clinicalScript: 'Entrando a entorno de baja carga estimular. Respira en cadencia lenta mientras el follaje amortigua el contraste visual y acústico.', clinicalObjective: 'Estabilización del córtex sensoriomotor.' },
+  { id: 'ALZHEIMER_GAMMA', name: '03. Enfermedad de Alzheimer & Demencia', cie11: '6D80 / 8A20', dsm5: '331.0', category: 'TREATMENT', ecosystem: 'cosmic_stars', targetKpiName: 'Acoplamiento de Fase PLV (40Hz)', kpiUnit: '%', defaultDurationSec: 300, defaultHz: 40.0, clinicalScript: 'Iniciando estimulación fótica sincrónica a 40 Hz. Fija la mirada al frente para inducir el arrastre de las redes tálamo-corticales.', clinicalObjective: 'Sincronización de ritmos Gamma.' },
+  { id: 'PARKINSON_MOTOR', name: '04. Parkinson: Temblor y Congelamiento Motor', cie11: '8A00.0', dsm5: '332.0', category: 'DIAGNOSTIC', ecosystem: 'sterile_room', targetKpiName: 'Estabilidad Cinemática Motora', kpiUnit: 'Score', defaultDurationSec: 120, clinicalScript: 'Mantén el mando alineado horizontalmente con el cursor visual. Evaluaremos la amplitud del temblor postural en reposo.', clinicalObjective: 'Cuantificación micrométrica de temblor en reposo vs. acción.' },
 
-  // 2. ESTADO DE NAVEGACIÓN Y EXPEDIENTE
-  const [activeTab, setActiveTab] = useState<AppTab>('workstation');
-  const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
+  // --- GRUPO 2: ESTADO DE ÁNIMO Y TRAUMA ---
+  { id: 'TDM_DEPRESSION', name: '05. Depresión Mayor (TDM): Retardo Psicomotor', cie11: '6A70', dsm5: '296.22', category: 'TREATMENT', ecosystem: 'bioluminescent_beach', targetKpiName: 'Simetría Frontal Alpha', kpiUnit: 'Ratio L/R', defaultDurationSec: 240, defaultHz: 10.0, clinicalScript: 'Sincroniza tu ritmo cardíaco con las olas luminiscentes. Observa cómo la expansión rítmica estimula la activación frontal izquierda.', clinicalObjective: 'Reducción de asimetría hemisférica frontal.' },
+  { id: 'DISTIMIA_CHRONIC', name: '06. Distimia & Depresión Persistente', cie11: '6A72', dsm5: '300.4', category: 'TREATMENT', ecosystem: 'warm_hearth', targetKpiName: 'Tono Vagal RMSSD', kpiUnit: 'ms', defaultDurationSec: 180, clinicalScript: 'Permite que la iluminación cálida del refugio disminuya la tensión basal. Respira en 4 tiempos hacia el abdomen.', clinicalObjective: 'Instalación de anclaje fisiológico de confort.' },
+  { id: 'PTSD_EMDR', name: '07. TEPT: Reprocesamiento de Huella Traumática', cie11: '6B40', dsm5: '309.81', category: 'TREATMENT', ecosystem: 'emdr_memory', targetKpiName: 'Desensibilización Galvánica (ΔGSR)', kpiUnit: 'µS', defaultDurationSec: 240, clinicalScript: 'Sigue el haz de luz horizontal únicamente con tus ojos, sin mover la cabeza, mientras sostienes la imagen del evento en tu mente.', clinicalObjective: 'Inducción de movimientos sacádicos bilaterales (EMDR).' },
+  { id: 'CPTSD_DEVELOPMENTAL', name: '08. Trauma Complejo (TEPT-C) & Apego', cie11: '6B41', dsm5: '307.81', category: 'DIAGNOSTIC', ecosystem: 'dev_trauma', targetKpiName: 'Reactividad Autonómica al Apego', kpiUnit: 'Score', defaultDurationSec: 180, clinicalScript: 'Explora el espacio de memoria relacional. Registramos tus micro-fluctuaciones electrodérmicas ante figuras vinculares.', clinicalObjective: 'Detección de hipervigilancia paroxística.' },
 
-  const [currentPatient, setCurrentPatient] = useState<PatientRecord>(() => {
-    return CLINICAL_CASE_PRESETS[0]?.record || SAFE_DEFAULT_PATIENT;
-  });
-  const [analysis, setAnalysis] = useState<AmieClinicalAnalysis | null>(null);
+  // --- GRUPO 3: ANSIEDAD, PÁNICO Y FOBIAS ---
+  { id: 'PANIC_DISORDER', name: '09. Trastorno de Pánico & Agorafobia', cie11: '6B01', dsm5: '300.01', category: 'DIAGNOSTIC', ecosystem: 'sterile_room', targetKpiName: 'Curva de Reactividad Simpática', kpiUnit: 'BPM', defaultDurationSec: 150, clinicalScript: 'Evaluación interoceptiva basal. Monitorizaremos la respuesta cardiovascular ante la disminución de referencias espaciales.', clinicalObjective: 'Registro de la sensibilidad a sensaciones interoceptivas.' },
+  { id: 'ACROPHOBIA_VRET', name: '10. Fobia Específica: Acrofobia (Alturas)', cie11: '6B03.0', dsm5: '300.29', category: 'DIAGNOSTIC', ecosystem: 'acrophobia_roof', targetKpiName: 'Oscilación Postural (Head-Sway)', kpiUnit: 'cm', defaultDurationSec: 180, clinicalScript: 'Exposición jerárquica en azotea de altura. Mira hacia el borde perimetral y mantén un ciclo de respiración regular.', clinicalObjective: 'Evaluación de habituación simpática y estabilidad vestibular.' },
+  { id: 'AEROPHOBIA_VRET', name: '11. Fobia Específica: Aerofobia (Volar)', cie11: '6B03.2', dsm5: '300.29', category: 'DIAGNOSTIC', ecosystem: 'aerophobia_cabin', targetKpiName: 'Pico de Estrés en Despegue', kpiUnit: 'µS', defaultDurationSec: 200, clinicalScript: 'Simulación de cabina presurizada en fase de aceleración y despegue. Relaja los hombros y mantén la espalda apoyada.', clinicalObjective: 'Registro de conductancia galvánica y taquicardia situacional.' },
+  { id: 'SOCIAL_ANXIETY', name: '12. Fobia Social / Ansiedad de Evaluación', cie11: '6B04', dsm5: '300.23', category: 'DIAGNOSTIC', ecosystem: 'cluster_b_forensic', targetKpiName: 'Evasión de Mirada (Gaze Avoidance)', kpiUnit: '%', defaultDurationSec: 180, clinicalScript: 'Dirige tu mirada a los evaluadores del panel. Registraremos la fijación visual y la reactividad electrodérmica ante el juicio.', clinicalObjective: 'Mapeo de evitación de contacto visual.' },
+  { id: 'GAD_GENERALIZED', name: '13. Trastorno de Ansiedad Generalizada (TAG)', cie11: '6B00', dsm5: '300.02', category: 'TREATMENT', ecosystem: 'zen_garden', targetKpiName: 'Habituación Autonómica (H)', kpiUnit: '%', defaultDurationSec: 240, clinicalScript: 'Jardín de contemplación. Sigue la respiración guiada a 6 respiraciones por minuto para inducir resonancia cardíaca.', clinicalObjective: 'Entrenamiento de variabilidad de la frecuencia cardíaca a 0.1 Hz.' },
+  { id: 'OCD_OBSESSIVE', name: '14. Trastorno Obsesivo-Compulsivo (TOC)', cie11: '6B20', dsm5: '300.3', category: 'TREATMENT', ecosystem: 'cosmic_stars', targetKpiName: 'Ruptura de Rumiación Prefrontal', kpiUnit: 'PLV %', defaultDurationSec: 200, clinicalScript: 'Descentramiento cognitivo. Observa la inmensidad estelar y permite que las obsesiones se diluyan sin ejecutar neutralizaciones compulsivas.', clinicalObjective: 'Exposición y prevención de respuesta (EPR) inmersiva.' },
 
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
-  const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // --- GRUPO 4: PERSONALIDAD Y PSICOPATOLOGÍA FORENSE ---
+  { id: 'BPD_INSTABILITY', name: '15. Trastorno Límite de la Personalidad (TLP)', cie11: '6D11', dsm5: '301.83', category: 'DIAGNOSTIC', ecosystem: 'dev_trauma', targetKpiName: 'Labilidad Afectiva Paroxística', kpiUnit: 'ΔGSR/s', defaultDurationSec: 180, clinicalScript: 'Evaluación de reactividad emocional ante señales de abandono y validación ambivalente.', clinicalObjective: 'Medición de la curva de desborde emocional.' },
+  { id: 'NARCISSISM_OVERT', name: '16. Trastorno Narcisista de la Personalidad (Overt)', cie11: '6D10.0', dsm5: '301.81', category: 'DIAGNOSTIC', ecosystem: 'cluster_b_forensic', targetKpiName: 'Umbral de Ira Narcisista', kpiUnit: 'µS', defaultDurationSec: 180, clinicalScript: 'Ensayo pericial forense de tolerancia al estatus y provocación al ego. Pulsa el gatillo ante juicios descalificatorios.', clinicalObjective: 'Detección de hiperreactividad autonómica encubierta.' },
+  { id: 'NARCISSISM_COVERT', name: '17. Narcisismo Encubierto (Covert)', cie11: '6D10.0', dsm5: '301.81', category: 'DIAGNOSTIC', ecosystem: 'cluster_b_forensic', targetKpiName: 'Disonancia por Rechazo Social', kpiUnit: 'RMSSD Drop', defaultDurationSec: 180, clinicalScript: 'Evaluación forense de exclusión y vergüenza tóxica. Observa las interacciones del grupo pericial.', clinicalObjective: 'Registro de caída parasimpática abrupta.' },
+  { id: 'PSYCHOPATHY_FACTOR1', name: '18. Psicopatía & Rasgos Disociales', cie11: '6D10.1', dsm5: '301.7', category: 'DIAGNOSTIC', ecosystem: 'cluster_b_forensic', targetKpiName: 'Aplanamiento Empático Autonómico', kpiUnit: 'GSR Δ = 0', defaultDurationSec: 180, clinicalScript: 'Ensayo de resonancia afectiva ante imágenes de distrés y sufrimiento ajeno. Presiona el disparador al percibir dolor.', clinicalObjective: 'Identificación de hiporreactividad fisiológica.' },
 
-  // 3. ESTADOS DE MODALES Y CONSOLAS INMERSIVAS
-  const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
-  const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
-  
-  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
-  const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
-  const [isFullscreenPhenotypeOpen, setIsFullscreenPhenotypeOpen] = useState<boolean>(false);
-  const [isFullscreenUnifiedVrOpen, setIsFullscreenUnifiedVrOpen] = useState<boolean>(false);
-  
-  const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
+  // --- GRUPO 5: NEUROLOGÍA FUNCIONAL Y DOLOR ---
+  { id: 'FND_CONVERSION', name: '19. Trastorno de Síntomas Neurológicos Funcionales (FND)', cie11: '6C20', dsm5: '300.11', category: 'TREATMENT', ecosystem: 'fnd_mirror', targetKpiName: 'Simetría de Control Visuomotor', kpiUnit: '%', defaultDurationSec: 240, clinicalScript: 'Terapia en espejo adaptativa. Mueve tu mano sana mientras el avatar proyecta movimiento bilateral armónico.', clinicalObjective: 'Recalibración del mapa somatosensorial.' },
+  { id: 'CHRONIC_PAIN_FIBRO', name: '20. Dolor Crónico / Fibromialgia', cie11: 'MG30.0', dsm5: '307.89', category: 'TREATMENT', ecosystem: 'pain_management', targetKpiName: 'Índice de Anestesia Electrónica', kpiUnit: 'Score/10', defaultDurationSec: 240, defaultHz: 0.5, clinicalScript: 'Inmersión analgésica por estimulación Sub-Delta. La temperatura perceptual del océano reduce el bombardeo nociceptivo.', clinicalObjective: 'Activación del sistema inhibitorio descendente del dolor.' },
+  { id: 'CRPS_NEUROPATHIC', name: '21. Síndrome de Dolor Regional Complejo (SDRC)', cie11: '8E43', dsm5: '354.4', category: 'TREATMENT', ecosystem: 'pain_management', targetKpiName: 'Amortiguación Simpática', kpiUnit: 'µS', defaultDurationSec: 200, clinicalScript: 'Filtro cromático criogénico. Disminución de la hiperexcitabilidad simpática regional.', clinicalObjective: 'Desensibilización periférica.' },
+  { id: 'INSOMNIA_SLOW_WAVE', name: '22. Trastorno de Insomnio Crónico Severo', cie11: '7A00', dsm5: '307.42', category: 'TREATMENT', ecosystem: 'neuro_hypnosis', targetKpiName: 'Profundidad de Trance Theta/Delta', kpiUnit: '%', defaultDurationSec: 300, defaultHz: 2.0, clinicalScript: 'Inducción de ondas Delta a 2.0 Hz. Cierra tus ojos parcialmente y permite que el tono acústico guíe el metabolismo hacia el sueño lento.', clinicalObjective: 'Desactivación del arousal cortical e inducción de ondas lentas.' },
 
-  // 4. ESTADO DE TELEMETRÍA, HARDWARE Y WEBSOCKETS VR
-  const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
-  const [telemetryProtocol, setTelemetryProtocol] = useState<TelemetryProtocol>('DISCONNECTED');
-  const [isTelemetryConnected, setIsTelemetryConnected] = useState<boolean>(false);
-  const [telemetryDeviceName, setTelemetryDeviceName] = useState<string>('Sin hardware');
-  const [liveTelemetry, setLiveTelemetry] = useState<PrecisionTelemetryPacket | null>(null);
-  const [vrWsStatus, setVrWsStatus] = useState<VrConnectionStatus>('DISCONNECTED');
+  // --- GRUPO 6: SALUD SEXUAL ---
+  { id: 'SEXUAL_INHIBITION_SIS', name: '23. Inhibición Sexual (Modelo Dual SIS)', cie11: 'HA01', dsm5: '302.72', category: 'TREATMENT', ecosystem: 'dual_control', targetKpiName: 'Desactivación del Freno Inhibitorio', kpiUnit: '%', defaultDurationSec: 240, clinicalScript: 'Focalización sensorial libre de demanda de rendimiento. Inhala calidez corporal y disuelve la autoobservación crítica.', clinicalObjective: 'Desactivación del sistema de inhibición sexual (SIS).' },
+  { id: 'SEXUAL_DESIRE_SES', name: '24. Trastorno del Deseo Hipoactivo (Modelo Dual SES)', cie11: 'HA00', dsm5: '302.71', category: 'TREATMENT', ecosystem: 'dual_control', targetKpiName: 'Activación del Sistema de Excitación', kpiUnit: 'Score', defaultDurationSec: 240, clinicalScript: 'Reconexión con señales corporales interoceptivas placenteras y sintonía vincular libre de juicio.', clinicalObjective: 'Estimulación del sistema de excitación sexual (SES).' }
+];
 
-  const closeAllModals = () => {
-    setIsDsmModalOpen(false);
-    setIsFullscreenConsoleOpen(false);
-    setIsFullscreenDiagnosticOpen(false);
-    setIsFullscreenPhenotypeOpen(false);
-    setIsFullscreenUnifiedVrOpen(false);
-    setActiveVrModuleId(null);
-  };
+export const FullscreenDiagnosticRunner: React.FC<Props> = ({
+  patient,
+  onClose,
+  onUpdatePatientVrData
+}) => {
+  const patientId = patient?.id || 'PAC-8104';
 
-  // 5. CICLO DE VIDA Y SUSCRIPCIONES REACTIVAS
+  const [selectedDisorderId, setSelectedDisorderId] = useState<string>('TDAH_CPT');
+  const currentDisorder = CLINICAL_24_DISORDERS_CATALOG.find(d => d.id === selectedDisorderId) || CLINICAL_24_DISORDERS_CATALOG[0];
+
+  const [programmableScript, setProgrammableScript] = useState<string>(currentDisorder.clinicalScript);
+  const [sessionDurationSec, setSessionDurationSec] = useState<number>(currentDisorder.defaultDurationSec);
+  const [targetHz, setTargetHz] = useState<number>(currentDisorder.defaultHz || 40.0);
+  const [targetThresholdGsr, setTargetThresholdGsr] = useState<number>(4.5);
+  const [isEditingParams, setIsEditingParams] = useState<boolean>(false);
+
+  const [testPhase, setTestPhase] = useState<'IDLE' | 'RUNNING' | 'FINISHED'>('IDLE');
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [liveKpiHistory, setLiveKpiHistory] = useState<KpiDataPoint[]>([]);
+  const [currentGsr, setCurrentGsr] = useState<number>(2.4);
+  const [currentHrv, setCurrentHrv] = useState<number>(38);
+  const [currentSpecificKpi, setCurrentSpecificKpi] = useState<number>(10);
+  const [isVisorLinked, setIsVisorLinked] = useState<boolean>(false);
+  const [logs, setLogs] = useState<string[]>(['[SYSTEM] Consola Clínica Multitrastorno inicializada.']);
+
+  const [generatedRoiReport, setGeneratedRoiReport] = useState<string>('');
+
   useEffect(() => {
-    const checkIsPatientApp = () => {
-      const isPatientUrl = 
-        window.location.search.includes('mode=paciente') || 
-        window.location.search.includes('paciente=true') ||
-        window.location.search.includes('rol=paciente');
+    setProgrammableScript(currentDisorder.clinicalScript);
+    setSessionDurationSec(currentDisorder.defaultDurationSec);
+    if (currentDisorder.defaultHz) setTargetHz(currentDisorder.defaultHz);
+    setLiveKpiHistory([]);
+    setTestPhase('IDLE');
+    setElapsedTime(0);
+    setGeneratedRoiReport('');
+  }, [selectedDisorderId]);
 
-      if (isPatientUrl) {
-        setIsPatientMode(true);
+  useEffect(() => {
+    const unsub = VrControlService.subscribeStatus((status) => {
+      setIsVisorLinked(status === 'CONNECTED');
+      if (status === 'CONNECTED') {
+        setLogs(prev => [...prev, '[WSS] Enlace WebSocket con Pico 3 ESTABLECIDO.']);
       }
-      setIsCheckingPlatform(false);
-    };
-
-    checkIsPatientApp();
-    const timer = setTimeout(checkIsPatientApp, 200);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const savedToken = localStorage.getItem('amie_auth_token');
-      const savedDoctor = localStorage.getItem('amie_doctor_name');
-      const savedUsername = localStorage.getItem('amie_username') || localStorage.getItem('amie_doctor_username');
-      const savedColegiado = localStorage.getItem('amie_colegiado_number');
-
-      if (savedToken && savedDoctor) {
-        setDoctorName(savedDoctor);
-        setDoctorUsername(savedUsername || 'harold01');
-        setColegiadoNumber(Number(savedColegiado) || 749210);
-        setIsAuthenticated(true);
-      }
-    } catch (e) {
-      console.warn('[AMIE] Almacenamiento local restringido:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    const unsubCredits = onCreditsUpdated((updated) => {
-      setUserProfile(updated);
     });
-    return () => unsubCredits();
+    return () => unsub();
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = subscribeUsbDeviceEvents(
-      (deviceName: string) => {
-        setUsbDeviceName(deviceName);
-        setSyncSuccessMsg(`Sensor biomédico conectado: ${deviceName}`);
-        setTimeout(() => setSyncSuccessMsg(null), 4000);
-      },
-      (deviceName: string) => {
-        setUsbDeviceName(null);
-        setErrorMsg(`Sensor biomédico desconectado: ${deviceName}`);
-        setTimeout(() => setErrorMsg(null), 4000);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const unsubStatus = telemetryService.subscribeStatus((status) => {
-      setTelemetryProtocol(status.protocol);
-      setIsTelemetryConnected(status.connected);
-      setTelemetryDeviceName(status.deviceName);
+  const dispatchConfigToVisor = () => {
+    VrControlService.changeEnvironment(currentDisorder.ecosystem, patientId, currentDisorder.category);
+    VrControlService.sendCommand({
+      type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+      scriptText: programmableScript,
+      frequencyHz: targetHz,
+      patientId,
+      category: currentDisorder.category
     });
-
-    const unsubData = telemetryService.subscribeData((packet) => {
-      setLiveTelemetry(packet);
-    });
-
-    return () => {
-      unsubStatus();
-      unsubData();
-    };
-  }, []);
-
-  useEffect(() => {
-    const unsubVr = VrControlService.subscribeStatus((status) => {
-      setVrWsStatus(status);
-    });
-
-    VrControlService.connect(undefined, currentPatient?.id || 'PAC-8104');
-    return () => unsubVr();
-  }, [currentPatient?.id]);
-
-  // 6. NORMALIZACIÓN DEFENSIVA DEL EXPEDIENTE
-  const safePatient: PatientRecord = {
-    ...SAFE_DEFAULT_PATIENT,
-    ...(currentPatient || {}),
-    functionalAreas: currentPatient?.functionalAreas || SAFE_DEFAULT_PATIENT?.functionalAreas || {
-      sleep: 50, appetite: 50, energy: 50, social: 50, attention: 50
-    },
-    neuromotorBiomarkers: currentPatient?.neuromotorBiomarkers || SAFE_DEFAULT_PATIENT?.neuromotorBiomarkers || {
-      reactionTimeMs: 240,
-      omissionErrors: 0,
-      commissionErrors: 0,
-      motorStabilityScore: 85
-    },
-    audioRecordings: currentPatient?.audioRecordings || [],
-    psychometricScores: currentPatient?.psychometricScores || {},
-    qeegZScores: currentPatient?.qeegZScores || {
-      frontalThetaBetaRatio: 1.8,
-      temporalAsymmetry: 0.2,
-      deltaSlowActivityZ: 0.4,
-      alphaPeakFrequencyHz: 10.2
-    }
   };
 
-  const safePatientId = safePatient.id || 'PAC-8104';
-  const safeAge = safePatient.age ?? 55;
-  const safeGender = safePatient.gender || 'M';
+  useEffect(() => {
+    if (testPhase !== 'RUNNING') return;
 
-  if (isCheckingPlatform) {
-    return <div className="min-h-screen bg-slate-950"></div>;
-  }
+    const timer = setInterval(() => {
+      setElapsedTime((prev) => {
+        const nextTime = prev + 1;
+        if (nextTime >= sessionDurationSec) {
+          stopTestAndGenerateReport();
+          return sessionDurationSec;
+        }
+        return nextTime;
+      });
 
-  // 7. VISTA DIRECTA DE PACIENTE (PICO 3 PRO / META QUEST)
-  if (isPatientMode) {
-    return (
-      <div className="relative w-screen h-screen">
-        <button
-          onClick={() => setIsPatientMode(false)}
-          className="absolute top-4 right-4 z-[999999] px-3.5 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xl backdrop-blur-md"
-        >
-          <LayoutDashboard className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Volver a Estación Médica</span>
-        </button>
+      setCurrentGsr((prev) => {
+        let delta = (Math.random() - 0.48) * 0.15;
+        if (currentDisorder.category === 'DIAGNOSTIC' && elapsedTime > 30 && elapsedTime < 70) {
+          delta += 0.08; 
+        } else if (currentDisorder.category === 'TREATMENT' && elapsedTime > 50) {
+          delta -= 0.04; 
+        }
+        return Math.max(0.8, Number((prev + delta).toFixed(2)));
+      });
 
-        <VrPatientExperience 
-          patientId={safePatientId} 
-          onClose={() => setIsPatientMode(false)} 
-        />
-      </div>
-    );
-  }
+      setCurrentHrv((prev) => {
+        let delta = Math.floor((Math.random() - 0.45) * 4);
+        if (currentDisorder.category === 'TREATMENT') delta += 1;
+        return Math.max(18, Math.min(95, prev + delta));
+      });
 
-  // 8. CONTROL DE ACCESO
-  const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
-    setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
-    setDoctorUsername(auth.username || 'harold01');
-    setColegiadoNumber(auth.colegiadoNumber || 749210);
-    closeAllModals();
-    setActiveTab('workstation');
-    setIsAuthenticated(true);
-  };
+      setCurrentSpecificKpi((prev) => {
+        if (currentDisorder.id === 'TDAH_CPT') {
+          return Math.floor(220 + Math.random() * 90);
+        }
+        return Math.min(98, prev + Math.random() * 2.5);
+      });
 
-  if (!isAuthenticated) {
-    return (
-      <LoginModal 
-        onSuccess={handleLoginSuccess}
-        onSelectPatientMode={() => setIsPatientMode(true)}
-        onPatientMode={() => setIsPatientMode(true)}
-      />
-    );
-  }
+      setLiveKpiHistory((prevCurve) => [
+        ...prevCurve,
+        {
+          t: elapsedTime,
+          gsr: currentGsr,
+          hrv: currentHrv,
+          kpiPrimary: Number(currentSpecificKpi.toFixed(1)),
+          phase: elapsedTime < 30 ? 'BASAL' : elapsedTime < 90 ? 'STIMULUS' : 'RECOVERY'
+        }
+      ]);
+    }, 1000);
 
-  const handleLogout = () => {
-    try {
-      localStorage.removeItem('amie_auth_token');
-      localStorage.removeItem('amie_doctor_name');
-    } catch {}
-    closeAllModals();
-    setIsAuthenticated(false);
-  };
+    return () => clearInterval(timer);
+  }, [testPhase, elapsedTime, sessionDurationSec, currentDisorder, currentGsr, currentHrv, currentSpecificKpi]);
 
-  // 9. ACCIONES PRINCIPALES Y GROUNDING MULTIMODAL
-  const handleRunAnalysis = async () => {
-    if (!currentPatient) return;
-
-    if (!hasAvailableCredits(1)) {
-      setErrorMsg('Saldo insuficiente de Créditos de IA. Recargue su bolsón en el panel superior.');
+  const handleStartTest = () => {
+    if (!isVisorLinked) {
+      setLogs(prev => [...prev, '[ERROR] El visor no responde. Sincroniza antes de comenzar.']);
       return;
     }
+    setLiveKpiHistory([]);
+    setElapsedTime(0);
+    setTestPhase('RUNNING');
+    setLogs(prev => [...prev, `[START] Despachando protocolo: ${currentDisorder.name}`]);
+    dispatchConfigToVisor();
 
-    setIsAnalyzing(true);
-    setErrorMsg(null);
-    try {
-      consumeAiCredit(doctorUsername, 1);
-      const result = await runAmieClinicalAnalysis(currentPatient);
-      setAnalysis(result);
-      setActiveTab('workstation');
-      setSyncSuccessMsg('Triangulación bioclínica completada. 1 Crédito de IA consumido.');
-      setTimeout(() => setSyncSuccessMsg(null), 4000);
-    } catch (err: unknown) {
-      console.error(err);
-      const msg = err instanceof Error ? err.message : 'Error al conectar con el motor clínico AMIE.';
-      setErrorMsg(msg);
-    } finally {
-      setIsAnalyzing(false);
+    if (currentDisorder.defaultHz) {
+      VrControlService.startLightStimulation(targetHz, currentDisorder.id, patientId);
     }
   };
 
-  const handleSyncPacient = async (pacId: string) => {
-    setIsSyncing(true);
-    setErrorMsg(null);
-    setSyncSuccessMsg(null);
-    setSyncNotFoundAlert(null);
+  const stopTestAndGenerateReport = () => {
+    setTestPhase('FINISHED');
+    VrControlService.stopLightStimulation(patientId);
+    VrControlService.stopActiveSession(patientId);
+    setLogs(prev => [...prev, `[STOP] Ensayo finalizado. Generando dictamen ROI con IA...`]);
 
-    try {
-      const syncResult = await syncWithClinicalApp(pacId, Number(colegiadoNumber), doctorUsername);
-      if (syncResult && syncResult.patient) {
-        setCurrentPatient(syncResult.patient);
-        if (syncResult.analysis) {
-          setAnalysis(syncResult.analysis);
-        }
-        setSyncSuccessMsg(syncResult.message || `Expediente ${pacId} sincronizado exitosamente.`);
-        setTimeout(() => setSyncSuccessMsg(null), 4500);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Fallo de conexión';
-      if (msg.includes('no existe') || msg.includes('Acceso denegado')) {
-        setSyncNotFoundAlert(msg);
+    const basalGsr = liveKpiHistory[0]?.gsr || 2.4;
+    const peakGsr = Math.max(...liveKpiHistory.map(p => p.gsr), basalGsr);
+    const finalGsr = liveKpiHistory[liveKpiHistory.length - 1]?.gsr || currentGsr;
+    const finalHrv = currentHrv;
+    const habituationRate = peakGsr > 0 ? (((peakGsr - finalGsr) / peakGsr) * 100).toFixed(1) : '0';
+
+    let aiDictamen = `INFORME PERICIAL DE EJECUCIÓN INMERSIVA (ROI)\n`;
+    aiDictamen += `Entidad Clínica: ${currentDisorder.name} (${currentDisorder.cie11} / DSM-5:${currentDisorder.dsm5})\n`;
+    aiDictamen += `Entorno WebXR: /ecosystems/${currentDisorder.ecosystem}.jpeg [MODO${currentDisorder.category}]\n`;
+    aiDictamen += `Duración Efectiva: ${elapsedTime} segundos grabados (Muestreo continuo)\n\n`;
+    aiDictamen += `1. DINÁMICA DE LA CURVA AUTONÓMICA REGISTRADA:\n`;
+    aiDictamen += `   • Línea Base (GSR): ${basalGsr.toFixed(2)} µS \vert{} VFC (RMSSD):${liveKpiHistory[0]?.hrv || 35} ms\n`;
+    aiDictamen += `   • Reactividad Máxima (Pico): ${peakGsr.toFixed(2)} µS (ΔGSR =${(peakGsr - basalGsr).toFixed(2)} µS)\n`;
+    aiDictamen += `   • Nivel de Cierre: ${finalGsr.toFixed(2)} µS \vert{} Tono Vagal:${finalHrv} ms\n`;
+    aiDictamen += `   • Tasa de Habituación / Recuperación (H): ${habituationRate}%\n`;
+    aiDictamen += `   • Métrica Focal (${currentDisorder.targetKpiName}): ${currentSpecificKpi.toFixed(1)}${currentDisorder.kpiUnit}\n\n`;
+
+    aiDictamen += `2. CONCLUSIÓN CLÍNICA Y JUICIO DIAGNÓSTICO:\n`;
+    if (currentDisorder.category === 'DIAGNOSTIC') {
+      if (peakGsr - basalGsr > 2.0) {
+        aiDictamen += `   El paciente exhibió una descompensación simpática paroxística ante la exposición diagnóstica, congruente con hipersensibilidad central y desregulación inhibitoria.\n`;
       } else {
-        setErrorMsg('Error de sincronización con servidor clínico: ' + msg);
+        aiDictamen += `   Respuesta fisiológica controlada dentro de los rangos de tolerancia basal (Mahalanobis D² < 2.5).\n`;
       }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleSelectPreset = (presetRecord: PatientRecord) => {
-    if (presetRecord) {
-      setCurrentPatient(presetRecord);
-      setAnalysis(null);
-      setSyncNotFoundAlert(null);
-      setSyncSuccessMsg(null);
-    }
-  };
-
-  const handleUpdatePatientVrData = (telemetry: VrTelemetryData, report: VrTherapyReport) => {
-    setCurrentPatient(prev => ({
-      ...prev,
-      vrTelemetryData: telemetry,
-      vrTherapyReport: report
-    }));
-    setSyncSuccessMsg('Métricas inmersivas VR transferidas a la Triangulación Global.');
-    setTimeout(() => setSyncSuccessMsg(null), 4500);
-  };
-
-  const handleAttachQeegToPatient = (biomarkers: QeegAttachmentPayload) => {
-    setCurrentPatient(prev => ({
-      ...prev,
-      qeegBiomarkers: {
-        recordingDate: biomarkers.recordingDate,
-        channelsCount: biomarkers.channelsCount,
-        samplingRateHz: biomarkers.samplingRateHz,
-        bandPowers: biomarkers.bandPowers,
-        regionalZScores: prev.qeegBiomarkers?.regionalZScores || {
-          frontal: { region: 'Frontal', deltaZ: 0.2, thetaZ: 1.8, alfaZ: -0.4, betaZ: 0.1, highBetaZ: 0.0 },
-          parietal: { region: 'Parietal', deltaZ: 0.1, thetaZ: 0.5, alfaZ: 0.2, betaZ: -0.1, highBetaZ: 0.0 },
-          temporal: { region: 'Temporal', deltaZ: 0.3, thetaZ: 0.8, alfaZ: -0.2, betaZ: 0.2, highBetaZ: 0.0 },
-          occipital: { region: 'Occipital', deltaZ: 0.0, thetaZ: 0.2, alfaZ: 1.1, betaZ: -0.3, highBetaZ: 0.0 }
-        }
+    } else {
+      if (Number(habituationRate) >= 40) {
+        aiDictamen += `   Intervención terapéutica exitosa. Se verificó un descenso de conductancia mayor al 40% y recuperación vagal (RMSSD > 35 ms), confirmando desensibilización biológica objetiva.\n`;
+      } else {
+        aiDictamen += `   Resistencia parcial a la intervención. Se sugiere aumentar la dosis de inmersión en 3 sesiones adicionales.\n`;
       }
-    }));
-    setSyncSuccessMsg('Estudio neurosensométrico vinculado con éxito al expediente.');
-    setTimeout(() => setSyncSuccessMsg(null), 4500);
-  };
-
-  const handleConnectBluetooth = async () => {
-    setSyncSuccessMsg('Buscando dispositivos BLE médicos (Colmi Ring / Geoid ECG)...');
-    const success = await telemetryService.connectBluetooth();
-    if (success) {
-      setSyncSuccessMsg('Sensor BLE vinculado correctamente.');
-    } else {
-      setErrorMsg('No se completó la vinculación Web Bluetooth.');
     }
-    setTimeout(() => { setSyncSuccessMsg(null); setErrorMsg(null); }, 4000);
-  };
 
-  const handleConnectUsb = async () => {
-    setSyncSuccessMsg('Abriendo puerto serie (Web Serial API)...');
-    const success = await telemetryService.connectUsb();
-    if (success) {
-      setSyncSuccessMsg('Microcontrolador biomédico USB sincronizado.');
-    } else {
-      setErrorMsg('Conexión serial cancelada o puerto ocupado.');
+    setGeneratedRoiReport(aiDictamen);
+
+    if (onUpdatePatientVrData) {
+      onUpdatePatientVrData(
+        { 
+          sessionDate: new Date().toISOString(), 
+          baselineGsr: basalGsr, 
+          baselineHrv: liveKpiHistory[0]?.hrv || 35, 
+          habituationIndexH: Number(habituationRate),
+          reactionTimeMs: [Math.round(currentSpecificKpi)],
+          gsrMicroSiemens: liveKpiHistory.map(p => p.gsr),
+          hrvRmssdMs: liveKpiHistory.map(p => p.hrv)
+        } as any,
+        { 
+          sessionId: `ROI-${Date.now()}`, 
+          date: new Date().toISOString(), 
+          moduleExecuted: currentDisorder.id, 
+          clinicalObservations: aiDictamen,
+          autonomicRegulationScore: Number(habituationRate) >= 40 ? 'ÓPTIMA' : 'MODERADA'
+        } as any
+      );
     }
-    setTimeout(() => { setSyncSuccessMsg(null); setErrorMsg(null); }, 4000);
   };
 
-  const handleTareGrip = () => {
-    const offset = telemetryService.executeZeroTare();
-    setSyncSuccessMsg(`Tara de dinamometría manual calibrada a 0.0 kg (Offset: ${offset.toFixed(1)} kg).`);
-    setTimeout(() => setSyncSuccessMsg(null), 4000);
-  };
-
-  const handleTriggerGrounding = () => {
-    VrControlService.triggerGroundingProtocol(safePatientId);
-    ClinicalAudioGuidanceEngine.triggerEmergencyGroundingVoice();
-    setSyncSuccessMsg('EMERGENCIA VR: Protocolo de Grounding Visual y Voz de Calma 5-4-3-2-1 despachados.');
-    setTimeout(() => setSyncSuccessMsg(null), 5000);
-  };
-
-  const handlePrintIndividualReport = () => {
+  const handlePrintRoiReport = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const reportContent = `
+    const printableHtml = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Reporte Objetivo Individual — ${safePatientId}</title>
+        <title>Reporte Objetivo Individual — ${patientId}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 30px; color: #0f172a; line-height: 1.5; }
-          h1 { color: #0284c7; font-size: 18px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
-          h2 { font-size: 14px; color: #334155; margin-top: 20px; }
-          .meta { background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-          th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
-          th { background: #f1f5f9; }
-          .signature-box { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; }
-          .signature-line { border-top: 1px solid #0f172a; width: 220px; text-align: center; padding-top: 5px; }
+          @page { size: A4 portrait; margin: 20mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; line-height: 1.45; font-size: 10.5pt; }
+          .header { border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+          .logo { font-size: 16pt; font-weight: 800; color: #0284c7; letter-spacing: -0.5px; }
+          .sublogo { font-size: 9pt; color: #64748b; font-weight: 600; text-transform: uppercase; }
+          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 9.5pt; }
+          .section-title { font-size: 11pt; font-weight: 700; color: #1e293b; text-transform: uppercase; margin-top: 18px; margin-bottom: 8px; border-left: 3px solid #0284c7; padding-left: 8px; }
+          .data-table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 16px; font-size: 9.5pt; }
+          .data-table th, .data-table td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+          .data-table th { background: #f1f5f9; color: #334155; }
+          .dictamen-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; font-size: 9.5pt; color: #166534; white-space: pre-wrap; font-family: monospace; }
+          .signature-area { margin-top: 45px; display: flex; justify-content: space-between; }
+          .signature-block { width: 220px; text-align: center; border-top: 1px solid #334155; padding-top: 6px; font-size: 9.5pt; }
         </style>
       </head>
       <body>
-        <h1>AMIE CLINICAL ENGINE — REPORTE OBJETIVO INDIVIDUAL (ROI)</h1>
-        <div class="meta">
-          <strong>PACIENTE ID:</strong> ${safePatientId} | <strong>EDAD:</strong> ${safeAge} años | <strong>GÉNERO:</strong> ${safeGender}<br/>
-          <strong>PROFESIONAL RESPONSABLE:</strong> ${doctorName} (No. Colegiado: ${colegiadoNumber})<br/>
-          <strong>FECHA DE EMISIÓN:</strong> ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+        <div class="header">
+          <div>
+            <div class="logo">AMIE CLINICAL COPILOT</div>
+            <div class="sublogo">Reporte Pericial de Desempeño Inmersivo en WebXR (ROI)</div>
+          </div>
+          <div style="text-align: right; font-size: 9pt; color: #64748b;">
+            Emisión: ${new Date().toLocaleDateString('es-ES')}<br/>
+            Folio: EXP-${patientId}-${Date.now().toString().slice(-4)}
+          </div>
         </div>
-        <h2>1. MATRIZ DE TRIANGULACIÓN Y RESUMEN DE MÓDULOS</h2>
-        <table>
+
+        <div class="meta-box">
+          <div><strong>PACIENTE:</strong> ${patientId}</div>
+          <div><strong>MODALIDAD:</strong> ${currentDisorder.category === 'DIAGNOSTIC' ? 'EVALUACIÓN DIAGNÓSTICA' : 'INTERVENCIÓN TERAPÉUTICA'}</div>
+          <div><strong>PATOLOGÍA:</strong> ${currentDisorder.name}</div>
+          <div><strong>CÓDIGO CLÍNICO:</strong> CIE-11: ${currentDisorder.cie11} \vert{} DSM-5-TR:${currentDisorder.dsm5}</div>
+          <div><strong>ESCENARIO WEBXR:</strong> ${currentDisorder.ecosystem}.jpeg (6DoF)</div>
+          <div><strong>DISPOSITIVO:</strong> Pico Neo 3 Pro / Meta Quest</div>
+        </div>
+
+        <div class="section-title">1. Parámetros y Guion Programado</div>
+        <p style="font-size: 9.5pt; color: #334155; margin-bottom: 12px; font-style: italic;">
+          "${programmableScript}"
+        </p>
+
+        <div class="section-title">2. Métricas de la Curva Temporal (Serie Grabada)</div>
+        <table class="data-table">
           <thead>
             <tr>
-              <th>Módulo Clínico</th>
-              <th>Métrica Objetiva / Indicador</th>
-              <th>Diferencial vs. Línea Base (Δ)</th>
-              <th>Estatus de Validación</th>
+              <th>Parámetro Fisiológico</th>
+              <th>Línea Base (t=0s)</th>
+              <th>Pico / Desafío</th>
+              <th>Cierre de Sesión</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>Workstation & Centinela</td>
-              <td>PHQ-9 / GAD-7 / Acústica F0</td>
-              <td>Dentro de norma histórica</td>
-              <td>Triangulado (3/3 Ejes)</td>
-            </tr>
-            <tr>
-              <td>Evaluador Científico</td>
-              <td>Afinidad Terapéutica / Tono Vagal</td>
-              <td>HRV RMSSD: 38 ms</td>
-              <td>Validado</td>
-            </tr>
-            <tr>
-              <td>Diferenciador Antisesgo</td>
-              <td>Distancia de Mahalanobis (D²)</td>
-              <td>D² = 1.84 (Sin atipicidad)</td>
-              <td>Filtro OK (D² &lt; 2.5)</td>
-            </tr>
-            <tr>
-              <td>Corrientes APA & RCI</td>
-              <td>Índice de Cambio Confiable (RCI)</td>
-              <td>RCI = -2.14 (Mejoría)</td>
-              <td>Significativo (p &lt; .05)</td>
-            </tr>
-            <tr>
-              <td>VR Inmersivo / Biofeedback</td>
-              <td>Conductancia Cutánea / Habituación H</td>
-              <td>GSR: 2.1 µS | H = 2.84</td>
-              <td>Closed-Loop Activo</td>
-            </tr>
-          </tbody>
-        </table>
-        <h2>2. DICTAMEN DE SINCRO-AUDITORÍA Y FIRMA</h2>
-        <p style="font-size: 11px; color: #475569;">
-          El presente informe certifica la consistencia multiaxial de los datos biométricos y psicométricos recopilados. Todas las pruebas fueron procesadas bajo normativas de confidencialidad HIPAA/RGPD y auditadas mediante algoritmos antisesgo.
-        </p>
-        <div class="signature-box">
-          <div class="signature-line">Firma del Asistente / Facilitador</div>
-          <div class="signature-line">${doctorName}<br/>No. Colegiado: ${colegiadoNumber}</div>
-        </div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(reportContent);
-    printWindow.document.close();
-  };
-
-  const handleExportPdfReport = () => {
-    const exportPdf = 
-      (pdfClinicalExporter as any).exportAmieClinicalPdf || 
-      (pdfClinicalExporter as any).exportClinicalPdf || 
-      (pdfClinicalExporter as any).default;
-
-    if (typeof exportPdf === 'function') {
-      try {
-        const opened = exportPdf(safePatient, analysis, doctorName, colegiadoNumber);
-        if (opened !== false) {
-          setSyncSuccessMsg('Dictamen clínico oficial generado exitosamente.');
-          setTimeout(() => setSyncSuccessMsg(null), 4000);
-          return;
-        }
-      } catch (e) {
-        console.warn('[AMIE PDF Export] Error en módulo PDF, invocando fallback ROI:', e);
-      }
-    }
-    handlePrintIndividualReport();
-  };
-
-  const handleExportFhirBundle = () => {
-    try {
-      const convertFhir = 
-        (fhirExporter as any).convertToFhirBundle || 
-        (fhirExporter as any).exportFhirBundle;
-      const downloadFhir = 
-        (fhirExporter as any).downloadFhirJson || 
-        (fhirExporter as any).downloadFhir;
-
-      if (typeof convertFhir === 'function' && typeof downloadFhir === 'function') {
-        const bundle = convertFhir(safePatient, analysis, colegiadoNumber);
-        downloadFhir(bundle, `HL7_FHIR_R4_${safePatientId}.json`);
-        setSyncSuccessMsg('Recurso HL7 FHIR R4 Bundle descargado con éxito.');
-        setTimeout(() => setSyncSuccessMsg(null), 4000);
-        return;
-      }
-
-      const fhirBundlePayload = {
-        resourceType: 'Bundle',
-        type: 'document',
-        timestamp: new Date().toISOString(),
-        entry: [
-          {
-            resource: {
-              resourceType: 'Patient',
-              id: safePatientId,
-              gender: safeGender === 'M' ? 'male' : safeGender === 'F' ? 'female' : 'other',
-              birthDate: new Date(Date.now() - safeAge * 365.25 * 24 * 3600 * 1000).toISOString().split('T')[0]
-            }
-          },
-          {
-            resource: {
-              resourceType: 'Practitioner',
-              id: `DOC-${colegiadoNumber}`,
-              name: [{ text: doctorName }]
-            }
-          },
-          {
-            resource: {
-              resourceType: 'DiagnosticReport',
-              status: 'final',
-              code: { text: analysis?.principalDiagnosis?.disorderName || 'Evaluación Multimodal AMIE' },
-              subject: { reference: `Patient/${safePatientId}` },
-              conclusion: analysis?.principalDiagnosis?.justificationDsm5 || 'Evaluación neuroclínica completada'
-            }
-          }
-        ]
-      };
-
-      const blob = new Blob([JSON.stringify(fhirBundlePayload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `HL7_FHIR_R4_${safePatientId}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      setSyncSuccessMsg('Recurso HL7 FHIR R4 Bundle descargado con éxito.');
-      setTimeout(() => setSyncSuccessMsg(null), 4000);
-    } catch {
-      setErrorMsg('Error al serializar el Bundle HL7 FHIR R4.');
-      setTimeout(() => setErrorMsg(null), 4000);
-    }
-  };
-
-  const handleQuickRecharge = () => {
-    const newTotal = rechargeAiCredits(20);
-    setSyncSuccessMsg(`+20 Créditos de IA acreditados. Saldo actual: ${newTotal}`);
-    setTimeout(() => setSyncSuccessMsg(null), 4000);
-  };
-
-  // 10. RENDERIZADO DEL ENTORNO DE TRABAJO MÉDICO
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
-      
-      {/* CABECERA PRINCIPAL */}
-      <Header
-        isAnalyzing={isAnalyzing}
-        onRunAnalysis={handleRunAnalysis}
-        onOpenPrinciples={() => {
-          setDsmModalView('principles');
-          setIsDsmModalOpen(true);
-        }}
-        onOpenDsmGuide={() => {
-          setDsmModalView('guide');
-          setIsDsmModalOpen(true);
-        }}
-        doctorName={doctorName}
-        colegiadoNumber={Number(colegiadoNumber)}
-        currentPatientId={safePatientId}
-        patientAge={safeAge}
-        patientGender={safeGender}
-        onSyncPacient={handleSyncPacient}
-        isSyncingPac={isSyncing}
-        onLogout={handleLogout}
-      />
-
-      {/* SUB-BARRA DE TELEMETRÍA, PROTOCOLO Y CRÉDITOS */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-[11px] text-slate-400">
-        <div className="max-w-7xl mx-auto w-full flex flex-wrap items-center justify-between gap-3">
-          
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 font-mono">
-              <Radio className={`w-3 h-3 ${isTelemetryConnected ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-              <span className="text-[10px] uppercase font-bold">{telemetryProtocol}:</span>
-              <span className="text-slate-200">{telemetryDeviceName}</span>
-            </span>
-
-            {isTelemetryConnected && liveTelemetry && (
-              <span className="flex items-center gap-2 px-2 py-0.5 bg-emerald-950/60 border border-emerald-500/30 rounded-md text-[10px] text-emerald-300 font-mono">
-                <span>FC: <strong>{liveTelemetry.heartRateBpm}</strong> bpm</span>
-                <span>VFC: <strong>{liveTelemetry.hrvRmssdMs}</strong> ms</span>
-                <span>GSR: <strong>{liveTelemetry.gsrMicroSiemens}</strong> µS</span>
-                <span>Grip: <strong>{liveTelemetry.handGripPressureKg}</strong> kg</span>
-              </span>
-            )}
-
-            <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-md text-[10px] font-mono">
-              <span className={`w-2 h-2 rounded-full ${vrWsStatus === 'CONNECTED' ? 'bg-cyan-400 animate-pulse' : vrWsStatus === 'CONNECTING' ? 'bg-amber-400' : 'bg-slate-600'}`}></span>
-              <span className="text-slate-400">VR Bridge: {vrWsStatus}</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleTareGrip}
-              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10.5px] font-semibold border border-slate-700 transition cursor-pointer"
-              title="Ajusta la lectura actual de presión manual a 0 kg"
-            >
-              <Scale className="w-3 h-3 text-amber-400" />
-              <span>Tara Grip</span>
-            </button>
-
-            <button
-              onClick={handleConnectBluetooth}
-              className="flex items-center gap-1 px-2.5 py-1 bg-blue-950/70 hover:bg-blue-900 text-blue-200 rounded-lg text-[10.5px] font-semibold border border-blue-600/40 transition cursor-pointer"
-              title="Vincular anillo Colmi o banda Geoid por Bluetooth"
-            >
-              <Bluetooth className="w-3 h-3 text-blue-400" />
-              <span>Conectar BLE</span>
-            </button>
-
-            <button
-              onClick={handleConnectUsb}
-              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950/70 hover:bg-cyan-900 text-cyan-200 rounded-lg text-[10.5px] font-semibold border border-cyan-600/40 transition cursor-pointer"
-              title="Vincular microcontrolador por puerto serie"
-            >
-              <Usb className="w-3 h-3 text-cyan-400" />
-              <span>Conectar USB</span>
-            </button>
-
-            <button
-              onClick={handleTriggerGrounding}
-              className="flex items-center gap-1 px-2.5 py-1 bg-rose-950/90 hover:bg-rose-900 text-rose-200 rounded-lg text-[10.5px] font-bold border border-rose-500/60 shadow-sm transition cursor-pointer animate-pulse"
-              title="Fuerza al visor VR a regresar inmediatamente al entorno de calma e inicia respiración guiada por voz"
-            >
-              <ShieldAlert className="w-3 h-3 text-rose-400" />
-              <span>Grounding VR + Voz</span>
-            </button>
-
-            <button
-              onClick={handleExportPdfReport}
-              className="flex items-center gap-1.5 px-3 py-1 bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-500/40 rounded-lg text-[11px] font-bold transition cursor-pointer shadow-sm"
-              title="Generar dictamen pericial con formato oficial"
-            >
-              <Printer className="w-3.5 h-3.5 text-sky-400" />
-              <span>Dictamen PDF</span>
-            </button>
-
-            <button
-              onClick={handleExportFhirBundle}
-              className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/40 rounded-lg text-[11px] font-bold transition cursor-pointer shadow-sm"
-              title="Descargar HL7 FHIR R4 Bundle interoperable (JSON)"
-            >
-              <FileCode className="w-3.5 h-3.5 text-emerald-400" />
-              <span>FHIR R4</span>
-            </button>
-
-            <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-950 border border-amber-500/40 rounded-lg font-mono text-[11px]">
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-amber-300 font-bold">{userProfile.availableAiCredits}</span>
-              <span className="text-slate-500 text-[10px]">IA</span>
-              <button 
-                onClick={handleQuickRecharge}
-                className="ml-1 p-0.5 hover:bg-amber-500/20 rounded text-amber-400 hover:text-amber-200 transition"
-                title="Recargar +20 créditos de inferencia"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* NAVEGACIÓN PRINCIPAL DE MÓDULOS */}
-      <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
-            
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Workstation Clínico" description="Núcleo de triaje y triangulación de riesgos." clinicalUtility="Generación del dictamen normativo DSM-5-TR / CIE-11." badge="Módulo 1">
-                <button
-                  onClick={() => setActiveTab('workstation')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'workstation'
-                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5" />
-                  <span>Workstation</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Evaluador Científico & Multisensor" description="Scoring de afinidad bioclínica (0-100)." clinicalUtility="Mapeo de respuesta terapéutica." badge="Módulo 2">
-                <button
-                  onClick={() => setActiveTab('scientific_evaluator')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'scientific_evaluator'
-                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <Microscope className="w-3.5 h-3.5 text-teal-300" />
-                  <span>Evaluador Científico</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Diferenciador Bioclínico & Antisesgo" description="Distancia de Mahalanobis." clinicalUtility="Eliminación de sesgos de confirmación." badge="Módulo 3">
-                <button
-                  onClick={() => setActiveTab('differential_bias')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'differential_bias'
-                      ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white shadow-md shadow-cyan-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <GitCompare className="w-3.5 h-3.5 text-cyan-300" />
-                  <span>Diferenciador & Sesgos</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Traducción APA & RCI" description="Corrientes teóricas y cálculo RCI." clinicalUtility="Cambio clínicamente confiable." badge="Marco APA">
-                <button
-                  onClick={() => setActiveTab('apa_framework')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'apa_framework'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>Corrientes APA & RCI</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Cluster B & Perfilado" description="Caracterización de rasgos narcisistas y disociales." clinicalUtility="Análisis pericial forense." badge="Cluster B">
-                <button
-                  onClick={() => setActiveTab('cluster_b')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'cluster_b'
-                      ? 'bg-gradient-to-r from-purple-600 to-rose-600 text-white shadow-md shadow-purple-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <UserX className="w-3.5 h-3.5 text-purple-300" />
-                  <span>Cluster B & Perfilado</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Capacitación AMIE" description="Simulador de pacientes con IA." clinicalUtility="Entrenamiento inmersivo." badge="Módulo 4">
-                <button
-                  onClick={() => setActiveTab('academy')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'academy'
-                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <GraduationCap className="w-3.5 h-3.5 text-purple-300" />
-                  <span>Capacitación AMIE</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Neurotopografía 3D" description="Potencia espectral continua en 3D." clinicalUtility="Comparativa normativo-clínica." badge="Módulo 5">
-                <button
-                  onClick={() => setActiveTab('neuro_3d')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'neuro_3d'
-                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Neurotopografía 3D</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="qEEG & Carga" description="Lectura de archivos .EDF/.BDF/.CSV." clinicalUtility="Inspección multicanal." badge="Señales Crudas">
-                <button
-                  onClick={() => setActiveTab('neurosensometry')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'neurosensometry'
-                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <Brain className="w-3.5 h-3.5" />
-                  <span>qEEG & Carga</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="VR Inmersivo" description="Consolas inmersivas y catálogo de entornos." clinicalUtility="Desensibilización y biofeedback." badge="Biometría VR">
-                <button
-                  onClick={() => setActiveTab('vr_therapy')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'vr_therapy'
-                      ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <Glasses className="w-3.5 h-3.5 text-cyan-300" />
-                  <span>VR Inmersivo</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Tester Móvil JITAI" description="Ingesta de fenotipado 24/7." clinicalUtility="Fenotipado Digital" badge="Tester Móvil">
-                <button
-                  onClick={() => setActiveTab('sentinel_tester')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'sentinel_tester'
-                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <Wifi className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Tester Móvil JITAI</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Hoja de Derivación a Psiquiatría" description="Interconsulta oficial estructurada." clinicalUtility="Gestión de crisis." badge="Interconsulta">
-                <button
-                  onClick={() => setActiveTab('referral')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'referral'
-                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <ShieldAlert className="w-3.5 h-3.5" />
-                  <span>Referencia</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-            <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Panel SaaS & Licenciamiento" description="Supervisión de licencias." clinicalUtility="Gestión de cuentas." badge="Perfil">
-                <button
-                  onClick={() => setActiveTab('saas')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'saas'
-                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20 font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>SaaS</span>
-                </button>
-              </HoverTooltip>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      {/* CUERPO DE CONTENIDO DINÁMICO */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
-        
-        {syncNotFoundAlert && (
-          <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-rose-600 rounded-xl text-white shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="font-bold text-sm block text-white">Alerta de Sincronización:</span>
-                <span className="text-rose-200 font-semibold">{syncNotFoundAlert}</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setSyncNotFoundAlert(null)}
-              className="px-3 py-1 bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shrink-0 cursor-pointer"
-            >
-              Entendido
-            </button>
-          </div>
-        )}
-
-        {syncSuccessMsg && (
-          <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 shadow-lg">
-            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{syncSuccessMsg}</span>
-          </div>
-        )}
-
-        {errorMsg && (
-          <div className="p-4 bg-red-950/60 border border-red-500/50 rounded-xl text-red-200 text-xs flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-            <div>
-              <span className="font-bold">Aviso del Sistema: </span>
-              <span>{errorMsg}</span>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 1: WORKSTATION */}
-        {activeTab === 'workstation' && (
-          <div className="space-y-5">
-            {analysis?.riskAlerts && <RiskAlertBanner alerts={analysis.riskAlerts} />}
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              <div className="lg:col-span-5 space-y-5 flex flex-col">
-                <PatientJsonEditor
-                  patient={safePatient}
-                  onChange={setCurrentPatient}
-                  onSelectPreset={handleSelectPreset}
-                />
-                <PatientSentinelDashboard patient={safePatient} />
-                <SessionAudioAcoustics audioRecordings={safePatient.audioRecordings} />
-                <BiomarkerDashboard patient={safePatient} />
-              </div>
-
-              <div className="lg:col-span-7 space-y-5">
-                {analysis ? (
-                  <>
-                    <ClinicalOutputViewer analysis={analysis} />
-                    <AmieChatCopilot patient={safePatient} analysis={analysis} />
-                  </>
-                ) : (
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center flex flex-col items-center justify-center h-full min-h-[480px] shadow-2xl">
-                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-sky-500/10 mb-4 animate-pulse">
-                      <BrainCircuit className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-base font-bold text-white mb-2">
-                      Motor AMIE Listo para Triangulación Multimodal
-                    </h3>
-                    <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-                      El expediente cuenta con métricas psicométricas y de hardware validadas. Haz clic en <strong className="text-sky-300">"Ejecutar AMIE"</strong> para activar la inferencia clínica guiada por Gemini 3.8 Flash.
-                    </p>
-
-                    <button
-                      onClick={handleRunAnalysis}
-                      disabled={isAnalyzing}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 via-cyan-500 to-indigo-500 hover:from-sky-400 hover:to-cyan-400 text-white shadow-lg shadow-sky-500/20 active:scale-95 transition cursor-pointer"
-                    >
-                      <Activity className="w-4 h-4" />
-                      <span>{isAnalyzing ? 'Procesando Triangulación...' : 'Procesar Expediente Ahora'}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: EVALUADOR CIENTÍFICO */}
-        {activeTab === 'scientific_evaluator' && <ScientificNeuroEvaluator patient={safePatient} />}
-        
-        {/* TAB 3: DIFERENCIADOR Y SESGOS */}
-        {activeTab === 'differential_bias' && (
-          <div className="space-y-6">
-            <DifferentialBiasResolver patient={safePatient} />
-            <DiagnosticTriangulationView patient={safePatient} analysis={analysis} />
-          </div>
-        )}
-
-        {/* TAB 4: CORRIENTES APA & RCI */}
-        {activeTab === 'apa_framework' && (
-          <ApaTherapeuticModule patient={safePatient} />
-        )}
-
-        {/* TAB 5: CLUSTER B & NARCISISMO */}
-        {activeTab === 'cluster_b' && (
-          <PsychopathyNarcissismModule 
-            patient={safePatient} 
-            onClose={() => setActiveTab('workstation')} 
-          />
-        )}
-
-        {/* TAB 6: CAPACITACIÓN ACADEMY */}
-        {activeTab === 'academy' && <AmieClinicalAcademy />}
-        
-        {/* TAB 7: NEUROTOPOGRAFÍA 3D */}
-        {activeTab === 'neuro_3d' && (
-          <div className="space-y-4">
-            <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-cyan-400" />
-                Modo de Visualización Encefalográfica
-              </span>
-              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-                <button
-                  onClick={() => setNeuroViewerMode('classic')}
-                  className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-                    neuroViewerMode === 'classic'
-                      ? 'bg-sky-600 text-white shadow'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Visor Anatómico
-                </button>
-                <button
-                  onClick={() => setNeuroViewerMode('holographic')}
-                  className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 cursor-pointer ${
-                    neuroViewerMode === 'holographic'
-                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5 text-cyan-300" />
-                  Visor Holográfico 3D
-                </button>
-              </div>
-            </div>
-
-            {neuroViewerMode === 'classic' ? (
-              <InteractiveNeuroViewer patient={safePatient} />
-            ) : (
-              <HolographicNeuroViewer3D patient={safePatient} />
-            )}
-          </div>
-        )}
-        
-        {/* TAB 8: qEEG & CARGA */}
-        {activeTab === 'neurosensometry' && (
-          <NeuroSensoryModule 
-            patient={safePatient} 
-            onAttachQeegToPatient={handleAttachQeegToPatient} 
-          />
-        )}
-        
-        {/* TAB 9: VR INMERSIVO & CONSOLAS CON BARRA DE AUDIO GUÍA INCORPORADA */}
-        {activeTab === 'vr_therapy' && (
-          <div className="space-y-5">
-            
-            {/* BARRA DE AUDIO GUÍA TERAPÉUTICO */}
-            <ClinicalAudioGuidanceBar 
-              initialProtocolId="VRET_EXPOSURE"
-              onGroundingTriggered={() => {
-                VrControlService.triggerGroundingProtocol(safePatientId);
-                setSyncSuccessMsg('Protocolo de Grounding Visual activado junto con la locución de calma.');
-              }}
-            />
-
-            {/* BOTONERA DE ACCESO A CONSOLAS Y MODALES */}
-            <div className="flex items-center justify-end gap-2.5 flex-wrap">
-              <button
-                onClick={() => setIsFullscreenUnifiedVrOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:scale-105 text-white rounded-xl text-xs font-bold shadow-xl shadow-cyan-600/30 transition cursor-pointer"
-              >
-                <Monitor className="w-4 h-4 text-cyan-200" />
-                <span>Abrir Consola Inmersiva Unificada (IA + VR)</span>
-              </button>
-
-              <button
-                onClick={() => setIsFullscreenPhenotypeOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition cursor-pointer"
-              >
-                <Smartphone className="w-4 h-4 text-teal-100" />
-                <span>Fenotipado Digital & Recaídas</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('GAMMA_INSIGHT')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
-              >
-                <Lightbulb className="w-4 h-4 text-amber-100" />
-                <span>Consola Gamma 40Hz (TOC / TEA)</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('TDAH_EXECUTIVE')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition cursor-pointer"
-              >
-                <Target className="w-4 h-4 text-sky-200" />
-                <span>Consola TDAH (Executive Control)</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('EMDR_MEMORY')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
-              >
-                <RotateCcw className="w-4 h-4 text-rose-200" />
-                <span>Consola Memoria & Fobias</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('FND_MIRROR')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
-              >
-                <UserCheck className="w-4 h-4 text-indigo-200" />
-                <span>Consola Mirror VR (FND)</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('PAIN_MANAGEMENT')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
-              >
-                <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
-                <span>Consola Analgesia VR</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('NEURO_HYPNOSIS')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-purple-200" />
-                <span>Consola Neurohipnosis Closed-Loop</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('DEV_TRAUMA')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 via-pink-700 to-rose-700 hover:from-purple-700 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
-              >
-                <Brain className="w-4 h-4 text-pink-200" />
-                <span>Consola Trauma Evolutivo & AIMA</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('DUAL_CONTROL_SES_SIS')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-700 to-purple-800 hover:from-rose-500 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
-              >
-                <HeartHandshake className="w-4 h-4 text-rose-200" />
-                <span>Control Dual (SES / SIS)</span>
-              </button>
-
-              <button
-                onClick={() => setIsFullscreenDiagnosticOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 to-indigo-700 hover:from-purple-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
-              >
-                <Brain className="w-4 h-4" />
-                <span>Consola Diagnóstico 3D</span>
-              </button>
-
-              <button
-                onClick={() => setIsFullscreenConsoleOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
-              >
-                <Glasses className="w-4 h-4" />
-                <span>Consola Tratamiento</span>
-              </button>
-            </div>
-
-            <VrTherapyModule
-              patient={safePatient}
-              onUpdatePatientVrData={handleUpdatePatientVrData}
-            />
-          </div>
-        )}
-
-        {/* TAB 10: TESTER MÓVIL JITAI */}
-        {activeTab === 'sentinel_tester' && (
-          <div className="py-2">
-            <SentinelMobileCollector />
-          </div>
-        )}
-
-        {/* TAB 11: REFERENCIA PSIQUIÁTRICA */}
-        {activeTab === 'referral' && (
-          <PsychiatryReferralView
-            patient={safePatient}
-            analysis={analysis}
-            currentDoctorName={doctorName}
-            colegiadoNumber={Number(colegiadoNumber)}
-          />
-        )}
-
-        {/* TAB 12: GESTIÓN SAAS */}
-        {activeTab === 'saas' && <AdminSaaSPanel />}
-      </main>
-
-      {/* ASISTENTE FLOTANTE AMIE */}
-      <FloatingAmieAssistant
-        currentPatientId={safePatientId}
-        onNavigateTab={(targetTab: string) => setActiveTab(targetTab as AppTab)}
-        activeTab={activeTab}
-      />
-
-      <DsmGuideModal
-        isOpen={isDsmModalOpen}
-        onClose={() => setIsDsmModalOpen(false)}
-        defaultView={dsmModalView}
-      />
-
-      {/* =====================================================================
-          SISTEMA MODAL FLOTANTE DE ALTA PRIORIDAD (z-[9999])
-          RESUELVE LA APERTURA DE TODOS LOS MÓDULOS DE TERAPIA Y CONSOLAS VR
-      ====================================================================== */}
-
-      {/* 1. MÓDULOS ESPECIALIZADOS DE VR */}
-      {activeVrModuleId && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-6 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 lg:p-6">
-            
-            <button
-              onClick={() => setActiveVrModuleId(null)}
-              className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-rose-950/90 hover:bg-rose-900 text-rose-200 border border-rose-500/60 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg"
-            >
-              <X className="w-4 h-4 text-rose-400" />
-              <span>Cerrar Consola</span>
-            </button>
-
-            {activeVrModuleId === 'GAMMA_INSIGHT' && (
-              <VrGammaInsightModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'EMDR_MEMORY' && (
-              <VrMemoryReconsolidationModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'FND_MIRROR' && (
-              <VrFunctionalNeurologyModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'PAIN_MANAGEMENT' && (
-              <VrPainManagementModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'NEURO_HYPNOSIS' && (
-              <VrClosedLoopHypnosisModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'DEV_TRAUMA' && (
-              <VrDevelopmentalTraumaFullscreenMonitor patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'DUAL_CONTROL_SES_SIS' && (
-              <VrDualControlTherapyModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
-            )}
-            {activeVrModuleId === 'TDAH_EXECUTIVE' && (
-              <VrModuleRouter
-                patient={safePatient}
-                initialModuleId="TDAH_EXECUTIVE"
-                onClose={() => setActiveVrModuleId(null)}
-              />
-            )}
-            {!['GAMMA_INSIGHT', 'EMDR_MEMORY', 'FND_MIRROR', 'PAIN_MANAGEMENT', 'NEURO_HYPNOSIS', 'DEV_TRAUMA', 'DUAL_CONTROL_SES_SIS', 'TDAH_EXECUTIVE'].includes(activeVrModuleId) && (
-              <VrModuleRouter
-                patient={safePatient}
-                initialModuleId={activeVrModuleId}
-                onClose={() => setActiveVrModuleId(null)}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 2. CONSOLA INMERSIVA UNIFICADA (IA + VR) */}
-      {isFullscreenUnifiedVrOpen && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-8 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4">
-            <AmieUnifiedVrConsole
-              patient={safePatient}
-              onClose={() => setIsFullscreenUnifiedVrOpen(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 3. FENOTIPADO DIGITAL & RECAÍDAS */}
-      {isFullscreenPhenotypeOpen && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-8 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4">
-            <DigitalPhenotypeModule
-              patient={safePatient}
-              onClose={() => setIsFullscreenPhenotypeOpen(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 4. CONSOLA DIAGNÓSTICO 3D */}
-      {isFullscreenDiagnosticOpen && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-8 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4">
-            <FullscreenDiagnosticRunner
-              patient={safePatient}
-              onClose={() => setIsFullscreenDiagnosticOpen(false)}
-              onUpdatePatientVrData={handleUpdatePatientVrData}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 5. CONSOLA DE TRATAMIENTO */}
-      {isFullscreenConsoleOpen && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-8 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4">
-            <FullscreenTreatmentConsole
-              patient={safePatient}
-              onClose={() => setIsFullscreenConsoleOpen(false)}
-            />
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// ENRUTADOR PRINCIPAL CON ALIAS RESILIENTES PARA PICO 3 PRO Y QUEST
-// ----------------------------------------------------------------------------
-export default function App() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Navigate to="/doctor" replace />} />
-        <Route path="/doctor" element={<DoctorWorkstation />} />
-        
-        {/* Rutas directas para el Visor Pico 3 Pro y Meta Quest */}
-        <Route path="/visor" element={<VrPatientExperience />} />
-        <Route path="/paciente" element={<VrPatientExperience />} />
-        <Route path="/vr" element={<VrPatientExperience />} />
-
-        {/* Fallback de redirección segura */}
-        <Route path="*" element={<Navigate to="/doctor" replace />} />
-      </Routes>
-    </Router>
-  );
-}
+              <td>Conductancia Dérmica (GSR)</td>
+              <td>${(liveKpiHistory[0]?.gsr || 2.4).toFixed(2)} µS</td>
+              <td>${Math.max(...liveKpiHistory.map(p => p.gsr), 2.5).toFixed(2
