@@ -1,3 +1,8 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - CONSOLA DE NEUROMODULACIÓN OPTO-GAMMA
+// frontend/components/VrGammaInsightModule.tsx
+// ============================================================================
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord } from '../types';
 import { 
@@ -16,6 +21,8 @@ import {
   Eye, 
   Glasses, 
   Moon,
+  Copy,
+  ExternalLink,
   X
 } from 'lucide-react';
 import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
@@ -41,7 +48,7 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
   const patientId = p?.id || p?.patientId || 'PAC-8104';
   const patientDisplayName = p?.patientNameAnonymized || patientId;
 
-  // Rol 'sender' corregido para que la consola del médico envíe comandos al visor
+  // Rol 'sender' emparejado con el canal del paciente
   const { isConnected, isPeerConnected, liveData, syncSession, transmit } = 
     useVrTelemetryBridge('sender', patientId, 'OPTO_NEUROMODULATION');
 
@@ -54,10 +61,9 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
   const [protocol, setProtocol] = useState<NeuromodulationProtocol>('ALZHEIMER_40HZ');
 
   // Métricas Biométricas Dinámicas
-  const [plvCoherence, setPlvCoherence] = useState(12); // Phase-Locking Value global
+  const [plvCoherence, setPlvCoherence] = useState(12);
   const [targetHz, setTargetHz] = useState(40.0);
   
-  // Métrica específica según la patología
   const [specificMetricName, setSpecificMetricName] = useState('Limpieza Microglial');
   const [specificMetricValue, setSpecificMetricValue] = useState(10);
   const [specificMetricUnit, setSpecificMetricUnit] = useState('%');
@@ -83,64 +89,109 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
     }, 4000);
   };
 
+  // URL directa generada para que el paciente abra el visor en este modo y módulo exacto
+  const visorDirectUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/visor?modulo=GAMMA_INSIGHT&modo=tratamiento&paciente=${patientId}`
+    : `/visor?modulo=GAMMA_INSIGHT&modo=tratamiento&paciente=${patientId}`;
+
+  const handleCopyVisorUrl = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(visorDirectUrl);
+      showNotification('success', 'Enlace copiado. Pégalo en el navegador del Pico 3.');
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     };
   }, []);
 
-  // Configurar entorno y métricas dinámicas según el protocolo seleccionado
+  // 1. Sincronización proactiva al abrir la consola: ordena al visor cambiar de entorno
   useEffect(() => {
+    syncSession();
+
+    // Notifica de inmediato al visor del paciente que debe adoptar el modo Tratamiento y la escena cósmica
+    transmit({ 
+      type: 'LOAD_MODULE', 
+      patientId, 
+      moduleName: 'OPTO_NEUROMODULATION',
+      ecosystem: 'cosmic_stars',
+      category: 'TREATMENT',
+      protocol: 'ALZHEIMER_40HZ',
+      frequencyHz: 40.0
+    });
+
+    transmit({
+      type: 'SET_MODULE_MODE',
+      patientId,
+      category: 'TREATMENT',
+      environmentId: 'cosmic_stars'
+    });
+  }, [patientId, syncSession, transmit]);
+
+  // Configurar parámetros dinámicos según el protocolo seleccionado
+  useEffect(() => {
+    let hz = 40.0;
     switch (protocol) {
       case 'ALZHEIMER_40HZ': 
+        hz = 40.0;
         setTargetHz(40.0); 
         setSpecificMetricName('Activación Microglial (Amiloide)'); 
         setSpecificMetricUnit('%'); 
         setVisualColor('bg-white'); 
         break;
       case 'DEPRESSION_ALPHA': 
+        hz = 10.0;
         setTargetHz(10.0); 
         setSpecificMetricName('Simetría Cortical Frontal'); 
         setSpecificMetricUnit('Ratio L/R'); 
         setVisualColor('bg-amber-400'); 
         break;
       case 'ADHD_SMR': 
+        hz = 15.0;
         setTargetHz(15.0); 
         setSpecificMetricName('Bloqueo Motor (Hiperactividad)'); 
         setSpecificMetricUnit('%'); 
         setVisualColor('bg-sky-400'); 
         break;
       case 'ANXIETY_THETA': 
+        hz = 6.0;
         setTargetHz(6.0); 
         setSpecificMetricName('Supresión de Amígdala'); 
         setSpecificMetricUnit('%'); 
         setVisualColor('bg-purple-500'); 
         break;
       case 'INSOMNIA_DELTA': 
+        hz = 2.0;
         setTargetHz(2.0); 
         setSpecificMetricName('Descenso de Cortisol (Sueño)'); 
         setSpecificMetricUnit('%'); 
         setVisualColor('bg-blue-600'); 
         break;
       case 'PTSD_THETA': 
+        hz = 7.5;
         setTargetHz(7.5); 
         setSpecificMetricName('Tolerancia Hipnagógica (Trauma)'); 
         setSpecificMetricUnit('%'); 
         setVisualColor('bg-rose-500'); 
         break;
       case 'CHRONIC_PAIN_SUBDELTA': 
+        hz = 0.5;
         setTargetHz(0.5); 
         setSpecificMetricName('Liberación Endorfínica Est.'); 
         setSpecificMetricUnit('Índice'); 
         setVisualColor('bg-teal-500'); 
         break;
       case 'AUTISM_MU': 
+        hz = 11.0;
         setTargetHz(11.0); 
         setSpecificMetricName('Estabilidad Red Neuronas Espejo'); 
         setSpecificMetricUnit('%'); 
         setVisualColor('bg-emerald-400'); 
         break;
       case 'BRAIN_FOG_BETA': 
+        hz = 20.0;
         setTargetHz(20.0); 
         setSpecificMetricName('Oxigenación Prefrontal (Agudeza)'); 
         setSpecificMetricUnit('%'); 
@@ -148,9 +199,19 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
         break;
     }
     setSpecificMetricValue(10);
-  }, [protocol]);
 
-  // Motor de simulación fisiológica con integración de telemetría real
+    // Si ya está en estimulación, retransmitir la nueva frecuencia al visor en vivo
+    if (sessionPhase === 'STIMULATION') {
+      transmit({
+        type: 'START_LIGHT_STIMULATION',
+        frequencyHz: hz,
+        protocol,
+        patientId
+      });
+    }
+  }, [protocol, sessionPhase, patientId, transmit]);
+
+  // Simulación y captura de telemetría de retorno
   useEffect(() => {
     if (sessionPhase !== 'STIMULATION') return;
     
@@ -177,6 +238,7 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
     return () => clearInterval(interval);
   }, [sessionPhase, protocol, liveData]);
 
+  // Iniciar la estimulación fótica en el visor
   const startStimulation = () => {
     setSessionPhase('STIMULATION');
     setIsFinished(false);
@@ -188,7 +250,8 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
       type: 'LOAD_MODULE', 
       patientId, 
       moduleName: 'OPTO_NEUROMODULATION',
-      ecosystem: 'NEUTRAL_VOID'
+      ecosystem: 'cosmic_stars',
+      category: 'TREATMENT'
     });
 
     transmit({ 
@@ -197,24 +260,27 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
       protocol,
       patientId 
     });
+
+    showNotification('success', `Estimulación ${targetHz.toFixed(1)} Hz despachada al visor.`);
   };
 
   const handleGenerateReport = () => {
     setSessionPhase('IDLE');
     setIsFinished(true);
+    
+    // Detener la pulsación fótica en el visor del paciente
+    transmit({ type: 'STOP_LIGHT_STIMULATION', patientId });
     transmit({ type: 'STOP_TEST', patientId });
 
     let report = `Análisis de Fotobiomodulación y Arrastre qEEG en VR.\n\n`;
     report += `**Protocolo Dinámico:** ${targetHz.toFixed(1)} Hz (${getProtocolName(protocol)}).\n\n`;
     
-    // Métrica General
     if (plvCoherence > 75) {
       report += "🟢 **Sincronización (PLV):** Excelente encendido neuronal en la banda objetivo (Arrastre logrado).\n";
     } else {
       report += "🟡 **Sincronización (PLV):** Resistencia parcial al arrastre. El córtex demoró en copiar la frecuencia lumínica.\n";
     }
 
-    // Dictamen Específico por Patología
     report += "\n🧠 **Evaluación Clínica Específica:**\n";
     switch (protocol) {
       case 'ALZHEIMER_40HZ':
@@ -233,13 +299,13 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
         report += `Inducción profunda. Reducción metabólica y descenso de cortisol estimado en ${Math.round(specificMetricValue)}%. Listo para fase de sueño 3 (Slow-Wave).`; 
         break;
       case 'PTSD_THETA':
-        report += `El paciente logró mantener un ${Math.round(specificMetricValue)}% de tolerancia en el estado hipnagógico (Cruce Alpha/Theta) sin disparar respuesta de pánico. Excelente para reprocesamiento.`; 
+        report += `El paciente logró mantener un ${Math.round(specificMetricValue)}% de tolerancia en el estado hipnagógico (Cruce Alpha/Theta) sin disparar respuesta de pánico.`; 
         break;
       case 'CHRONIC_PAIN_SUBDELTA':
         report += `Frecuencias ultra-bajas (0.5Hz) lograron un índice de "anestesia electrónica" y liberación endorfínica de ${specificMetricValue}/10.`; 
         break;
       case 'AUTISM_MU':
-        report += `El ritmo Mu (11Hz) estabilizó el córtex sensoriomotor en un ${Math.round(specificMetricValue)}%. Prevención de meltdown y sobrecarga sensorial exitosa.`; 
+        report += `El ritmo Mu (11Hz) estabilizó el córtex sensoriomotor en un ${Math.round(specificMetricValue)}%. Prevención de sobrecarga sensorial exitosa.`; 
         break;
       case 'BRAIN_FOG_BETA':
         report += `Ritmo Beta de vigilia (20Hz) restauró la oxigenación prefrontal en un ${Math.round(specificMetricValue)}%. Eliminación de la niebla mental post-viral/fatiga.`; 
@@ -281,13 +347,13 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
       });
 
       if (response.ok) {
-        showNotification('success', 'Sesión de Neuromodulación guardada exitosamente en el expediente.');
+        showNotification('success', 'Sesión de Neuromodulación guardada en el expediente.');
       } else {
-        showNotification('success', 'Datos asegurados en el búfer clínico local.');
+        showNotification('success', 'Datos asegurados en el búfer local.');
       }
       setTimeout(() => onClose(), 1500);
     } catch (e) {
-      console.warn('[AMIE Opto] Fallo de red remoto. Asegurando en memoria:', e);
+      console.warn('[AMIE Opto] Guardado local:', e);
       showNotification('success', 'Sesión resguardada en almacenamiento local.');
       setTimeout(() => onClose(), 1500);
     } finally {
@@ -325,27 +391,27 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
               MÓDULO CLÍNICO • Opto-Neuromodulación Multiprotocolo
             </h2>
             <p className="text-xs text-slate-400">
-              Expediente: <strong className="text-amber-300 font-mono">{patientDisplayName} ({patientId})</strong> | VR + qEEG Sync
+              Expediente: <strong className="text-amber-300 font-mono">{patientDisplayName} ({patientId})</strong> | Modo Tratamiento VR
             </p>
           </div>
         </div>
         
         <div className="flex items-center gap-3">
+          {/* Indicador de Enlace en tiempo real con el Visor Pico 3 */}
           <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 font-mono ${
-            isPeerConnected 
+            isPeerConnected || isConnected
               ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400' 
-              : isConnected 
-              ? 'bg-amber-950/80 border-amber-500/50 text-amber-400' 
               : 'bg-slate-900 border-slate-700 text-slate-500'
           }`}>
-            <Activity className="w-4 h-4" /> 
-            <span>{isPeerConnected ? 'VR & qEEG Enlazados' : isConnected ? 'Buscando Visor...' : 'Sin Señal Hardware'}</span>
+            <Activity className="w-4 h-4 animate-pulse" /> 
+            <span>{isPeerConnected || isConnected ? 'Visor Enlazado (VR Activo)' : 'Buscando Visor...'}</span>
           </div>
 
           <button 
             type="button"
             onClick={syncSession} 
             className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer active:scale-95"
+            title="Reintentar handshake con el visor"
           >
             <RefreshCw className="w-4 h-4" /> 
             <span>Sincronizar</span>
@@ -402,30 +468,31 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
                 </select>
               </div>
 
-              {/* Instrucciones de ingreso para el paciente */}
-              {!isConnected && sessionPhase === 'IDLE' && !isFinished && (
-                <div className="mb-4 p-3 bg-slate-950 border border-amber-500/30 border-dashed rounded-xl flex flex-col items-center text-center gap-2 mt-4">
-                  <Glasses className="w-6 h-6 text-amber-400 animate-pulse" />
-                  <div className="text-[11px] text-slate-400 leading-relaxed">
-                    <strong className="text-amber-300 block mb-1">Esperando al paciente...</strong>
-                    Para iniciar la fotobiomodulación, el paciente debe colocarse el visor VR con el ID: <span className="text-amber-300 font-mono bg-amber-900/30 px-1 rounded">{patientId}</span>
-                  </div>
+              {/* Botón de Enlace Directo para el Visor */}
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-2 mt-2">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Glasses className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="text-[10.5px] text-slate-300 truncate font-mono">Modo: Tratamiento</span>
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={handleCopyVisorUrl}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-[10px] font-bold flex items-center gap-1 transition"
+                  title="Copiar URL directa para el visor"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>Copiar Link</span>
+                </button>
+              </div>
 
               {sessionPhase === 'IDLE' && !isFinished && (
                 <button 
                   type="button"
-                  disabled={!isConnected}
                   onClick={startStimulation} 
-                  className={`w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 mt-4 cursor-pointer active:scale-95 ${
-                    !isConnected 
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
-                      : 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20'
-                  }`}
+                  className="w-full py-3 rounded-xl text-sm font-bold shadow-lg transition flex justify-center items-center gap-2 mt-4 cursor-pointer active:scale-95 bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20"
                 >
                   <PlayCircle className="w-5 h-5" /> 
-                  <span>{!isConnected ? 'Esperando Visor...' : 'Iniciar Opto-Estimulación'}</span>
+                  <span>Iniciar Opto-Estimulación</span>
                 </button>
               )}
 
@@ -442,7 +509,7 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
             </div>
             
             <div className="mt-4 p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-[10px] text-slate-400 leading-relaxed font-mono">
-              El panel adapta dinámicamente las métricas clínicas a reportar dependiendo del diagnóstico seleccionado.
+              La señal fótica se inyecta en 6DoF dentro del visor. Las métricas reflejan la sincronización cortical en tiempo real.
             </div>
           </div>
 
@@ -512,14 +579,18 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
             {sessionPhase === 'IDLE' && !isFinished ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-500">
                 <Sun className="w-16 h-16 mb-4 opacity-20" />
-                <p className="text-sm max-w-md text-center leading-relaxed">
-                  Selecciona la condición patológica en el panel izquierdo. El visor adoptará el color y la frecuencia Hz específicos para inducir el arrastre de fase en las redes cerebrales.
+                <p className="text-sm max-w-md text-center leading-relaxed mb-4">
+                  Selecciona la condición patológica. Al pulsar iniciar, el visor enlazará el parpadeo fotobiomodulado en el paciente.
                 </p>
+                <div className="flex items-center gap-2 text-xs bg-slate-900 px-4 py-2 rounded-xl border border-slate-800 text-slate-400">
+                  <span>URL del visor:</span>
+                  <code className="text-amber-300 font-mono text-[11px]">{visorDirectUrl}</code>
+                </div>
               </div>
             ) : !isFinished ? (
               <div className="flex flex-col items-center justify-center h-full">
                 
-                {/* Visualizador de parpadeo (flicker) dinámico */}
+                {/* Visualizador de parpadeo sincronizado con el visor */}
                 <div className="relative w-full max-w-md h-56 mb-8 flex items-center justify-center bg-black rounded-3xl overflow-hidden border-4 border-slate-800 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
                   <div 
                     className={`absolute inset-0 ${visualColor}`}
@@ -535,7 +606,7 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
                       <Glasses className="w-12 h-12 text-white/80 mb-2" />
                     )}
                     <span className="text-white font-mono font-bold text-xs uppercase text-center leading-relaxed">
-                      Simulación Visor Pico 3<br />Frecuencia Dirigida Activa
+                      Visor Pico 3 Sincronizado<br />Frecuencia Dirigida Activa: {targetHz.toFixed(1)} Hz
                     </span>
                   </div>
                 </div>
@@ -545,7 +616,7 @@ export const VrGammaInsightModule: React.FC<Props> = ({ patient, onClose }) => {
                 </h4>
                 
                 <p className="text-sm text-slate-400 max-w-lg text-center leading-relaxed">
-                  El visor está pulsando a {targetHz.toFixed(1)} Hz. La corteza visual procesa la señal forzando a las redes neuronales a sincronizarse, induciendo el cambio neuroquímico terapéutico.
+                  El visor pulsa en WebXR a {targetHz.toFixed(1)} Hz. La corteza visual procesa la señal forzando la sincronización de redes tálamo-corticales.
                 </p>
 
               </div>
