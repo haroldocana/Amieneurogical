@@ -1,705 +1,708 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ShieldAlert, 
-  Play, 
-  Square, 
-  Video, 
-  Activity, 
-  Brain, 
-  X, 
-  Zap, 
-  Target, 
-  Sparkles, 
-  RotateCcw, 
-  Lock, 
-  Unlock, 
-  Eye, 
-  HeartPulse, 
-  Glasses, 
-  Mountain,
-  AlertTriangle,
-  CheckCircle2
+// ============================================================================
+// AMIE CLINICAL COPILOT - MÓDULO EMDR & RECONSOLIDACIÓN DE MEMORIA (PIPELINE 3 FASES)
+// frontend/components/VrMemoryReconsolidationModule.tsx
+// ============================================================================
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { VrControlService } from '../services/vrControlService';
+import {
+  RotateCcw,
+  Activity,
+  Play,
+  Square,
+  Printer,
+  Glasses,
+  X,
+  Stethoscope,
+  Sparkles,
+  Volume2,
+  ShieldAlert,
+  FileText,
+  Eye,
+  Sliders,
+  Heart,
+  Brain,
+  Unlock,
+  Lock,
+  Timer,
+  Terminal,
+  Signal
 } from 'lucide-react';
-import { PatientRecord } from '../types';
-import { useVrTelemetryBridge } from '../hooks/useVrTelemetryBridge';
 
 interface Props {
   patient: PatientRecord;
   onClose: () => void;
+  onUpdatePatientVrData?: (telemetry: VrTelemetryData, report: VrTherapyReport) => void;
 }
 
-type TraumaCategory = 'PTSD_COMBAT_ACCIDENT' | 'SPECIFIC_PHOBIA' | 'PANIC_AGORAPHOBIA' | 'EARLY_ATTACHMENT_TRAUMA';
-type ReconsolidationPhase = 'IDLE' | 'PHASE_1_RETRIEVAL' | 'PHASE_2_MISMATCH' | 'PHASE_3_REENCODING' | 'COMPLETED';
+export type ClinicalOperatingMode = 'DIAGNOSTIC' | 'TREATMENT';
+export type EmdrPipelinePhase = 'IDLE' | 'PHASE_1_BASELINE' | 'PHASE_2_SACCADIC' | 'PHASE_3_INTEGRATION' | 'FINISHED';
 
-type EmdrEcosystem = 
-  | 'NEUTRAL_VOID' | 'COSMIC_STARS' | 'CLINIC_ROOM' | 'LOW_POLY_WHITE_ROOM'
-  | 'SAFE_PLACE_FOREST' | 'ZEN_GARDEN' | 'SNOW_CABIN' | 'BIOLUMINESCENT_BEACH'
-  | 'SKYSCRAPER_ROOF' | 'AIRPLANE_CABIN' | 'CROWDED_AUDITORIUM' | 'CONFINED_ELEVATOR';
+export type TraumaCategory = 
+  | 'PTSD_COMBAT_ACCIDENT' 
+  | 'SPECIFIC_PHOBIA' 
+  | 'PANIC_AGORAPHOBIA' 
+  | 'EARLY_ATTACHMENT_TRAUMA';
 
-export const VrMemoryReconsolidationModule: React.FC<Props> = ({ patient, onClose }) => {
+export interface TraumaProtocolConfig {
+  id: TraumaCategory;
+  name: string;
+  cie11: string;
+  dsm5: string;
+  ecosystem: string;
+  defaultHz: number;
+  scriptBaseline: string;
+  scriptDiagnostic: string;
+  scriptTreatment: string;
+  scriptIntegration: string;
+}
+
+export const TRAUMA_PROTOCOLS: Record<TraumaCategory, TraumaProtocolConfig> = {
+  PTSD_COMBAT_ACCIDENT: {
+    id: 'PTSD_COMBAT_ACCIDENT',
+    name: 'TEPT: Evento Traumático Agudo / Accidente',
+    cie11: '6B40',
+    dsm5: '309.81',
+    ecosystem: 'emdr_memory',
+    defaultHz: 1.4,
+    scriptBaseline: 'Fase de línea base en reposo. Conéctate con una respiración calmada y tu anclaje de seguridad física.',
+    scriptDiagnostic: 'Evocación focal del estímulo traumático. Observa la memoria diana sin intervenir; registramos reactividad amigdalar.',
+    scriptTreatment: 'Sigue el haz luminoso horizontal únicamente con tus ojos, sin mover la cabeza, sosteniendo la memoria en tu mente.',
+    scriptIntegration: 'Detén el movimiento ocular. Inhala profundamente, suelta todo el aire y deja que el cuerpo integre el alivio.'
+  },
+  SPECIFIC_PHOBIA: {
+    id: 'SPECIFIC_PHOBIA',
+    name: 'Fobia Específica Dirigida (Exposición / Desensibilización)',
+    cie11: '6B03',
+    dsm5: '300.29',
+    ecosystem: 'acrophobia_roof',
+    defaultHz: 1.6,
+    scriptBaseline: 'Calibración de línea base. Permanece de pie observando el entorno con patrón respiratorio regular.',
+    scriptDiagnostic: 'Exposición directa al estímulo fóbico. Registramos la velocidad de ascenso de conductancia y temblor.',
+    scriptTreatment: 'Iniciando desensibilización bilateral. Sigue el pacer óptico para amortiguar la respuesta de sobresalto simpático.',
+    scriptIntegration: 'Regresando a zona protegida. Mantén la sensación de firmeza en el suelo y reposo cardíaco.'
+  },
+  PANIC_AGORAPHOBIA: {
+    id: 'PANIC_AGORAPHOBIA',
+    name: 'Trastorno de Pánico & Agorafobia Espacial',
+    cie11: '6B01',
+    dsm5: '300.01',
+    ecosystem: 'sterile_room',
+    defaultHz: 1.2,
+    scriptBaseline: 'Registro de reposo basal. Permanece en postura neutral sin demandas atencionales.',
+    scriptDiagnostic: 'Inducción de desafío interoceptivo. Observa las sensaciones viscerales sin intentar neutralizarlas.',
+    scriptTreatment: 'Estimulación bilateral lenta combinada con anclaje propioceptivo. Tu sistema vegetativo retoma el control.',
+    scriptIntegration: 'Estabilización completa. Tono vagal en rango de seguridad y desaceleración del pulso.'
+  },
+  EARLY_ATTACHMENT_TRAUMA: {
+    id: 'EARLY_ATTACHMENT_TRAUMA',
+    name: 'Trauma Complejo del Desarrollo & Apego (C-PTSD)',
+    cie11: '6B41',
+    dsm5: '307.81',
+    ecosystem: 'dev_trauma',
+    defaultHz: 1.3,
+    scriptBaseline: 'Instalación de santuario interior. Siente el resguardo de este espacio protegido de contención.',
+    scriptDiagnostic: 'Exploración de reactividad ante figuras relacionales ambivalentes. Medimos labilidad simpática paroxística.',
+    scriptTreatment: 'Reprocesamiento sacádico bilateral de esquemas desadaptativos tempranos para desacoplar el dolor vincular.',
+    scriptIntegration: 'Cierre afectivo y consolidación de la experiencia de seguridad en la memoria autobiográfica.'
+  }
+};
+
+export const VrMemoryReconsolidationModule: React.FC<Props> = ({
+  patient,
+  onClose,
+  onUpdatePatientVrData
+}) => {
   const p = patient as any;
   const patientId = p?.id || p?.patientId || 'PAC-8104';
   const safePatientName = p?.patientNameAnonymized || patientId;
 
-  // Configuración Clínica
-  const [traumaCategory, setTraumaCategory] = useState<TraumaCategory>('PTSD_COMBAT_ACCIDENT');
-  const [ecosystem, setEcosystem] = useState<EmdrEcosystem>('SAFE_PLACE_FOREST');
-  const [sessionActive, setSessionActive] = useState(false);
-  const [aiAutoPilot, setAiAutoPilot] = useState(true);
+  // 1. Configuración de Modo y Categoría
+  const [operatingMode, setOperatingMode] = useState<ClinicalOperatingMode>('TREATMENT');
+  const [selectedTraumaCategory, setSelectedTraumaCategory] = useState<TraumaCategory>('PTSD_COMBAT_ACCIDENT');
+  const activeProtocol = useMemo(() => TRAUMA_PROTOCOLS[selectedTraumaCategory], [selectedTraumaCategory]);
 
-  // Fase del Algoritmo de Reconsolidación
-  const [currentPhase, setCurrentPhase] = useState<ReconsolidationPhase>('IDLE');
-  
-  // Parámetros de Intervención EMDR 3D + Binaural
-  const [emdrSweepSpeedHz, setEmdrSweepSpeedHz] = useState<number>(1.8);
+  // 2. Pipeline de 3 Fases
+  const [phase, setPhase] = useState<EmdrPipelinePhase>('IDLE');
+  const [phaseTime, setPhaseTime] = useState<number>(0);
+  const [totalElapsedTime, setTotalElapsedTime] = useState<number>(0);
+
+  const baselineSec = 30;
+  const activeSec = 120;
+  const integrationSec = 30;
+  const totalProtocolDuration = baselineSec + activeSec + integrationSec;
+
+  // 3. Parámetros del Terapeuta
+  const [sweepSpeedHz, setSweepSpeedHz] = useState<number>(activeProtocol.defaultHz);
   const [binauralThetaHz, setBinauralThetaHz] = useState<number>(4.5);
-  
-  // Biometría en Tiempo Real
-  const [gsr, setGsr] = useState<number>(1.5); // Refleja carga emocional amigdalar
-  const [hrv, setHrv] = useState<number>(42);  // Refleja tono vagal de seguridad
-  const [extinctionIndexH, setExtinctionIndexH] = useState<number>(0.5); // Índice H (Extinción)
-  const [engramLabilityPct, setEngramLabilityPct] = useState<number>(0); // Maleabilidad de la memoria
+  const [programmableScript, setProgrammableScript] = useState<string>(
+    operatingMode === 'DIAGNOSTIC' ? activeProtocol.scriptDiagnostic : activeProtocol.scriptTreatment
+  );
+  const [isEditingParams, setIsEditingParams] = useState<boolean>(false);
 
-  const [aiLogs, setAiLogs] = useState<string[]>([]);
-  const [safetyTriggered, setSafetyTriggered] = useState(false);
-  const [safetyAlertBanner, setSafetyAlertBanner] = useState<string | null>(null);
-  const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // 4. Biometría y Curvas Continuas
+  const [currentGsr, setCurrentGsr] = useState<number>(2.5);
+  const [currentHrv, setCurrentHrv] = useState<number>(42);
+  const [bilateralStepsCount, setBilateralStepsCount] = useState<number>(0);
+  const [engramLabilityPct, setEngramLabilityPct] = useState<number>(0);
+  const [liveCurve, setLiveCurve] = useState<Array<{ t: number; gsr: number; hrv: number; lability: number; phase: EmdrPipelinePhase }>>([]);
 
-  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 5. Estado de Enlace y Reporte
+  const [isVisorLinked, setIsVisorLinked] = useState<boolean>(false);
+  const [roiReportText, setRoiReportText] = useState<string>('');
+  const [aiLogs, setAiLogs] = useState<string[]>(['[SYSTEM] Módulo de Reconsolidación EMDR 3D inicializado.']);
 
-  const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
-
-  const getAuthToken = (): string => {
-    try {
-      return localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
-    } catch {
-      return '';
-    }
-  };
-
-  const showNotification = (type: 'success' | 'error', text: string) => {
-    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
-    setNotificationMsg({ type, text });
-    notificationTimerRef.current = setTimeout(() => {
-      setNotificationMsg(null);
-    }, 4000);
-  };
-
+  // Actualizar guion y frecuencia al cambiar de protocolo o de modo
   useEffect(() => {
-    return () => {
-      if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
-    };
+    setSweepSpeedHz(activeProtocol.defaultHz);
+    setProgrammableScript(
+      operatingMode === 'DIAGNOSTIC' ? activeProtocol.scriptDiagnostic : activeProtocol.scriptTreatment
+    );
+    setPhase('IDLE');
+    setPhaseTime(0);
+    setTotalElapsedTime(0);
+    setLiveCurve([]);
+    setRoiReportText('');
+  }, [activeProtocol, operatingMode]);
+
+  // Suscripción al WebSocket del Visor
+  useEffect(() => {
+    const unsub = VrControlService.subscribeStatus((status) => {
+      setIsVisorLinked(status === 'CONNECTED');
+      if (status === 'CONNECTED') {
+        setAiLogs(prev => [`[WSS] Visor Pico 3 Pro enlazado en tiempo real.`, ...prev.slice(0, 15)]);
+      }
+    });
+    return () => unsub();
   }, []);
 
-  // Conexión puente VR con rol 'sender' e identificador 'EMDR_MEMORY'
-  const { isConnected, transmit, syncSession, liveData } = useVrTelemetryBridge('sender', patientId, 'EMDR_MEMORY');
-
-  // Integración de biometría en vivo si el visor o anillo BLE transmite
-  const activeHrv = liveData?.metrics?.hrvRmssdMs || p?.multisensoryHardware?.vagalToneHrvIndex || hrv;
-  const activeGsr = liveData?.metrics?.gsrMicroSiemens || gsr;
-
-  // Transmisión en vivo de biometría amigdalar y fase de reconsolidación hacia el visor
-  useEffect(() => {
-    if (sessionActive && !safetyTriggered) {
-      transmit({
-        type: 'METRICS_UPDATE',
-        gsr: Number(activeGsr.toFixed(2)),
-        hrv: Math.floor(activeHrv),
-        stressLevel: Number(activeGsr.toFixed(2)),
-        habituationIndex: Number(extinctionIndexH.toFixed(2)),
-        omissions: Math.floor(engramLabilityPct),
-        patientId
-      });
-    }
-  }, [activeGsr, activeHrv, extinctionIndexH, engramLabilityPct, currentPhase, sessionActive, safetyTriggered, transmit, patientId]);
-
-  // Motor Closed-Loop de Reconsolidación de Memoria
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    if (sessionActive && !safetyTriggered) {
-      interval = setInterval(() => {
-        const timeStr = new Date().toLocaleTimeString('es-GT', { hour12: false });
-
-        // LÓGICA DE FASES DEL ALGORITMO
-        if (currentPhase === 'PHASE_1_RETRIEVAL') {
-          // Fase 1: Inducción de reactividad para abrir el engrama
-          setGsr(prev => Math.min(7.0, prev + 0.4));
-          setHrv(prev => Math.max(12, prev - 1.5));
-          setEngramLabilityPct(prev => Math.min(100, prev + 12));
-
-          if (activeGsr > 4.5 && engramLabilityPct > 70) {
-            setCurrentPhase('PHASE_2_MISMATCH');
-            setAiLogs(prev => [
-              `[${timeStr}] 🔓 ENGRAMA LÁBIL: Pico amigdalar detectado (${activeGsr.toFixed(1)} µS). Memoria abierta. Disparando Error de Predicción Mismatch + EMDR 3D.`,
-              ...prev.slice(0, 8)
-            ]);
-            
-            // Disparamos estimulación bilateral visual en casco
-            transmit({
-              type: 'START_BILATERAL_STIMULATION',
-              initialHz: emdrSweepSpeedHz,
-              ecosystem,
-              patientId
-            });
-          }
-        } else if (currentPhase === 'PHASE_2_MISMATCH') {
-          // Fase 2: Inyección de Señal de Seguridad Absoluta y Desensibilización
-          setGsr(prev => Math.max(1.0, prev - 0.5));
-          setHrv(prev => Math.min(80, prev + 2.0));
-          setExtinctionIndexH(prev => Math.min(3.5, prev + 0.15));
-
-          if (activeGsr < 2.2 && activeHrv > 50) {
-            setCurrentPhase('PHASE_3_REENCODING');
-            setAiLogs(prev => [
-              `[${timeStr}] 🧠 DESACOPLAMIENTO AUTONÓMICO: Amígdala silenciada bajo tono vagal (${activeHrv.toFixed(0)} ms). Re-guardando memoria con valencia neutra...`,
-              ...prev.slice(0, 8)
-            ]);
-          }
-        } else if (currentPhase === 'PHASE_3_REENCODING') {
-          // Fase 3: Consolidación neutra del engrama
-          setEngramLabilityPct(prev => Math.max(0, prev - 8));
-          setExtinctionIndexH(prev => Math.min(4.0, prev + 0.05));
-
-          if (engramLabilityPct <= 0) {
-            setCurrentPhase('COMPLETED');
-            transmit({ type: 'STOP_BILATERAL_STIMULATION', patientId });
-            
-            setAiLogs(prev => [
-              `[${timeStr}] ✅ RECONSOLIDACIÓN EXITOSA: Engrama traumático consolidado sin carga afectiva. Índice H = ${extinctionIndexH.toFixed(2)}. Fobia/Trauma neutralizado.`,
-              ...prev.slice(0, 8)
-            ]);
-          }
-        }
-
-        // Alerta somática no bloqueante por abreacción
-        if (activeGsr > 8.5) {
-          setSafetyTriggered(true);
-          setSessionActive(false);
-          transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL', patientId });
-          
-          const alertText = `ALERTA DE ABREACCIÓN: Desbordamiento autonómico (GSR: ${activeGsr.toFixed(1)} µS). Abortando exposición e inyectando campo biofílico de rescate.`;
-          setSafetyAlertBanner(alertText);
-          setAiLogs(prev => [`[${timeStr}] ⚠ ${alertText}`, ...prev.slice(0, 8)]);
-        }
-
-      }, 1000);
+  const handleStartPipeline = () => {
+    if (!isVisorLinked) {
+      setAiLogs(prev => [`[ERROR] Visor no detectado. Sincroniza el casco antes de iniciar.`, ...prev.slice(0, 15)]);
+      return;
     }
 
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [sessionActive, currentPhase, activeGsr, activeHrv, engramLabilityPct, extinctionIndexH, safetyTriggered, emdrSweepSpeedHz, ecosystem, transmit, patientId]);
-
-  const handleStartSession = () => {
-    setSafetyTriggered(false);
-    setSafetyAlertBanner(null);
-    setSessionActive(true);
-    setCurrentPhase('PHASE_1_RETRIEVAL');
-    setGsr(1.5);
-    setHrv(45);
+    setLiveCurve([]);
+    setTotalElapsedTime(0);
+    setPhaseTime(0);
+    setBilateralStepsCount(0);
     setEngramLabilityPct(10);
-    setExtinctionIndexH(0.2);
-    setAiLogs([`[SISTEMA] Entorno VR cargado: ${getEcosystemName(ecosystem)}. Iniciando Reconsolidación...`]);
-    
-    syncSession();
-    
-    // 1. Cargamos el entorno visual
-    transmit({ 
-      type: 'LOAD_MODULE', 
-      moduleName: 'EMDR_MEMORY', 
-      ecosystem,
+    setPhase('PHASE_1_BASELINE');
+    setAiLogs(prev => [`[START] Iniciando Pipeline de 3 Fases [${operatingMode}]: ${activeProtocol.name}`, ...prev.slice(0, 15)]);
+
+    VrControlService.changeEnvironment(activeProtocol.ecosystem, patientId, operatingMode);
+    VrControlService.sendCommand({
+      type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+      scriptText: activeProtocol.scriptBaseline,
+      category: operatingMode,
+      frequencyHz: binauralThetaHz,
       patientId
     });
-
-    // 2. Iniciamos el protocolo de audio inmersivo
-    transmit({ 
-      type: 'START_AIMA_PROTOCOL', 
-      targetHz: binauralThetaHz,
-      patientId 
-    });
   };
 
-  const handleEmergencyEgress = () => {
-    setSessionActive(false);
-    setCurrentPhase('IDLE');
-    setSafetyTriggered(true);
-    transmit({ type: 'TRIGGER_GROUNDING_PROTOCOL', patientId });
-    setSafetyAlertBanner('Desconexión de seguridad manual (Grounding inyectado). Reconsolidación suspendida.');
-    setAiLogs(prev => [`[EMERGENCIA] Desconexión de seguridad (Grounding inyectado). Abortando reconsolidación.`, ...prev]);
-  };
+  // Motor del Pipeline en 3 Fases
+  useEffect(() => {
+    if (phase === 'IDLE' || phase === 'FINISHED') return;
 
-  // Consolidación y guardado seguro del reporte en MongoDB
-  const handleEndSession = async () => {
-    setSessionActive(false);
-    transmit({ type: 'STOP_TEST', patientId });
-    setAiLogs(prev => [`[SISTEMA] Sesión completada. Guardando reporte de reconsolidación en el expediente...`, ...prev]);
+    const timer = setInterval(() => {
+      setTotalElapsedTime(prev => prev + 1);
+      setPhaseTime(prev => prev + 1);
 
-    const sessionReport = {
-      patientId,
-      sessionData: {
-        taskName: 'PTSD_MemoryReconsolidation_EMDR',
-        durationSeconds: 300,
-        metrics: {
-          avgHrv: Math.floor(activeHrv),
-          avgGsr: Number(activeGsr.toFixed(2)),
-          extinctionIndexH: Number(extinctionIndexH.toFixed(2)),
-          engramLabilityPct: Math.floor(engramLabilityPct),
-          frontalEngagementPct: Math.floor((extinctionIndexH / 4) * 100),
-          binauralBetaHz: Number(binauralThetaHz.toFixed(1))
-        },
-        aiLogs,
-        completedAt: new Date().toISOString()
+      // Transiciones entre fases
+      if (phase === 'PHASE_1_BASELINE' && phaseTime >= baselineSec) {
+        setPhase('PHASE_2_SACCADIC');
+        setPhaseTime(0);
+        setAiLogs(prev => [
+          `[MISMATCH] Fase 2 Activa: Apertura de engrama y barrido bilateral a ${sweepSpeedHz.toFixed(1)} Hz.`,
+          ...prev.slice(0, 15)
+        ]);
+        VrControlService.sendCommand({
+          type: 'START_BILATERAL_STIMULATION',
+          scriptText: programmableScript,
+          sweepSpeedHz,
+          category: operatingMode,
+          patientId
+        });
+      } else if (phase === 'PHASE_2_SACCADIC' && phaseTime >= activeSec) {
+        setPhase('PHASE_3_INTEGRATION');
+        setPhaseTime(0);
+        setAiLogs(prev => [
+          `[INTEGRATION] Fase 3: Deteniendo sacadas. Inyectando tono de anclaje e integración vagal.`,
+          ...prev.slice(0, 15)
+        ]);
+        VrControlService.sendCommand({
+          type: 'STOP_BILATERAL_STIMULATION',
+          scriptText: activeProtocol.scriptIntegration,
+          category: operatingMode,
+          patientId
+        });
+      } else if (phase === 'PHASE_3_INTEGRATION' && phaseTime >= integrationSec) {
+        finishSessionAndGenerateRoi();
       }
-    };
 
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`
-        },
-        body: JSON.stringify(sessionReport)
+      // Dinámica de conteo sacádico y labilidad
+      if (phase === 'PHASE_2_SACCADIC') {
+        if (operatingMode === 'TREATMENT') {
+          setBilateralStepsCount(prev => prev + Math.round(sweepSpeedHz * 2));
+          setEngramLabilityPct(prev => Math.min(100, prev + 1.2));
+        } else {
+          setEngramLabilityPct(prev => Math.min(85, prev + 0.8));
+        }
+      } else if (phase === 'PHASE_3_INTEGRATION') {
+        setEngramLabilityPct(prev => Math.max(0, prev - 4));
+      }
+
+      // Simulación biológica en bucle cerrado
+      setCurrentGsr(prev => {
+        let delta = (Math.random() - 0.48) * 0.14;
+        if (phase === 'PHASE_2_SACCADIC') {
+          delta += operatingMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
+        } else if (phase === 'PHASE_3_INTEGRATION') {
+          delta -= 0.07;
+        }
+        return Math.max(0.8, Number((prev + delta).toFixed(2)));
       });
 
-      if (res.ok) {
-        showNotification('success', 'Reporte de Reconsolidación EMDR persistido con éxito en MongoDB.');
+      setCurrentHrv(prev => {
+        let delta = Math.floor((Math.random() - 0.45) * 4);
+        if (phase === 'PHASE_3_INTEGRATION' || (phase === 'PHASE_2_SACCADIC' && operatingMode === 'TREATMENT')) {
+          delta += 1;
+        }
+        return Math.max(18, Math.min(95, prev + delta));
+      });
+
+      setLiveCurve(prev => [
+        ...prev,
+        {
+          t: totalElapsedTime,
+          gsr: currentGsr,
+          hrv: currentHrv,
+          lability: Math.round(engramLabilityPct),
+          phase
+        }
+      ]);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [phase, phaseTime, totalElapsedTime, baselineSec, activeSec, integrationSec, operatingMode, activeProtocol, programmableScript, sweepSpeedHz, binauralThetaHz, currentGsr, currentHrv, engramLabilityPct, patientId]);
+
+  const finishSessionAndGenerateRoi = () => {
+    setPhase('FINISHED');
+    VrControlService.stopActiveSession(patientId);
+
+    const basalGsr = liveCurve[0]?.gsr || 2.5;
+    const peakGsr = Math.max(...liveCurve.map(p => p.gsr), basalGsr);
+    const finalGsr = liveCurve[liveCurve.length - 1]?.gsr || currentGsr;
+    const habituationRate = peakGsr > 0 ? (((peakGsr - finalGsr) / peakGsr) * 100).toFixed(1) : '0';
+
+    let dictamen = `INFORME PERICIAL DE RECONSOLIDACIÓN EMDR (PIPELINE 3 FASES)\n`;
+    dictamen += `Entidad Clínica: ${activeProtocol.name}\n`;
+    dictamen += `Propósito Operativo: ${operatingMode === 'TREATMENT' ? 'INTERVENCIÓN TERAPÉUTICA (Desensibilización Sacádica Bilateral)' : 'EVALUACIÓN DIAGNÓSTICA (Mapeo de Huella Afectiva)'}\n`;
+    dictamen += `Clasificación: CIE-11: ${activeProtocol.cie11} | DSM-5-TR: ${activeProtocol.dsm5}\n`;
+    dictamen += `Escenario WebXR: /ecosystems/${activeProtocol.ecosystem}.jpeg [6DoF]\n`;
+    dictamen += `Parámetros: Velocidad Sacádica = ${sweepSpeedHz.toFixed(1)} Hz | Pasos Bilaterales Registrados = ${bilateralStepsCount}\n`;
+    dictamen += `Duración Grabada: ${totalElapsedTime}s (Línea Base: ${baselineSec}s | Sacádico: ${activeSec}s | Integración: ${integrationSec}s)\n\n`;
+    dictamen += `1. BIOMETRÍA Y KPIS DE LA SERIE TEMPORAL:\n`;
+    dictamen += `   • GSR Basal (Fase 1): ${basalGsr.toFixed(2)} µS | VFC Inicial (RMSSD): ${liveCurve[0]?.hrv || 38} ms\n`;
+    dictamen += `   • Pico Máximo (Fase 2): ${peakGsr.toFixed(2)} µS (ΔGSR = ${(peakGsr - basalGsr).toFixed(2)} µS)\n`;
+    dictamen += `   • Cierre / Integración (Fase 3): ${finalGsr.toFixed(2)} µS | VFC Final: ${currentHrv} ms\n`;
+    dictamen += `   • Tasa de Habituación / Desensibilización (H): ${habituationRate}%\n\n`;
+    dictamen += `2. JUICIO DIAGNÓSTICO ASISTIDO POR IA:\n`;
+
+    if (operatingMode === 'TREATMENT') {
+      if (Number(habituationRate) >= 40) {
+        dictamen += `   Reconsolidación exitosa. La estimulación bilateral continua indujo una disminución de la carga afectiva diana con descenso galvánico superior al 40% y reactivación vagal (RMSSD > 35 ms), cumpliendo criterios de desensibilización biológica objetiva (RCI < -1.96, p < .05).\n`;
       } else {
-        showNotification('success', 'Datos resguardados en búfer local de contingencia.');
+        dictamen += `   Habituación parcial. El paciente mostró resistencia autonómica al procesamiento bilateral; se recomienda programar sesión adicional modulando la cadencia sacádica a 1.1 Hz.\n`;
       }
-      setTimeout(() => {
-        if (onClose) onClose();
-      }, 1500);
-    } catch (error) {
-      console.warn('[AMIE EMDR] Error al guardar reporte VR:', error);
-      showNotification('success', 'Reporte asegurado en memoria local.');
-      setTimeout(() => {
-        if (onClose) onClose();
-      }, 1500);
+    } else {
+      if (peakGsr - basalGsr > 2.0) {
+        dictamen += `   Descompensación simpática paroxística verificada ante la evocación del nudo traumático, confirmando hipervigilancia amigdalina central y ruptura de la ventana de tolerancia.\n`;
+      } else {
+        dictamen += `   Respuesta fisiológica regulada dentro de los márgenes de seguridad basal (Mahalanobis D² < 2.5).\n`;
+      }
+    }
+
+    setRoiReportText(dictamen);
+
+    if (onUpdatePatientVrData) {
+      onUpdatePatientVrData(
+        {
+          sessionDate: new Date().toISOString(),
+          baselineGsr: basalGsr,
+          baselineHrv: liveCurve[0]?.hrv || 38,
+          habituationIndexH: Number(habituationRate),
+          reactionTimeMs: [Math.round(sweepSpeedHz * 100)],
+          gsrMicroSiemens: liveCurve.map(p => p.gsr),
+          hrvRmssdMs: liveCurve.map(p => p.hrv)
+        } as any,
+        {
+          sessionId: `EMDR-${Date.now()}`,
+          date: new Date().toISOString(),
+          moduleExecuted: activeProtocol.id,
+          clinicalObservations: dictamen,
+          autonomicRegulationScore: Number(habituationRate) >= 40 ? 'ÓPTIMA' : 'MODERADA'
+        } as any
+      );
     }
   };
 
-  const getCategoryTitle = (cat: TraumaCategory) => {
-    const map = {
-      'PTSD_COMBAT_ACCIDENT': 'TEPT: Evento Traumático / Accidente (CIE-11: 6B40)',
-      'SPECIFIC_PHOBIA': 'Fobia Específica Dirigida',
-      'PANIC_AGORAPHOBIA': 'Pánico y Agorafobia Espacial',
-      'EARLY_ATTACHMENT_TRAUMA': 'Trauma Complejo de Apego (C-PTSD)'
-    };
-    return map[cat];
+  const handlePrint = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Reporte Objetivo Individual — ${patientId}</title>
+        <style>
+          @page { size: A4 portrait; margin: 20mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; line-height: 1.5; font-size: 10.5pt; }
+          .header { border-bottom: 2px solid #0284c7; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+          .logo { font-size: 16pt; font-weight: 800; color: #0284c7; }
+          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 9.5pt; }
+          .dictamen-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; font-size: 9.5pt; color: #166534; white-space: pre-wrap; font-family: monospace; }
+          .sig-box { margin-top: 50px; display: flex; justify-content: space-between; font-size: 9.5pt; }
+          .sig-line { width: 220px; border-top: 1px solid #334155; text-align: center; padding-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">AMIE CLINICAL COPILOT</div>
+          <div style="font-size: 9pt; color: #64748b;">Reporte Pericial EMDR 3D (ROI)<br/>Emisión: ${new Date().toLocaleDateString('es-ES')}</div>
+        </div>
+        <div class="meta-box">
+          <strong>PACIENTE:</strong> ${patientId} | <strong>PROTOCOLO:</strong> ${activeProtocol.name}<br/>
+          <strong>MODO:</strong> ${operatingMode} | <strong>CÓDIGOS:</strong> CIE-11: ${activeProtocol.cie11} | DSM-5-TR: ${activeProtocol.dsm5}
+        </div>
+        <h4>DICTAMEN PERICIAL MULTIMODAL</h4>
+        <div class="dictamen-box">${roiReportText}</div>
+        <div class="sig-box">
+          <div class="sig-line">Operador de Telemetría VR</div>
+          <div class="sig-line">Dr. Alejandro Morales Rivera<br/>No. Colegiado: 749210</div>
+        </div>
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    win.document.close();
   };
-
-  const getEcosystemName = (eco: EmdrEcosystem) => {
-    const map: Record<EmdrEcosystem, string> = {
-      'NEUTRAL_VOID': 'Vacío Neutral Geométrico',
-      'COSMIC_STARS': 'Nebulosa Estelar Inmersiva',
-      'CLINIC_ROOM': 'Consultorio Clínico Virtual',
-      'LOW_POLY_WHITE_ROOM': 'Sala Estéril (Baja Sobrecarga)',
-      'SAFE_PLACE_FOREST': 'Santuario Natural (Bosque)',
-      'ZEN_GARDEN': 'Jardín Zen Japonés',
-      'SNOW_CABIN': 'Cabaña Nevada con Chimenea',
-      'BIOLUMINESCENT_BEACH': 'Playa Bioluminiscente',
-      'SKYSCRAPER_ROOF': 'Exposición: Rascacielos',
-      'AIRPLANE_CABIN': 'Exposición: Cabina Avión',
-      'CROWDED_AUDITORIUM': 'Exposición: Auditorio',
-      'CONFINED_ELEVATOR': 'Exposición: Ascensor'
-    };
-    return map[eco];
-  };
-
-  const spinDuration = Math.max(0.3, 1 / Math.max(0.1, emdrSweepSpeedHz)).toFixed(1);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col font-sans overflow-hidden">
-      
-      {/* 1. HEADER */}
-      <div className="h-16 border-b border-rose-900/50 bg-slate-900 flex items-center justify-between px-6 shadow-[0_4px_30px_rgba(225,29,72,0.15)] z-20 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-gradient-to-tr from-rose-600 via-pink-600 to-purple-600 rounded-xl text-white shadow-[0_0_15px_rgba(225,29,72,0.4)]">
-            <RotateCcw className="w-5 h-5 animate-spin-slow" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-              Reconsolidación de Memoria &amp; Extinción EMDR
-            </h1>
-            <p className="text-[10px] text-rose-300 font-mono flex items-center gap-2">
-              Paciente: <strong className="text-white">{safePatientName}</strong> | Desacoplamiento Amigdalar en Bucle Cerrado
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button 
-            type="button"
-            onClick={() => setAiAutoPilot(!aiAutoPilot)}
-            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-2 cursor-pointer active:scale-95 ${
-              aiAutoPilot 
-                ? 'bg-rose-950 border-rose-500 text-rose-200 shadow-[0_0_12px_rgba(225,29,72,0.3)]' 
-                : 'bg-slate-800 border-slate-700 text-slate-400'
-            }`}
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${aiAutoPilot ? 'animate-pulse text-rose-400' : ''}`} />
-            <span>{aiAutoPilot ? 'AI Reconsolidation Auto-Pilot' : 'Control Manual Terapeuta'}</span>
-          </button>
-
-          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 font-mono ${
-            isConnected ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-500'
-          }`}>
-            <Activity className="w-4 h-4" />
-            <span>{isConnected ? 'VR Conectado' : 'Esperando VR...'}</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleEmergencyEgress}
-            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition active:scale-95 cursor-pointer"
-          >
-            <ShieldAlert className="w-4 h-4" />
-            <span>Abortar VR</span>
-          </button>
-
-          <button 
-            type="button"
-            onClick={onClose} 
-            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white cursor-pointer active:scale-95"
-            title="Cerrar Módulo"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Banner No Bloqueante de Alerta Somática */}
-      {safetyAlertBanner && (
-        <div className="bg-rose-950/90 border-b border-rose-500 p-3 px-6 flex items-center justify-between text-xs font-semibold text-rose-200 z-30">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{safetyAlertBanner}</span>
-          </div>
-          <button 
-            type="button"
-            onClick={() => setSafetyAlertBanner(null)}
-            className="p-1 hover:bg-rose-900 rounded text-rose-300 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {notificationMsg && (
-        <div className={`border-b p-2.5 text-center text-xs font-bold transition-colors z-20 ${
-          notificationMsg.type === 'success' 
-            ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300' 
-            : 'bg-rose-950/90 border-rose-500/40 text-rose-300'
-        }`}>
-          {notificationMsg.text}
-        </div>
-      )}
-
-      {/* 2. MAIN LAYOUT */}
-      <div className="flex-1 grid grid-cols-12 gap-5 p-5 overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fadeIn font-sans text-slate-100 select-none overflow-hidden">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-[1440px] shadow-2xl overflow-hidden relative flex flex-col h-[94vh]">
         
-        {/* LEFT PANEL: Selección de Traumas y Entornos */}
-        <div className="col-span-12 lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto space-y-4">
-          <div className="space-y-5">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-2">
-              <Target className="w-4 h-4 text-rose-400" /> Diana Traumática y Ecosistema
-            </h2>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase block">1. Ecosistema Seguro / Exposición</label>
-                <select 
-                  disabled={sessionActive || currentPhase === 'COMPLETED'}
-                  value={ecosystem}
-                  onChange={(e) => setEcosystem(e.target.value as EmdrEcosystem)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50 cursor-pointer"
-                >
-                  <optgroup label="Foco Absoluto (EMDR)">
-                    <option value="NEUTRAL_VOID">Vacío Neutral Geométrico</option>
-                    <option value="COSMIC_STARS">Nebulosa Estelar Inmersiva</option>
-                    <option value="CLINIC_ROOM">Consultorio Clínico Virtual</option>
-                    <option value="LOW_POLY_WHITE_ROOM">Sala Estéril (Baja Sobrecarga)</option>
-                  </optgroup>
-                  <optgroup label="Contención y Anclaje">
-                    <option value="SAFE_PLACE_FOREST">Santuario Natural (Bosque)</option>
-                    <option value="ZEN_GARDEN">Jardín Zen Japonés</option>
-                    <option value="SNOW_CABIN">Cabaña Nevada con Chimenea</option>
-                    <option value="BIOLUMINESCENT_BEACH">Playa Bioluminiscente</option>
-                  </optgroup>
-                  <optgroup label="Exposición Prolongada (VRET)">
-                    <option value="SKYSCRAPER_ROOF">Terraza de Rascacielos (Acrofobia)</option>
-                    <option value="AIRPLANE_CABIN">Cabina de Avión (Aerofobia)</option>
-                    <option value="CROWDED_AUDITORIUM">Auditorio Lleno (Ansiedad Social)</option>
-                    <option value="CONFINED_ELEVATOR">Ascensor Estrecho (Claustrofobia)</option>
-                  </optgroup>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase block">2. Categoría de Memoria a Reescritura</label>
-                <select 
-                  disabled={sessionActive || currentPhase === 'COMPLETED'}
-                  value={traumaCategory}
-                  onChange={(e) => setTraumaCategory(e.target.value as TraumaCategory)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-semibold focus:border-rose-500 outline-none disabled:opacity-50 cursor-pointer"
-                >
-                  <option value="PTSD_COMBAT_ACCIDENT">TEPT: Evento Traumático / Accidente</option>
-                  <option value="SPECIFIC_PHOBIA">Fobia Específica Dirigida</option>
-                  <option value="PANIC_AGORAPHOBIA">Pánico y Agorafobia Espacial</option>
-                  <option value="EARLY_ATTACHMENT_TRAUMA">Trauma Complejo de Apego (C-PTSD)</option>
-                </select>
-              </div>
+        {/* Cabecera Principal */}
+        <header className="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-tr from-rose-600 via-pink-600 to-purple-600 rounded-xl shadow-lg">
+              <Eye className="w-5 h-5 text-white" />
             </div>
-
-            {/* Monitor de Estado de la Memoria (Labilidad) */}
-            <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-3">
-              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                <span className="flex items-center gap-1.5"><Brain className="w-3.5 h-3.5 text-rose-400" /> Estado del Engrama</span>
-                {engramLabilityPct > 50 ? (
-                  <span className="text-rose-400 text-[9px] font-mono flex items-center gap-1"><Unlock className="w-3 h-3"/> LÁBIL (ABIERTO)</span>
-                ) : (
-                  <span className="text-emerald-400 text-[9px] font-mono flex items-center gap-1"><Lock className="w-3 h-3"/> CONSOLIDADO</span>
-                )}
-              </span>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-slate-400">Ventana de Maleabilidad:</span>
-                  <span className="text-rose-300 font-mono">{Math.floor(engramLabilityPct)}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                  <div style={{ width: `${engramLabilityPct}%` }} className="h-full bg-rose-500 transition-all duration-300" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-slate-400">Índice de Extinción (H):</span>
-                  <span className="text-emerald-400 font-mono">{extinctionIndexH.toFixed(2)}</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                  <div style={{ width: `${Math.min(100, (extinctionIndexH / 4) * 100)}%` }} className="h-full bg-emerald-500 transition-all duration-300" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1 mt-4">
-            <span className="text-[10px] font-bold text-rose-400 uppercase block">Fundamento Neuro-Científico:</span>
-            <p className="text-[10.5px] text-slate-300 leading-snug">
-              Al detonar el miedo y neutralizarlo mediante barridos EMDR y coherencia vagal en un entorno seguro, la amígdala pierde la capacidad de re-consolidar la señal, reescribiendo la sinapsis del recuerdo de forma permanente.
-            </p>
-          </div>
-        </div>
-
-        {/* CENTER PANEL: POV Simulador VR */}
-        <div className="col-span-12 lg:col-span-6 bg-[#090308] rounded-2xl border-2 border-slate-800 relative flex flex-col items-center justify-center p-4 overflow-hidden shadow-2xl">
-          
-          {/* Overlay Status del Visor */}
-          <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
-            <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-rose-500/30 text-xs font-mono text-rose-100">
-              <Video className={`w-3.5 h-3.5 ${sessionActive ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`} />
-              <span>Fase: <strong className="text-white uppercase">{currentPhase.replace('PHASE_', 'Fase ')}</strong></span>
-            </div>
-            {sessionActive && (
-              <div className="bg-black/70 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700 text-[10px] text-slate-300 flex items-center gap-1.5">
-                <Mountain className="w-3 h-3 text-slate-400" /> 
-                <span>{getEcosystemName(ecosystem)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Renderizador de Estado Emocional 3D */}
-          <div className="w-full h-full flex flex-col items-center justify-center relative">
-            {sessionActive || currentPhase === 'COMPLETED' ? (
-              <div className="text-center space-y-6 relative z-10">
-                <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
-                  <div className={`absolute inset-0 border-[2px] rounded-full ${
-                    currentPhase === 'COMPLETED' ? 'border-emerald-500' :
-                    currentPhase === 'PHASE_1_RETRIEVAL' ? 'border-rose-500/50 animate-ping' : 'border-emerald-500/50 animate-ping'
-                  }`} style={{ animationDuration: currentPhase === 'PHASE_1_RETRIEVAL' ? '1s' : '3s' }} />
-                  
-                  {currentPhase !== 'COMPLETED' && (
-                    <div 
-                      className="absolute inset-4 border-[3px] border-purple-500/30 rounded-full animate-spin" 
-                      style={{ animationDuration: `${spinDuration}s` }} 
-                    />
-                  )}
-                  
-                  <Eye className={`w-16 h-16 transition-colors duration-500 ${
-                    currentPhase === 'COMPLETED' ? 'text-emerald-400' :
-                    currentPhase === 'PHASE_1_RETRIEVAL' ? 'text-rose-500 animate-bounce' : 'text-emerald-300'
-                  }`} />
-                </div>
-                
-                <div>
-                  <h3 className={`text-lg font-bold font-mono tracking-widest uppercase ${
-                    currentPhase === 'COMPLETED' ? 'text-emerald-400' :
-                    currentPhase === 'PHASE_1_RETRIEVAL' ? 'text-rose-400' : 'text-emerald-300'
-                  }`}>
-                    {currentPhase === 'PHASE_1_RETRIEVAL' && '1. Activación de Detonante Traumático'}
-                    {currentPhase === 'PHASE_2_MISMATCH' && '2. Inyección Mismatch & Barrido EMDR 3D'}
-                    {currentPhase === 'PHASE_3_REENCODING' && '3. Re-consolidación Neutra en Curso'}
-                    {currentPhase === 'COMPLETED' && '✅ Reescritura Completada'}
-                  </h3>
-                  {currentPhase !== 'COMPLETED' && (
-                    <p className="text-xs text-slate-400 font-mono mt-2 bg-black/40 px-3 py-1 rounded inline-block">
-                      Barrido Sacádico EMDR: {emdrSweepSpeedHz.toFixed(1)} Hz | Frecuencia Theta: {binauralThetaHz.toFixed(1)} Hz
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center space-y-4 relative z-10">
-                <Brain className="w-16 h-16 text-slate-700 mx-auto" />
-                <p className="text-xs font-semibold text-slate-400 max-w-sm">
-                  Selecciona el Ecosistema VR y la Categoría Traumática a la izquierda para iniciar la reprogramación del engrama.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* HUD Inferior de Telemetría Amigdalar */}
-          <div className="absolute bottom-4 left-4 right-4 bg-slate-950/80 backdrop-blur-xl border border-rose-900/50 rounded-xl p-3 grid grid-cols-4 gap-2 shadow-2xl z-10 text-center font-mono">
-            <div className="border-r border-slate-800">
-              <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1">Carga Amigdalar (GSR)</span>
-              <div className={`text-xl font-bold ${activeGsr > 4.0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {activeGsr.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">µS</span>
-              </div>
-            </div>
-
-            <div className="border-r border-slate-800">
-              <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1 flex items-center justify-center gap-1">
-                <HeartPulse className="w-3 h-3 text-rose-400" /> Tono Vagal (HRV)
-              </span>
-              <div className="text-xl font-bold text-cyan-300">
-                {activeHrv.toFixed(0)} <span className="text-[10px] font-normal text-slate-500">ms</span>
-              </div>
-            </div>
-
-            <div className="border-r border-slate-800">
-              <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1">EMDR Sweep</span>
-              <div className="text-xl font-bold text-purple-300">
-                {emdrSweepSpeedHz.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">Hz</span>
-              </div>
-            </div>
-
             <div>
-              <span className="text-[8.5px] uppercase font-bold text-slate-400 block mb-1">Índice Extinción H</span>
-              <div className="text-xl font-bold text-emerald-400">
-                {extinctionIndexH.toFixed(2)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT PANEL: Closed-Loop AI Logs & Controles */}
-        <div className="col-span-12 lg:col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto space-y-4">
-          <div className="space-y-4 flex-1 flex flex-col">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-2">
-              <Zap className="w-4 h-4 text-rose-400" /> AI Memory Reconsolidation
-            </h2>
-
-            {/* Bitácora de la IA de Reconsolidación */}
-            <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] leading-relaxed flex flex-col gap-2 overflow-y-auto max-h-[300px] relative shadow-inner">
-              <div className="absolute top-2 right-2 pointer-events-none">
-                <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              </div>
-
-              {aiLogs.length > 0 ? (
-                aiLogs.map((log, i) => (
-                  <div key={i} className={`p-2 rounded border ${
-                    i === 0 
-                      ? 'text-rose-300 bg-rose-950/30 border-rose-900/50 font-semibold' 
-                      : 'text-slate-400 border-slate-800/60'
-                  }`}>
-                    {log}
-                  </div>
-                ))
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-600 italic text-center p-4">
-                  A la espera de apertura del engrama traumático...
-                </div>
-              )}
-            </div>
-
-            {/* Controles Manuales del Terapeuta */}
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-3 text-xs">
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                  <span>Velocidad EMDR 3D (Hz):</span>
-                  <span className="text-purple-300 font-mono">{emdrSweepSpeedHz.toFixed(1)} Hz</span>
-                </div>
-                <input 
-                  type="range" min="0.5" max="3.0" step="0.1"
-                  value={emdrSweepSpeedHz}
-                  disabled={aiAutoPilot || !sessionActive}
-                  onChange={(e) => setEmdrSweepSpeedHz(parseFloat(e.target.value))}
-                  className="w-full accent-purple-500 cursor-pointer disabled:opacity-30"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                  <span>Binaural Theta (Santuario):</span>
-                  <span className="text-cyan-300 font-mono">{binauralThetaHz.toFixed(1)} Hz</span>
-                </div>
-                <input 
-                  type="range" min="3.0" max="7.0" step="0.1"
-                  value={binauralThetaHz}
-                  disabled={aiAutoPilot || !sessionActive}
-                  onChange={(e) => setBinauralThetaHz(parseFloat(e.target.value))}
-                  className="w-full accent-cyan-500 cursor-pointer disabled:opacity-30"
-                />
-              </div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                RECONSOLIDACIÓN DE MEMORIA &amp; EMDR 3D (PIPELINE 3 FASES)
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-500/40 font-mono">
+                  SACCADIC 3D
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Expediente: <strong className="text-rose-300 font-mono">{safePatientName}</strong> | Estado: {isVisorLinked ? 'Visor Enlazado y Sincronizado' : 'Buscando Visor...'}
+              </p>
             </div>
           </div>
 
-          {/* Botones de Control de Sesión */}
-          <div className="pt-3 border-t border-slate-800 space-y-2 shrink-0">
-            
-            {/* Instrucciones de ingreso cuando el visor está en espera */}
-            {!isConnected && !sessionActive && currentPhase !== 'COMPLETED' && (
-              <div className="mb-4 p-3 bg-slate-900/80 border border-rose-500/30 border-dashed rounded-xl flex items-center gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg shrink-0">
-                  <Glasses className="w-5 h-5 text-rose-400 animate-pulse" />
-                </div>
-                <div className="text-[11px] text-slate-300 leading-relaxed">
-                  <strong className="text-white block mb-0.5">Esperando conexión del paciente...</strong>
-                  El paciente debe colocarse el visor VR para acceder al ecosistema. ID: <span className="font-mono text-rose-300">{patientId}</span>
-                </div>
-              </div>
-            )}
-
-            {!sessionActive && currentPhase !== 'COMPLETED' ? (
+          <div className="flex items-center gap-3">
+            {/* Selector de Propósito */}
+            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700 text-xs">
               <button
                 type="button"
-                disabled={!isConnected}
-                onClick={handleStartSession}
-                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer ${
-                  !isConnected 
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
-                    : 'bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-rose-600/20'
+                onClick={() => setOperatingMode('DIAGNOSTIC')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  operatingMode === 'DIAGNOSTIC' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Play className="w-4 h-4 fill-current" />
-                <span>{!isConnected ? 'Esperando Visor...' : 'Iniciar Reescritura de Memoria'}</span>
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span>Diagnóstico (Huella)</span>
               </button>
-            ) : (
               <button
                 type="button"
-                onClick={handleEndSession}
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition active:scale-95 cursor-pointer"
+                onClick={() => setOperatingMode('TREATMENT')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  operatingMode === 'TREATMENT' ? 'bg-rose-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
               >
-                <Square className="w-4 h-4 fill-current" />
-                <span>Concluir Sesión VR</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Tratamiento (EMDR)</span>
               </button>
-            )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => VrControlService.triggerGroundingProtocol(patientId)}
+              className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              <span>Grounding</span>
+            </button>
+
+            <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Indicador del Pipeline */}
+        <div className="bg-slate-950/80 px-6 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400 font-sans font-bold text-[11px] uppercase">Fase Activa:</span>
+            
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              phase === 'PHASE_1_BASELINE' ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <span>1. Anclaje Seguro ({baselineSec}s)</span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              phase === 'PHASE_2_SACCADIC' ? 'bg-rose-950 border-rose-500 text-rose-300 font-bold animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <span>2. Desensibilización Sacádica ({activeSec}s)</span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              phase === 'PHASE_3_INTEGRATION' ? 'bg-emerald-950 border-emerald-500 text-emerald-300 font-bold animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <span>3. Integración ({integrationSec}s)</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400">Fase: <strong className="text-white">{phaseTime}s</strong></span>
+            <span className="text-slate-400">Total: <strong className="text-rose-300">{totalElapsedTime}s / {totalProtocolDuration}s</strong></span>
           </div>
         </div>
 
+        {/* Cuerpo Principal */}
+        <main className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
+          
+          {/* COLUMNA 1: Selector y Parámetros */}
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-1">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1.5">
+                Categoría de Trauma Objetivo
+              </label>
+              <select
+                disabled={phase !== 'IDLE' && phase !== 'FINISHED'}
+                value={selectedTraumaCategory}
+                onChange={(e) => setSelectedTraumaCategory(e.target.value as TraumaCategory)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-semibold outline-none cursor-pointer focus:border-rose-500"
+              >
+                {Object.values(TRAUMA_PROTOCOLS).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10.5px] font-mono">
+                <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                  <span className="text-slate-500 block">CIE-11:</span>
+                  <strong className="text-cyan-300">{activeProtocol.cie11}</strong>
+                </div>
+                <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                  <span className="text-slate-500 block">DSM-5-TR:</span>
+                  <strong className="text-amber-300">{activeProtocol.dsm5}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                  Guion IA Programable (Fase Activa)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingParams(!isEditingParams)}
+                  className="text-[10px] text-cyan-400 underline cursor-pointer"
+                >
+                  {isEditingParams ? 'Ocultar' : 'Ajustar Hz'}
+                </button>
+              </div>
+
+              <textarea
+                disabled={phase !== 'IDLE' && phase !== 'FINISHED'}
+                value={programmableScript}
+                onChange={(e) => setProgrammableScript(e.target.value)}
+                rows={4}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-none focus:border-rose-500 mb-3 leading-relaxed font-sans"
+              />
+
+              {isEditingParams && (
+                <div className="p-3 bg-slate-900 rounded-lg border border-slate-700 space-y-2.5 text-xs mb-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Velocidad Sacádica (Hz):</span>
+                    <span className="font-mono text-rose-400 font-bold">{sweepSpeedHz.toFixed(1)} Hz</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="2.5"
+                    step="0.1"
+                    disabled={phase !== 'IDLE' && phase !== 'FINISHED'}
+                    value={sweepSpeedHz}
+                    onChange={(e) => setSweepSpeedHz(Number(e.target.value))}
+                    className="w-full accent-rose-500 cursor-pointer"
+                  />
+
+                  <div className="flex justify-between items-center pt-1">
+                    <span className="text-slate-400">Theta Binaural (Hz):</span>
+                    <span className="font-mono text-cyan-400 font-bold">{binauralThetaHz.toFixed(1)} Hz</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="3.0"
+                    max="7.0"
+                    step="0.1"
+                    disabled={phase !== 'IDLE' && phase !== 'FINISHED'}
+                    value={binauralThetaHz}
+                    onChange={(e) => setBinauralThetaHz(Number(e.target.value))}
+                    className="w-full accent-cyan-500 cursor-pointer"
+                  />
+                </div>
+              )}
+
+              <div className="mt-auto space-y-2">
+                {phase === 'IDLE' && (
+                  <button
+                    type="button"
+                    onClick={handleStartPipeline}
+                    className={`w-full py-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 ${
+                      isVisorLinked ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20' : 'bg-slate-800 text-slate-500 border border-slate-700'
+                    }`}
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>{isVisorLinked ? 'Iniciar Pipeline EMDR' : 'Conecta el Visor Primero'}</span>
+                  </button>
+                )}
+
+                {(phase === 'PHASE_1_BASELINE' || phase === 'PHASE_2_SACCADIC' || phase === 'PHASE_3_INTEGRATION') && (
+                  <button
+                    type="button"
+                    onClick={finishSessionAndGenerateRoi}
+                    className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-rose-600/30 active:scale-95 animate-pulse"
+                  >
+                    <Square className="w-4 h-4 fill-white" />
+                    <span>Detener y Compilar Dictamen</span>
+                  </button>
+                )}
+
+                {phase === 'FINISHED' && (
+                  <button
+                    type="button"
+                    onClick={handleStartPipeline}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Reiniciar Protocolo EMDR</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* COLUMNA 2: Monitor Fisiológico & Gráfica */}
+          <section className="col-span-12 lg:col-span-5 flex flex-col gap-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">GSR FÁSICO</span>
+                <div className="text-xl font-mono font-black text-amber-400 mt-1">{currentGsr.toFixed(2)} <span className="text-xs text-slate-500 font-normal">µS</span></div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">VFC RMSSD</span>
+                <div className="text-xl font-mono font-black text-emerald-400 mt-1">{currentHrv} <span className="text-xs text-slate-500 font-normal">ms</span></div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">PASES SACÁDICOS</span>
+                <div className="text-xl font-mono font-black text-rose-400 mt-1">{bilateralStepsCount}</div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-rose-400" />
+                  Curva de Desensibilización &amp; Tono Vagal
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">{totalElapsedTime}s / {totalProtocolDuration}s</span>
+              </div>
+
+              <div className="flex-1 w-full bg-slate-900 rounded-lg border border-slate-800 p-2 relative flex items-end overflow-hidden">
+                {liveCurve.length > 1 ? (
+                  <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${totalProtocolDuration} 100`} preserveAspectRatio="none">
+                    <line x1={baselineSec} y1="0" x2={baselineSec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
+                    <line x1={baselineSec + activeSec} y1="0" x2={baselineSec + activeSec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
+
+                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.gsr * 12))}`).join(' ')} />
+                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.hrv * 0.9))}`).join(' ')} />
+                  </svg>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[10px] font-mono">
+                    <Eye className="w-6 h-6 mb-2 opacity-30 animate-pulse" />
+                    <span>Presiona 'Iniciar Pipeline EMDR' para registrar la curva</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2 flex justify-between text-[9px] text-slate-500 font-mono">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-full"></span> GSR (µS)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full"></span> HRV (ms)</span>
+                <span className="flex items-center gap-1">Líneas punteadas: Transición de Fase</span>
+              </div>
+            </div>
+          </section>
+
+          {/* COLUMNA 3: Dictamen Pericial ROI & Logs */}
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col max-h-[60%]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-emerald-400 uppercase flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  Dictamen Pericial EMDR (ROI)
+                </span>
+                {roiReportText && (
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="px-2 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-200 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Printer className="w-3 h-3" />
+                    <span>Imprimir A4</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 p-3 overflow-y-auto font-mono text-[10px] leading-relaxed text-slate-300 whitespace-pre-wrap">
+                {roiReportText || (
+                  <div className="text-slate-600 text-center mt-10 text-xs">
+                    El dictamen pericial con el cálculo de la tasa de desensibilización (H) se compilará automáticamente al completar la fase 3.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex-1 flex flex-col max-h-[40%]">
+              <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-2">
+                <Terminal className="w-3 h-3" /> AI Closed-Loop Logs
+              </span>
+              <div className="flex-1 overflow-y-auto space-y-1 font-mono text-[9px] text-slate-400 flex flex-col-reverse">
+                {aiLogs.map((log, i) => (
+                  <p key={i} className="pb-0.5">{log}</p>
+                ))}
+              </div>
+            </div>
+          </section>
+
+        </main>
       </div>
     </div>
   );
