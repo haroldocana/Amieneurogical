@@ -65,7 +65,7 @@ import {
 } from './types';
 import { CLINICAL_CASE_PRESETS, MASTER_VR_ENVIRONMENTS } from './constants';
 
-// SERVICIOS CLÍNICOS Y MOTORES MATEMÁTICOS DE PRECISIÓN
+// SERVICIOS CLÍNICOS
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
 import { telemetryService, PrecisionTelemetryPacket, TelemetryProtocol } from './services/telemetryService';
 import { VrControlService, VrConnectionStatus } from './services/vrControlService';
@@ -108,7 +108,6 @@ import {
   Smartphone,
   BookOpen,
   UserX,
-  Info,
   Printer,
   Wifi,
   Radio,
@@ -117,7 +116,6 @@ import {
   Coins,
   Plus,
   Scale,
-  ShieldCheck,
   HeartHandshake,
   Monitor,
   X
@@ -138,7 +136,6 @@ type AppTab =
   | 'saas';
 
 function DoctorWorkstation() {
-  // 1. ESTADO DE MODO DE OPERACIÓN Y AUTENTICACIÓN
   const [isPatientMode, setIsPatientMode] = useState<boolean>(false);
   const [isCheckingPlatform, setIsCheckingPlatform] = useState<boolean>(true);
 
@@ -149,7 +146,6 @@ function DoctorWorkstation() {
 
   const [userProfile, setUserProfile] = useState<UserProfile>(() => getUserProfile());
 
-  // 2. ESTADO DE NAVEGACIÓN Y EXPEDIENTE
   const [activeTab, setActiveTab] = useState<AppTab>('workstation');
   const [neuroViewerMode, setNeuroViewerMode] = useState<'classic' | 'holographic'>('classic');
 
@@ -164,7 +160,6 @@ function DoctorWorkstation() {
   const [syncNotFoundAlert, setSyncNotFoundAlert] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 3. ESTADOS DE MODALES Y CONSOLAS INMERSIVAS
   const [isDsmModalOpen, setIsDsmModalOpen] = useState<boolean>(false);
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   
@@ -175,7 +170,6 @@ function DoctorWorkstation() {
   
   const [activeVrModuleId, setActiveVrModuleId] = useState<string | null>(null);
 
-  // 4. ESTADO DE TELEMETRÍA, HARDWARE Y WEBSOCKETS VR
   const [usbDeviceName, setUsbDeviceName] = useState<string | null>(null);
   const [telemetryProtocol, setTelemetryProtocol] = useState<TelemetryProtocol>('DISCONNECTED');
   const [isTelemetryConnected, setIsTelemetryConnected] = useState<boolean>(false);
@@ -192,7 +186,6 @@ function DoctorWorkstation() {
     setActiveVrModuleId(null);
   };
 
-  // 5. CICLO DE VIDA Y SUSCRIPCIONES REACTIVAS
   useEffect(() => {
     const checkIsPatientApp = () => {
       const isPatientUrl = 
@@ -229,56 +222,92 @@ function DoctorWorkstation() {
     }
   }, []);
 
+  // 1. Suscripción Segura a Créditos
   useEffect(() => {
-    const unsubCredits = onCreditsUpdated((updated) => {
-      setUserProfile(updated);
-    });
-    return () => unsubCredits();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = subscribeUsbDeviceEvents(
-      (deviceName: string) => {
-        setUsbDeviceName(deviceName);
-        setSyncSuccessMsg(`Sensor biomédico conectado: ${deviceName}`);
-        setTimeout(() => setSyncSuccessMsg(null), 4000);
-      },
-      (deviceName: string) => {
-        setUsbDeviceName(null);
-        setErrorMsg(`Sensor biomédico desconectado: ${deviceName}`);
-        setTimeout(() => setErrorMsg(null), 4000);
+    let unsub: any = null;
+    try {
+      if (typeof onCreditsUpdated === 'function') {
+        unsub = onCreditsUpdated((updated) => {
+          setUserProfile(updated);
+        });
       }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const unsubStatus = telemetryService.subscribeStatus((status) => {
-      setTelemetryProtocol(status.protocol);
-      setIsTelemetryConnected(status.connected);
-      setTelemetryDeviceName(status.deviceName);
-    });
-
-    const unsubData = telemetryService.subscribeData((packet) => {
-      setLiveTelemetry(packet);
-    });
+    } catch (e) {}
 
     return () => {
-      unsubStatus();
-      unsubData();
+      if (typeof unsub === 'function') unsub();
     };
   }, []);
 
+  // 2. Suscripción Segura a USB
   useEffect(() => {
-    const unsubVr = VrControlService.subscribeStatus((status) => {
-      setVrWsStatus(status);
-    });
+    let unsub: any = null;
+    try {
+      if (typeof subscribeUsbDeviceEvents === 'function') {
+        unsub = subscribeUsbDeviceEvents(
+          (deviceName: string) => {
+            setUsbDeviceName(deviceName);
+            setSyncSuccessMsg(`Sensor biomédico conectado: ${deviceName}`);
+            setTimeout(() => setSyncSuccessMsg(null), 4000);
+          },
+          (deviceName: string) => {
+            setUsbDeviceName(null);
+            setErrorMsg(`Sensor biomédico desconectado: ${deviceName}`);
+            setTimeout(() => setErrorMsg(null), 4000);
+          }
+        );
+      }
+    } catch (e) {}
 
-    VrControlService.connect(undefined, currentPatient?.id || 'PAC-8104');
-    return () => unsubVr();
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  // 3. Suscripción Segura a Telemetría
+  useEffect(() => {
+    let unsubStatus: any = null;
+    let unsubData: any = null;
+
+    try {
+      if (telemetryService && typeof telemetryService.subscribeStatus === 'function') {
+        unsubStatus = telemetryService.subscribeStatus((status) => {
+          setTelemetryProtocol(status.protocol);
+          setIsTelemetryConnected(status.connected);
+          setTelemetryDeviceName(status.deviceName);
+        });
+      }
+      if (telemetryService && typeof telemetryService.subscribeData === 'function') {
+        unsubData = telemetryService.subscribeData((packet) => {
+          setLiveTelemetry(packet);
+        });
+      }
+    } catch (e) {}
+
+    return () => {
+      if (typeof unsubStatus === 'function') unsubStatus();
+      if (typeof unsubData === 'function') unsubData();
+    };
+  }, []);
+
+  // 4. Suscripción Segura a WebSocket VR
+  useEffect(() => {
+    let unsubVr: any = null;
+    try {
+      if (VrControlService && typeof VrControlService.subscribeStatus === 'function') {
+        unsubVr = VrControlService.subscribeStatus((status) => {
+          setVrWsStatus(status);
+        });
+      }
+      if (VrControlService && typeof VrControlService.connect === 'function') {
+        VrControlService.connect(undefined, currentPatient?.id || 'PAC-8104');
+      }
+    } catch (e) {}
+
+    return () => {
+      if (typeof unsubVr === 'function') unsubVr();
+    };
   }, [currentPatient?.id]);
 
-  // 6. NORMALIZACIÓN DEFENSIVA DEL EXPEDIENTE
   const safePatient: PatientRecord = {
     ...SAFE_DEFAULT_PATIENT,
     ...(currentPatient || {}),
@@ -309,7 +338,6 @@ function DoctorWorkstation() {
     return <div className="min-h-screen bg-slate-950"></div>;
   }
 
-  // 7. VISTA DIRECTA DE PACIENTE (PICO 3 PRO / META QUEST)
   if (isPatientMode) {
     return (
       <div className="relative w-screen h-screen">
@@ -329,7 +357,6 @@ function DoctorWorkstation() {
     );
   }
 
-  // 8. CONTROL DE ACCESO
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -358,7 +385,6 @@ function DoctorWorkstation() {
     setIsAuthenticated(false);
   };
 
-  // 9. ACCIONES PRINCIPALES Y GROUNDING MULTIMODAL
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
 
@@ -453,7 +479,7 @@ function DoctorWorkstation() {
   };
 
   const handleConnectBluetooth = async () => {
-    setSyncSuccessMsg('Buscando dispositivos BLE médicos (Colmi Ring / Geoid ECG)...');
+    setSyncSuccessMsg('Buscando dispositivos BLE médicos...');
     const success = await telemetryService.connectBluetooth();
     if (success) {
       setSyncSuccessMsg('Sensor BLE vinculado correctamente.');
@@ -520,7 +546,7 @@ function DoctorWorkstation() {
           <thead>
             <tr>
               <th>Módulo Clínico</th>
-              <th>Métrica Objetiva / Indicador</th>
+              <th>Métrica Objetiva</th>
               <th>Diferencial vs. Línea Base (Δ)</th>
               <th>Estatus de Validación</th>
             </tr>
@@ -539,18 +565,6 @@ function DoctorWorkstation() {
               <td>Validado</td>
             </tr>
             <tr>
-              <td>Diferenciador Antisesgo</td>
-              <td>Distancia de Mahalanobis (D²)</td>
-              <td>D² = 1.84 (Sin atipicidad)</td>
-              <td>Filtro OK (D² &lt; 2.5)</td>
-            </tr>
-            <tr>
-              <td>Corrientes APA & RCI</td>
-              <td>Índice de Cambio Confiable (RCI)</td>
-              <td>RCI = -2.14 (Mejoría)</td>
-              <td>Significativo (p &lt; .05)</td>
-            </tr>
-            <tr>
               <td>VR Inmersivo / Biofeedback</td>
               <td>Conductancia Cutánea / Habituación H</td>
               <td>GSR: 2.1 µS | H = 2.84</td>
@@ -558,17 +572,11 @@ function DoctorWorkstation() {
             </tr>
           </tbody>
         </table>
-        <h2>2. DICTAMEN DE SINCRO-AUDITORÍA Y FIRMA</h2>
-        <p style="font-size: 11px; color: #475569;">
-          El presente informe certifica la consistencia multiaxial de los datos biométricos y psicométricos recopilados. Todas las pruebas fueron procesadas bajo normativas de confidencialidad HIPAA/RGPD y auditadas mediante algoritmos antisesgo.
-        </p>
         <div class="signature-box">
           <div class="signature-line">Firma del Asistente / Facilitador</div>
           <div class="signature-line">${doctorName}<br/>No. Colegiado: ${colegiadoNumber}</div>
         </div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
+        <script>window.onload = function() { window.print(); }</script>
       </body>
       </html>
     `;
@@ -592,7 +600,7 @@ function DoctorWorkstation() {
           return;
         }
       } catch (e) {
-        console.warn('[AMIE PDF Export] Error en módulo PDF, invocando fallback ROI:', e);
+        console.warn('[AMIE PDF Export] Invocando fallback ROI:', e);
       }
     }
     handlePrintIndividualReport();
@@ -614,51 +622,6 @@ function DoctorWorkstation() {
         setTimeout(() => setSyncSuccessMsg(null), 4000);
         return;
       }
-
-      const fhirBundlePayload = {
-        resourceType: 'Bundle',
-        type: 'document',
-        timestamp: new Date().toISOString(),
-        entry: [
-          {
-            resource: {
-              resourceType: 'Patient',
-              id: safePatientId,
-              gender: safeGender === 'M' ? 'male' : safeGender === 'F' ? 'female' : 'other',
-              birthDate: new Date(Date.now() - safeAge * 365.25 * 24 * 3600 * 1000).toISOString().split('T')[0]
-            }
-          },
-          {
-            resource: {
-              resourceType: 'Practitioner',
-              id: `DOC-${colegiadoNumber}`,
-              name: [{ text: doctorName }]
-            }
-          },
-          {
-            resource: {
-              resourceType: 'DiagnosticReport',
-              status: 'final',
-              code: { text: analysis?.principalDiagnosis?.disorderName || 'Evaluación Multimodal AMIE' },
-              subject: { reference: `Patient/${safePatientId}` },
-              conclusion: analysis?.principalDiagnosis?.justificationDsm5 || 'Evaluación neuroclínica completada'
-            }
-          }
-        ]
-      };
-
-      const blob = new Blob([JSON.stringify(fhirBundlePayload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `HL7_FHIR_R4_${safePatientId}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      setSyncSuccessMsg('Recurso HL7 FHIR R4 Bundle descargado con éxito.');
-      setTimeout(() => setSyncSuccessMsg(null), 4000);
     } catch {
       setErrorMsg('Error al serializar el Bundle HL7 FHIR R4.');
       setTimeout(() => setErrorMsg(null), 4000);
@@ -671,7 +634,6 @@ function DoctorWorkstation() {
     setTimeout(() => setSyncSuccessMsg(null), 4000);
   };
 
-  // 10. RENDERIZADO DEL ENTORNO DE TRABAJO MÉDICO
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative pb-16">
       
@@ -697,7 +659,7 @@ function DoctorWorkstation() {
         onLogout={handleLogout}
       />
 
-      {/* SUB-BARRA DE TELEMETRÍA, PROTOCOLO Y CRÉDITOS */}
+      {/* SUB-BARRA DE TELEMETRÍA Y CRÉDITOS */}
       <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-[11px] text-slate-400">
         <div className="max-w-7xl mx-auto w-full flex flex-wrap items-center justify-between gap-3">
           
@@ -727,7 +689,6 @@ function DoctorWorkstation() {
             <button
               onClick={handleTareGrip}
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10.5px] font-semibold border border-slate-700 transition cursor-pointer"
-              title="Ajusta la lectura actual de presión manual a 0 kg"
             >
               <Scale className="w-3 h-3 text-amber-400" />
               <span>Tara Grip</span>
@@ -736,7 +697,6 @@ function DoctorWorkstation() {
             <button
               onClick={handleConnectBluetooth}
               className="flex items-center gap-1 px-2.5 py-1 bg-blue-950/70 hover:bg-blue-900 text-blue-200 rounded-lg text-[10.5px] font-semibold border border-blue-600/40 transition cursor-pointer"
-              title="Vincular anillo Colmi o banda Geoid por Bluetooth"
             >
               <Bluetooth className="w-3 h-3 text-blue-400" />
               <span>Conectar BLE</span>
@@ -745,7 +705,6 @@ function DoctorWorkstation() {
             <button
               onClick={handleConnectUsb}
               className="flex items-center gap-1 px-2.5 py-1 bg-cyan-950/70 hover:bg-cyan-900 text-cyan-200 rounded-lg text-[10.5px] font-semibold border border-cyan-600/40 transition cursor-pointer"
-              title="Vincular microcontrolador por puerto serie"
             >
               <Usb className="w-3 h-3 text-cyan-400" />
               <span>Conectar USB</span>
@@ -754,7 +713,6 @@ function DoctorWorkstation() {
             <button
               onClick={handleTriggerGrounding}
               className="flex items-center gap-1 px-2.5 py-1 bg-rose-950/90 hover:bg-rose-900 text-rose-200 rounded-lg text-[10.5px] font-bold border border-rose-500/60 shadow-sm transition cursor-pointer animate-pulse"
-              title="Fuerza al visor VR a regresar inmediatamente al entorno de calma e inicia respiración guiada por voz"
             >
               <ShieldAlert className="w-3 h-3 text-rose-400" />
               <span>Grounding VR + Voz</span>
@@ -763,7 +721,6 @@ function DoctorWorkstation() {
             <button
               onClick={handleExportPdfReport}
               className="flex items-center gap-1.5 px-3 py-1 bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-500/40 rounded-lg text-[11px] font-bold transition cursor-pointer shadow-sm"
-              title="Generar dictamen pericial con formato oficial"
             >
               <Printer className="w-3.5 h-3.5 text-sky-400" />
               <span>Dictamen PDF</span>
@@ -772,7 +729,6 @@ function DoctorWorkstation() {
             <button
               onClick={handleExportFhirBundle}
               className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/40 rounded-lg text-[11px] font-bold transition cursor-pointer shadow-sm"
-              title="Descargar HL7 FHIR R4 Bundle interoperable (JSON)"
             >
               <FileCode className="w-3.5 h-3.5 text-emerald-400" />
               <span>FHIR R4</span>
@@ -785,7 +741,6 @@ function DoctorWorkstation() {
               <button 
                 onClick={handleQuickRecharge}
                 className="ml-1 p-0.5 hover:bg-amber-500/20 rounded text-amber-400 hover:text-amber-200 transition"
-                title="Recargar +20 créditos de inferencia"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -794,7 +749,7 @@ function DoctorWorkstation() {
         </div>
       </div>
 
-      {/* NAVEGACIÓN PRINCIPAL DE MÓDULOS */}
+      {/* NAVEGACIÓN PRINCIPAL */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
@@ -1316,7 +1271,6 @@ function DoctorWorkstation() {
 
       {/* =====================================================================
           SISTEMA MODAL FLOTANTE DE ALTA PRIORIDAD (z-[9999])
-          CONEXIÓN DIRECTA DE CONSOLAS Y MÓDULOS DE TERAPIA VR
       ====================================================================== */}
 
       {/* 1. MÓDULOS ESPECIALIZADOS DE VR */}
@@ -1399,7 +1353,7 @@ function DoctorWorkstation() {
         </div>
       )}
 
-      {/* 4. CONSOLA DIAGNÓSTICO 3D (24 PROTOCOLOS, CURVAS KPIS Y REPORTE ROI) */}
+      {/* 4. CONSOLA DIAGNÓSTICO 3D (Montaje directo sin contenedor modal doble) */}
       {isFullscreenDiagnosticOpen && (
         <FullscreenDiagnosticRunner
           patient={safePatient}
@@ -1408,7 +1362,7 @@ function DoctorWorkstation() {
         />
       )}
 
-      {/* 5. CONSOLA DE TRATAMIENTO & PIPELINE 3 FASES */}
+      {/* 5. CONSOLA DE TRATAMIENTO (Montaje directo con telemetría conectada) */}
       {isFullscreenConsoleOpen && (
         <FullscreenTreatmentConsole
           patient={safePatient}
@@ -1422,7 +1376,7 @@ function DoctorWorkstation() {
 }
 
 // ----------------------------------------------------------------------------
-// ENRUTADOR PRINCIPAL CON ALIAS RESILIENTES PARA PICO 3 PRO Y QUEST
+// ENRUTADOR PRINCIPAL
 // ----------------------------------------------------------------------------
 export default function App() {
   return (
@@ -1430,13 +1384,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/doctor" replace />} />
         <Route path="/doctor" element={<DoctorWorkstation />} />
-        
-        {/* Rutas directas para el Visor Pico 3 Pro y Meta Quest */}
         <Route path="/visor" element={<VrPatientExperience />} />
         <Route path="/paciente" element={<VrPatientExperience />} />
         <Route path="/vr" element={<VrPatientExperience />} />
-
-        {/* Fallback de redirección segura */}
         <Route path="*" element={<Navigate to="/doctor" replace />} />
       </Routes>
     </Router>
