@@ -121,6 +121,10 @@ import {
   Scale,
   HeartHandshake,
   Monitor,
+  Eye,
+  Crosshair,
+  Flame,
+  Shield,
   X
 } from 'lucide-react';
 
@@ -225,7 +229,7 @@ function DoctorWorkstation() {
     }
   }, []);
 
-  // Suscripción Segura a Créditos
+  // Suscripción a créditos
   useEffect(() => {
     let unsub: any = null;
     try {
@@ -241,7 +245,7 @@ function DoctorWorkstation() {
     };
   }, []);
 
-  // Suscripción Segura a USB
+  // Suscripción a dispositivos USB
   useEffect(() => {
     let unsub: any = null;
     try {
@@ -266,7 +270,7 @@ function DoctorWorkstation() {
     };
   }, []);
 
-  // Suscripción Segura a Telemetría
+  // Suscripción a telemetría
   useEffect(() => {
     let unsubStatus: any = null;
     let unsubData: any = null;
@@ -292,7 +296,7 @@ function DoctorWorkstation() {
     };
   }, []);
 
-  // Suscripción Segura a WebSocket VR
+  // Suscripción a WebSocket VR
   useEffect(() => {
     let unsubVr: any = null;
     try {
@@ -337,11 +341,41 @@ function DoctorWorkstation() {
   const safeAge = safePatient.age ?? 55;
   const safeGender = safePatient.gender || 'M';
 
+  // --------------------------------------------------------------------------
+  // DISPARADOR BIDIRECCIONAL: CONECTA EL PANEL Y EL VISOR AL HACER CLIC
+  // --------------------------------------------------------------------------
+  const handleLaunchVrModule = (
+    moduleId: string, 
+    ecosystem: string, 
+    category: 'DIAGNOSTIC' | 'TREATMENT', 
+    title: string,
+    hz = 0
+  ) => {
+    VrControlService.syncClinicalContext({
+      moduleId,
+      category,
+      disorderId: moduleId,
+      disorderName: title,
+      ecosystem,
+      patientId: safePatientId,
+      frequencyHz: hz,
+      audioGuidance: {
+        baselineScript: `Iniciando sesión clínica para ${title}. Mantén una postura relajada y fija la vista al frente.`,
+        activeScript: '',
+        recoveryScript: ''
+      }
+    });
+
+    setActiveVrModuleId(moduleId);
+    setSyncSuccessMsg(`Sincronizando visor Pico con: ${title} (${category})`);
+    setTimeout(() => setSyncSuccessMsg(null), 3500);
+  };
+
   if (isCheckingPlatform) {
     return <div className="min-h-screen bg-slate-950"></div>;
   }
 
-  // Vista Modo Paciente (Fullscreen VR)
+  // Vista del paciente (WebXR Pico 3 Pro)
   if (isPatientMode) {
     return (
       <div className="relative w-screen h-screen">
@@ -361,7 +395,6 @@ function DoctorWorkstation() {
     );
   }
 
-  // Autenticación Médica
   const handleLoginSuccess = (auth: { doctorName: string; colegiadoNumber: number; token: string; username: string }) => {
     setDoctorName(auth.doctorName || 'Dr. Alejandro Morales Rivera');
     setDoctorUsername(auth.username || 'harold01');
@@ -390,12 +423,11 @@ function DoctorWorkstation() {
     setIsAuthenticated(false);
   };
 
-  // Acciones Principales
   const handleRunAnalysis = async () => {
     if (!currentPatient) return;
 
     if (!hasAvailableCredits(1)) {
-      setErrorMsg('Saldo insuficiente de Créditos de IA. Recargue su bolsón en el panel superior.');
+      setErrorMsg('Saldo insuficiente de Créditos de IA. Recargue en el panel superior.');
       return;
     }
 
@@ -508,14 +540,14 @@ function DoctorWorkstation() {
 
   const handleTareGrip = () => {
     const offset = telemetryService.executeZeroTare();
-    setSyncSuccessMsg(`Tara de dinamometría manual calibrada a 0.0 kg (Offset: ${offset.toFixed(1)} kg).`);
+    setSyncSuccessMsg(`Tara de dinamometría calibrada a 0.0 kg (Offset: ${offset.toFixed(1)} kg).`);
     setTimeout(() => setSyncSuccessMsg(null), 4000);
   };
 
   const handleTriggerGrounding = () => {
     VrControlService.triggerGroundingProtocol(safePatientId);
     ClinicalAudioGuidanceEngine.triggerEmergencyGroundingVoice();
-    setSyncSuccessMsg('EMERGENCIA VR: Protocolo de Grounding Visual y Voz de Calma 5-4-3-2-1 despachados al visor.');
+    setSyncSuccessMsg('EMERGENCIA VR: Grounding Visual y Voz 5-4-3-2-1 despachados al visor.');
     setTimeout(() => setSyncSuccessMsg(null), 5000);
   };
 
@@ -684,13 +716,13 @@ function DoctorWorkstation() {
         </div>
       </div>
 
-      {/* NAVEGACIÓN PRINCIPAL (TABS) */}
+      {/* NAVEGACIÓN PRINCIPAL */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 sticky top-[57px] z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-1 font-sans w-full">
             
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Workstation Clínico" description="Núcleo de triaje y triangulación de riesgos." clinicalUtility="Generación del dictamen normativo DSM-5-TR / CIE-11." badge="Módulo 1">
+              <HoverTooltip title="Workstation Clínico" description="Triaje y triangulación multimodal." clinicalUtility="Dictamen DSM-5-TR / CIE-11." badge="Módulo 1">
                 <button
                   onClick={() => setActiveTab('workstation')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -706,7 +738,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Evaluador Científico & Multisensor" description="Scoring de afinidad bioclínica (0-100)." clinicalUtility="Mapeo de respuesta terapéutica." badge="Módulo 2">
+              <HoverTooltip title="Evaluador Científico" description="Scoring de afinidad bioclínica." clinicalUtility="Mapeo terapéutico." badge="Módulo 2">
                 <button
                   onClick={() => setActiveTab('scientific_evaluator')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -722,7 +754,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Diferenciador Bioclínico & Antisesgo" description="Distancia de Mahalanobis." clinicalUtility="Eliminación de sesgos de confirmación." badge="Módulo 3">
+              <HoverTooltip title="Diferenciador Bioclínico" description="Distancia de Mahalanobis." clinicalUtility="Eliminación de sesgos." badge="Módulo 3">
                 <button
                   onClick={() => setActiveTab('differential_bias')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -738,7 +770,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Traducción APA & RCI" description="Corrientes teóricas y cálculo RCI." clinicalUtility="Cambio clínicamente confiable." badge="Marco APA">
+              <HoverTooltip title="Traducción APA & RCI" description="Corrientes teóricas y cálculo RCI." clinicalUtility="Cambio confiable." badge="Marco APA">
                 <button
                   onClick={() => setActiveTab('apa_framework')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -754,7 +786,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Cluster B & Perfilado" description="Caracterización de rasgos narcisistas y disociales." clinicalUtility="Análisis pericial forense." badge="Cluster B">
+              <HoverTooltip title="Cluster B & Perfilado" description="Rasgos narcisistas y forenses." clinicalUtility="Peritaje psiquiátrico." badge="Cluster B">
                 <button
                   onClick={() => setActiveTab('cluster_b')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -770,7 +802,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Capacitación AMIE" description="Simulador de pacientes con IA." clinicalUtility="Entrenamiento inmersivo." badge="Módulo 4">
+              <HoverTooltip title="Capacitación AMIE" description="Simulador de pacientes con IA." clinicalUtility="Entrenamiento." badge="Módulo 4">
                 <button
                   onClick={() => setActiveTab('academy')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -786,7 +818,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Neurotopografía 3D" description="Potencia espectral continua en 3D." clinicalUtility="Comparativa normativo-clínica." badge="Módulo 5">
+              <HoverTooltip title="Neurotopografía 3D" description="Potencia espectral continua." clinicalUtility="Comparativa normativo-clínica." badge="Módulo 5">
                 <button
                   onClick={() => setActiveTab('neuro_3d')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -802,7 +834,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="qEEG & Carga" description="Lectura de archivos .EDF/.BDF/.CSV." clinicalUtility="Inspección multicanal." badge="Señales Crudas">
+              <HoverTooltip title="qEEG & Carga" description="Lectura .EDF/.BDF/.CSV." clinicalUtility="Inspección multicanal." badge="Señales Crudas">
                 <button
                   onClick={() => setActiveTab('neurosensometry')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -818,7 +850,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="VR Inmersivo" description="Consolas inmersivas y catálogo de entornos." clinicalUtility="Desensibilización y biofeedback." badge="Biometría VR">
+              <HoverTooltip title="VR Inmersivo" description="Consolas inmersivas 6DoF." clinicalUtility="Desensibilización." badge="Biometría VR">
                 <button
                   onClick={() => setActiveTab('vr_therapy')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -850,7 +882,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Hoja de Derivación a Psiquiatría" description="Interconsulta oficial estructurada." clinicalUtility="Gestión de crisis." badge="Interconsulta">
+              <HoverTooltip title="Hoja de Derivación" description="Interconsulta psiquiátrica." clinicalUtility="Gestión de crisis." badge="Interconsulta">
                 <button
                   onClick={() => setActiveTab('referral')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -866,7 +898,7 @@ function DoctorWorkstation() {
             </div>
 
             <div className="shrink-0 inline-flex">
-              <HoverTooltip title="Panel SaaS & Licenciamiento" description="Supervisión de licencias." clinicalUtility="Gestión de cuentas." badge="Perfil">
+              <HoverTooltip title="Panel SaaS" description="Supervisión de licencias." clinicalUtility="Gestión institucional." badge="Perfil">
                 <button
                   onClick={() => setActiveTab('saas')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 whitespace-nowrap cursor-pointer ${
@@ -888,7 +920,6 @@ function DoctorWorkstation() {
       {/* CUERPO DE CONTENIDO DINÁMICO */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
         
-        {/* Alertas Globales */}
         {syncNotFoundAlert && (
           <div className="p-4 bg-rose-950/80 border-2 border-rose-500 rounded-2xl text-rose-100 text-xs flex items-center justify-between shadow-2xl">
             <div className="flex items-center gap-3">
@@ -1052,7 +1083,7 @@ function DoctorWorkstation() {
           />
         )}
         
-        {/* TAB 9: VR INMERSIVO & CONSOLAS */}
+        {/* TAB 9: VR INMERSIVO & CONSOLAS MAESTRAS */}
         {activeTab === 'vr_therapy' && (
           <div className="space-y-5">
             
@@ -1068,88 +1099,146 @@ function DoctorWorkstation() {
             {/* GESTOR DE ESCENARIOS MULTIMEDIA (FOTOS Y VIDEOS 360°) */}
             <CustomMediaUploader patientId={safePatientId} />
 
-            {/* BOTONERA DE ACCESO A CONSOLAS Y MODALES */}
+            {/* BOTONERA MAESTRA: ACCESO INMEDIATO Y SINCRONIZADO CON PICO */}
             <div className="flex items-center justify-end gap-2.5 flex-wrap">
               
+              {/* ORQUESTADOR MAESTRO (CATÁLOGO DE 30 TRASTORNOS) */}
               <button
-                onClick={() => setIsFullscreenDiagnosticOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:scale-105 text-white rounded-xl text-xs font-bold shadow-xl shadow-cyan-600/30 transition cursor-pointer"
+                onClick={() => {
+                  setIsFullscreenDiagnosticOpen(true);
+                  VrControlService.syncClinicalContext({
+                    moduleId: 'ASPERGER_SYNDROME',
+                    category: 'DIAGNOSTIC',
+                    disorderId: 'ASPERGER_SYNDROME',
+                    disorderName: 'Orquestador Multitrastorno 6DoF',
+                    ecosystem: 'clinical_office',
+                    patientId: safePatientId
+                  });
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:scale-105 text-white rounded-xl text-xs font-black shadow-xl shadow-cyan-600/30 transition cursor-pointer"
               >
                 <Brain className="w-4 h-4 text-cyan-200" />
-                <span>Orquestador Maestro (24 Trastornos 6DoF)</span>
+                <span>Orquestador Maestro (30 Trastornos 6DoF)</span>
               </button>
 
+              {/* ASPERGER / TEA */}
+              <button
+                onClick={() => handleLaunchVrModule('ASPERGER_SYNDROME', 'social_cafe', 'DIAGNOSTIC', 'Asperger / TEA Nivel 1: Sintonía Social')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-100" />
+                <span>Asperger / TEA</span>
+              </button>
+
+              {/* TDAH */}
+              <button
+                onClick={() => handleLaunchVrModule('TDAH_CPT', 'tdah_executive', 'DIAGNOSTIC', 'TDAH: Control Ejecutivo CPT')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-sky-600/20 transition cursor-pointer"
+              >
+                <Target className="w-4 h-4 text-sky-100" />
+                <span>TDAH (CPT 3D)</span>
+              </button>
+
+              {/* TLP (TRASTORNO LÍMITE) */}
+              <button
+                onClick={() => handleLaunchVrModule('BPD_INSTABILITY', 'abandonment_scenario', 'DIAGNOSTIC', 'TLP: Regulación Emocional y Abandono')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-700 via-pink-700 to-rose-700 hover:from-purple-600 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <Shield className="w-4 h-4 text-pink-200" />
+                <span>TLP (Límite)</span>
+              </button>
+
+              {/* ESQUIZOFRENIA / PSICOSIS */}
+              <button
+                onClick={() => handleLaunchVrModule('SCHIZOPHRENIA_VR', 'sensory_overload_room', 'DIAGNOSTIC', 'Esquizofrenia: Regulación de Arousal')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-800 via-purple-800 to-slate-800 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <Eye className="w-4 h-4 text-indigo-200" />
+                <span>Esquizofrenia</span>
+              </button>
+
+              {/* ADICCIÓN A SUSTANCIAS */}
+              <button
+                onClick={() => handleLaunchVrModule('SUD_ADDICTION', 'bar_environment', 'DIAGNOSTIC', 'Adicción a Sustancias: Craving & Exposición')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-700 via-orange-700 to-red-700 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <Flame className="w-4 h-4 text-amber-200" />
+                <span>Adicción Sustancias</span>
+              </button>
+
+              {/* ADICCIÓN DIGITAL / GAMING */}
+              <button
+                onClick={() => handleLaunchVrModule('DIGITAL_ADDICTION', 'gaming_room', 'DIAGNOSTIC', 'Adicción Digital / Videojuegos')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4 text-blue-200" />
+                <span>Adicción Digital</span>
+              </button>
+
+              {/* NARCISISMO */}
+              <button
+                onClick={() => handleLaunchVrModule('NARCISSISM_MALE', 'boardroom_provocation', 'DIAGNOSTIC', 'Narcisismo: Tolerancia al Estatus')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-yellow-700 via-amber-700 to-orange-800 hover:from-yellow-600 hover:to-amber-600 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4 text-yellow-200" />
+                <span>Narcisismo</span>
+              </button>
+
+              {/* PSICOPATÍA & SOCIOPATÍA */}
+              <button
+                onClick={() => handleLaunchVrModule('PSYCHOPATHY', 'distress_empathy_test', 'DIAGNOSTIC', 'Psicopatía Forense / Sociopatía PCL-R')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-red-800 via-rose-800 to-slate-900 hover:from-red-700 hover:to-rose-700 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <Crosshair className="w-4 h-4 text-red-300" />
+                <span>Psicopatía / Forense</span>
+              </button>
+
+              {/* EMDR 3D */}
+              <button
+                onClick={() => handleLaunchVrModule('EMDR_MEMORY', 'emdr_memory', 'TREATMENT', 'Reprocesamiento Sacádico EMDR 3D', 1.4)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-200" />
+                <span>EMDR 3D</span>
+              </button>
+
+              {/* GAMMA 40HZ */}
+              <button
+                onClick={() => handleLaunchVrModule('GAMMA_INSIGHT', 'cosmic_stars', 'TREATMENT', 'Opto-Neuromodulación Gamma 40Hz', 40.0)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
+              >
+                <Lightbulb className="w-4 h-4 text-amber-100" />
+                <span>Gamma 40Hz</span>
+              </button>
+
+              {/* CONSOLA DE TRATAMIENTO */}
+              <button
+                onClick={() => {
+                  setIsFullscreenConsoleOpen(true);
+                  VrControlService.syncClinicalContext({
+                    moduleId: 'VRET_EXPOSURE',
+                    category: 'TREATMENT',
+                    disorderId: 'VRET_EXPOSURE',
+                    disorderName: 'Consola de Tratamiento Inmersivo',
+                    ecosystem: 'safe_place_forest',
+                    patientId: safePatientId
+                  });
+                }}
+                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-700 to-cyan-600 hover:from-blue-600 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+              >
+                <Glasses className="w-4 h-4 text-white" />
+                <span>Consola Tratamiento</span>
+              </button>
+
+              {/* CONSOLA UNIFICADA */}
               <button
                 onClick={() => setIsFullscreenUnifiedVrOpen(true)}
                 className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
               >
                 <Monitor className="w-4 h-4 text-slate-300" />
-                <span>Consola Inmersiva Unificada</span>
+                <span>Consola Unificada</span>
               </button>
 
-              <button
-                onClick={() => setIsFullscreenPhenotypeOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-teal-600 via-cyan-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/20 transition cursor-pointer"
-              >
-                <Smartphone className="w-4 h-4 text-teal-100" />
-                <span>Fenotipado Digital & Recaídas</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('GAMMA_INSIGHT')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer"
-              >
-                <Lightbulb className="w-4 h-4 text-amber-100" />
-                <span>Módulo Opto-Gamma 40Hz</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('EMDR_MEMORY')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
-              >
-                <RotateCcw className="w-4 h-4 text-rose-200" />
-                <span>Módulo EMDR 3D</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('FND_MIRROR')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer"
-              >
-                <UserCheck className="w-4 h-4 text-indigo-200" />
-                <span>Consola Mirror VR (FND)</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('PAIN_MANAGEMENT')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-600/20 transition cursor-pointer"
-              >
-                <ThermometerSnowflake className="w-4 h-4 text-cyan-200" />
-                <span>Analgesia VR</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('NEURO_HYPNOSIS')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/20 transition cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-purple-200" />
-                <span>Neurohipnosis Closed-Loop</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('DEV_TRAUMA')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-800 via-pink-700 to-rose-700 hover:from-purple-700 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-800/20 transition cursor-pointer"
-              >
-                <Brain className="w-4 h-4 text-pink-200" />
-                <span>Consola Trauma Evolutivo & AIMA</span>
-              </button>
-
-              <button
-                onClick={() => setActiveVrModuleId('DUAL_CONTROL_SES_SIS')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-rose-600 via-pink-700 to-purple-800 hover:from-rose-500 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer"
-              >
-                <HeartHandshake className="w-4 h-4 text-rose-200" />
-                <span>Control Dual (SES/SIS)</span>
-              </button>
             </div>
 
             <VrTherapyModule
@@ -1242,7 +1331,14 @@ function DoctorWorkstation() {
                 onClose={() => setActiveVrModuleId(null)}
               />
             )}
-            {!['GAMMA_INSIGHT', 'EMDR_MEMORY', 'FND_MIRROR', 'PAIN_MANAGEMENT', 'NEURO_HYPNOSIS', 'DEV_TRAUMA', 'DUAL_CONTROL_SES_SIS', 'TDAH_EXECUTIVE'].includes(activeVrModuleId) && (
+            {activeVrModuleId === 'TEA_SENSORY' && (
+              <VrModuleRouter
+                patient={safePatient}
+                initialModuleId="TEA_SENSORY"
+                onClose={() => setActiveVrModuleId(null)}
+              />
+            )}
+            {!['GAMMA_INSIGHT', 'EMDR_MEMORY', 'FND_MIRROR', 'PAIN_MANAGEMENT', 'NEURO_HYPNOSIS', 'DEV_TRAUMA', 'DUAL_CONTROL_SES_SIS', 'TDAH_EXECUTIVE', 'TEA_SENSORY'].includes(activeVrModuleId) && (
               <VrModuleRouter
                 patient={safePatient}
                 initialModuleId={activeVrModuleId}
@@ -1277,7 +1373,7 @@ function DoctorWorkstation() {
         </div>
       )}
 
-      {/* 4. ORQUESTADOR MAESTRO DE 24 TRASTORNOS (FullscreenDiagnosticRunner) */}
+      {/* 4. ORQUESTADOR MAESTRO (FullscreenDiagnosticRunner) */}
       {isFullscreenDiagnosticOpen && (
         <FullscreenDiagnosticRunner
           patient={safePatient}
