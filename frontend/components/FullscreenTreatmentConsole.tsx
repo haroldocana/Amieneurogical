@@ -24,7 +24,7 @@ import {
   Sliders,
   Heart,
   Zap,
-  Timer
+  Clock
 } from 'lucide-react';
 
 interface Props {
@@ -235,10 +235,9 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
   const [currentKpi, setCurrentKpi] = useState<number>(10);
   const [liveCurve, setLiveCurve] = useState<Array<{ t: number; gsr: number; hrv: number; kpi: number; phase: PipelinePhase }>>([]);
 
-  const [isVisorLinked, setIsVisorLinked] = useState<boolean>(false);
+  const [isVisorLinked, setIsVisorLinked] = useState<boolean>(() => VrControlService.isConnected());
   const [roiReportText, setRoiReportText] = useState<string>('');
 
-  // Refs para asegurar estabilidad del setInterval
   const stateRef = useRef({
     pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi,
     customScript, customHz, operatingMode, currentProtocol
@@ -251,32 +250,78 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     };
   }, [pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, customHz, operatingMode, currentProtocol]);
 
+  // Sincronización proactiva del contexto clínico hacia el visor
+  const broadcastContextToVisor = (proto = currentProtocol, mode = operatingMode, script = customScript) => {
+    VrControlService.syncClinicalContext({
+      moduleId: proto.id,
+      category: mode,
+      disorderId: proto.id,
+      disorderName: proto.name,
+      ecosystem: proto.ecosystem,
+      patientId,
+      pipeline: {
+        phase1Sec: proto.phase1Sec,
+        phase2Sec: proto.phase2Sec,
+        phase3Sec: proto.phase3Sec
+      },
+      audioGuidance: {
+        baselineScript: proto.scriptBaseline,
+        activeScript: script,
+        recoveryScript: proto.scriptRecovery
+      },
+      frequencyHz: customHz
+    });
+  };
+
   useEffect(() => {
     setOperatingMode(currentProtocol.defaultCategory);
     setCustomHz(currentProtocol.defaultHz || 40.0);
-    setCustomScript(currentProtocol.defaultCategory === 'DIAGNOSTIC' ? currentProtocol.scriptActiveDiagnostic : currentProtocol.scriptActiveTreatment);
+    const newScript = currentProtocol.defaultCategory === 'DIAGNOSTIC' 
+      ? currentProtocol.scriptActiveDiagnostic 
+      : currentProtocol.scriptActiveTreatment;
+    setCustomScript(newScript);
     setPipelinePhase('IDLE');
     setPhaseTime(0);
     setTotalElapsedTime(0);
     setLiveCurve([]);
     setRoiReportText('');
+
+    broadcastContextToVisor(currentProtocol, currentProtocol.defaultCategory, newScript);
   }, [currentProtocol]);
 
   useEffect(() => {
-    setCustomScript(operatingMode === 'DIAGNOSTIC' ? currentProtocol.scriptActiveDiagnostic : currentProtocol.scriptActiveTreatment);
-  }, [operatingMode, currentProtocol]);
+    const newScript = operatingMode === 'DIAGNOSTIC' 
+      ? currentProtocol.scriptActiveDiagnostic 
+      : currentProtocol.scriptActiveTreatment;
+    setCustomScript(newScript);
+    broadcastContextToVisor(currentProtocol, operatingMode, newScript);
+  }, [operatingMode]);
 
+  // Suscripción bidireccional inmediata
   useEffect(() => {
-    let unsub: any = null;
-    try {
-      if (typeof VrControlService?.subscribeStatus === 'function') {
-        unsub = VrControlService.subscribeStatus((status) => {
-          setIsVisorLinked(status === 'CONNECTED');
-        });
+    if (!VrControlService.isConnected()) {
+      VrControlService.connect(undefined, patientId);
+    } else {
+      setIsVisorLinked(true);
+    }
+
+    const unsubStatus = VrControlService.subscribeStatus((status) => {
+      setIsVisorLinked(status === 'CONNECTED');
+    });
+
+    const unsubMsg = VrControlService.subscribeMessages((msg) => {
+      if (msg.type === 'VISOR_ACK_READY' || msg.type === 'PONG') {
+        setIsVisorLinked(true);
       }
-    } catch (e) {}
-    return () => { if (typeof unsub === 'function') unsub(); };
-  }, []);
+    });
+
+    VrControlService.sendCommand({ type: 'PING_HANDSHAKE', patientId, timestamp: Date.now() });
+
+    return () => {
+      if (typeof unsubStatus === 'function') unsubStatus();
+      if (typeof unsubMsg === 'function') unsubMsg();
+    };
+  }, [patientId]);
 
   const totalProtocolDuration = currentProtocol.phase1Sec + currentProtocol.phase2Sec + currentProtocol.phase3Sec;
 
@@ -287,17 +332,15 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     setPhaseTime(0);
     setPipelinePhase('PHASE_1_BASELINE');
 
-    if (typeof VrControlService?.changeEnvironment === 'function') {
-      VrControlService.changeEnvironment(currentProtocol.ecosystem, patientId, operatingMode);
-    }
-    if (typeof VrControlService?.sendCommand === 'function') {
-      VrControlService.sendCommand({
-        type: 'UPDATE_AI_GUIDANCE_SCRIPT',
-        scriptText: currentProtocol.scriptBaseline,
-        category: operatingMode,
-        patientId
-      });
-    }
+    VrControlService.sendCommand({
+      type: 'START_PIPELINE_PHASE',
+      phase: 'PHASE_1_BASELINE',
+      durationSec: currentProtocol.phase1Sec,
+      speechScript: currentProtocol.scriptBaseline,
+      ecosystem: currentProtocol.ecosystem,
+      category: operatingMode,
+      patientId
+    });
   };
 
   useEffect(() => {
@@ -310,23 +353,42 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
 
       setTotalElapsedTime(nextTotal);
 
+      // Transición Fase 1 -> Fase 2 (Estímulo / Intervención)
       if (s.pipelinePhase === 'PHASE_1_BASELINE' && nextPhaseTime >= s.currentProtocol.phase1Sec) {
         setPipelinePhase('PHASE_2_ACTIVE');
         setPhaseTime(0);
-        if (typeof VrControlService?.sendCommand === 'function') {
-          VrControlService.sendCommand({ type: 'UPDATE_AI_GUIDANCE_SCRIPT', scriptText: s.customScript, frequencyHz: s.customHz, category: s.operatingMode, patientId });
-        }
-        if (s.currentProtocol.defaultHz && typeof VrControlService?.startLightStimulation === 'function') {
+
+        VrControlService.sendCommand({
+          type: 'START_PIPELINE_PHASE',
+          phase: 'PHASE_2_ACTIVE',
+          durationSec: s.currentProtocol.phase2Sec,
+          speechScript: s.customScript,
+          frequencyHz: s.customHz,
+          category: s.operatingMode,
+          patientId
+        });
+
+        if (s.currentProtocol.defaultHz) {
           VrControlService.startLightStimulation(s.customHz, s.currentProtocol.id, patientId);
         }
-      } else if (s.pipelinePhase === 'PHASE_2_ACTIVE' && nextPhaseTime >= s.currentProtocol.phase2Sec) {
+      } 
+      // Transición Fase 2 -> Fase 3 (Habituación / Integración)
+      else if (s.pipelinePhase === 'PHASE_2_ACTIVE' && nextPhaseTime >= s.currentProtocol.phase2Sec) {
         setPipelinePhase('PHASE_3_RECOVERY');
         setPhaseTime(0);
-        if (typeof VrControlService?.stopLightStimulation === 'function') VrControlService.stopLightStimulation(patientId);
-        if (typeof VrControlService?.sendCommand === 'function') {
-          VrControlService.sendCommand({ type: 'UPDATE_AI_GUIDANCE_SCRIPT', scriptText: s.currentProtocol.scriptRecovery, category: s.operatingMode, patientId });
-        }
-      } else if (s.pipelinePhase === 'PHASE_3_RECOVERY' && nextPhaseTime >= s.currentProtocol.phase3Sec) {
+
+        VrControlService.stopLightStimulation(patientId);
+        VrControlService.sendCommand({
+          type: 'START_PIPELINE_PHASE',
+          phase: 'PHASE_3_RECOVERY',
+          durationSec: s.currentProtocol.phase3Sec,
+          speechScript: s.currentProtocol.scriptRecovery,
+          category: s.operatingMode,
+          patientId
+        });
+      } 
+      // Transición Fase 3 -> Conclusión
+      else if (s.pipelinePhase === 'PHASE_3_RECOVERY' && nextPhaseTime >= s.currentProtocol.phase3Sec) {
         finishPipelineAndCompileRoi();
       } else {
         setPhaseTime(nextPhaseTime);
@@ -354,8 +416,8 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
 
   const finishPipelineAndCompileRoi = () => {
     setPipelinePhase('FINISHED');
-    if (typeof VrControlService?.stopLightStimulation === 'function') VrControlService.stopLightStimulation(patientId);
-    if (typeof VrControlService?.stopActiveSession === 'function') VrControlService.stopActiveSession(patientId);
+    VrControlService.stopLightStimulation(patientId);
+    VrControlService.stopActiveSession(patientId);
 
     const curveData = liveCurve;
     const basalGsr = curveData[0]?.gsr || 2.4;
@@ -367,6 +429,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     dictamen += `Protocolo: ${currentProtocol.name}\n`;
     dictamen += `Propósito Operativo: ${operatingMode === 'TREATMENT' ? 'INTERVENCIÓN TERAPÉUTICA' : 'EVALUACIÓN DIAGNÓSTICA'}\n`;
     dictamen += `Clasificación: CIE-11: ${currentProtocol.cie11} | DSM-5-TR: ${currentProtocol.dsm5}\n`;
+    dictamen += `Escenario WebXR: /ecosystems/${currentProtocol.ecosystem}.jpeg\n`;
     dictamen += `Duración Grabada: ${totalElapsedTime}s (Línea Base: ${currentProtocol.phase1Sec}s | Activo: ${currentProtocol.phase2Sec}s | Habituación: ${currentProtocol.phase3Sec}s)\n\n`;
     dictamen += `1. BIOMETRÍA Y KPIS DE LA SERIE TEMPORAL:\n`;
     dictamen += `   • GSR Basal: ${basalGsr.toFixed(2)} µS | VFC Inicial: ${curveData[0]?.hrv || 35} ms\n`;
@@ -376,17 +439,31 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     dictamen += `   • Métrica Focal (${currentProtocol.targetKpiName}): ${currentKpi.toFixed(1)} ${currentProtocol.kpiUnit}\n\n`;
 
     if (operatingMode === 'TREATMENT') {
-      dictamen += `2. JUICIO DIAGNÓSTICO: Intervención exitosa. Restablecimiento del tono vagal y desensibilización biológica objetiva.\n`;
+      dictamen += `2. JUICIO DIAGNÓSTICO: Intervención completada. Modulación parasimpática con habituación del ${habituationRate}%.\n`;
     } else {
-      dictamen += `2. JUICIO DIAGNÓSTICO: Respuesta fisiológica compensada dentro de los rangos de tolerancia basal.\n`;
+      dictamen += `2. JUICIO DIAGNÓSTICO: Evaluación diagnóstica finalizada. Respuesta fisiológica cuantificada dentro de los márgenes de seguridad.\n`;
     }
 
     setRoiReportText(dictamen);
 
     if (typeof onUpdatePatientVrData === 'function') {
       onUpdatePatientVrData(
-        { sessionDate: new Date().toISOString(), baselineGsr: basalGsr, baselineHrv: curveData[0]?.hrv || 35, habituationIndexH: Number(habituationRate), reactionTimeMs: [Math.round(currentKpi)], gsrMicroSiemens: curveData.map(p => p.gsr), hrvRmssdMs: curveData.map(p => p.hrv) } as any,
-        { sessionId: `ROI-${Date.now()}`, date: new Date().toISOString(), moduleExecuted: currentProtocol.id, clinicalObservations: dictamen, autonomicRegulationScore: Number(habituationRate) >= 40 ? 'ÓPTIMA' : 'MODERADA' } as any
+        { 
+          sessionDate: new Date().toISOString(), 
+          baselineGsr: basalGsr, 
+          baselineHrv: curveData[0]?.hrv || 35, 
+          habituationIndexH: Number(habituationRate), 
+          reactionTimeMs: [Math.round(currentKpi)], 
+          gsrMicroSiemens: curveData.map(p => p.gsr), 
+          hrvRmssdMs: curveData.map(p => p.hrv) 
+        } as any,
+        { 
+          sessionId: `ROI-${Date.now()}`, 
+          date: new Date().toISOString(), 
+          moduleExecuted: currentProtocol.id, 
+          clinicalObservations: dictamen, 
+          autonomicRegulationScore: Number(habituationRate) >= 40 ? 'ÓPTIMA' : 'MODERADA' 
+        } as any
       );
     }
   };
@@ -411,7 +488,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-gradient-to-tr from-emerald-600 to-cyan-600 rounded-xl shadow-lg"><Sparkles className="w-5 h-5 text-white" /></div>
             <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">CONSOLA DE TRATAMIENTO & EXPOSICIÓN (PIPELINE 3 FASES)</h2>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">CONSOLA DE TRATAMIENTO &amp; EXPOSICIÓN (PIPELINE 3 FASES)</h2>
               <p className="text-xs text-slate-400">Expediente: <strong className="text-cyan-300 font-mono">{patientId}</strong> | {isVisorLinked ? 'Visor Sincronizado' : 'Buscando Visor...'}</p>
             </div>
           </div>
@@ -420,6 +497,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
               <button onClick={() => setOperatingMode('DIAGNOSTIC')} className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${operatingMode === 'DIAGNOSTIC' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><Stethoscope className="w-3.5 h-3.5" /><span>Diagnóstico</span></button>
               <button onClick={() => setOperatingMode('TREATMENT')} className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${operatingMode === 'TREATMENT' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><Sparkles className="w-3.5 h-3.5" /><span>Tratamiento</span></button>
             </div>
+            <button onClick={() => VrControlService.triggerGroundingProtocol(patientId)} className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"><ShieldAlert className="w-3.5 h-3.5 text-rose-400" /><span>Grounding</span></button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 cursor-pointer"><X className="w-5 h-5" /></button>
           </div>
         </header>
@@ -448,11 +526,18 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Volume2 className="w-3.5 h-3.5 text-amber-400" /> Guion IA Programable</span>
+                <button type="button" onClick={() => setIsEditingParams(!isEditingParams)} className="text-[10px] text-cyan-400 underline cursor-pointer">{isEditingParams ? 'Ocultar' : 'Ajustar Hz'}</button>
               </div>
               <textarea disabled={pipelinePhase !== 'IDLE' && pipelinePhase !== 'FINISHED'} value={customScript} onChange={(e) => setCustomScript(e.target.value)} rows={4} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-none focus:border-emerald-500 mb-3" />
+              {isEditingParams && currentProtocol.defaultHz && (
+                <div className="p-3 bg-slate-900 rounded-lg border border-slate-700 flex justify-between items-center text-xs mb-3">
+                  <span className="text-slate-400">Frecuencia Fótica (Hz):</span>
+                  <input type="number" step="0.5" value={customHz} onChange={(e) => setCustomHz(Number(e.target.value))} className="w-16 bg-slate-800 border border-slate-600 rounded p-1 text-center font-mono text-amber-400" />
+                </div>
+              )}
               <div className="mt-auto space-y-2">
-                {pipelinePhase === 'IDLE' && <button onClick={startPipeline} className="w-full py-3 rounded-xl text-xs font-bold transition flex justify-center items-center gap-2 cursor-pointer shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white"><Play className="w-4 h-4" /> <span>Iniciar Pipeline</span></button>}
-                {(pipelinePhase === 'PHASE_1_BASELINE' || pipelinePhase === 'PHASE_2_ACTIVE' || pipelinePhase === 'PHASE_3_RECOVERY') && <button onClick={finishPipelineAndCompileRoi} className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer animate-pulse"><Square className="w-4 h-4" /> <span>Detener y Compilar</span></button>}
+                {pipelinePhase === 'IDLE' && <button onClick={startPipeline} className="w-full py-3 rounded-xl text-xs font-bold transition flex justify-center items-center gap-2 cursor-pointer shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white"><Play className="w-4 h-4 fill-white" /> <span>Iniciar Pipeline en Visor</span></button>}
+                {(pipelinePhase === 'PHASE_1_BASELINE' || pipelinePhase === 'PHASE_2_ACTIVE' || pipelinePhase === 'PHASE_3_RECOVERY') && <button onClick={finishPipelineAndCompileRoi} className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer animate-pulse"><Square className="w-4 h-4 fill-white" /> <span>Detener y Compilar</span></button>}
                 {pipelinePhase === 'FINISHED' && <button onClick={startPipeline} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"><RotateCcw className="w-4 h-4" /> <span>Reiniciar</span></button>}
               </div>
             </div>
@@ -472,7 +557,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
                     <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (Number(p.gsr || 2.4) * 12))}`).join(' ')} />
                     <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (Number(p.hrv || 40) * 0.9))}`).join(' ')} />
                   </svg>
-                ) : (<div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[10px] font-mono"><Timer className="w-6 h-6 mb-2 opacity-30" /><span>Presiona 'Iniciar Pipeline' para activar las 3 fases</span></div>)}
+                ) : (<div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[10px] font-mono"><Clock className="w-6 h-6 mb-2 opacity-30" /><span>Presiona 'Iniciar Pipeline' para activar las 3 fases</span></div>)}
               </div>
             </div>
           </section>
