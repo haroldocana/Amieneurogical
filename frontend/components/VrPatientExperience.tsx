@@ -17,7 +17,8 @@ import {
   Glasses, 
   X,
   VolumeX,
-  Play
+  Play,
+  Video
 } from 'lucide-react';
 
 interface Props { 
@@ -47,14 +48,17 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [isFlickerActive, setIsFlickerActive] = useState<boolean>(false);
   const [flickerHz, setFlickerHz] = useState<number>(40.0);
   
-  // ESTADO CLAVE: Controla si el navegador ya permite emitir audio
+  // Estados para Audio Autoplay y Multimedia 360 Personalizada
   const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
+  const [customMediaUrl, setCustomMediaUrl] = useState<string | null>(null);
+  const [currentMediaType, setCurrentMediaType] = useState<'image' | 'video'>('image');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const isFlickerActiveRef = useRef(isFlickerActive);
@@ -62,32 +66,28 @@ export const VrPatientExperience: React.FC<Props> = ({
   const flickerHzRef = useRef(flickerHz);
   flickerHzRef.current = flickerHz;
 
-  // 1. Desbloqueo Físico del Audio (Bypass de Autoplay Policy)
+  // 1. Desbloqueo Físico de Permisos para Audio y Video en Navegador Pico
   const unlockAudioContext = () => {
     try {
-      // Forzar la creación de un contexto de audio falso para despertar el navegador
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContext) {
         const ctx = new AudioContext();
         ctx.resume();
       }
-      
-      // Lanzar una voz de prueba silenciosa para habilitar el motor TTS
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance('');
         utterance.volume = 0;
         window.speechSynthesis.speak(utterance);
       }
-      
       setIsAudioUnlocked(true);
     } catch (e) {
-      console.warn("Error al desbloquear audio:", e);
+      console.warn('[AMIE WebXR] Error al desbloquear audio/video:', e);
     }
   };
 
   // 2. Síntesis de voz terapéutica
   const speakVoiceInstruction = useCallback((text: string) => {
-    if (!isAudioUnlocked) return; // Si no está desbloqueado, no intenta hablar
+    if (!isAudioUnlocked) return;
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     
     try {
@@ -103,11 +103,11 @@ export const VrPatientExperience: React.FC<Props> = ({
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {
-      console.warn('[AMIE Audio Pico] Error en síntesis:', e);
+      console.warn('[AMIE Audio] Error en síntesis de voz:', e);
     }
   }, [isAudioUnlocked]);
 
-  // 3. WebSocket bidireccional estable
+  // 3. Receptor WebSocket de Telemetría y Contenido Multimedia
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isComponentMounted = true;
@@ -157,8 +157,20 @@ export const VrPatientExperience: React.FC<Props> = ({
               return;
             }
 
+            // Proyección de Video o Imagen 360 Personalizada desde la Estación Médica
+            if (data.type === 'LOAD_CUSTOM_MEDIA') {
+              if (data.scenarioName) setCurrentDisorderName(data.scenarioName);
+              setCurrentMediaType(data.mediaType || 'image');
+              setCustomMediaUrl(data.mediaUrl || null);
+              setPhaseLabel('Escenario Multimedia Activo');
+              return;
+            }
+
             if (data.type === 'SYNC_CLINICAL_CONTEXT') {
-              if (data.ecosystem) setActiveEcosystem(data.ecosystem);
+              if (data.ecosystem) {
+                setActiveEcosystem(data.ecosystem);
+                setCustomMediaUrl(null);
+              }
               if (data.category) setCurrentCategory(data.category);
               if (data.disorderName) setCurrentDisorderName(data.disorderName);
 
@@ -188,7 +200,10 @@ export const VrPatientExperience: React.FC<Props> = ({
               if (data.speechScript) {
                 speakVoiceInstruction(data.speechScript);
               }
-              if (data.ecosystem) setActiveEcosystem(data.ecosystem);
+              if (data.ecosystem) {
+                setActiveEcosystem(data.ecosystem);
+                setCustomMediaUrl(null);
+              }
               if (data.category) setCurrentCategory(data.category);
 
               if (data.frequencyHz && data.frequencyHz > 0) {
@@ -201,6 +216,7 @@ export const VrPatientExperience: React.FC<Props> = ({
             }
 
             if (data.type === 'TRIGGER_GROUNDING_PROTOCOL') {
+              setCustomMediaUrl(null);
               setActiveEcosystem('safe_place_forest');
               setCurrentCategory('TREATMENT');
               setIsFlickerActive(false);
@@ -244,7 +260,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
   }, [activePatientId, speakVoiceInstruction]);
 
-  // 4. Motor WebXR
+  // 4. Inicialización WebXR Three.js
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -299,7 +315,8 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.setAnimationLoop(() => {
       const elapsedTime = clock.getElapsedTime();
 
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && Math.floor(elapsedTime * 10) % 3 === 0) {
+      // Transmisión de telemetría de posición e interacción
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && Math.floor(elapsedTime * 10) % 4 === 0) {
         wsRef.current.send(JSON.stringify({
           type: 'VR_TELEMETRY_FRAME',
           patientId: activePatientId,
@@ -309,6 +326,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         }));
       }
 
+      // Estimulación luminosa Gamma 40Hz
       if (ambientLightRef.current) {
         if (isFlickerActiveRef.current) {
           const hz = flickerHzRef.current || 40.0;
@@ -332,7 +350,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
   }, [activePatientId]);
 
-  // 5. Gestor de Entornos 360
+  // 5. Inyección Dinámica de Imagen 360° o Video 360° en la Esfera
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
@@ -341,7 +359,40 @@ export const VrPatientExperience: React.FC<Props> = ({
       mat.map.dispose();
       mat.map = null;
     }
+    if (videoElementRef.current) {
+      videoElementRef.current.pause();
+      videoElementRef.current.src = '';
+      videoElementRef.current = null;
+    }
 
+    // A. RUTA DE VIDEO 360°
+    if (currentMediaType === 'video' && customMediaUrl) {
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.playsInline = true;
+      video.loop = true;
+      video.muted = false;
+      video.src = customMediaUrl;
+
+      video.onloadeddata = () => {
+        video.play().catch(err => {
+          console.warn('[AMIE Video] Autoplay diferido hasta interacción:', err);
+        });
+        const videoTexture = new THREE.VideoTexture(video);
+        videoTexture.minFilter = THREE.LinearFilter;
+        videoTexture.magFilter = THREE.LinearFilter;
+        videoTexture.generateMipmaps = false;
+        mat.map = videoTexture;
+        mat.color.setHex(0xffffff);
+        mat.needsUpdate = true;
+      };
+
+      videoElementRef.current = video;
+      return;
+    }
+
+    // B. RUTA DE IMAGEN 360°
+    const targetImageUrl = customMediaUrl || `${typeof window !== 'undefined' ? window.location.origin : ''}/ecosystems/${activeEcosystem}.jpeg`;
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -375,26 +426,34 @@ export const VrPatientExperience: React.FC<Props> = ({
         mat.needsUpdate = true;
       }
     };
-    img.src = `${typeof window !== 'undefined' ? window.location.origin : ''}/ecosystems/${activeEcosystem}.jpeg`;
-  }, [activeEcosystem]);
+    img.src = targetImageUrl;
+
+    return () => {
+      if (videoElementRef.current) {
+        videoElementRef.current.pause();
+        videoElementRef.current.src = '';
+        videoElementRef.current = null;
+      }
+    };
+  }, [activeEcosystem, customMediaUrl, currentMediaType]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
       
-      {/* 🔴 ESCUDO DE DESBLOQUEO DE AUDIO (OBLIGATORIO PARA PICO) */}
+      {/* Escudo de Desbloqueo Físico de Audio/Video */}
       {!isAudioUnlocked && (
-        <div className="absolute inset-0 z-[999999] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-8">
+        <div className="absolute inset-0 z-[999999] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8">
           <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-md text-center space-y-6">
             <div className="w-20 h-20 bg-emerald-900/50 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30">
               <VolumeX className="w-10 h-10 text-emerald-400 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white mb-2">Activar Audio Clínico</h2>
-              <p className="text-slate-400 text-sm">El visor requiere tu permiso explícito para reproducir las instrucciones del terapeuta en los auriculares.</p>
+              <h2 className="text-2xl font-black text-white mb-2">Activar Experiencia VR</h2>
+              <p className="text-slate-400 text-sm">El visor requiere tu autorización para reproducir audio clínico y video inmersivo en los auriculares integrados.</p>
             </div>
             <button
               onClick={unlockAudioContext}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-600/20 active:scale-95 transition flex items-center justify-center gap-3"
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-600/20 active:scale-95 transition flex items-center justify-center gap-3 cursor-pointer"
             >
               <Play className="w-6 h-6 fill-white" />
               INICIAR SESIÓN VR
@@ -403,7 +462,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Panel Superior */}
+      {/* Barra de Estado Superior */}
       <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/90 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800 text-xs">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-cyan-400" />
@@ -414,6 +473,15 @@ export const VrPatientExperience: React.FC<Props> = ({
           <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
           <span>Audio: <strong className={isAudioUnlocked ? 'text-emerald-400' : 'text-amber-400'}>{isAudioUnlocked ? 'Activo' : 'Bloqueado'}</strong></span>
         </div>
+        {currentMediaType === 'video' && (
+          <>
+            <div className="h-4 w-px bg-slate-800" />
+            <div className="flex items-center gap-1 text-indigo-400 font-mono font-bold">
+              <Video className="w-3.5 h-3.5" />
+              <span>Video 360</span>
+            </div>
+          </>
+        )}
         {isFlickerActive && (
           <>
             <div className="h-4 w-px bg-slate-800" />
