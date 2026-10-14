@@ -233,15 +233,15 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     const habituationRate = peakGsr > 0 ? (((peakGsr - finalGsr) / peakGsr) * 100).toFixed(1) : '0';
 
     let aiDictamen = `INFORME PERICIAL DE EJECUCIÓN INMERSIVA (ROI)\n`;
-    aiDictamen += `Entidad Clínica: ${currentDisorder.name} (${currentDisorder.cie11} / DSM-5:${currentDisorder.dsm5})\n`;
-    aiDictamen += `Entorno WebXR: /ecosystems/${currentDisorder.ecosystem}.jpeg [MODO${currentDisorder.category}]\n`;
+    aiDictamen += `Entidad Clínica: ${currentDisorder.name} (${currentDisorder.cie11} / DSM-5: ${currentDisorder.dsm5})\n`;
+    aiDictamen += `Entorno WebXR: /ecosystems/${currentDisorder.ecosystem}.jpeg [MODO ${currentDisorder.category}]\n`;
     aiDictamen += `Duración Efectiva: ${elapsedTime} segundos grabados (Muestreo continuo)\n\n`;
     aiDictamen += `1. DINÁMICA DE LA CURVA AUTONÓMICA REGISTRADA:\n`;
-    aiDictamen += `   • Línea Base (GSR): ${basalGsr.toFixed(2)} µS \vert{} VFC (RMSSD):${liveKpiHistory[0]?.hrv || 35} ms\n`;
-    aiDictamen += `   • Reactividad Máxima (Pico): ${peakGsr.toFixed(2)} µS (ΔGSR =${(peakGsr - basalGsr).toFixed(2)} µS)\n`;
-    aiDictamen += `   • Nivel de Cierre: ${finalGsr.toFixed(2)} µS \vert{} Tono Vagal:${finalHrv} ms\n`;
+    aiDictamen += `   • Línea Base (GSR): ${basalGsr.toFixed(2)} µS | VFC (RMSSD): ${liveKpiHistory[0]?.hrv || 35} ms\n`;
+    aiDictamen += `   • Reactividad Máxima (Pico): ${peakGsr.toFixed(2)} µS (ΔGSR = ${(peakGsr - basalGsr).toFixed(2)} µS)\n`;
+    aiDictamen += `   • Nivel de Cierre: ${finalGsr.toFixed(2)} µS | Tono Vagal: ${finalHrv} ms\n`;
     aiDictamen += `   • Tasa de Habituación / Recuperación (H): ${habituationRate}%\n`;
-    aiDictamen += `   • Métrica Focal (${currentDisorder.targetKpiName}): ${currentSpecificKpi.toFixed(1)}${currentDisorder.kpiUnit}\n\n`;
+    aiDictamen += `   • Métrica Focal (${currentDisorder.targetKpiName}): ${currentSpecificKpi.toFixed(1)} ${currentDisorder.kpiUnit}\n\n`;
 
     aiDictamen += `2. CONCLUSIÓN CLÍNICA Y JUICIO DIAGNÓSTICO:\n`;
     if (currentDisorder.category === 'DIAGNOSTIC') {
@@ -323,7 +323,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
           <div><strong>PACIENTE:</strong> ${patientId}</div>
           <div><strong>MODALIDAD:</strong> ${currentDisorder.category === 'DIAGNOSTIC' ? 'EVALUACIÓN DIAGNÓSTICA' : 'INTERVENCIÓN TERAPÉUTICA'}</div>
           <div><strong>PATOLOGÍA:</strong> ${currentDisorder.name}</div>
-          <div><strong>CÓDIGO CLÍNICO:</strong> CIE-11: ${currentDisorder.cie11} \vert{} DSM-5-TR:${currentDisorder.dsm5}</div>
+          <div><strong>CÓDIGO CLÍNICO:</strong> CIE-11: ${currentDisorder.cie11} | DSM-5-TR: ${currentDisorder.dsm5}</div>
           <div><strong>ESCENARIO WEBXR:</strong> ${currentDisorder.ecosystem}.jpeg (6DoF)</div>
           <div><strong>DISPOSITIVO:</strong> Pico Neo 3 Pro / Meta Quest</div>
         </div>
@@ -347,4 +347,239 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
             <tr>
               <td>Conductancia Dérmica (GSR)</td>
               <td>${(liveKpiHistory[0]?.gsr || 2.4).toFixed(2)} µS</td>
-              <td>${Math.max(...liveKpiHistory.map(p => p.gsr), 2.5).toFixed(2
+              <td>${Math.max(...liveKpiHistory.map(p => p.gsr), 2.5).toFixed(2)} µS</td>
+              <td>${currentGsr.toFixed(2)} µS</td>
+            </tr>
+            <tr>
+              <td>Variabilidad Cardíaca (HRV RMSSD)</td>
+              <td>${liveKpiHistory[0]?.hrv || 35} ms</td>
+              <td>—</td>
+              <td>${currentHrv} ms</td>
+            </tr>
+            <tr>
+              <td>${currentDisorder.targetKpiName}</td>
+              <td>10.0 ${currentDisorder.kpiUnit}</td>
+              <td>—</td>
+              <td>${currentSpecificKpi.toFixed(1)} ${currentDisorder.kpiUnit}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="section-title">3. Dictamen Clínico Asistido por IA (Auditoría)</div>
+        <div class="dictamen-box">${generatedRoiReport}</div>
+
+        <div class="signature-area">
+          <div class="signature-block">
+            Operador de Telemetría VR<br/>
+            Firma de Asistencia
+          </div>
+          <div class="signature-block">
+            Especialista Responsable<br/>
+            Sello y Cédula Profesional
+          </div>
+        </div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printableHtml);
+    printWindow.document.close();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fadeIn">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-[1440px] shadow-2xl overflow-hidden relative text-slate-100 flex flex-col h-[94vh]">
+        
+        {/* CABECERA PRINCIPAL */}
+        <div className="bg-slate-950 px-5 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg border ${isVisorLinked ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-600/20 text-amber-400 border-amber-500/30'}`}>
+              <Signal className={`w-5 h-5 ${isVisorLinked ? 'animate-pulse' : ''}`} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                CONSOLA CLÍNICA MULTITRASTORNO (24 PROTOCOLOS WEBXR)
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-cyan-950 text-cyan-300 border border-cyan-500/40 font-mono">
+                  6DoF CLOSED-LOOP
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400">Expediente: <strong className="text-cyan-300 font-mono">{patientId}</strong> | Estado: {isVisorLinked ? 'Visor Enlazado y Sincronizado' : 'Buscando Visor...'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={() => VrControlService.triggerGroundingProtocol(patientId)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-xs font-bold rounded-xl transition shadow-lg active:scale-95 cursor-pointer"
+            >
+              <ShieldAlert className="w-3.5 h-3.5" /> <span>Grounding Inmediato</span>
+            </button>
+            <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition border border-slate-700/60 cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* CUERPO PRINCIPAL (3 Columnas) */}
+        <div className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
+          
+          {/* COLUMNA 1: Selector y Parámetros Programables */}
+          <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-1">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1.5 flex items-center gap-1.5">
+                <Stethoscope className="w-3.5 h-3.5 text-cyan-400" /> Seleccionar Patología (24 Trastornos)
+              </label>
+              <select
+                disabled={testPhase === 'RUNNING'}
+                value={selectedDisorderId}
+                onChange={(e) => setSelectedDisorderId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-semibold outline-none cursor-pointer focus:border-cyan-500"
+              >
+                {CLINICAL_24_DISORDERS_CATALOG.map((disorder) => (
+                  <option key={disorder.id} value={disorder.id}>{disorder.name} [{disorder.category}]</option>
+                ))}
+              </select>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10.5px] font-mono">
+                <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                  <span className="text-slate-500 block">CIE-11:</span>
+                  <strong className="text-cyan-300">{currentDisorder.cie11}</strong>
+                </div>
+                <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                  <span className="text-slate-500 block">DSM-5-TR:</span>
+                  <strong className="text-amber-300">{currentDisorder.dsm5}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400" /> Guion de IA (Programable)
+                </span>
+                <button type="button" onClick={() => setIsEditingParams(!isEditingParams)} className="text-[10px] text-cyan-400 underline cursor-pointer">
+                  {isEditingParams ? 'Ocultar' : 'Ajustar Umbrales'}
+                </button>
+              </div>
+
+              <textarea
+                disabled={testPhase === 'RUNNING'}
+                value={programmableScript}
+                onChange={(e) => setProgrammableScript(e.target.value)}
+                rows={4}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-none focus:border-amber-500 mb-3 leading-relaxed"
+              />
+
+              {isEditingParams && (
+                <div className="p-3 bg-slate-900 rounded-lg border border-slate-700 space-y-2 text-[11px] mb-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Duración (s):</span>
+                    <input type="number" value={sessionDurationSec} onChange={(e) => setSessionDurationSec(Number(e.target.value))} className="w-14 bg-slate-800 border border-slate-600 rounded p-1 text-center text-white" />
+                  </div>
+                  {currentDisorder.defaultHz && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Frec. Fótica (Hz):</span>
+                      <input type="number" step="0.5" value={targetHz} onChange={(e) => setTargetHz(Number(e.target.value))} className="w-14 bg-slate-800 border border-slate-600 rounded p-1 text-center text-amber-400" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-auto space-y-2">
+                {testPhase === 'IDLE' && (
+                  <button type="button" onClick={handleStartTest} className={`w-full py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${isVisorLinked ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>
+                    <Play className="w-4 h-4" /> <span>{isVisorLinked ? 'Iniciar Prueba en Visor' : 'Conecta el Visor Primero'}</span>
+                  </button>
+                )}
+                {testPhase === 'RUNNING' && (
+                  <button type="button" onClick={stopTestAndGenerateReport} className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 active:scale-95 animate-pulse cursor-pointer">
+                    <Square className="w-4 h-4" /> <span>Detener y Generar Dictamen</span>
+                  </button>
+                )}
+                {testPhase === 'FINISHED' && (
+                  <button type="button" onClick={handleStartTest} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer">
+                    <RotateCcw className="w-4 h-4" /> <span>Reiniciar Ensayo Clínico</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* COLUMNA 2: Monitor de KPIs y Gráfico Temporal */}
+          <div className="col-span-12 lg:col-span-5 flex flex-col gap-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">GSR FÁSICO (µS)</span>
+                <div className="text-xl font-mono font-black text-amber-400 mt-1">{currentGsr.toFixed(2)}</div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block">VFC RMSSD (ms)</span>
+                <div className="text-xl font-mono font-black text-emerald-400 mt-1">{currentHrv}</div>
+              </div>
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl overflow-hidden">
+                <span className="text-[10px] text-slate-500 font-bold block truncate" title={currentDisorder.targetKpiName}>{currentDisorder.targetKpiName}</span>
+                <div className="text-xl font-mono font-black text-cyan-400 mt-1">{currentSpecificKpi.toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">{currentDisorder.kpiUnit}</span></div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Activity className="w-4 h-4 text-cyan-400" /> Curva de Reactividad Temporal</span>
+                <span className="text-[10px] font-mono text-slate-500">{elapsedTime}s / {sessionDurationSec}s</span>
+              </div>
+              
+              <div className="flex-1 w-full bg-slate-900 rounded-lg border border-slate-800 p-2 relative flex items-end">
+                {liveKpiHistory.length > 1 ? (
+                  <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${sessionDurationSec} 100`} preserveAspectRatio="none">
+                    <line x1="0" y1="25" x2={sessionDurationSec} y2="25" stroke="#ef4444" strokeDasharray="3 3" strokeWidth="0.8" />
+                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveKpiHistory.map(p => `${p.t},${Math.max(10, 100 - (p.gsr * 12))}`).join(' ')} />
+                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveKpiHistory.map(p => `${p.t},${Math.max(10, 100 - (p.hrv * 0.9))}`).join(' ')} />
+                  </svg>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[10px] font-mono"><Activity className="w-6 h-6 mb-2 opacity-30" /> Esperando telemetría...</div>
+                )}
+              </div>
+              
+              <div className="mt-2 flex justify-between text-[9px] text-slate-500 font-mono">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-full"></span> GSR</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full"></span> HRV</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-rose-500"></span> Umbral</span>
+              </div>
+            </div>
+          </div>
+
+          {/* COLUMNA 3: Dictamen y Terminal */}
+          <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col max-h-[60%]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-emerald-400 uppercase flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Dictamen Individual (ROI)</span>
+                {generatedRoiReport && (
+                  <button type="button" onClick={handlePrintRoiReport} className="px-2 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-200 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer">
+                    <Printer className="w-3 h-3" /> Imprimir A4
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 p-3 overflow-y-auto font-mono text-[10px] leading-relaxed text-slate-300 whitespace-pre-wrap">
+                {generatedRoiReport || <div className="text-slate-600 text-center mt-10">El dictamen pericial se compilará automáticamente al finalizar la sesión.</div>}
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex-1 flex flex-col max-h-[40%]">
+              <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-2"><Terminal className="w-3 h-3" /> System Logs</span>
+              <div className="flex-1 overflow-y-auto space-y-1 font-mono text-[9px] text-slate-400 flex flex-col-reverse">
+                {[...logs].reverse().map((log, i) => <p key={i}>{log}</p>)}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FullscreenDiagnosticRunner;
