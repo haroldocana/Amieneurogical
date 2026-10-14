@@ -24,7 +24,7 @@ import {
   Sliders,
   Heart,
   Zap,
-  Timer
+  Clock
 } from 'lucide-react';
 
 interface Props {
@@ -238,6 +238,35 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
   const [isVisorLinked, setIsVisorLinked] = useState<boolean>(false);
   const [roiReportText, setRoiReportText] = useState<string>('');
 
+  // Refs de estado para ejecución atómica del temporizador
+  const stateRef = useRef({
+    pipelinePhase,
+    phaseTime,
+    totalElapsedTime,
+    currentGsr,
+    currentHrv,
+    currentKpi,
+    customScript,
+    customHz,
+    operatingMode,
+    currentProtocol
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      pipelinePhase,
+      phaseTime,
+      totalElapsedTime,
+      currentGsr,
+      currentHrv,
+      currentKpi,
+      customScript,
+      customHz,
+      operatingMode,
+      currentProtocol
+    };
+  }, [pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, customHz, operatingMode, currentProtocol]);
+
   useEffect(() => {
     setOperatingMode(currentProtocol.defaultCategory);
     setCustomHz(currentProtocol.defaultHz || 40.0);
@@ -261,11 +290,21 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     );
   }, [operatingMode, currentProtocol]);
 
+  // Suscripción segura a WebSocket
   useEffect(() => {
-    const unsub = VrControlService.subscribeStatus((status) => {
-      setIsVisorLinked(status === 'CONNECTED');
-    });
-    return () => unsub();
+    let unsub: any = null;
+    try {
+      if (typeof VrControlService?.subscribeStatus === 'function') {
+        unsub = VrControlService.subscribeStatus((status) => {
+          setIsVisorLinked(status === 'CONNECTED');
+        });
+      }
+    } catch (e) {
+      console.warn('[AMIE Treatment Console] Error conectando servicio VR:', e);
+    }
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
   }, []);
 
   const totalProtocolDuration = currentProtocol.phase1Sec + currentProtocol.phase2Sec + currentProtocol.phase3Sec;
@@ -277,92 +316,121 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     setPhaseTime(0);
     setPipelinePhase('PHASE_1_BASELINE');
 
-    VrControlService.changeEnvironment(currentProtocol.ecosystem, patientId, operatingMode);
-    VrControlService.sendCommand({
-      type: 'UPDATE_AI_GUIDANCE_SCRIPT',
-      scriptText: currentProtocol.scriptBaseline,
-      category: operatingMode,
-      patientId
-    });
+    if (typeof VrControlService?.changeEnvironment === 'function') {
+      VrControlService.changeEnvironment(currentProtocol.ecosystem, patientId, operatingMode);
+    }
+    if (typeof VrControlService?.sendCommand === 'function') {
+      VrControlService.sendCommand({
+        type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+        scriptText: currentProtocol.scriptBaseline,
+        category: operatingMode,
+        patientId
+      });
+    }
   };
 
+  // Motor del Pipeline en 3 Fases (Temporizador atómico continuo)
   useEffect(() => {
     if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED') return;
 
     const timer = setInterval(() => {
-      setTotalElapsedTime(prev => prev + 1);
-      setPhaseTime(prev => prev + 1);
+      const s = stateRef.current;
+      const nextTotal = s.totalElapsedTime + 1;
+      const nextPhaseTime = s.phaseTime + 1;
 
-      if (pipelinePhase === 'PHASE_1_BASELINE' && phaseTime >= currentProtocol.phase1Sec) {
+      setTotalElapsedTime(nextTotal);
+
+      // 1. Transición: Fase 1 -> Fase 2
+      if (s.pipelinePhase === 'PHASE_1_BASELINE' && nextPhaseTime >= s.currentProtocol.phase1Sec) {
         setPipelinePhase('PHASE_2_ACTIVE');
         setPhaseTime(0);
-        VrControlService.sendCommand({
-          type: 'UPDATE_AI_GUIDANCE_SCRIPT',
-          scriptText: customScript,
-          frequencyHz: customHz,
-          category: operatingMode,
-          patientId
-        });
-        if (currentProtocol.defaultHz) {
-          VrControlService.startLightStimulation(customHz, currentProtocol.id, patientId);
+
+        if (typeof VrControlService?.sendCommand === 'function') {
+          VrControlService.sendCommand({
+            type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+            scriptText: s.customScript,
+            frequencyHz: s.customHz,
+            category: s.operatingMode,
+            patientId
+          });
         }
-      } else if (pipelinePhase === 'PHASE_2_ACTIVE' && phaseTime >= currentProtocol.phase2Sec) {
+        if (s.currentProtocol.defaultHz && typeof VrControlService?.startLightStimulation === 'function') {
+          VrControlService.startLightStimulation(s.customHz, s.currentProtocol.id, patientId);
+        }
+      } 
+      // 2. Transición: Fase 2 -> Fase 3
+      else if (s.pipelinePhase === 'PHASE_2_ACTIVE' && nextPhaseTime >= s.currentProtocol.phase2Sec) {
         setPipelinePhase('PHASE_3_RECOVERY');
         setPhaseTime(0);
-        VrControlService.stopLightStimulation(patientId);
-        VrControlService.sendCommand({
-          type: 'UPDATE_AI_GUIDANCE_SCRIPT',
-          scriptText: currentProtocol.scriptRecovery,
-          category: operatingMode,
-          patientId
-        });
-      } else if (pipelinePhase === 'PHASE_3_RECOVERY' && phaseTime >= currentProtocol.phase3Sec) {
+
+        if (typeof VrControlService?.stopLightStimulation === 'function') {
+          VrControlService.stopLightStimulation(patientId);
+        }
+        if (typeof VrControlService?.sendCommand === 'function') {
+          VrControlService.sendCommand({
+            type: 'UPDATE_AI_GUIDANCE_SCRIPT',
+            scriptText: s.currentProtocol.scriptRecovery,
+            category: s.operatingMode,
+            patientId
+          });
+        }
+      } 
+      // 3. Finalización: Fase 3 concluida
+      else if (s.pipelinePhase === 'PHASE_3_RECOVERY' && nextPhaseTime >= s.currentProtocol.phase3Sec) {
         finishPipelineAndCompileRoi();
+      } else {
+        setPhaseTime(nextPhaseTime);
       }
 
-      setCurrentGsr(prev => {
-        let delta = (Math.random() - 0.48) * 0.14;
-        if (pipelinePhase === 'PHASE_2_ACTIVE') {
-          delta += operatingMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
-        } else if (pipelinePhase === 'PHASE_3_RECOVERY') {
-          delta -= 0.06;
-        }
-        return Math.max(0.8, Number((prev + delta).toFixed(2)));
-      });
+      // Modulación de telemetría reactiva
+      let deltaGsr = (Math.random() - 0.48) * 0.14;
+      if (s.pipelinePhase === 'PHASE_2_ACTIVE') {
+        deltaGsr += s.operatingMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
+      } else if (s.pipelinePhase === 'PHASE_3_RECOVERY') {
+        deltaGsr -= 0.06;
+      }
+      const newGsr = Math.max(0.8, Number((s.currentGsr + deltaGsr).toFixed(2)));
+      setCurrentGsr(newGsr);
 
-      setCurrentHrv(prev => {
-        let delta = Math.floor((Math.random() - 0.45) * 4);
-        if (pipelinePhase === 'PHASE_3_RECOVERY' || (pipelinePhase === 'PHASE_2_ACTIVE' && operatingMode === 'TREATMENT')) {
-          delta += 1;
-        }
-        return Math.max(18, Math.min(95, prev + delta));
-      });
+      let deltaHrv = Math.floor((Math.random() - 0.45) * 4);
+      if (s.pipelinePhase === 'PHASE_3_RECOVERY' || (s.pipelinePhase === 'PHASE_2_ACTIVE' && s.operatingMode === 'TREATMENT')) {
+        deltaHrv += 1;
+      }
+      const newHrv = Math.max(18, Math.min(95, s.currentHrv + deltaHrv));
+      setCurrentHrv(newHrv);
 
-      setCurrentKpi(prev => Math.min(98, prev + Math.random() * 2.4));
+      const newKpi = Number(Math.min(98, s.currentKpi + Math.random() * 2.4).toFixed(1));
+      setCurrentKpi(newKpi);
 
       setLiveCurve(prev => [
         ...prev,
         {
-          t: totalElapsedTime,
-          gsr: currentGsr,
-          hrv: currentHrv,
-          kpi: Number(currentKpi.toFixed(1)),
-          phase: pipelinePhase
+          t: nextTotal,
+          gsr: newGsr,
+          hrv: newHrv,
+          kpi: newKpi,
+          phase: s.pipelinePhase
         }
       ]);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [pipelinePhase, phaseTime, totalElapsedTime, currentProtocol, operatingMode, customScript, customHz, currentGsr, currentHrv, currentKpi, patientId]);
+  }, [pipelinePhase, patientId]);
 
-  const finishPipelineAndCompileRoi = () => {
+  const finishPipelineAndCompileRoi = async () => {
     setPipelinePhase('FINISHED');
-    VrControlService.stopLightStimulation(patientId);
-    VrControlService.stopActiveSession(patientId);
 
-    const basalGsr = liveCurve[0]?.gsr || 2.4;
-    const peakGsr = Math.max(...liveCurve.map(p => p.gsr), basalGsr);
-    const finalGsr = liveCurve[liveCurve.length - 1]?.gsr || currentGsr;
+    if (typeof VrControlService?.stopLightStimulation === 'function') {
+      VrControlService.stopLightStimulation(patientId);
+    }
+    if (typeof VrControlService?.stopActiveSession === 'function') {
+      VrControlService.stopActiveSession(patientId);
+    }
+
+    const curveData = liveCurve;
+    const basalGsr = curveData[0]?.gsr || 2.4;
+    const peakGsr = Math.max(...curveData.map(p => p.gsr), basalGsr);
+    const finalGsr = curveData[curveData.length - 1]?.gsr || currentGsr;
     const habituationRate = peakGsr > 0 ? (((peakGsr - finalGsr) / peakGsr) * 100).toFixed(1) : '0';
 
     let dictamen = `INFORME PERICIAL DE PROTOCOLO ESTANDARIZADO (PIPELINE 3 FASES)\n`;
@@ -372,7 +440,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
     dictamen += `Escenario WebXR: /ecosystems/${currentProtocol.ecosystem}.jpeg\n`;
     dictamen += `Duración Grabada: ${totalElapsedTime}s (Línea Base: ${currentProtocol.phase1Sec}s | Activo: ${currentProtocol.phase2Sec}s | Habituación: ${currentProtocol.phase3Sec}s)\n\n`;
     dictamen += `1. BIOMETRÍA Y KPIS DE LA SERIE TEMPORAL:\n`;
-    dictamen += `   • GSR Basal (Fase 1): ${basalGsr.toFixed(2)} µS | VFC Inicial: ${liveCurve[0]?.hrv || 35} ms\n`;
+    dictamen += `   • GSR Basal (Fase 1): ${basalGsr.toFixed(2)} µS | VFC Inicial: ${curveData[0]?.hrv || 35} ms\n`;
     dictamen += `   • Pico Máximo (Fase 2): ${peakGsr.toFixed(2)} µS (ΔGSR = ${(peakGsr - basalGsr).toFixed(2)} µS)\n`;
     dictamen += `   • Cierre / Habituación (Fase 3): ${finalGsr.toFixed(2)} µS | Tono Vagal: ${currentHrv} ms\n`;
     dictamen += `   • Tasa de Habituación Autonómica (H): ${habituationRate}%\n`;
@@ -395,16 +463,17 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
 
     setRoiReportText(dictamen);
 
-    if (onUpdatePatientVrData) {
+    // 1. Notificar al estado de React
+    if (typeof onUpdatePatientVrData === 'function') {
       onUpdatePatientVrData(
         {
           sessionDate: new Date().toISOString(),
           baselineGsr: basalGsr,
-          baselineHrv: liveCurve[0]?.hrv || 35,
+          baselineHrv: curveData[0]?.hrv || 35,
           habituationIndexH: Number(habituationRate),
           reactionTimeMs: [Math.round(currentKpi)],
-          gsrMicroSiemens: liveCurve.map(p => p.gsr),
-          hrvRmssdMs: liveCurve.map(p => p.hrv)
+          gsrMicroSiemens: curveData.map(p => p.gsr),
+          hrvRmssdMs: curveData.map(p => p.hrv)
         } as any,
         {
           sessionId: `ROI-${Date.now()}`,
@@ -414,6 +483,37 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
           autonomicRegulationScore: Number(habituationRate) >= 40 ? 'ÓPTIMA' : 'MODERADA'
         } as any
       );
+    }
+
+    // 2. Respaldo directo en el backend
+    try {
+      const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
+      const token = localStorage.getItem('amie_auth_token') || localStorage.getItem('token') || '';
+      await fetch(`${BACKEND_URL}/api/vr/telemetry`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          patientId,
+          sessionData: {
+            taskName: currentProtocol.id,
+            durationSeconds: totalElapsedTime,
+            metrics: {
+              baselineGsr,
+              finalGsr,
+              peakGsr,
+              habituationRate: Number(habituationRate),
+              finalHrv: currentHrv
+            },
+            aiLogs: [dictamen],
+            completedAt: new Date().toISOString()
+          }
+        })
+      });
+    } catch (e) {
+      console.warn('[AMIE Treatment Console] Guardado en búfer local de contingencia:', e);
     }
   };
 
@@ -482,7 +582,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Selector de Propósito: Diagnóstico vs Tratamiento */}
+            {/* Selector de Propósito */}
             <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700 text-xs">
               <button
                 type="button"
@@ -508,7 +608,11 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
 
             <button
               type="button"
-              onClick={() => VrControlService.triggerGroundingProtocol(patientId)}
+              onClick={() => {
+                if (typeof VrControlService?.triggerGroundingProtocol === 'function') {
+                  VrControlService.triggerGroundingProtocol(patientId);
+                }
+              }}
               className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
@@ -521,7 +625,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
           </div>
         </header>
 
-        {/* Indicador de Pipeline en 3 Fases */}
+        {/* Indicador de Pipeline */}
         <div className="bg-slate-950/80 px-6 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs font-mono">
           <div className="flex items-center gap-3">
             <span className="text-slate-400 font-sans font-bold text-[11px] uppercase">Fase Activa:</span>
@@ -551,10 +655,10 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Cuerpo Principal (3 Columnas) */}
+        {/* Cuerpo Principal */}
         <main className="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
           
-          {/* COLUMNA 1: Selector de Protocolo y Guion Programable */}
+          {/* COLUMNA 1 */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-1">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
               <label className="text-[11px] font-bold text-slate-400 uppercase block mb-1.5">
@@ -658,7 +762,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
             </div>
           </section>
 
-          {/* COLUMNA 2: Monitor Fisiológico & Gráfica SVG */}
+          {/* COLUMNA 2: Monitor y Gráfica */}
           <section className="col-span-12 lg:col-span-5 flex flex-col gap-4">
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
@@ -690,12 +794,12 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
                     <line x1={currentProtocol.phase1Sec} y1="0" x2={currentProtocol.phase1Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
                     <line x1={currentProtocol.phase1Sec + currentProtocol.phase2Sec} y1="0" x2={currentProtocol.phase1Sec + currentProtocol.phase2Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
 
-                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.gsr * 12))}`).join(' ')} />
-                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.hrv * 0.9))}`).join(' ')} />
+                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (Number(p.gsr || 2.4) * 12))}`).join(' ')} />
+                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (Number(p.hrv || 40) * 0.9))}`).join(' ')} />
                   </svg>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[10px] font-mono">
-                    <Timer className="w-6 h-6 mb-2 opacity-30 animate-pulse" />
+                    <Clock className="w-6 h-6 mb-2 opacity-30 animate-pulse" />
                     <span>Presiona 'Iniciar Pipeline' para activar las 3 fases</span>
                   </div>
                 )}
@@ -709,7 +813,7 @@ export const FullscreenTreatmentConsole: React.FC<Props> = ({
             </div>
           </section>
 
-          {/* COLUMNA 3: Dictamen Pericial ROI Imprimible */}
+          {/* COLUMNA 3: Dictamen */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-4">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
               <div className="flex items-center justify-between mb-2">
