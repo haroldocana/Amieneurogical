@@ -428,7 +428,7 @@ function DoctorWorkstation() {
       vrTelemetryData: telemetry,
       vrTherapyReport: report
     }));
-    setSyncSuccessMsg('Métricas inmersivas VR transferidas a la Triangulación Global.');
+    setSyncSuccessMsg('Métricas inmersivas VR transferidas al expediente clínico.');
     setTimeout(() => setSyncSuccessMsg(null), 4500);
   };
 
@@ -1316,7 +1316,7 @@ function DoctorWorkstation() {
 
       {/* =====================================================================
           SISTEMA MODAL FLOTANTE DE ALTA PRIORIDAD (z-[9999])
-          RESUELVE LA APERTURA DE TODOS LOS MÓDULOS DE TERAPIA Y CONSOLAS VR
+          CONEXIÓN DIRECTA DE CONSOLAS Y MÓDULOS DE TERAPIA VR
       ====================================================================== */}
 
       {/* 1. MÓDULOS ESPECIALIZADOS DE VR */}
@@ -1336,7 +1336,11 @@ function DoctorWorkstation() {
               <VrGammaInsightModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
             )}
             {activeVrModuleId === 'EMDR_MEMORY' && (
-              <VrMemoryReconsolidationModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
+              <VrMemoryReconsolidationModule 
+                patient={safePatient} 
+                onClose={() => setActiveVrModuleId(null)} 
+                onUpdatePatientVrData={handleUpdatePatientVrData}
+              />
             )}
             {activeVrModuleId === 'FND_MIRROR' && (
               <VrFunctionalNeurologyModule patient={safePatient} onClose={() => setActiveVrModuleId(null)} />
@@ -1395,29 +1399,22 @@ function DoctorWorkstation() {
         </div>
       )}
 
-      {/* 4. CONSOLA DIAGNÓSTICO 3D */}
+      {/* 4. CONSOLA DIAGNÓSTICO 3D (24 PROTOCOLOS, CURVAS KPIS Y REPORTE ROI) */}
       {isFullscreenDiagnosticOpen && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-8 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4">
-            <FullscreenDiagnosticRunner
-              patient={safePatient}
-              onClose={() => setIsFullscreenDiagnosticOpen(false)}
-              onUpdatePatientVrData={handleUpdatePatientVrData}
-            />
-          </div>
-        </div>
+        <FullscreenDiagnosticRunner
+          patient={safePatient}
+          onClose={() => setIsFullscreenDiagnosticOpen(false)}
+          onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
       )}
 
-      {/* 5. CONSOLA DE TRATAMIENTO */}
+      {/* 5. CONSOLA DE TRATAMIENTO & PIPELINE 3 FASES */}
       {isFullscreenConsoleOpen && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 lg:p-8 overflow-y-auto flex items-center justify-center animate-fadeIn">
-          <div className="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4">
-            <FullscreenTreatmentConsole
-              patient={safePatient}
-              onClose={() => setIsFullscreenConsoleOpen(false)}
-            />
-          </div>
-        </div>
+        <FullscreenTreatmentConsole
+          patient={safePatient}
+          onClose={() => setIsFullscreenConsoleOpen(false)}
+          onUpdatePatientVrData={handleUpdatePatientVrData}
+        />
       )}
 
     </div>
