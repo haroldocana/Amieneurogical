@@ -3,8 +3,6 @@
 // frontend/services/vrControlService.ts
 // ============================================================================
 
-import { MASTER_VR_ENVIRONMENTS } from '../constants';
-
 export type VrConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
 export type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
 
@@ -48,12 +46,12 @@ export class VrControlService {
     const cleanUrl = envApiUrl.replace(/\/+$/, '');
 
     if (cleanUrl.startsWith('https://')) {
-      return cleanUrl.replace('https://', 'wss://');
+      return cleanUrl.replace('https://', 'wss://') + '/ws/vr';
     } else if (cleanUrl.startsWith('http://')) {
-      return cleanUrl.replace('http://', 'ws://');
+      return cleanUrl.replace('http://', 'ws://') + '/ws/vr';
     }
 
-    return 'wss://amieneurogical.onrender.com';
+    return 'wss://amieneurogical.onrender.com/ws/vr';
   }
 
   private static getAuthToken(): string {
@@ -96,7 +94,7 @@ export class VrControlService {
       this.ws = new WebSocket(this.currentUrl);
 
       this.ws.onopen = () => {
-        console.log('✅ [AMIE VR CONTROL] Conectado exitosamente al puente VR');
+        console.log('✅ [AMIE VR CONTROL] Enlace establecido con el servidor');
         this.notifyStatus('CONNECTED');
         this.startHeartbeat();
 
@@ -124,14 +122,14 @@ export class VrControlService {
             try {
               listener(parsed);
             } catch (err) {
-              console.error('[AMIE VR CONTROL] Error en listener de mensaje:', err);
+              console.error('[AMIE VR CONTROL] Error en listener:', err);
             }
           });
         } catch {}
       };
 
       this.ws.onerror = (err) => {
-        console.warn('❌ [AMIE VR CONTROL] Error de conexión WebSocket:', err);
+        console.warn('❌ [AMIE VR CONTROL] Error en socket:', err);
       };
 
       this.ws.onclose = () => {
@@ -141,12 +139,11 @@ export class VrControlService {
           return;
         }
 
-        console.warn('⚠️ [AMIE VR CONTROL] Conexión cerrada. Reconectando en 2.5s...');
+        console.warn('⚠️ [AMIE VR CONTROL] Reconexión automática en 2.5s...');
         this.notifyStatus('RECONNECTING');
         this.reconnectTimer = setTimeout(() => this.connectInternal(), 2500);
       };
     } catch (e) {
-      console.error('[AMIE VR CONTROL] Excepción al instanciar WebSocket:', e);
       this.notifyStatus('DISCONNECTED');
       if (!this.isExplicitDisconnect) {
         this.reconnectTimer = setTimeout(() => this.connectInternal(), 2500);
@@ -195,9 +192,6 @@ export class VrControlService {
     this.sendRaw(JSON.stringify(fullPayload));
   }
 
-  /**
-   * Sincronización proactiva de módulo, modo, patología, audio y pipeline al visor
-   */
   public static syncClinicalContext(context: {
     moduleId: string;
     category: ModuleCategory;
@@ -216,7 +210,6 @@ export class VrControlService {
       ...context,
       timestamp: Date.now()
     });
-    console.log(`📡 [AMIE VR] Contexto clínico sincronizado al visor: ${context.disorderName} [${context.category}]`);
   }
 
   public static changeEnvironment(
@@ -225,7 +218,6 @@ export class VrControlService {
     category: ModuleCategory = 'TREATMENT'
   ): void {
     if (patientId) this.activePatientId = patientId;
-
     this.sendCommand({
       type: 'CHANGE_ENVIRONMENT',
       environmentId,
@@ -237,28 +229,12 @@ export class VrControlService {
     });
   }
 
-  public static setModuleMode(
-    category: ModuleCategory, 
-    environmentId?: string, 
-    patientId?: string
-  ): void {
-    if (patientId) this.activePatientId = patientId;
-
-    this.sendCommand({
-      type: 'SET_MODULE_MODE',
-      category,
-      environmentId,
-      patientId: this.activePatientId
-    });
-  }
-
   public static startLightStimulation(
     frequencyHz: number = 40.0, 
     protocol: string = 'ALZHEIMER_40HZ', 
     patientId?: string
   ): void {
     if (patientId) this.activePatientId = patientId;
-
     this.sendCommand({
       type: 'START_LIGHT_STIMULATION',
       frequencyHz,
@@ -312,32 +288,21 @@ export class VrControlService {
     this.statusListeners.forEach(fn => {
       try {
         fn(status, this.currentUrl);
-      } catch (err) {
-        console.error('[AMIE VR CONTROL] Error notificando estado:', err);
-      }
+      } catch (err) {}
     });
   }
 
   public static disconnect(): void {
     this.isExplicitDisconnect = true;
     this.stopHeartbeat();
-
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-
     if (this.ws) {
-      this.ws.onopen = null;
-      this.ws.onmessage = null;
-      this.ws.onerror = null;
-      this.ws.onclose = null;
-      try {
-        this.ws.close();
-      } catch {}
+      try { this.ws.close(); } catch {}
       this.ws = null;
     }
-
     this.pendingQueue = [];
     this.notifyStatus('DISCONNECTED');
   }
