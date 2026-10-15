@@ -1,5 +1,11 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - MÓDULO FORENSE & PERFILADO CLUSTER B
+// frontend/components/PsychopathyNarcissismModule.tsx
+// ============================================================================
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PatientRecord } from '../types';
+import { VrControlService } from '../services/vrControlService';
 import { 
   ShieldAlert, 
   Wifi, 
@@ -8,7 +14,12 @@ import {
   Play, 
   Square, 
   FileText, 
-  AlertTriangle 
+  AlertTriangle,
+  Video,
+  Send,
+  CheckCircle2,
+  Eye,
+  Sliders
 } from 'lucide-react';
 
 interface Props {
@@ -19,6 +30,7 @@ interface Props {
 interface SubtypeStudy {
   id: string;
   videoKey: string;
+  videoPath: string;
   protocolKey: string;
   title: string;
   dsmCode: string;
@@ -34,6 +46,7 @@ const STUDY_SUBTYPES: SubtypeStudy[] = [
   {
     id: 'OVERT',
     videoKey: 'overt_provocation',
+    videoPath: '/video/overt_provocation.mp4',
     protocolKey: 'OVERT_EGO_THREAT',
     title: 'Perfilado Narcisista Grandioso / Exhibicionista (Overt)',
     dsmCode: 'Cluster B / F60.81',
@@ -47,6 +60,7 @@ const STUDY_SUBTYPES: SubtypeStudy[] = [
   {
     id: 'COVERT',
     videoKey: 'covert_rejection',
+    videoPath: '/video/covert_rejection.mp4',
     protocolKey: 'COVERT_SHAME_REJECTION',
     title: 'Perfilado Narcisista Vulnerable / Encubierto (Covert)',
     dsmCode: 'Cluster B / F60.81',
@@ -60,6 +74,7 @@ const STUDY_SUBTYPES: SubtypeStudy[] = [
   {
     id: 'ANTISOCIAL',
     videoKey: 'antisocial_distress',
+    videoPath: '/video/antisocial_distress.mp4',
     protocolKey: 'ANTISOCIAL_EMPATHY_FLAT',
     title: 'Rasgos Antisociales con Aplanamiento Empático (Factor 1 PCL-R)',
     dsmCode: 'Cluster B / F60.2',
@@ -79,6 +94,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
   const [isAssayRunning, setIsAssayRunning] = useState(false);
   const [assayTime, setAssayTime] = useState(0);
   const [isVrConnected, setIsVrConnected] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   // Estados de Telemetría Biológica en Vivo
   const [hrvBpm, setHrvBpm] = useState<number | null>(null);
@@ -89,8 +105,70 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
-  // Conexión WebSocket Bidireccional con Heartbeat y URLs Dinámicas
+  const buildFullVideoUrl = (path: string): string => {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${origin}${cleanPath}`;
+  };
+
+  // Función esencial: despacha el video 360 al visor Pico 3 mediante WebSocket
+  const broadcastVideoToVisor = (subtype: SubtypeStudy) => {
+    const fullVideoUrl = buildFullVideoUrl(subtype.videoPath);
+
+    // 1. Comando principal de carga de video para VrPatientExperience
+    const loadMediaPayload = {
+      type: 'LOAD_CUSTOM_MEDIA',
+      mediaUrl: fullVideoUrl,
+      mediaType: 'video',
+      scenarioName: subtype.title,
+      patientId: activePatientId,
+      timestamp: Date.now()
+    };
+
+    // 2. Comando complementario de contexto clínico
+    const syncContextPayload = {
+      type: 'SYNC_CLINICAL_CONTEXT',
+      moduleId: subtype.id,
+      category: 'DIAGNOSTIC',
+      disorderId: subtype.id,
+      disorderName: subtype.title,
+      ecosystem: subtype.videoKey,
+      patientId: activePatientId,
+      timestamp: Date.now()
+    };
+
+    // Despacho vía VrControlService
+    try {
+      VrControlService.sendCommand(loadMediaPayload);
+      VrControlService.sendCommand(syncContextPayload);
+    } catch (e) {
+      console.warn('[AMIE Cluster B] VrControlService send error:', e);
+    }
+
+    // Despacho directo vía WebSocket local si está abierto
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify(loadMediaPayload));
+        wsRef.current.send(JSON.stringify(syncContextPayload));
+        wsRef.current.send(JSON.stringify({
+          type: 'CHANGE_ENVIRONMENT',
+          environment: subtype.videoKey,
+          moduleId: subtype.videoKey,
+          protocol: subtype.protocolKey,
+          patientId: activePatientId,
+          timestamp: Date.now()
+        }));
+      } catch (e) {}
+    }
+
+    setStatusMsg(`🟢 Video 360 despachado al visor: ${subtype.title}`);
+    setTimeout(() => setStatusMsg(null), 4000);
+  };
+
+  // Conexión WebSocket Bidireccional
   useEffect(() => {
     const rawWsUrl = (import.meta as any).env?.VITE_WS_URL || (import.meta as any).env?.VITE_API_URL;
     let wsUrl: string;
@@ -103,7 +181,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
       const host = typeof window !== 'undefined' && window.location.host 
         ? window.location.host 
         : 'amieneurogical.onrender.com';
-      wsUrl = `${protocol}//${host}`;
+      wsUrl = `${protocol}//${host}/ws/vr`;
     }
 
     const connectWebSocket = () => {
@@ -120,7 +198,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             timestamp: Date.now()
           }));
 
-          // Heartbeat cada 25 segundos para neutralizar el timeout de inactividad de Render (55s)
           if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
           pingIntervalRef.current = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
@@ -141,7 +218,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             if (data.type === 'CLUSTER_B_TELEMETRY' || data.type === 'VR_TELEMETRY_FRAME') {
               setIsVrConnected(true);
               
-              // Tolerancia polimórfica a nomenclaturas de telemetría de AMIE
               const extractedHrv = data.hrvBpm ?? data.hrvRmssdMs ?? data.hrv;
               if (extractedHrv !== undefined && extractedHrv !== null) {
                 setHrvBpm(Math.round(Number(extractedHrv)));
@@ -160,8 +236,12 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             if (data.type === 'CLINICAL_TEST_INTERACTION') {
               if (data.hits !== undefined) setTotalHits(Number(data.hits));
             }
+
+            if (data.type === 'VISOR_ACK_READY' || data.type === 'PONG') {
+              setIsVrConnected(true);
+            }
           } catch (e) {
-            console.warn('[AMIE Cluster B] Error al procesar trama de telemetría:', e);
+            console.warn('[AMIE Cluster B] Error telemetría:', e);
           }
         };
 
@@ -181,9 +261,14 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
 
     connectWebSocket();
 
+    const unsubVrService = VrControlService.subscribeStatus((status) => {
+      if (status === 'CONNECTED') setIsVrConnected(true);
+    });
+
     return () => {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      if (unsubVrService) unsubVrService();
       if (wsRef.current) {
         wsRef.current.onopen = null;
         wsRef.current.onmessage = null;
@@ -215,21 +300,17 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     };
   }, [isAssayRunning]);
 
-  // Selección de Subtipo y Enlace con el Visor Pico 3
+  // Al seleccionar subtipo, proyectar inmediatamente al visor y sincronizar preview
   const handleSelectSubtype = (subtype: SubtypeStudy) => {
     setSelectedSubtype(subtype);
     setAssayTime(0);
     setIsAssayRunning(false);
+    broadcastVideoToVisor(subtype);
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'CHANGE_ENVIRONMENT',
-        environment: subtype.videoKey,
-        moduleId: subtype.videoKey,
-        protocol: subtype.protocolKey,
-        patientId: activePatientId,
-        timestamp: Date.now()
-      }));
+    if (videoPreviewRef.current) {
+      videoPreviewRef.current.src = subtype.videoPath;
+      videoPreviewRef.current.currentTime = 0;
+      videoPreviewRef.current.play().catch(() => {});
     }
   };
 
@@ -240,18 +321,62 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     const nextState = !isAssayRunning;
     setIsAssayRunning(nextState);
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: nextState ? 'START_ASSAY' : 'STOP_ASSAY',
-        environment: selectedSubtype.videoKey,
-        moduleId: selectedSubtype.videoKey,
-        protocol: selectedSubtype.protocolKey,
+    if (nextState) {
+      // Iniciar: asegurar que el video esté proyectado y mandar fase activa
+      broadcastVideoToVisor(selectedSubtype);
+
+      const startPayload = {
+        type: 'START_PIPELINE_PHASE',
+        phase: 'PHASE_2_ACTIVE',
+        durationSec: 300,
+        speechScript: selectedSubtype.paradoxDetails,
+        category: 'DIAGNOSTIC',
         patientId: activePatientId,
         timestamp: Date.now()
-      }));
-    }
+      };
 
-    if (!nextState) {
+      VrControlService.sendCommand(startPayload);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(startPayload));
+        wsRef.current.send(JSON.stringify({
+          type: 'START_ASSAY',
+          environment: selectedSubtype.videoKey,
+          moduleId: selectedSubtype.videoKey,
+          protocol: selectedSubtype.protocolKey,
+          patientId: activePatientId,
+          timestamp: Date.now()
+        }));
+      }
+
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.play().catch(() => {});
+      }
+    } else {
+      // Detener
+      const stopPayload = {
+        type: 'START_PIPELINE_PHASE',
+        phase: 'PHASE_3_RECOVERY',
+        durationSec: 30,
+        speechScript: 'Ensayo concluido. Normalizando registro neurovegetativo.',
+        category: 'DIAGNOSTIC',
+        patientId: activePatientId,
+        timestamp: Date.now()
+      };
+
+      VrControlService.sendCommand(stopPayload);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(stopPayload));
+        wsRef.current.send(JSON.stringify({
+          type: 'STOP_ASSAY',
+          patientId: activePatientId,
+          timestamp: Date.now()
+        }));
+      }
+
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.pause();
+      }
+
       persistCurrentAssay();
     }
   };
@@ -279,7 +404,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         body: JSON.stringify(payload)
       });
     } catch (e) {
-      console.warn('[AMIE Cluster B] Almacenamiento local completado (backend offline):', e);
+      console.warn('[AMIE Cluster B] Almacenamiento local:', e);
     }
   };
 
@@ -347,6 +472,15 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
 
           <button 
             type="button"
+            onClick={() => broadcastVideoToVisor(selectedSubtype)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-900/60 hover:bg-rose-800 border border-rose-500/60 text-xs font-bold text-white transition cursor-pointer active:scale-95 shadow-md"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Proyectar Video al Visor</span>
+          </button>
+
+          <button 
+            type="button"
             onClick={() => handleSelectSubtype(selectedSubtype)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer active:scale-95"
           >
@@ -366,6 +500,13 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
           )}
         </div>
       </div>
+
+      {statusMsg && (
+        <div className="p-3 mb-4 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2 animate-pulse">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{statusMsg}</span>
+        </div>
+      )}
 
       {/* Alerta de Protocolo y Consentimiento */}
       <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-4 mb-6 text-xs text-amber-200/90 space-y-2">
@@ -416,13 +557,14 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
                     Afinidad: {sub.affinity}/100
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400 font-mono">{sub.dsmCode}</p>
+                <p className="text-[11px] text-slate-400 font-mono mb-1">{sub.dsmCode}</p>
+                <p className="text-[10px] text-rose-300 font-mono truncate">{sub.videoPath}</p>
               </button>
             );
           })}
         </div>
 
-        {/* Detalles de la Prueba Activa */}
+        {/* Detalles de la Prueba Activa y Preview de Video */}
         <div className="lg:col-span-8 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
@@ -444,11 +586,41 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
               {selectedSubtype.description}
             </p>
 
-            <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 text-xs">
-              <p className="font-bold text-amber-400">⚡ Ensayo de Provocación Inmersiva VR (Pico 3):</p>
-              <p className="text-slate-300">{selectedSubtype.paradoxDetails}</p>
-              <p className="font-bold text-cyan-400 pt-1">Firma Biofisiológica Esperada:</p>
-              <p className="text-slate-400 font-mono text-[11px]">{selectedSubtype.bioResponse}</p>
+            {/* Reproductor de Vista Previa Local del Video 360 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+              <div className="aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 relative flex items-center justify-center">
+                <video
+                  ref={videoPreviewRef}
+                  src={selectedSubtype.videoPath}
+                  controls
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="flex flex-col justify-between space-y-2 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                    ⚡ Estímulo 360° Asociado:
+                  </span>
+                  <p className="font-mono text-cyan-300 text-[11px] mb-1">{selectedSubtype.videoPath}</p>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">{selectedSubtype.paradoxDetails}</p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Firma Esperada:</span>
+                  <p className="text-slate-400 font-mono text-[10.5px] leading-relaxed">{selectedSubtype.bioResponse}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => broadcastVideoToVisor(selectedSubtype)}
+                  className="w-full py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-black text-xs rounded-lg transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>FORZAR CARGA DE VIDEO EN PICO 3</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -487,7 +659,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
                 disabled={!hasConsent && !isAssayRunning}
                 className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 ${
                   isAssayRunning 
-                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-950/50' 
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-950/50 animate-pulse' 
                     : hasConsent 
                       ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/50' 
                       : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
