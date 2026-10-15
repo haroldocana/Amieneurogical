@@ -48,7 +48,6 @@ export const VrPatientExperience: React.FC<Props> = ({
   const [isFlickerActive, setIsFlickerActive] = useState<boolean>(false);
   const [flickerHz, setFlickerHz] = useState<number>(40.0);
   
-  // Estados para Audio Autoplay y Multimedia 360 Personalizada
   const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
   const [customMediaUrl, setCustomMediaUrl] = useState<string | null>(null);
   const [currentMediaType, setCurrentMediaType] = useState<'image' | 'video'>('image');
@@ -66,12 +65,11 @@ export const VrPatientExperience: React.FC<Props> = ({
   const flickerHzRef = useRef(flickerHz);
   flickerHzRef.current = flickerHz;
 
-  // 1. Desbloqueo Físico de Permisos para Audio y Video en Navegador Pico
   const unlockAudioContext = () => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContext) {
-        const ctx = new AudioContext();
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
         ctx.resume();
       }
       if ('speechSynthesis' in window) {
@@ -79,13 +77,16 @@ export const VrPatientExperience: React.FC<Props> = ({
         utterance.volume = 0;
         window.speechSynthesis.speak(utterance);
       }
+      if (videoElementRef.current) {
+        videoElementRef.current.muted = false;
+        videoElementRef.current.play().catch(() => {});
+      }
       setIsAudioUnlocked(true);
     } catch (e) {
       console.warn('[AMIE WebXR] Error al desbloquear audio/video:', e);
     }
   };
 
-  // 2. Síntesis de voz terapéutica
   const speakVoiceInstruction = useCallback((text: string) => {
     if (!isAudioUnlocked) return;
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -107,13 +108,18 @@ export const VrPatientExperience: React.FC<Props> = ({
     }
   }, [isAudioUnlocked]);
 
-  // 3. Receptor WebSocket de Telemetría y Contenido Multimedia
   useEffect(() => {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let isComponentMounted = true;
 
-    const envWsUrl = (import.meta as any).env?.VITE_WS_URL;
-    const wsTarget = envWsUrl || 'wss://amieneurogical.onrender.com/ws/vr';
+    const rawWsUrl = (import.meta as any).env?.VITE_WS_URL || (import.meta as any).env?.VITE_API_URL;
+    let wsTarget = 'wss://amieneurogical.onrender.com/ws/vr';
+    if (rawWsUrl) {
+      wsTarget = rawWsUrl.replace(/^http/, 'ws');
+      if (!wsTarget.endsWith('/ws/vr')) {
+        wsTarget = `${wsTarget.replace(/\/+$/, '')}/ws/vr`;
+      }
+    }
 
     const connectToStation = () => {
       if (!isComponentMounted) return;
@@ -157,20 +163,44 @@ export const VrPatientExperience: React.FC<Props> = ({
               return;
             }
 
-            // Proyección de Video o Imagen 360 Personalizada desde la Estación Médica
             if (data.type === 'LOAD_CUSTOM_MEDIA') {
               if (data.scenarioName) setCurrentDisorderName(data.scenarioName);
-              setCurrentMediaType(data.mediaType || 'image');
+              const isVid = data.mediaType === 'video' || (data.mediaUrl && data.mediaUrl.match(/\.(mp4|webm|ogv)$/i));
+              setCurrentMediaType(isVid ? 'video' : 'image');
               setCustomMediaUrl(data.mediaUrl || null);
-              setPhaseLabel('Escenario Multimedia Activo');
+              setPhaseLabel('Escenario 360 Activo');
+              return;
+            }
+
+            if (data.type === 'CHANGE_ENVIRONMENT') {
+              const env = data.environment || '';
+              if (env.includes('overt_provocation') || env.includes('narcissism') || env.includes('antisocial') || env.endsWith('.mp4')) {
+                setCurrentMediaType('video');
+                const vUrl = env.startsWith('/') || env.startsWith('http') ? env : `/video/${env}.mp4`;
+                setCustomMediaUrl(vUrl);
+                setPhaseLabel('Video 360 Activo');
+              } else {
+                setCurrentMediaType('image');
+                setCustomMediaUrl(null);
+                setActiveEcosystem(env);
+              }
               return;
             }
 
             if (data.type === 'SYNC_CLINICAL_CONTEXT') {
-              if (data.ecosystem) {
+              const isVid = data.mediaType === 'video' || data.ecosystem?.endsWith('.mp4') ||
+                ['overt_provocation', 'narcissism_collapse', 'antisocial_distress', 'covert_rejection'].some(k => data.ecosystem?.includes(k));
+
+              if (isVid) {
+                setCurrentMediaType('video');
+                const path = data.mediaUrl || (data.ecosystem?.startsWith('/') ? data.ecosystem : `/video/${data.ecosystem}.mp4`);
+                setCustomMediaUrl(path);
+              } else if (data.ecosystem) {
                 setActiveEcosystem(data.ecosystem);
                 setCustomMediaUrl(null);
+                setCurrentMediaType('image');
               }
+
               if (data.category) setCurrentCategory(data.category);
               if (data.disorderName) setCurrentDisorderName(data.disorderName);
 
@@ -189,20 +219,22 @@ export const VrPatientExperience: React.FC<Props> = ({
               return;
             }
 
-            if (data.type === 'START_PIPELINE_PHASE') {
+            if (data.type === 'START_PIPELINE_PHASE' || data.type === 'START_ASSAY') {
               const labels: Record<string, string> = {
                 'PHASE_1_BASELINE': '1. Calibración de Línea Base',
                 'PHASE_2_ACTIVE': '2. Desafío / Intervención Activa',
                 'PHASE_3_RECOVERY': '3. Habituación y Retorno a Calma'
               };
-              setPhaseLabel(labels[data.phase] || data.phase);
+              if (data.phase) setPhaseLabel(labels[data.phase] || data.phase);
 
               if (data.speechScript) {
                 speakVoiceInstruction(data.speechScript);
               }
               if (data.ecosystem) {
-                setActiveEcosystem(data.ecosystem);
-                setCustomMediaUrl(null);
+                if (data.ecosystem.endsWith('.mp4') || data.mediaType === 'video') {
+                  setCurrentMediaType('video');
+                  setCustomMediaUrl(data.ecosystem);
+                }
               }
               if (data.category) setCurrentCategory(data.category);
 
@@ -217,6 +249,7 @@ export const VrPatientExperience: React.FC<Props> = ({
 
             if (data.type === 'TRIGGER_GROUNDING_PROTOCOL') {
               setCustomMediaUrl(null);
+              setCurrentMediaType('image');
               setActiveEcosystem('safe_place_forest');
               setCurrentCategory('TREATMENT');
               setIsFlickerActive(false);
@@ -225,7 +258,7 @@ export const VrPatientExperience: React.FC<Props> = ({
               return;
             }
 
-            if (data.type === 'STOP_LIGHT_STIMULATION' || data.type === 'STOP_TEST' || data.type === 'STOP_ACTIVE_SESSION') {
+            if (data.type === 'STOP_LIGHT_STIMULATION' || data.type === 'STOP_TEST' || data.type === 'STOP_ACTIVE_SESSION' || data.type === 'STOP_ASSAY') {
               setIsFlickerActive(false);
               setPhaseLabel('Sesión Concluida');
               return;
@@ -260,7 +293,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
   }, [activePatientId, speakVoiceInstruction]);
 
-  // 4. Inicialización WebXR Three.js
+  // Inicialización WebXR Three.js
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -315,7 +348,6 @@ export const VrPatientExperience: React.FC<Props> = ({
     renderer.setAnimationLoop(() => {
       const elapsedTime = clock.getElapsedTime();
 
-      // Transmisión de telemetría de posición e interacción
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && Math.floor(elapsedTime * 10) % 4 === 0) {
         wsRef.current.send(JSON.stringify({
           type: 'VR_TELEMETRY_FRAME',
@@ -326,7 +358,6 @@ export const VrPatientExperience: React.FC<Props> = ({
         }));
       }
 
-      // Estimulación luminosa Gamma 40Hz
       if (ambientLightRef.current) {
         if (isFlickerActiveRef.current) {
           const hz = flickerHzRef.current || 40.0;
@@ -350,7 +381,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
   }, [activePatientId]);
 
-  // 5. Inyección Dinámica de Imagen 360° o Video 360° en la Esfera
+  // Inyección Dinámica de Imagen 360° o Video 360° en la Esfera
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
@@ -371,21 +402,34 @@ export const VrPatientExperience: React.FC<Props> = ({
       video.crossOrigin = 'anonymous';
       video.playsInline = true;
       video.loop = true;
-      video.muted = false;
-      video.src = customMediaUrl;
+      video.muted = true; // Crucial para autorizar autoplay en WebXR de Pico Browser
+      video.autoplay = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
 
-      video.onloadeddata = () => {
-        video.play().catch(err => {
-          console.warn('[AMIE Video] Autoplay diferido hasta interacción:', err);
+      const fullSrc = customMediaUrl.startsWith('http')
+        ? customMediaUrl
+        : `${typeof window !== 'undefined' ? window.location.origin : ''}${customMediaUrl.startsWith('/') ? '' : '/'}${customMediaUrl}`;
+      video.src = fullSrc;
+
+      const videoTexture = new THREE.VideoTexture(video);
+      videoTexture.minFilter = THREE.LinearFilter;
+      videoTexture.magFilter = THREE.LinearFilter;
+      videoTexture.format = THREE.RGBAFormat;
+      videoTexture.generateMipmaps = false;
+
+      mat.map = videoTexture;
+      mat.color.setHex(0xffffff);
+      mat.needsUpdate = true;
+
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          if (isAudioUnlocked) video.muted = false;
+        }).catch(err => {
+          console.warn('[AMIE Video] Autoplay diferido en Pico:', err);
         });
-        const videoTexture = new THREE.VideoTexture(video);
-        videoTexture.minFilter = THREE.LinearFilter;
-        videoTexture.magFilter = THREE.LinearFilter;
-        videoTexture.generateMipmaps = false;
-        mat.map = videoTexture;
-        mat.color.setHex(0xffffff);
-        mat.needsUpdate = true;
-      };
+      }
 
       videoElementRef.current = video;
       return;
@@ -435,7 +479,7 @@ export const VrPatientExperience: React.FC<Props> = ({
         videoElementRef.current = null;
       }
     };
-  }, [activeEcosystem, customMediaUrl, currentMediaType]);
+  }, [activeEcosystem, customMediaUrl, currentMediaType, isAudioUnlocked]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
