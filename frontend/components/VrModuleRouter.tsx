@@ -10,7 +10,7 @@ import { VrDevelopmentalTraumaFullscreenMonitor } from './VrDevelopmentalTraumaF
 import { VrMemoryReconsolidationModule } from './VrMemoryReconsolidationModule';
 import { PsychopathyNarcissismModule } from './PsychopathyNarcissismModule';
 import { ClusterBForenseVrModule } from './ClusterBForenseVrModule';
-import { FullscreenTreatmentConsole } from './FullscreenTreatmentConsole';
+import { FullscreenDiagnosticRunner } from './FullscreenDiagnosticRunner';
 import { VrGammaInsightModule } from './VrGammaInsightModule';
 import { VrFunctionalNeurologyModule } from './VrFunctionalNeurologyModule';
 import { VrPainManagementModule } from './VrPainManagementModule';
@@ -114,7 +114,14 @@ export const VrModuleRouter: React.FC<Props> = ({
       case 'NARCISSISM_CLUSTER_B':
         return <PsychopathyNarcissismModule patient={patient} onClose={handleBack} />;
       case 'TAG_ANXIETY':
-        return <FullscreenTreatmentConsole patient={patient} onClose={handleBack} />;
+        return (
+          <FullscreenDiagnosticRunner 
+            patient={patient} 
+            initialDisorderId="GAD_GENERALIZED" 
+            initialMode="TREATMENT" 
+            onClose={handleBack} 
+          />
+        );
       case 'DUAL_CONTROL_SES_SIS':
         return <VrDualControlTherapyModule patient={patient} onClose={handleBack} />;
       case 'DEV_TRAUMA':
