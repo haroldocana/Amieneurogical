@@ -31,7 +31,6 @@ import { FloatingAmieAssistant } from './components/FloatingAmieAssistant';
 import { HoverTooltip } from './components/HoverTooltip';
 import { LoginModal } from './components/LoginModal';
 import { VrTherapyModule } from './components/VrTherapyModule';
-import { FullscreenTreatmentConsole } from './components/FullscreenTreatmentConsole';
 import { FullscreenDiagnosticRunner } from './components/FullscreenDiagnosticRunner';
 import { DiagnosticTriangulationView } from './components/DiagnosticTriangulationView';
 
@@ -66,7 +65,7 @@ import {
   VrTelemetryData, 
   VrTherapyReport 
 } from './types';
-import { CLINICAL_CASE_PRESETS, MASTER_VR_ENVIRONMENTS } from './constants';
+import { CLINICAL_CASE_PRESETS } from './constants';
 
 // SERVICIOS CLÍNICOS
 import { runAmieClinicalAnalysis, syncWithClinicalApp, SAFE_DEFAULT_PATIENT } from './services/geminiService';
@@ -125,8 +124,6 @@ import {
   Crosshair,
   Flame,
   Shield,
-  Compass,
-  AlertOctagon,
   X
 } from 'lucide-react';
 
@@ -173,7 +170,6 @@ function DoctorWorkstation() {
   const [dsmModalView, setDsmModalView] = useState<'guide' | 'principles'>('principles');
   
   // Modales de Consolas Inmersivas
-  const [isFullscreenConsoleOpen, setIsFullscreenConsoleOpen] = useState<boolean>(false);
   const [isFullscreenDiagnosticOpen, setIsFullscreenDiagnosticOpen] = useState<boolean>(false);
   const [diagnosticRunnerDisorderId, setDiagnosticRunnerDisorderId] = useState<string>('TDAH_CPT');
   const [diagnosticRunnerMode, setDiagnosticRunnerMode] = useState<'DIAGNOSTIC' | 'TREATMENT'>('DIAGNOSTIC');
@@ -193,7 +189,6 @@ function DoctorWorkstation() {
 
   const closeAllModals = () => {
     setIsDsmModalOpen(false);
-    setIsFullscreenConsoleOpen(false);
     setIsFullscreenDiagnosticOpen(false);
     setIsFullscreenPhenotypeOpen(false);
     setIsFullscreenUnifiedVrOpen(false);
@@ -1567,15 +1562,6 @@ function DoctorWorkstation() {
           initialDisorderId={diagnosticRunnerDisorderId}
           initialMode={diagnosticRunnerMode}
           onClose={() => setIsFullscreenDiagnosticOpen(false)}
-          onUpdatePatientVrData={handleUpdatePatientVrData}
-        />
-      )}
-
-      {/* 5. CONSOLA DE TRATAMIENTO GENÉRICA */}
-      {isFullscreenConsoleOpen && (
-        <FullscreenTreatmentConsole
-          patient={safePatient}
-          onClose={() => setIsFullscreenConsoleOpen(false)}
           onUpdatePatientVrData={handleUpdatePatientVrData}
         />
       )}
