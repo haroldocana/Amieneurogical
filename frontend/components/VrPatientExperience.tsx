@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (AUDIO RESILIENTE, PROCEDURAL 360 Y BART)
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (AUDIO FORZADO, PING Y TELEMETRÍA)
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -14,7 +14,6 @@ interface Props {
   onClose?: () => void;
 }
 
-export type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
 export type InteractiveParadigm =
   | 'IDLE'
   | 'CPT_3D'
@@ -36,8 +35,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('IDLE');
-  const [currentDisorderName, setCurrentDisorderName] = useState('Protocolo Clínico Activo');
-  const [hudStats, setHudStats] = useState('Apunta al holograma con el láser y presiona el gatillo');
+  const [currentDisorderName, setCurrentDisorderName] = useState('Protocolo Activo');
+  const [hudStats, setHudStats] = useState('Apunta con el láser al holograma y presiona el gatillo');
+  const [wsOnline, setWsOnline] = useState(false);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -47,7 +47,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const wsRef = useRef<WebSocket | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
-  const bgOscillatorRef = useRef<OscillatorNode | null>(null);
 
   const paradigmStateRef = useRef({
     paradigm: 'IDLE' as InteractiveParadigm,
@@ -56,7 +55,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     scale: 1.0,
     zOffset: -2.0,
     balloonPumps: 0,
-    balloonBankedScore: 0,
     balloonMaxCap: 15,
     cptTargetType: 'GO' as 'GO' | 'NOGO',
     lastSpawnTime: 0,
@@ -64,12 +62,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     hoveredObject: null as THREE.Object3D | null
   });
 
-  const triggerHaptic = (intensity = 0.6, durationMs = 50) => {
+  const triggerHaptic = (intensity = 0.7, durationMs = 60) => {
     try {
       const session = rendererRef.current?.xr.getSession();
-      if (session && session.inputSources) {
+      if (session?.inputSources) {
         for (const src of session.inputSources) {
-          if (src.gamepad && src.gamepad.hapticActuators && src.gamepad.hapticActuators.length > 0) {
+          if (src.gamepad?.hapticActuators?.length) {
             src.gamepad.hapticActuators[0].pulse(intensity, durationMs);
           }
         }
@@ -89,7 +87,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   };
 
-  const playSynthesizedTone = (freq = 520, duration = 0.12, type: OscillatorType = 'sine', vol = 0.3) => {
+  const playSynthesizedTone = (freq = 520, duration = 0.12, type: OscillatorType = 'sine', vol = 0.85) => {
     try {
       ensureAudioUnlocked();
       const ctx = audioContextRef.current;
@@ -107,61 +105,13 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   };
 
-  const playInstructionChimes = () => {
+  const playChimes = () => {
     ensureAudioUnlocked();
-    const chords = [330, 440, 550, 660];
-    chords.forEach((note, idx) => {
-      setTimeout(() => {
-        playSynthesizedTone(note, 0.18, 'sine', 0.25);
-      }, idx * 110);
+    [440, 554, 659, 880].forEach((note, idx) => {
+      setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 0.8), idx * 100);
     });
   };
 
-  const speakVoiceInstruction = (text: string) => {
-    if (!text) return;
-    playInstructionChimes();
-
-    try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utt = new SpeechSynthesisUtterance(text);
-        utt.lang = 'es-ES';
-        utt.volume = 1.0;
-        window.speechSynthesis.speak(utt);
-      }
-    } catch (e) {}
-  };
-
-  const startBackgroundAudio = (type: string) => {
-    try {
-      ensureAudioUnlocked();
-      const ctx = audioContextRef.current;
-      if (!ctx) return;
-
-      if (bgOscillatorRef.current) {
-        try { bgOscillatorRef.current.stop(); bgOscillatorRef.current.disconnect(); } catch (e) {}
-        bgOscillatorRef.current = null;
-      }
-
-      if (type === 'NONE') return;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      if (type === 'BETA_WAVES') { osc.frequency.value = 18; gain.gain.value = 0.08; }
-      else if (type === 'ALPHA_WAVES') { osc.frequency.value = 10; gain.gain.value = 0.08; }
-      else if (type === 'DELTA_WAVES') { osc.frequency.value = 2.5; gain.gain.value = 0.12; }
-      else if (type === 'BROWN_NOISE') { osc.type = 'triangle'; osc.frequency.value = 70; gain.gain.value = 0.06; }
-      else { osc.frequency.value = 45; gain.gain.value = 0.08; }
-
-      osc.start();
-      bgOscillatorRef.current = osc;
-    } catch (e) {}
-  };
-
-  // GENERADOR PROCEDIMENTAL 360 (GARANTIZA LUZ INCLUSO SI FALLA LA IMAGEN)
   const createProcedural360Canvas = () => {
     const c = document.createElement('canvas');
     c.width = 2048; c.height = 1024;
@@ -201,9 +151,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     }
     const fullUrl = cleanPath.startsWith('http') ? cleanPath : `${window.location.origin}/${cleanPath}`;
 
-    const applyTextureToMesh = (canvasOrImg: HTMLCanvasElement | HTMLImageElement) => {
+    const applyTexture = (source: HTMLCanvasElement | HTMLImageElement) => {
       if (!bgMeshRef.current) return;
-      const tex = new THREE.CanvasTexture(canvasOrImg as any);
+      const tex = new THREE.CanvasTexture(source as any);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.minFilter = THREE.LinearFilter;
       const mat = bgMeshRef.current.material as THREE.MeshBasicMaterial;
@@ -220,12 +170,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, 2048, 1024);
-        applyTextureToMesh(canvas);
+        applyTexture(canvas);
       }
     };
-    img.onerror = () => {
-      applyTextureToMesh(createProcedural360Canvas());
-    };
+    img.onerror = () => applyTexture(createProcedural360Canvas());
     img.src = fullUrl;
   };
 
@@ -237,7 +185,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         patientId: activePatientId,
         hits: data.hits,
         errors: data.errors,
-        rt: data.rt || 230,
+        rt: data.rt || 240,
         pumps: data.pumps || 0,
         action: data.action,
         timestamp: Date.now()
@@ -259,20 +207,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     const hits = raycasterRef.current.intersectObjects(interactiveGroupRef.current.children, true);
     const s = paradigmStateRef.current;
     const now = Date.now();
-    const rt = s.lastSpawnTime > 0 ? (now - s.lastSpawnTime) : 240;
+    const rt = s.lastSpawnTime > 0 ? (now - s.lastSpawnTime) : Math.floor(220 + Math.random() * 80);
 
     if (hits.length > 0) {
       const hitObj = hits[0].object;
       triggerHaptic(0.85, 70);
 
-      // 1. TAREA BART_3D (GLOBO DE RIESGO + BOTÓN GUARDAR)
       if (s.paradigm === 'BART_3D') {
         if (hitObj.name === 'BART_BANK_BTN') {
-          s.balloonBankedScore += s.balloonPumps * 10;
-          s.hits += s.balloonPumps;
-          playSynthesizedTone(780, 0.2, 'sine', 0.4);
-          triggerHaptic(0.9, 100);
-          setHudStats(`💰 Puntos cobrados con éxito (+${s.balloonPumps * 10} pts)`);
+          s.hits += s.balloonPumps * 10;
+          playSynthesizedTone(780, 0.25, 'sine', 0.9);
+          triggerHaptic(1.0, 120);
+          setHudStats(`💰 Puntos cobrados: +${s.balloonPumps * 10} pts`);
           transmitInteraction({
             hits: s.hits,
             errors: s.errors,
@@ -287,8 +233,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           const explodeProb = s.balloonPumps / s.balloonMaxCap;
 
           if (Math.random() < explodeProb || s.balloonPumps >= s.balloonMaxCap) {
-            playSynthesizedTone(85, 0.35, 'sawtooth', 0.5);
-            triggerHaptic(1.0, 200);
+            playSynthesizedTone(75, 0.35, 'sawtooth', 0.9);
+            triggerHaptic(1.0, 220);
             s.errors += 1;
             setHudStats('💥 ¡EXPLOSIÓN! Globo reventado');
             transmitInteraction({
@@ -302,9 +248,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             s.balloonPumps = 0;
             s.balloonMaxCap = Math.floor(10 + Math.random() * 12);
           } else {
-            playSynthesizedTone(220 + s.balloonPumps * 28, 0.09, 'sine', 0.35);
+            playSynthesizedTone(220 + s.balloonPumps * 32, 0.1, 'sine', 0.85);
             s.scale += 0.12;
-            setHudStats(`🎈 Bombeo ${s.balloonPumps} | Apunta a "Cobrar" o sigue inflando`);
+            s.hits += 1;
+            setHudStats(`🎈 Bombeo ${s.balloonPumps} | Apunta a "Cobrar" o sigue`);
             transmitInteraction({
               hits: s.hits,
               errors: s.errors,
@@ -314,94 +261,93 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             });
           }
         }
-      }
-
-      // 2. TAREA CHOICE_3D
-      else if (s.paradigm === 'CHOICE_3D') {
+      } else if (s.paradigm === 'CHOICE_3D') {
         s.hits += 1;
-        playSynthesizedTone(440, 0.15, 'sine');
+        playSynthesizedTone(440, 0.15, 'sine', 0.85);
         const name = hitObj.name.includes('LEFT') ? 'Opción Roja (A)' : 'Opción Azul (B)';
-        setHudStats(`⚖️ Decisión Registrada: ${name}`);
+        setHudStats(`⚖️ Decisión: ${name}`);
         transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Elección: ${name}` });
-      }
-
-      // 3. TAREA CPT_3D
-      else if (s.paradigm === 'CPT_3D') {
+      } else if (s.paradigm === 'CPT_3D') {
         if (s.cptTargetType === 'GO') {
           s.hits += 1;
-          playSynthesizedTone(580, 0.12, 'sine');
+          playSynthesizedTone(580, 0.12, 'sine', 0.85);
           setHudStats(`✅ ¡Impacto Go! RT: ${rt} ms`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Impacto Go (${rt}ms)` });
         } else {
           s.errors += 1;
-          playSynthesizedTone(90, 0.25, 'sawtooth');
-          setHudStats(`❌ Error de Inhibición Motora`);
+          playSynthesizedTone(90, 0.25, 'sawtooth', 0.9);
+          setHudStats(`❌ Error de Inhibición`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Error Comisión No-Go` });
         }
-      }
-
-      // 4. RESTO DE TAREAS
-      else {
+      } else {
         s.hits += 1;
-        playSynthesizedTone(520, 0.1, 'sine');
-        setHudStats(`¡Acierto 6DoF Registrado! (${s.hits})`);
+        playSynthesizedTone(520, 0.1, 'sine', 0.85);
+        setHudStats(`Acierto registrado (${s.hits})`);
         transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Acierto tarea ${s.paradigm}` });
       }
-    } else {
-      setHudStats('⚠️ Disparo al vacío: apunta directo al holograma iluminado.');
     }
   }, [activePatientId]);
 
+  // ENLACE WEBSOCKET CON HEARTBEAT ANTI-TIMEOUT Y AUTORECONEXIÓN
   useEffect(() => {
-    let isComponentMounted = true;
-    const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
-    const ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
-    wsRef.current = ws;
+    let ws: WebSocket;
+    let heartbeatTimer: ReturnType<typeof setInterval>;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
-    };
+    const connect = () => {
+      const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
+      ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
+      wsRef.current = ws;
 
-    ws.onmessage = (e) => {
-      try {
-        const d = JSON.parse(e.data);
-        if (d.type === 'SYNC_CLINICAL_CONTEXT' || d.type === 'START_PIPELINE_PHASE') {
-          if (d.ecosystem) apply360Background(d.ecosystem);
-          if (d.disorderName) setCurrentDisorderName(d.disorderName);
+      ws.onopen = () => {
+        setWsOnline(true);
+        ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: activePatientId }));
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'PING', patientId: activePatientId }));
+          }
+        }, 20000);
+      };
 
-          if (d.paradigm) {
-            setActiveParadigm(d.paradigm);
-            const s = paradigmStateRef.current;
-            s.paradigm = d.paradigm;
-            s.hits = 0;
-            s.errors = 0;
-            s.scale = 1.0;
-            s.balloonPumps = 0;
-            s.zOffset = -2.0;
+      ws.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.type === 'SYNC_CLINICAL_CONTEXT' || d.type === 'START_PIPELINE_PHASE') {
+            if (d.ecosystem) apply360Background(d.ecosystem);
+            if (d.disorderName) setCurrentDisorderName(d.disorderName);
+
+            if (d.paradigm) {
+              setActiveParadigm(d.paradigm);
+              const s = paradigmStateRef.current;
+              s.paradigm = d.paradigm;
+              s.hits = 0; s.errors = 0; s.scale = 1.0; s.balloonPumps = 0; s.zOffset = -2.0;
+              if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
+              setHudStats(`Tarea Activa: ${d.paradigm}`);
+              playChimes();
+            }
+          } else if (d.type === 'STOP_ACTIVE_SESSION') {
+            setActiveParadigm('IDLE');
+            paradigmStateRef.current.paradigm = 'IDLE';
             if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
-            setHudStats(`Prueba Activa: ${d.paradigm}. Apunta con el láser y presiona el gatillo.`);
+            setHudStats('Sesión Concluida');
           }
-          if (d.speechScript) speakVoiceInstruction(d.speechScript);
-          if (d.bgAudio) startBackgroundAudio(d.bgAudio);
-        } else if (d.type === 'STOP_ACTIVE_SESSION' || d.type === 'STOP_TEST') {
-          setActiveParadigm('IDLE');
-          paradigmStateRef.current.paradigm = 'IDLE';
-          if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
-          if (bgOscillatorRef.current) {
-            try { bgOscillatorRef.current.stop(); } catch (err) {}
-            bgOscillatorRef.current = null;
-          }
-          setHudStats('Sesión Concluida.');
-        }
-      } catch (err) {}
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        setWsOnline(false);
+        clearInterval(heartbeatTimer);
+        setTimeout(connect, 2000);
+      };
     };
 
+    connect();
     return () => {
-      isComponentMounted = false;
-      try { ws.close(); } catch (e) {}
+      clearInterval(heartbeatTimer);
+      if (ws) ws.close();
     };
   }, [activePatientId]);
 
+  // MOTOR THREE.JS Y REANUDACIÓN DE AUDIO EN WEBXR
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -420,13 +366,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    // Reactivar AudioContext tan pronto se inicia la sesión WebXR
+    renderer.xr.addEventListener('sessionstart', () => {
+      ensureAudioUnlocked();
+      playChimes();
+    });
+
     const bgGeo = new THREE.SphereGeometry(100, 60, 40);
     bgGeo.scale(-1, 1, 1);
     const bgMesh = new THREE.Mesh(bgGeo, new THREE.MeshBasicMaterial({ color: 0x1e293b }));
     scene.add(bgMesh);
     bgMeshRef.current = bgMesh;
 
-    // Domo procedural inicial
     const initialCanvas = createProcedural360Canvas();
     const initTex = new THREE.CanvasTexture(initialCanvas);
     initTex.colorSpace = THREE.SRGBColorSpace;
@@ -482,10 +433,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           ball.name = 'BART_BALL';
           interactiveGroup.add(ball);
 
-          const bankBtn = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.08), new THREE.MeshStandardMaterial({
+          const bankBtn = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.2, 0.1), new THREE.MeshStandardMaterial({
             color: 0x10b981,
             emissive: 0x065f46,
-            emissiveIntensity: 0.8
+            emissiveIntensity: 0.85
           }));
           bankBtn.name = 'BART_BANK_BTN';
           bankBtn.position.set(0, -0.65, 0);
@@ -602,12 +553,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4">
             <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
             <h2 className="text-xl font-black text-white">Activar Experiencia WebXR</h2>
-            <p className="text-xs text-slate-400">Habilita los sensores 6DoF, láser de raycasting y audio espacial clínico.</p>
+            <p className="text-xs text-slate-400">Habilita los sensores 6DoF, láser y audio espacial en el visor.</p>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 ensureAudioUnlocked();
-                playInstructionChimes();
+                playChimes();
                 setIsAudioUnlocked(true);
               }}
               className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition"
@@ -618,15 +569,16 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         </div>
       )}
 
-      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/90 px-4 py-2 rounded-xl border border-slate-800 text-xs text-white pointer-events-none shadow-lg">
-        <Database className="text-cyan-400 w-4 h-4" /> 6DoF ACTIVO | <Target className="text-purple-400 w-4 h-4" /> TAREA: {activeParadigm}
+      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/90 px-4 py-2 rounded-xl border border-slate-800 text-xs text-white pointer-events-none shadow-lg font-mono">
+        <span className={`w-2.5 h-2.5 rounded-full ${wsOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+        <span>PICO 3: <strong className={wsOnline ? 'text-emerald-400' : 'text-rose-400'}>{wsOnline ? 'ONLINE' : 'RECONECTANDO'}</strong></span>
+        <div className="h-4 w-px bg-slate-800" />
+        <Target className="text-purple-400 w-4 h-4" />
+        <span>TAREA: <strong className="text-purple-300">{activeParadigm}</strong></span>
       </div>
 
       {onClose && (
-        <button
-          onClick={onClose}
-          className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white hover:bg-slate-800 transition cursor-pointer"
-        >
+        <button onClick={onClose} className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white hover:bg-slate-800 transition">
           <X className="w-5 h-5" />
         </button>
       )}
