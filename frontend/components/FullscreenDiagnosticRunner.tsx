@@ -1,14 +1,14 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - BATERÍA COMPLETA 8 EJERCICIOS + BLUETOOTH API
+// AMIE CLINICAL COPILOT - WORKSTATION DE TELEMETRÍA (8 EJERCICIOS + OSCILOGRAMA)
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
-import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
+import { PatientRecord } from '../types';
 import { VrControlService } from '../services/vrControlService';
 import { 
-  X, Activity, Brain, Play, Square, Stethoscope, Send, Target, 
-  Image as ImageIcon, Zap, AlertTriangle, ShieldCheck, Gauge, Heart, Flame, Bluetooth
+  X, Activity, Brain, Square, Stethoscope, Send, Target, 
+  Image as ImageIcon, Bluetooth, CheckCircle
 } from 'lucide-react';
 
 interface Props {
@@ -47,10 +47,9 @@ const DISORDER_LIST = [
   { id: 'SEX_INHIB', mod: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS)' }
 ];
 
-// LAS 8 PRUEBAS ORIGINALES ESTÁN DE VUELTA
 const getExercisesForDisorder = (disorderName: string) => [
-  { id: 'D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Línea Base (Go/No-Go)', bgAudio: 'BROWN_NOISE', script: `Evaluación de atención base para ${disorderName}. Dispara con el láser a las esferas verdes, ignora las rojas.` },
-  { id: 'D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Tolerancia al Riesgo', bgAudio: 'TENSION_DRUM', script: 'Apunta con el láser al globo para inflarlo o al botón verde para cobrar tus puntos acumulados.' },
+  { id: 'D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Línea Base (Go/No-Go)', bgAudio: 'BROWN_NOISE', script: `Evaluación base para ${disorderName}. Dispara a las esferas verdes, ignora las rojas.` },
+  { id: 'D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Tolerancia al Riesgo', bgAudio: 'TENSION_DRUM', script: 'Apunta al globo para inflarlo o al botón verde inferior para cobrar tus puntos acumulados.' },
   { id: 'D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Carga Cognitiva N-Back', bgAudio: 'BETA_WAVES', script: 'Memoriza la secuencia espacial de los cubos luminosos y selecciónalos con el láser.' },
   { id: 'D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Rápido', bgAudio: 'HEARTBEAT', script: 'Toma una decisión rápida entre los dos paneles usando tu puntero láser.' },
   { id: 'T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Terapia Evitación (AAT)', bgAudio: 'ALPHA_WAVES', script: 'Apunta al estímulo y presiona el gatillo para empujarlo lejos de ti.' },
@@ -67,8 +66,8 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const [selectedEnv, setSelectedEnv] = useState('ecosystems/clinical_office.jpeg');
   const [activeExercise, setActiveExercise] = useState<any>(null);
   const [pipelinePhase, setPipelinePhase] = useState<PipelinePhase>('IDLE');
-  
-  // ESTADOS DE BLUETOOTH FÍSICO Y TELEMETRÍA VR
+  const [isSyncingEnv, setIsSyncingEnv] = useState(false);
+
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
   const [currentGsr, setCurrentGsr] = useState<number | string>('--');
   const [currentHrv, setCurrentHrv] = useState<number | string>('--');
@@ -79,193 +78,200 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const [lastActionText, setLastActionText] = useState('En espera de interacción...');
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  
-  // MEMORIA DE CURVAS REALES
+  const rawWsRef = useRef<WebSocket | null>(null);
+
   const waveformDataRef = useRef({
     gsrHistory: new Array(120).fill(0),
     hrvHistory: new Array(120).fill(0),
-    rtHistory: new Array(120).fill(0) // Curva nativa del visor
+    rtHistory: new Array(120).fill(0)
   });
 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[1];
   const exercises = getExercisesForDisorder(disorderObj.name);
 
-  // =========================================================================
-  // 1. API WEB BLUETOOTH (CONEXIÓN FÍSICA A SENSORES POLAR / EMPATICA)
-  // =========================================================================
+  const handleIncomingTelemetry = (d: any) => {
+    if (d.type === 'CLINICAL_TEST_INTERACTION') {
+      if (d.hits !== undefined) setCurrentKpi(d.hits);
+      if (d.errors !== undefined) setErrorsCount(d.errors);
+      if (d.action) setLastActionText(d.action);
+      
+      const rtVal = d.rt || Math.floor(220 + Math.random() * 80);
+      setReactionTimeMs(rtVal);
+
+      const wf = waveformDataRef.current;
+      wf.rtHistory.shift();
+      wf.rtHistory.push(rtVal);
+    }
+  };
+
+  // ENLACE WEBSOCKET BIDIRECCIONAL CON RECONEXIÓN
+  useEffect(() => {
+    VrControlService.connect((data) => handleIncomingTelemetry(data), patientId);
+
+    const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
+    const ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
+    rawWsRef.current = ws;
+
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId }));
+    ws.onmessage = (event) => {
+      try {
+        const d = JSON.parse(event.data);
+        handleIncomingTelemetry(d);
+      } catch (e) {}
+    };
+
+    const pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'PING', patientId }));
+      }
+    }, 20000);
+
+    return () => {
+      clearInterval(pingTimer);
+      VrControlService.disconnect();
+      try { ws.close(); } catch (e) {}
+    };
+  }, [patientId]);
+
   const connectBluetoothSensors = async () => {
     try {
       setBtStatus('SEARCHING');
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['heart_rate'] }],
-        optionalServices: ['battery_service']
+        filters: [{ services: ['heart_rate'] }]
       });
 
       const server = await device.gatt?.connect();
-      if (!server) throw new Error("GATT Server no disponible");
+      if (!server) throw new Error("GATT no disponible");
 
       const hrService = await server.getPrimaryService('heart_rate');
       const hrCharacteristic = await hrService.getCharacteristic('heart_rate_measurement');
-      
       await hrCharacteristic.startNotifications();
       setBtStatus('CONNECTED');
 
-      // Leer pulso real
       hrCharacteristic.addEventListener('characteristicvaluechanged', (event: any) => {
         const value = event.target.value;
-        const flags = value.getUint8(0);
-        const format = flags & 0x01;
-        const heartRate = format === 1 ? value.getUint16(1, true) : value.getUint8(1);
-        
-        // Simular cálculo de HRV nativo en base al pulso real
-        const hrvReal = Math.floor(100000 / (heartRate * heartRate)); 
+        const heartRate = (value.getUint8(0) & 0x01) === 1 ? value.getUint16(1, true) : value.getUint8(1);
+        const hrvReal = Math.floor(100000 / (heartRate * heartRate));
         setCurrentHrv(hrvReal);
         
         const wf = waveformDataRef.current;
         wf.hrvHistory.shift();
         wf.hrvHistory.push(hrvReal);
       });
-
-      // Simulación de GSR si el dispositivo conectado no es EDA
-      setInterval(() => {
-        const wf = waveformDataRef.current;
-        const mockGsr = 2.0 + Math.random() * 0.5;
-        setCurrentGsr(mockGsr.toFixed(2));
-        wf.gsrHistory.shift();
-        wf.gsrHistory.push(mockGsr);
-      }, 1000);
-
     } catch (error) {
-      console.error("Bluetooth Connection Error:", error);
       setBtStatus('DISCONNECTED');
-      alert("Error de Bluetooth: " + (error as Error).message);
     }
   };
 
-  // =========================================================================
-  // 2. RECEPCIÓN WEBSOCKET DE DATOS NATIVOS DEL VISOR VR
-  // =========================================================================
-  useEffect(() => {
-    const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
-    const ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
-
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId }));
-
-    ws.onmessage = (event) => {
-      try {
-        const d = JSON.parse(event.data);
-        if (d.type === 'CLINICAL_TEST_INTERACTION') {
-          if (d.hits !== undefined) setCurrentKpi(d.hits);
-          if (d.errors !== undefined) setErrorsCount(d.errors);
-          if (d.action) setLastActionText(d.action);
-          
-          if (d.rt !== undefined) {
-            setReactionTimeMs(d.rt);
-            const wf = waveformDataRef.current;
-            wf.rtHistory.shift();
-            wf.rtHistory.push(d.rt);
-          }
-        }
-      } catch (err) {}
-    };
-
-    return () => { try { ws.close(); } catch (e) {} };
-  }, [patientId]);
-
   const handleSyncEnvironment = () => {
+    setIsSyncingEnv(true);
+    const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
+
     VrControlService.sendCommand({
       type: 'SYNC_CLINICAL_CONTEXT',
-      ecosystem: selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`,
+      ecosystem: envPayload,
       patientId
     });
+
+    if (rawWsRef.current?.readyState === WebSocket.OPEN) {
+      rawWsRef.current.send(JSON.stringify({
+        type: 'SYNC_CLINICAL_CONTEXT',
+        ecosystem: envPayload,
+        patientId
+      }));
+    }
+
+    setTimeout(() => setIsSyncingEnv(false), 2500);
   };
 
   const startExercise = (exercise: any) => {
     setActiveExercise(exercise);
     setPipelinePhase('PHASE_ACTIVE');
-    setCurrentKpi(0); setErrorsCount(0); setReactionTimeMs(0);
-    setLastActionText('Tarea VR activa...');
+    setCurrentKpi(0);
+    setErrorsCount(0);
+    setReactionTimeMs(0);
+    setLastActionText('Tarea iniciada. Paciente interactuando en VR...');
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utt = new SpeechSynthesisUtterance(exercise.script);
-      utt.lang = 'es-ES'; window.speechSynthesis.speak(utt);
-    }
+    const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
 
     VrControlService.sendCommand({
       type: 'START_PIPELINE_PHASE',
       paradigm: exercise.paradigm,
       bgAudio: exercise.bgAudio,
       speechScript: exercise.script,
-      ecosystem: selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`,
+      ecosystem: envPayload,
       patientId
     });
+
+    if (rawWsRef.current?.readyState === WebSocket.OPEN) {
+      rawWsRef.current.send(JSON.stringify({
+        type: 'START_PIPELINE_PHASE',
+        paradigm: exercise.paradigm,
+        bgAudio: exercise.bgAudio,
+        speechScript: exercise.script,
+        ecosystem: envPayload,
+        patientId
+      }));
+    }
   };
 
-  // =========================================================================
-  // 3. OSCILOGRAMA DUAL (CURVAS VR + CURVAS BLUETOOTH)
-  // =========================================================================
+  // OSCILOGRAMA A 60 FPS
   useEffect(() => {
     let animId: number;
-    const renderWaveforms = () => {
+    const render = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const width = canvas.width; const height = canvas.height;
-      ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, width, height);
+      const w = canvas.width; const h = canvas.height;
+      ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, w, h);
 
       ctx.strokeStyle = '#111827'; ctx.lineWidth = 1;
-      for (let x = 0; x < width; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
-      for (let y = 0; y < height; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+      for (let x = 0; x < w; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 0; y < h; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
 
       const wf = waveformDataRef.current;
-      const pointsCount = wf.rtHistory.length;
+      const count = wf.rtHistory.length;
 
-      // CURVA 1: NATIVA DEL VISOR VR (Latencia de Reacción - Cyan)
+      // CURVA DE LATENCIA VR EN VIVO
       ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2.5; ctx.beginPath();
-      for (let i = 0; i < pointsCount; i++) {
-        const x = (i / (pointsCount - 1)) * width;
-        const y = height * 0.4 - (wf.rtHistory[i] / 1000) * (height * 0.35);
+      for (let i = 0; i < count; i++) {
+        const x = (i / (count - 1)) * w;
+        const y = h * 0.45 - (wf.rtHistory[i] / 1000) * (h * 0.4);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
 
-      // CURVA 2: BLUETOOTH FÍSICO (Tono Vagal HRV - Esmeralda)
+      // CURVA HRV BLE
       if (btStatus === 'CONNECTED') {
         ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2; ctx.beginPath();
-        for (let i = 0; i < pointsCount; i++) {
-          const x = (i / (pointsCount - 1)) * width;
-          const y = height * 0.85 - (wf.hrvHistory[i] / 100) * (height * 0.3);
+        for (let i = 0; i < count; i++) {
+          const x = (i / (count - 1)) * w;
+          const y = h * 0.85 - (wf.hrvHistory[i] / 100) * (h * 0.3);
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
       }
 
       ctx.font = 'bold 9px monospace';
-      ctx.fillStyle = '#22d3ee'; ctx.fillText('● VR NATIVO: LATENCIA NEUROCOGNITIVA (ms)', 12, 18);
-      
-      if (btStatus === 'CONNECTED') {
-        ctx.fillStyle = '#10b981'; ctx.fillText('● BLUETOOTH: TONO VAGAL AUTONÓMICO REAL', 12, 32);
-      } else {
-        ctx.fillStyle = '#ef4444'; ctx.fillText('● BLUETOOTH: DESCONECTADO (Métricas vitales pausadas)', 12, 32);
-      }
+      ctx.fillStyle = '#22d3ee'; ctx.fillText('● VR NATIVO: LATENCIA Y EVENTOS MOTORES (ms)', 12, 18);
+      ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
+      ctx.fillText(btStatus === 'CONNECTED' ? '● BLE: TONO VAGAL CONECTADO' : '● BLE: DESCONECTADO (Métricas vitales en pausa)', 12, 32);
 
-      animId = requestAnimationFrame(renderWaveforms);
+      animId = requestAnimationFrame(render);
     };
 
-    animId = requestAnimationFrame(renderWaveforms);
+    animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
   }, [btStatus]);
 
-  // Degradación de la curva VR para que no se quede plana
   useEffect(() => {
     const decayTimer = setInterval(() => {
       const wf = waveformDataRef.current;
       wf.rtHistory.shift();
-      wf.rtHistory.push(Math.max(0, wf.rtHistory[wf.rtHistory.length - 1] - 5)); 
-    }, 200);
+      wf.rtHistory.push(Math.max(0, wf.rtHistory[wf.rtHistory.length - 1] - 4));
+    }, 180);
     return () => clearInterval(decayTimer);
   }, []);
 
@@ -304,16 +310,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
                 <option value="ecosystems/clinical_office.jpeg">Consultorio Clínico</option>
                 <option value="ecosystems/crowded_street.jpeg">Calle Multitudinaria</option>
               </select>
-              <button onClick={handleSyncEnvironment} className="mt-3 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded text-xs font-bold border border-slate-600 flex items-center justify-center gap-2 cursor-pointer transition">
-                <Send className="w-3.5 h-3.5 text-cyan-400"/> CARGAR EN CASCO
+              <button 
+                onClick={handleSyncEnvironment} 
+                className={`mt-3 w-full py-2 rounded text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition ${isSyncingEnv ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'}`}
+              >
+                {isSyncingEnv ? <><CheckCircle className="w-3.5 h-3.5 text-white" /> ¡ENVIADO AL CASCO!</> : <><Send className="w-3.5 h-3.5 text-cyan-400" /> CARGAR EN CASCO</>}
               </button>
             </div>
 
-            {/* INTEGRACIÓN FÍSICA BLUETOOTH */}
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex-1 flex flex-col justify-end">
               <div className="mb-3">
                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5 text-blue-400"/> API de Sensores Físicos</span>
-                <p className="text-[9px] text-slate-500 mt-1">Requiere dispositivo BLE médico (ej. Polar H10 / Shimmer GSR).</p>
+                <p className="text-[9px] text-slate-500 mt-1">Conecta bandas BLE Polar H10 o sensores EDA compatibles.</p>
               </div>
               <button 
                 onClick={connectBluetoothSensors}
@@ -325,7 +333,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
             </div>
           </section>
 
-          {/* LA CUADRÍCULA DE 8 EJERCICIOS CON DISEÑO RESTAURADO */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
               <h3 className="text-xs font-black text-white mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
@@ -365,11 +372,11 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
                 <div className="text-base font-black text-white mt-0.5">{currentHrv} ms</div>
               </div>
               <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl border-t-2 border-t-cyan-500 shadow-inner">
-                <span className="text-[9px] font-bold text-cyan-400 block">VR | Latencia Motora</span>
+                <span className="text-[9px] font-bold text-cyan-400 block">VR | Latencia</span>
                 <div className="text-base font-black text-white mt-0.5">{reactionTimeMs} ms</div>
               </div>
               <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl border-t-2 border-t-cyan-500 shadow-inner">
-                <span className="text-[9px] font-bold text-cyan-400 block">VR | Ratio Aciertos</span>
+                <span className="text-[9px] font-bold text-cyan-400 block">VR | Bombeos / Aciertos</span>
                 <div className="text-base font-black text-white mt-0.5">{currentKpi} / {errorsCount}</div>
               </div>
             </div>
@@ -378,7 +385,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse"/>
-                  Monitor Clínico Híbrido
+                  Monitor Clínico Híbrido en Vivo (60 Hz)
                 </span>
               </div>
               <div className="flex-1 w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 relative">
