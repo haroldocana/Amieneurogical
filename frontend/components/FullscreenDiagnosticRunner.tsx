@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - TELEMETRÍA VR NATIVA Y API WEB BLUETOOTH REAL
+// AMIE CLINICAL COPILOT - BATERÍA COMPLETA 8 EJERCICIOS + BLUETOOTH API
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -23,22 +23,40 @@ export const CLINICAL_MODULES = [
   { id: 'MOD_AFFECTIVE', name: 'II. Afectivo & Trauma' },
   { id: 'MOD_ANXIETY', name: 'III. Ansiedad & Fobias' },
   { id: 'MOD_ADDICTIONS', name: 'IV. Adicciones' },
-  { id: 'MOD_FORENSIC', name: 'V. Forense & Cluster B' }
+  { id: 'MOD_FORENSIC', name: 'V. Forense & Cluster B' },
+  { id: 'MOD_HYPNOSIS_PAIN', name: 'VI. Neurohipnosis & Dolor' },
+  { id: 'MOD_SEXOLOGY', name: 'VII. Salud Sexual' }
 ];
 
 const DISORDER_LIST = [
   { id: 'TDAH', mod: 'MOD_NEURODEV', name: 'TDAH / Impulsividad' },
   { id: 'TEA', mod: 'MOD_NEURODEV', name: 'Espectro Autista' },
+  { id: 'ALZHEIMER', mod: 'MOD_NEURODEV', name: 'Alzheimer / Deterioro' },
   { id: 'DEPRESION', mod: 'MOD_AFFECTIVE', name: 'Depresión Mayor' },
+  { id: 'ESQUIZOFRENIA', mod: 'MOD_AFFECTIVE', name: 'Esquizofrenia' },
+  { id: 'TEPT', mod: 'MOD_AFFECTIVE', name: 'Estrés Postraumático' },
+  { id: 'PANICO', mod: 'MOD_ANXIETY', name: 'Trastorno de Pánico' },
   { id: 'FOBIA_SOCIAL', mod: 'MOD_ANXIETY', name: 'Fobia Social' },
-  { id: 'PSICOPATIA', mod: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1)' }
+  { id: 'ADICCION', mod: 'MOD_ADDICTIONS', name: 'Craving Sustancias' },
+  { id: 'LUDOPATIA', mod: 'MOD_ADDICTIONS', name: 'Ludopatía' },
+  { id: 'TLP', mod: 'MOD_FORENSIC', name: 'Borderline (TLP)' },
+  { id: 'NARCISISMO', mod: 'MOD_FORENSIC', name: 'Narcisismo' },
+  { id: 'PSICOPATIA', mod: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1)' },
+  { id: 'DOLOR', mod: 'MOD_HYPNOSIS_PAIN', name: 'Dolor Crónico / Fibromialgia' },
+  { id: 'INSOMNIO', mod: 'MOD_HYPNOSIS_PAIN', name: 'Insomnio Severo' },
+  { id: 'SEX_INHIB', mod: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS)' }
 ];
 
+// LAS 8 PRUEBAS ORIGINALES ESTÁN DE VUELTA
 const getExercisesForDisorder = (disorderName: string) => [
   { id: 'D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Línea Base (Go/No-Go)', bgAudio: 'BROWN_NOISE', script: `Evaluación de atención base para ${disorderName}. Dispara con el láser a las esferas verdes, ignora las rojas.` },
   { id: 'D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Tolerancia al Riesgo', bgAudio: 'TENSION_DRUM', script: 'Apunta con el láser al globo para inflarlo o al botón verde para cobrar tus puntos acumulados.' },
-  { id: 'T1', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '3. Reprocesamiento EMDR', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la esfera de luz con tus ojos de lado a lado sin mover la cabeza.' },
-  { id: 'T2', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '4. Rescate Vagal (Grounding)', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración con la expansión del loto fractal. Inhala al crecer, exhala al contraerse.' }
+  { id: 'D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Carga Cognitiva N-Back', bgAudio: 'BETA_WAVES', script: 'Memoriza la secuencia espacial de los cubos luminosos y selecciónalos con el láser.' },
+  { id: 'D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Rápido', bgAudio: 'HEARTBEAT', script: 'Toma una decisión rápida entre los dos paneles usando tu puntero láser.' },
+  { id: 'T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Terapia Evitación (AAT)', bgAudio: 'ALPHA_WAVES', script: 'Apunta al estímulo y presiona el gatillo para empujarlo lejos de ti.' },
+  { id: 'T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Reprocesamiento EMDR', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la esfera de luz con tus ojos de lado a lado sin mover la cabeza.' },
+  { id: 'T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Terapia Somatomotora', bgAudio: 'THETA_WAVES', script: 'Apunta a las esferas flotantes para sincronizar tu esquema corporal.' },
+  { id: 'T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Rescate Vagal (Grounding)', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración con la expansión del loto fractal. Inhala al crecer, exhala al contraerse.' }
 ];
 
 export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }) => {
@@ -66,7 +84,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const waveformDataRef = useRef({
     gsrHistory: new Array(120).fill(0),
     hrvHistory: new Array(120).fill(0),
-    rtHistory: new Array(120).fill(0) // Curva nativa del visor (Latencias)
+    rtHistory: new Array(120).fill(0) // Curva nativa del visor
   });
 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[1];
@@ -78,7 +96,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const connectBluetoothSensors = async () => {
     try {
       setBtStatus('SEARCHING');
-      // Filtrar dispositivos médicos Bluetooth LE (Servicio de Ritmo Cardíaco 0x180D)
       const device = await navigator.bluetooth.requestDevice({
         filters: [{ services: ['heart_rate'] }],
         optionalServices: ['battery_service']
@@ -93,7 +110,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       await hrCharacteristic.startNotifications();
       setBtStatus('CONNECTED');
 
-      // Leer datos binarios reales del corazón humano
+      // Leer pulso real
       hrCharacteristic.addEventListener('characteristicvaluechanged', (event: any) => {
         const value = event.target.value;
         const flags = value.getUint8(0);
@@ -104,7 +121,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
         const hrvReal = Math.floor(100000 / (heartRate * heartRate)); 
         setCurrentHrv(hrvReal);
         
-        // Inyectar en el oscilograma
         const wf = waveformDataRef.current;
         wf.hrvHistory.shift();
         wf.hrvHistory.push(hrvReal);
@@ -127,7 +143,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   };
 
   // =========================================================================
-  // 2. RECEPCIÓN WEBSOCKET DE DATOS NATIVOS DEL VISOR VR (MILISEGUNDOS)
+  // 2. RECEPCIÓN WEBSOCKET DE DATOS NATIVOS DEL VISOR VR
   // =========================================================================
   useEffect(() => {
     const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
@@ -145,7 +161,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
           
           if (d.rt !== undefined) {
             setReactionTimeMs(d.rt);
-            // Inyectar la latencia real en la curva del visor
             const wf = waveformDataRef.current;
             wf.rtHistory.shift();
             wf.rtHistory.push(d.rt);
@@ -201,7 +216,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       const width = canvas.width; const height = canvas.height;
       ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, width, height);
 
-      // Grid
       ctx.strokeStyle = '#111827'; ctx.lineWidth = 1;
       for (let x = 0; x < width; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
       for (let y = 0; y < height; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
@@ -213,7 +227,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2.5; ctx.beginPath();
       for (let i = 0; i < pointsCount; i++) {
         const x = (i / (pointsCount - 1)) * width;
-        // Escalar milisegundos (0 - 1000ms)
         const y = height * 0.4 - (wf.rtHistory[i] / 1000) * (height * 0.35);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
@@ -246,12 +259,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
     return () => cancelAnimationFrame(animId);
   }, [btStatus]);
 
-  // Degradación de la curva VR para que no se quede plana si no hay acción
+  // Degradación de la curva VR para que no se quede plana
   useEffect(() => {
     const decayTimer = setInterval(() => {
       const wf = waveformDataRef.current;
       wf.rtHistory.shift();
-      wf.rtHistory.push(Math.max(0, wf.rtHistory[wf.rtHistory.length - 1] - 5)); // Decae lentamente
+      wf.rtHistory.push(Math.max(0, wf.rtHistory[wf.rtHistory.length - 1] - 5)); 
     }, 200);
     return () => clearInterval(decayTimer);
   }, []);
@@ -262,7 +275,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
         <header className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Brain className="w-6 h-6 text-cyan-400" />
-            <h2 className="text-sm font-black">AMIE CDSS • ENTORNO CLÍNICO</h2>
+            <h2 className="text-sm font-black">AMIE CDSS • ENTORNO CLÍNICO HÍBRIDO</h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-2"><X /></button>
         </header>
@@ -312,23 +325,28 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
             </div>
           </section>
 
+          {/* LA CUADRÍCULA DE 8 EJERCICIOS CON DISEÑO RESTAURADO */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
               <h3 className="text-xs font-black text-white mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
-                <Target className="w-4 h-4 text-purple-400"/> PARADIGMAS 3D (INTERACTIVIDAD)
+                <Target className="w-4 h-4 text-purple-400"/> BATERÍA CLÍNICA (8 PARADIGMAS 3D)
               </h3>
-              <div className="grid grid-cols-1 gap-2 flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto pr-1">
                 {exercises.map(ex => (
-                  <div key={ex.id} className="bg-slate-900 border border-slate-700 p-2.5 rounded-lg flex items-center justify-between">
+                  <div key={ex.id} className="bg-slate-900 border border-slate-700 p-2.5 rounded-lg flex flex-col justify-between">
                     <div>
-                      <p className="text-[11px] font-bold text-white leading-tight">{ex.name}</p>
+                      <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded ${ex.mode==='DIAGNOSTIC'?'bg-cyan-950 text-cyan-300 border border-cyan-800':'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+                        {ex.mode === 'DIAGNOSTIC' ? 'EVALUACIÓN' : 'TRATAMIENTO'}
+                      </span>
+                      <p className="text-[11px] font-bold text-white mt-1.5 leading-tight">{ex.name}</p>
                       <p className="text-[9px] text-slate-500 font-mono mt-0.5">{ex.paradigm}</p>
                     </div>
                     <button 
                       onClick={() => startExercise(ex)}
-                      className={`px-3 py-2 rounded text-[10px] font-black transition cursor-pointer ${activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                      disabled={pipelinePhase === 'PHASE_ACTIVE' && activeExercise?.id !== ex.id}
+                      className={`mt-2 py-2 rounded text-[10px] font-black transition cursor-pointer ${activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
                     >
-                      {activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'ACTIVO...' : 'INICIAR'}
+                      {activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'ACTIVO...' : 'INICIAR PRUEBA'}
                     </button>
                   </div>
                 ))}
