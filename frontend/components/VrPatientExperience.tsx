@@ -1,5 +1,6 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF NEXT-GEN (RAYCASTING Y HÁPTICA)
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF NEXT-GEN (BATERÍA DE 8 MOTORES 3D)
+// RAYCASTING LÁSER, HÁPTICA DINÁMICA, SINTETIZADOR BINAURAL Y FONDOS 360°
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -7,8 +8,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { 
-  Wifi, RefreshCw, Stethoscope, Sparkles, Volume2, 
-  Database, Zap, X, VolumeX, Play, Video, Target
+  Database, Target, VolumeX, Play, X, Stethoscope, Sparkles, Volume2 
 } from 'lucide-react';
 
 interface Props { 
@@ -18,7 +18,16 @@ interface Props {
 }
 
 export type ModuleCategory = 'DIAGNOSTIC' | 'TREATMENT';
-export type InteractiveParadigm = 'NONE' | 'BART_GLASS' | 'CPT_NEON' | 'EMDR_LIGHTBAR' | 'BIO_LOTUS' | 'SIS_SES_ORBS' | 'KINEMATIC_TARGET';
+export type InteractiveParadigm = 
+  | 'IDLE'
+  | 'CPT_3D' 
+  | 'BART_3D' 
+  | 'N_BACK_3D' 
+  | 'CHOICE_3D' 
+  | 'AAT_3D' 
+  | 'EMDR_3D' 
+  | 'BIO_3D' 
+  | 'MIRROR_3D';
 
 export const VrPatientExperience: React.FC<Props> = ({ 
   patientId: propsPatientId, 
@@ -32,49 +41,61 @@ export const VrPatientExperience: React.FC<Props> = ({
   const activePatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
 
   const [isConnected, setIsConnected] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState('clinical_office');
+  const [activeEcosystem, setActiveEcosystem] = useState('clinical_office.jpeg');
   const [currentCategory, setCurrentCategory] = useState<ModuleCategory>('DIAGNOSTIC');
-  const [currentDisorderId, setCurrentDisorderId] = useState<string>('PSYCHOPATHY');
+  const [currentDisorderId, setCurrentDisorderId] = useState<string>('PSICOPATIA');
   const [currentDisorderName, setCurrentDisorderName] = useState('Consultorio Clínico Base');
   const [phaseLabel, setPhaseLabel] = useState('En espera de inicio...');
-  const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('BART_GLASS');
+  const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('IDLE');
   
   const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
   const [customMediaUrl, setCustomMediaUrl] = useState<string | null>(null);
   const [currentMediaType, setCurrentMediaType] = useState<'image' | 'video'>('image');
 
-  const [hudStats, setHudStats] = useState<string>('Apunta con el láser del mando y usa el gatillo');
+  const [hudStats, setHudStats] = useState<string>('Apunta con el láser del mando y presiona el gatillo');
 
-  // CORE THREE.JS REFS
+  // THREE.JS CORE REFS
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const envMeshRef = useRef<THREE.Mesh | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // INTERACTIVITY REFS
+  // INTERACTIVITY & RAYCASTING REFS
   const interactiveGroupRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const controller1Ref = useRef<THREE.Group | null>(null);
   const controller2Ref = useRef<THREE.Group | null>(null);
 
+  // AUDIO CORE (WEB AUDIO API + BINAURAL + TTS)
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const bgOscillatorRef = useRef<OscillatorNode | null>(null);
+  const bgGainRef = useRef<GainNode | null>(null);
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ESTADO DE SIMULACIÓN Y TELEMETRÍA CINEMÁTICA
   const paradigmStateRef = useRef({
-    paradigm: 'BART_GLASS' as InteractiveParadigm,
+    paradigm: 'IDLE' as InteractiveParadigm,
     isPhaseActive: false,
+    hits: 0,
+    errors: 0,
+    omissions: 0,
+    reactionTimes: [] as number[],
+    lastSpawnTime: 0,
+    cptTargetType: 'GO' as 'GO' | 'NOGO',
     balloonScale: 1.0,
     balloonPumps: 0,
-    cptTargetType: 'GO' as 'GO' | 'NOGO',
-    cptSpawnTime: 0,
-    cptHits: 0,
-    cptCommissions: 0
+    balloonMaxCap: 20,
+    zOffset: -2.0,
+    nbackIndex: 0,
+    lastInteractionTime: 0
   });
 
   // =========================================================================
-  // MOTOR HÁPTICO Y DE AUDIO (FEEDBACK SENSORIAL)
+  // 1. MOTOR HÁPTICO DINÁMICO (VIBRACIÓN FÍSICA EN MANDOS PICO / QUEST)
   // =========================================================================
-  const triggerHapticFeedback = (intensity = 0.5, durationMs = 50) => {
+  const triggerHapticFeedback = (intensity = 0.5, durationMs = 60) => {
     if (!rendererRef.current) return;
     const session = rendererRef.current.xr.getSession();
     if (session && session.inputSources) {
@@ -86,7 +107,10 @@ export const VrPatientExperience: React.FC<Props> = ({
     }
   };
 
-  const playSynthesizedTone = (type: 'PUMP' | 'POP' | 'GO_CHIME' | 'BUZZ' | 'CALM') => {
+  // =========================================================================
+  // 2. EFECTOS SONOROS CLÍNICOS SINTETIZADOS (PURO WEB AUDIO API)
+  // =========================================================================
+  const playSynthesizedTone = (type: 'PUMP' | 'POP' | 'GO_CHIME' | 'BUZZ' | 'CALM' | 'SELECT') => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!audioContextRef.current && AudioCtx) audioContextRef.current = new AudioCtx();
@@ -100,26 +124,135 @@ export const VrPatientExperience: React.FC<Props> = ({
       const now = ctx.currentTime;
 
       if (type === 'PUMP') {
-        osc.type = 'sine'; osc.frequency.setValueAtTime(180, now); osc.frequency.exponentialRampToValueAtTime(320, now + 0.12);
-        gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-        osc.start(now); osc.stop(now + 0.13);
-        triggerHapticFeedback(0.3, 30); // Vibración leve
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(320, now + 0.12);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.13);
+        triggerHapticFeedback(0.3, 35);
       } else if (type === 'POP') {
-        osc.type = 'triangle'; osc.frequency.setValueAtTime(120, now); osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
-        gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-        osc.start(now); osc.stop(now + 0.26);
-        triggerHapticFeedback(1.0, 150); // Vibración fuerte
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(35, now + 0.28);
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+        osc.start(now);
+        osc.stop(now + 0.29);
+        triggerHapticFeedback(1.0, 160);
       } else if (type === 'GO_CHIME') {
-        osc.type = 'sine'; osc.frequency.setValueAtTime(520, now);
-        gain.gain.setValueAtTime(0.25, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-        osc.start(now); osc.stop(now + 0.16);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(540, now);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.16);
         triggerHapticFeedback(0.6, 50);
       } else if (type === 'BUZZ') {
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(95, now);
-        gain.gain.setValueAtTime(0.35, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now); osc.stop(now + 0.31);
-        triggerHapticFeedback(0.8, 100);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(90, now);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.31);
+        triggerHapticFeedback(0.85, 110);
+      } else if (type === 'CALM') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.51);
+      } else if (type === 'SELECT') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.11);
+        triggerHapticFeedback(0.4, 40);
       }
+    } catch (e) {}
+  };
+
+  // =========================================================================
+  // 3. GENERADOR DE AUDIO DE FONDO (BINAURAL, RUIDO MARRÓN, FRECUENCIAS CEREBRALES)
+  // =========================================================================
+  const startBackgroundAudio = (type: string) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!audioContextRef.current && AudioCtx) audioContextRef.current = new AudioCtx();
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+      if (bgOscillatorRef.current) {
+        try { bgOscillatorRef.current.stop(); bgOscillatorRef.current.disconnect(); } catch (e) {}
+        bgOscillatorRef.current = null;
+      }
+
+      if (type === 'NONE') return;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'BETA_WAVES') {
+        osc.type = 'sine';
+        osc.frequency.value = 18; // 18 Hz para alerta y carga cognitiva
+        gain.gain.value = 0.08;
+        osc.start();
+      } else if (type === 'ALPHA_WAVES') {
+        osc.type = 'sine';
+        osc.frequency.value = 10; // 10 Hz para relajación consciente
+        gain.gain.value = 0.08;
+        osc.start();
+      } else if (type === 'THETA_WAVES') {
+        osc.type = 'sine';
+        osc.frequency.value = 5.5; // 5.5 Hz para trance hipnótico
+        gain.gain.value = 0.09;
+        osc.start();
+      } else if (type === 'DELTA_WAVES') {
+        osc.type = 'sine';
+        osc.frequency.value = 2.0; // 2.0 Hz para sueño y desaceleración metabólica
+        gain.gain.value = 0.12;
+        osc.start();
+      } else if (type === 'BROWN_NOISE') {
+        osc.type = 'triangle';
+        osc.frequency.value = 65;
+        gain.gain.value = 0.05;
+        osc.start();
+      } else if (type === 'TENSION_DRUM' || type === 'HEARTBEAT') {
+        osc.type = 'sine';
+        osc.frequency.value = 45;
+        gain.gain.value = 0.0;
+        osc.start();
+        heartbeatTimerRef.current = setInterval(() => {
+          if (!ctx) return;
+          const now = ctx.currentTime;
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        }, 900);
+      } else if (type === 'BILATERAL_SWEEP') {
+        osc.type = 'sine';
+        osc.frequency.value = 320;
+        gain.gain.value = 0.07;
+        osc.start();
+      } else {
+        osc.type = 'sine';
+        osc.frequency.value = 120;
+        gain.gain.value = 0.04;
+        osc.start();
+      }
+
+      bgOscillatorRef.current = osc;
+      bgGainRef.current = gain;
     } catch (e) {}
   };
 
@@ -153,67 +286,127 @@ export const VrPatientExperience: React.FC<Props> = ({
       audioEl.volume = 1.0;
       audioEl.style.display = 'none';
       document.body.appendChild(audioEl);
-      audioEl.play().catch(() => {});
+      audioEl.play().catch(() => {
+        if ('speechSynthesis' in window) {
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'es-ES';
+          window.speechSynthesis.speak(u);
+        }
+      });
     } catch (e) {}
   }, [isAudioUnlocked]);
 
   // =========================================================================
-  // RAYCASTING Y COLISIONES (EVALUACIÓN ESPACIAL REAL)
+  // 4. RAYCASTING LÁSER 6DoF Y MANEJADOR DE LAS 8 TAREAS HOLOGRÁFICAS
   // =========================================================================
   const handleControllerSelect = useCallback((event: any) => {
     const controller = event.target;
     if (!interactiveGroupRef.current) return;
 
-    // Crear rayo desde el mando
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.identity().extractRotation(controller.matrixWorld);
     raycasterRef.current.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycasterRef.current.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-    // Detectar si el láser toca el holograma
     const intersects = raycasterRef.current.intersectObjects(interactiveGroupRef.current.children, true);
     
     if (intersects.length > 0) {
       const hitObject = intersects[0].object;
       const s = paradigmStateRef.current;
-      
-      // Lógica solo si se acierta al holograma
-      if (s.paradigm === 'BART_GLASS' && hitObject.name === 'BART_GLASS') {
+      const now = Date.now();
+      s.lastInteractionTime = now;
+
+      // 1. TAREA CPT_3D (Atención e Inhibición Go/No-Go)
+      if (s.paradigm === 'CPT_3D') {
+        const rt = s.lastSpawnTime > 0 ? (now - s.lastSpawnTime) : 260;
+        if (s.cptTargetType === 'GO') {
+          playSynthesizedTone('GO_CHIME');
+          s.hits += 1;
+          s.reactionTimes.push(rt);
+          setHudStats(`✅ Impacto Go! RT: ${rt} ms`);
+        } else {
+          playSynthesizedTone('BUZZ');
+          s.errors += 1;
+          setHudStats(`❌ Error de Comisión (Inhibición Fallida)`);
+        }
+      }
+
+      // 2. TAREA BART_3D (Riesgo y Castigo / Psicopatía)
+      else if (s.paradigm === 'BART_3D') {
         s.balloonPumps += 1;
-        const explodeProb = (s.balloonPumps / 22);
-        if (Math.random() < explodeProb || s.balloonPumps >= 22) {
+        const explodeProb = s.balloonPumps / s.balloonMaxCap;
+        if (Math.random() < explodeProb || s.balloonPumps >= s.balloonMaxCap) {
           playSynthesizedTone('POP');
-          s.balloonPumps = 0; s.balloonScale = 1.0;
-          setHudStats(`💥 ¡EXPLOSIÓN! Insensibilidad evaluada`);
+          s.balloonPumps = 0;
+          s.balloonScale = 1.0;
+          s.balloonMaxCap = Math.floor(12 + Math.random() * 16);
+          setHudStats(`💥 ¡EXPLOSIÓN! Insensibilidad al riesgo evaluada`);
         } else {
           playSynthesizedTone('PUMP');
           s.balloonScale += 0.12;
+          s.hits += 1;
           setHudStats(`🎈 Riesgo Asumido: ${s.balloonPumps} bombeos`);
         }
-      } else if (s.paradigm === 'CPT_NEON' && hitObject.name === 'CPT_NEON') {
-        if (s.cptTargetType === 'GO') {
-          playSynthesizedTone('GO_CHIME');
-          s.cptHits += 1;
-          setHudStats(`✅ Impacto Positivo!`);
-        } else {
-          playSynthesizedTone('BUZZ');
-          s.cptCommissions += 1;
-          setHudStats(`❌ Error de Inhibición Motora`);
-        }
       }
-      
-      // Enviar telemetría de interacción
+
+      // 3. TAREA N_BACK_3D (Memoria de Trabajo y Carga Cognitiva)
+      else if (s.paradigm === 'N_BACK_3D') {
+        playSynthesizedTone('SELECT');
+        s.hits += 1;
+        setHudStats(`🧠 Secuencia Registrada: Selección ${s.hits}`);
+      }
+
+      // 4. TAREA CHOICE_3D (Dilema Rápido / Toma de Decisiones)
+      else if (s.paradigm === 'CHOICE_3D') {
+        playSynthesizedTone('SELECT');
+        s.hits += 1;
+        const choice = hitObject.name === 'CHOICE_LEFT' ? 'Opción A' : 'Opción B';
+        setHudStats(`⚖️ Decisión Registrada: ${choice}`);
+      }
+
+      // 5. TAREA AAT_3D (Aproximación / Evitación AAT)
+      else if (s.paradigm === 'AAT_3D') {
+        playSynthesizedTone('SELECT');
+        s.zOffset -= 0.6; // Empuja el estímulo fóbico lejos
+        s.hits += 1;
+        setHudStats(`🛡️ Estímulo Evitado (+1 Rechazo Activo)`);
+      }
+
+      // 6. TAREA EMDR_3D (Reprocesamiento Sacádico)
+      else if (s.paradigm === 'EMDR_3D') {
+        playSynthesizedTone('CALM');
+        setHudStats(`👁️ Sincronización sacádica en curso`);
+      }
+
+      // 7. TAREA BIO_3D (Respiración Fractal y Rescate Vagal)
+      else if (s.paradigm === 'BIO_3D') {
+        playSynthesizedTone('CALM');
+        setHudStats(`🌸 Resonancia Vagal activa: Sigue el ritmo 6 RPM`);
+      }
+
+      // 8. TAREA MIRROR_3D (Espejo Somatomotor)
+      else if (s.paradigm === 'MIRROR_3D') {
+        playSynthesizedTone('SELECT');
+        s.hits += 1;
+        setHudStats(`🪞 Calibración somatosensorial completada`);
+      }
+
+      // Transmisión inmediata de la interacción al CDSS de la estación
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
-          type: 'CLINICAL_TEST_INTERACTION', patientId: activePatientId,
-          hits: s.balloonPumps || s.cptHits, timestamp: Date.now()
+          type: 'CLINICAL_TEST_INTERACTION',
+          paradigm: s.paradigm,
+          patientId: activePatientId,
+          hits: s.hits,
+          errors: s.errors,
+          timestamp: now
         }));
       }
     }
   }, [activePatientId]);
 
   // =========================================================================
-  // CONEXIÓN AL MOTOR DE TRIANGULACIÓN (WEBSOCKETS)
+  // 5. ENLACE WEBSOCKET Y SINCRONIZACIÓN DE TELEMETRÍA BIDIRECCIONAL
   // =========================================================================
   useEffect(() => {
     let isComponentMounted = true;
@@ -236,27 +429,52 @@ export const VrPatientExperience: React.FC<Props> = ({
              setCurrentMediaType('video');
              setCustomMediaUrl(data.mediaUrl);
           } else if (data.type === 'SYNC_CLINICAL_CONTEXT') {
-            if (data.hologramType) {
-              setActiveParadigm(data.hologramType);
-              paradigmStateRef.current.paradigm = data.hologramType;
-              if (data.hologramType === 'NONE' && interactiveGroupRef.current) {
-                interactiveGroupRef.current.visible = false;
-              } else if (interactiveGroupRef.current) {
-                interactiveGroupRef.current.visible = true;
-              }
-            }
             if (data.ecosystem) {
               const isVid = data.ecosystem.endsWith('.mp4') || data.mediaType === 'video';
               setCurrentMediaType(isVid ? 'video' : 'image');
+              setActiveEcosystem(data.ecosystem);
               setCustomMediaUrl(data.ecosystem);
             }
             if (data.disorderName) setCurrentDisorderName(data.disorderName);
+            if (data.category) setCurrentCategory(data.category);
             if (data.audioGuidance?.baselineScript) speakVoiceInstruction(data.audioGuidance.baselineScript);
           } else if (data.type === 'START_PIPELINE_PHASE') {
-            setPhaseLabel(data.phase);
+            const requestedParadigm = (data.paradigm || data.hologramType || 'CPT_3D') as InteractiveParadigm;
+            setActiveParadigm(requestedParadigm);
+            
+            const s = paradigmStateRef.current;
+            s.paradigm = requestedParadigm;
+            s.isPhaseActive = true;
+            s.hits = 0;
+            s.errors = 0;
+            s.balloonScale = 1.0;
+            s.balloonPumps = 0;
+            s.zOffset = -2.0;
+
+            if (interactiveGroupRef.current) {
+              interactiveGroupRef.current.clear();
+            }
+
+            setPhaseLabel(`Tarea Activa: ${requestedParadigm}`);
+            setHudStats(`Prueba Iniciada: ${requestedParadigm}. Apunta y dispara con el láser.`);
+
             if (data.speechScript) speakVoiceInstruction(data.speechScript);
-          } else if (data.type === 'STOP_ACTIVE_SESSION') {
+            if (data.bgAudio) startBackgroundAudio(data.bgAudio);
+          } else if (data.type === 'STOP_ACTIVE_SESSION' || data.type === 'STOP_TEST') {
+            setActiveParadigm('IDLE');
+            paradigmStateRef.current.paradigm = 'IDLE';
+            paradigmStateRef.current.isPhaseActive = false;
+            if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
+            if (bgOscillatorRef.current) {
+              try { bgOscillatorRef.current.stop(); } catch (e) {}
+              bgOscillatorRef.current = null;
+            }
+            if (heartbeatTimerRef.current) {
+              clearInterval(heartbeatTimerRef.current);
+              heartbeatTimerRef.current = null;
+            }
             setPhaseLabel('Sesión Concluida / Analizando Datos');
+            setHudStats('Sesión Finalizada con Éxito');
             if (videoElementRef.current) { videoElementRef.current.pause(); }
           }
         };
@@ -266,11 +484,15 @@ export const VrPatientExperience: React.FC<Props> = ({
     };
 
     connectToStation();
-    return () => { isComponentMounted = false; if (wsRef.current) wsRef.current.close(); };
+    return () => { 
+      isComponentMounted = false; 
+      if (wsRef.current) wsRef.current.close();
+      if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
+    };
   }, [activePatientId, speakVoiceInstruction]);
 
   // =========================================================================
-  // MOTOR DE RENDERIZADO WEBXR (SCENE, CAPAS Y HOLOGRAMAS)
+  // 6. MOTOR THREE.JS Y RENDERIZADO DINÁMICO DE LOS 8 PARADIGMAS
   // =========================================================================
   useEffect(() => {
     if (!mountRef.current) return;
@@ -293,7 +515,7 @@ export const VrPatientExperience: React.FC<Props> = ({
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // CAPA 1: ECOSISTEMA 360 (Foto o Video inmersivo de fondo)
+    // CAPA 1: ECOSISTEMA 360 (Esfera inmersiva)
     const envGeo = new THREE.SphereGeometry(100, 60, 40);
     envGeo.scale(-1, 1, 1);
     const envMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
@@ -301,24 +523,24 @@ export const VrPatientExperience: React.FC<Props> = ({
     scene.add(envMesh);
     envMeshRef.current = envMesh;
 
-    // CAPA 2: GRUPO HOLOGRÁFICO 3D
+    // CAPA 2: GRUPO CONTENEDOR HOLOGRÁFICO 3D
     const interactiveGroup = new THREE.Group();
     scene.add(interactiveGroup);
     interactiveGroupRef.current = interactiveGroup;
 
-    // CONTROLADORES Y LÁSER DE APUNTADO
+    // CONTROLADORES CON LÁSER DE RAYCASTING 6DoF
     const buildControllerLaser = () => {
       const geometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, -5) // Láser de 5 metros
+        new THREE.Vector3(0, 0, -5)
       ]);
-      const material = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.7, linewidth: 2 });
+      const material = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.75, linewidth: 2 });
       return new THREE.Line(geometry, material);
     };
 
     const ctrl1 = renderer.xr.getController(0);
     ctrl1.addEventListener('selectstart', handleControllerSelect);
-    ctrl1.add(buildControllerLaser()); // Añade el láser al mando
+    ctrl1.add(buildControllerLaser());
     scene.add(ctrl1);
     controller1Ref.current = ctrl1;
 
@@ -330,109 +552,192 @@ export const VrPatientExperience: React.FC<Props> = ({
 
     try {
       const vrBtn = VRButton.createButton(renderer);
-      vrBtn.style.position = 'absolute'; vrBtn.style.bottom = '30px'; vrBtn.style.zIndex = '100000';
+      vrBtn.style.position = 'absolute';
+      vrBtn.style.bottom = '30px';
+      vrBtn.style.zIndex = '100000';
       container.appendChild(vrBtn);
     } catch (e) {}
 
     const clock = new THREE.Clock();
 
-    // BUCLE DE RENDERIZADO Y CINEMÁTICA
+    // BUCLE PRINCIPAL DE ANIMACIÓN Y FÍSICA HOLOGRÁFICA
     renderer.setAnimationLoop(() => {
       const t = clock.getElapsedTime();
       const s = paradigmStateRef.current;
 
-      if (interactiveGroup.visible && interactiveGroup.children.length === 0) {
-        // MATERIAL FOTORREALISTA (CRISTAL) PARA HOLOGRAMAS
+      // CONSTRUCTOR DE ENTIDADES SI EL GRUPO ESTÁ VACÍO Y HAY UNA TAREA ACTIVA
+      if (interactiveGroup.children.length === 0 && s.paradigm !== 'IDLE') {
         const glassMat = new THREE.MeshPhysicalMaterial({
-          color: 0x00f0ff, metalness: 0.2, roughness: 0.05, transmission: 0.9, ior: 1.5, clearcoat: 1.0
+          color: 0x00f0ff,
+          metalness: 0.1,
+          roughness: 0.05,
+          transmission: 0.9,
+          ior: 1.5,
+          clearcoat: 1.0
         });
 
-        // 1. BART GLASS (Globo de riesgo)
-        const balloon = new THREE.Mesh(new THREE.SphereGeometry(0.35, 32, 32), glassMat);
-        balloon.name = 'BART_GLASS'; balloon.position.set(0, 1.2, -2.0);
-        interactiveGroup.add(balloon);
+        // 1. CPT_3D
+        if (s.paradigm === 'CPT_3D') {
+          const cptMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
+          cptMesh.name = 'CPT_3D';
+          interactiveGroup.add(cptMesh);
+        }
+        // 2. BART_3D
+        else if (s.paradigm === 'BART_3D') {
+          const balloonMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 32, 32), glassMat);
+          balloonMesh.name = 'BART_3D';
+          interactiveGroup.add(balloonMesh);
+        }
+        // 3. N_BACK_3D
+        else if (s.paradigm === 'N_BACK_3D') {
+          for (let i = 0; i < 3; i++) {
+            const cube = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), glassMat.clone());
+            cube.name = `N_BACK_3D_${i}`;
+            cube.position.set(i * 0.45 - 0.45, 0, 0);
+            interactiveGroup.add(cube);
+          }
+        }
+        // 4. CHOICE_3D
+        else if (s.paradigm === 'CHOICE_3D') {
+          const optLeft = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.08), new THREE.MeshStandardMaterial({ color: 0xef4444 }));
+          optLeft.name = 'CHOICE_LEFT';
+          optLeft.position.set(-0.55, 0, 0);
 
-        // 2. CPT NEON (Dianas poliedricas Go/NoGo)
-        const cpt = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
-        cpt.name = 'CPT_NEON'; cpt.position.set(0, 1.3, -2.0);
-        interactiveGroup.add(cpt);
+          const optRight = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.08), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
+          optRight.name = 'CHOICE_RIGHT';
+          optRight.position.set(0.55, 0, 0);
 
-        // 3. EMDR LIGHTBAR (Barra sacádica)
-        const emdr = new THREE.Mesh(new THREE.SphereGeometry(0.08, 24, 24), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
-        emdr.name = 'EMDR_LIGHTBAR'; emdr.position.set(0, 1.4, -2.5);
-        interactiveGroup.add(emdr);
+          interactiveGroup.add(optLeft);
+          interactiveGroup.add(optRight);
+        }
+        // 5. AAT_3D
+        else if (s.paradigm === 'AAT_3D') {
+          const aatMesh = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.06, 16, 100), glassMat);
+          aatMesh.name = 'AAT_3D';
+          interactiveGroup.add(aatMesh);
+        }
+        // 6. EMDR_3D
+        else if (s.paradigm === 'EMDR_3D') {
+          const emdrMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 24), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+          emdrMesh.name = 'EMDR_3D';
+          interactiveGroup.add(emdrMesh);
+        }
+        // 7. BIO_3D
+        else if (s.paradigm === 'BIO_3D') {
+          const bioMesh = new THREE.Mesh(new THREE.TorusKnotGeometry(0.32, 0.08, 100, 16), glassMat);
+          bioMesh.name = 'BIO_3D';
+          interactiveGroup.add(bioMesh);
+        }
+        // 8. MIRROR_3D
+        else if (s.paradigm === 'MIRROR_3D') {
+          const handL = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), glassMat.clone());
+          handL.name = 'MIRROR_L';
+          handL.position.set(-0.35, 0, 0);
 
-        // 4. BIO LOTUS (Respiración Fractal a 0.1Hz)
-        const lotus = new THREE.Mesh(new THREE.TorusKnotGeometry(0.3, 0.08, 100, 16), glassMat);
-        lotus.name = 'BIO_LOTUS'; lotus.position.set(0, 1.3, -2.5);
-        interactiveGroup.add(lotus);
+          const handR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), glassMat.clone());
+          handR.name = 'MIRROR_R';
+          handR.position.set(0.35, 0, 0);
 
-        // 5. SIS SES ORBS (Control dual afectivo)
-        const sisGroup = new THREE.Group();
-        sisGroup.name = 'SIS_SES_ORBS';
-        const orb1 = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
-        orb1.position.set(-0.4, 1.3, -2.0);
-        const orb2 = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
-        orb2.position.set(0.4, 1.3, -2.0);
-        sisGroup.add(orb1);
-        sisGroup.add(orb2);
-        interactiveGroup.add(sisGroup);
+          interactiveGroup.add(handL);
+          interactiveGroup.add(handR);
+        }
       }
 
-      // Animaciones en tiempo real
-      interactiveGroup.children.forEach(c => c.visible = c.name === s.paradigm);
+      // DINÁMICA ESPACIAL EN CADA FRAME
+      if (interactiveGroup.children.length > 0 && s.paradigm !== 'IDLE') {
+        interactiveGroup.position.set(0, 1.3, s.zOffset);
 
-      const activeMesh = interactiveGroup.getObjectByName(s.paradigm);
-      if (activeMesh) {
-        if (s.paradigm === 'BART_GLASS') {
-          activeMesh.scale.lerp(new THREE.Vector3(s.balloonScale, s.balloonScale * 1.1, s.balloonScale), 0.1);
-        } else if (s.paradigm === 'CPT_NEON') {
-          activeMesh.rotation.x += 0.02; activeMesh.rotation.y += 0.03;
-          if (Math.floor(t * 2) % 3 === 0 && (Date.now() - s.cptSpawnTime > 1600)) {
-            s.cptSpawnTime = Date.now();
-            s.cptTargetType = Math.random() > 0.3 ? 'GO' : 'NOGO';
-            (activeMesh as THREE.Mesh).material = new THREE.MeshStandardMaterial({ color: s.cptTargetType === 'GO' ? 0x10b981 : 0xef4444 });
+        if (s.paradigm === 'BART_3D') {
+          const b = interactiveGroup.getObjectByName('BART_3D');
+          if (b) {
+            b.scale.lerp(new THREE.Vector3(s.balloonScale, s.balloonScale * 1.15, s.balloonScale), 0.1);
+            b.rotation.y += 0.008;
           }
-        } else if (s.paradigm === 'EMDR_LIGHTBAR') {
-          activeMesh.position.x = Math.sin(t * Math.PI * 2 * 1.2) * 1.4;
-        } else if (s.paradigm === 'BIO_LOTUS') {
-          const sc = 0.8 + Math.sin(t * Math.PI * 2 * 0.1) * 0.45; // Respiración 6 RPM
-          activeMesh.scale.set(sc, sc, sc);
-          activeMesh.rotation.y += 0.01;
-        } else if (s.paradigm === 'SIS_SES_ORBS') {
-          activeMesh.rotation.y += 0.02;
+        } else if (s.paradigm === 'CPT_3D') {
+          const cpt = interactiveGroup.getObjectByName('CPT_3D') as THREE.Mesh;
+          if (cpt) {
+            cpt.rotation.x += 0.02;
+            cpt.rotation.y += 0.03;
+            if (Math.floor(t * 2) % 3 === 0 && (Date.now() - s.lastSpawnTime > 1500)) {
+              s.lastSpawnTime = Date.now();
+              s.cptTargetType = Math.random() > 0.35 ? 'GO' : 'NOGO';
+              (cpt.material as THREE.MeshStandardMaterial).color.setHex(s.cptTargetType === 'GO' ? 0x10b981 : 0xef4444);
+            }
+          }
+        } else if (s.paradigm === 'EMDR_3D') {
+          const em = interactiveGroup.getObjectByName('EMDR_3D');
+          if (em) {
+            em.position.x = Math.sin(t * Math.PI * 2 * 1.2) * 1.4; // 1.2 Hz sacádico
+          }
+        } else if (s.paradigm === 'BIO_3D') {
+          const bio = interactiveGroup.getObjectByName('BIO_3D');
+          if (bio) {
+            const breath = 0.8 + Math.sin(t * Math.PI * 2 * 0.1) * 0.45; // 0.1 Hz = 6 RPM
+            bio.scale.set(breath, breath, breath);
+            bio.rotation.y += 0.01;
+          }
+        } else if (s.paradigm === 'AAT_3D') {
+          const aat = interactiveGroup.getObjectByName('AAT_3D');
+          if (aat) {
+            s.zOffset += 0.003; // Aproximación lenta que induce urgencia
+            aat.rotation.x += 0.015;
+          }
+        } else if (s.paradigm === 'MIRROR_3D') {
+          const l = interactiveGroup.getObjectByName('MIRROR_L');
+          const r = interactiveGroup.getObjectByName('MIRROR_R');
+          if (l && r) {
+            l.position.y = Math.sin(t * 2) * 0.12;
+            r.position.y = Math.sin(t * 2) * 0.12; // Movimiento simétrico espejo
+          }
         }
       }
 
       renderer.render(scene, camera);
     });
 
-    return () => { renderer.setAnimationLoop(null); renderer.dispose(); };
+    return () => {
+      renderer.setAnimationLoop(null);
+      envGeo.dispose();
+      envMat.dispose();
+      renderer.dispose();
+    };
   }, [handleControllerSelect]);
 
-  // CARGA DE FONDOS 360 (CAPA 1)
+  // =========================================================================
+  // 7. CARGA DE FONDO PANORÁMICO 360° (IMAGEN O VIDEO)
+  // =========================================================================
   useEffect(() => {
     if (!envMeshRef.current) return;
     const mat = envMeshRef.current.material as THREE.MeshBasicMaterial;
 
     if (currentMediaType === 'video' && customMediaUrl) {
       const video = document.createElement('video');
-      video.crossOrigin = 'anonymous'; video.loop = true; video.muted = true; video.playsInline = true;
-      video.src = customMediaUrl.startsWith('http') ? customMediaUrl : `${window.location.origin}${customMediaUrl}`;
+      video.crossOrigin = 'anonymous';
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.src = customMediaUrl.startsWith('http') ? customMediaUrl : `${window.location.origin}/${customMediaUrl.replace(/^\/+/, '')}`;
       const tex = new THREE.VideoTexture(video);
-      mat.map = tex; mat.needsUpdate = true;
-      video.play().then(() => { if (isAudioUnlocked) video.muted = false; }).catch(()=>{});
+      mat.map = tex;
+      mat.needsUpdate = true;
+      video.play().then(() => { if (isAudioUnlocked) video.muted = false; }).catch(() => {});
       videoElementRef.current = video;
-    } else if (customMediaUrl) {
-      const img = new Image(); img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const c = document.createElement('canvas'); c.width = 2048; c.height = 1024;
-        c.getContext('2d')?.drawImage(img, 0, 0, 2048, 1024);
-        mat.map = new THREE.CanvasTexture(c); mat.needsUpdate = true;
-      };
-      img.src = customMediaUrl;
+      return;
     }
-  }, [customMediaUrl, currentMediaType, isAudioUnlocked]);
+
+    const targetUrl = customMediaUrl || (activeEcosystem.startsWith('http') ? activeEcosystem : `${window.location.origin}/${activeEcosystem.replace(/^\/+/, '')}`);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 2048;
+      c.height = 1024;
+      c.getContext('2d')?.drawImage(img, 0, 0, 2048, 1024);
+      mat.map = new THREE.CanvasTexture(c);
+      mat.needsUpdate = true;
+    };
+    img.src = targetUrl;
+  }, [activeEcosystem, customMediaUrl, currentMediaType, isAudioUnlocked]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
@@ -442,7 +747,10 @@ export const VrPatientExperience: React.FC<Props> = ({
             <VolumeX className="w-10 h-10 text-emerald-400 animate-pulse mx-auto" />
             <h2 className="text-2xl font-black text-white">Activar Sistema Next-Gen</h2>
             <p className="text-slate-400 text-sm">Habilita los sensores 6DoF, láser de raycasting, telemetría y audio espacial clínico.</p>
-            <button onClick={(e) => { e.stopPropagation(); unlockAudioContext(); }} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 cursor-pointer">
+            <button 
+              onClick={(e) => { e.stopPropagation(); unlockAudioContext(); }} 
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 cursor-pointer shadow-lg active:scale-95 transition"
+            >
               <Play className="w-6 h-6 fill-white" /> INICIAR SESIÓN VR
             </button>
           </div>
@@ -450,7 +758,7 @@ export const VrPatientExperience: React.FC<Props> = ({
       )}
 
       {/* HUD Clínico */}
-      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/90 px-4 py-2.5 rounded-xl border border-slate-800 text-xs">
+      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-slate-950/90 px-4 py-2.5 rounded-xl border border-slate-800 text-xs shadow-lg pointer-events-none">
         <Database className="w-4 h-4 text-cyan-400" />
         <span className="text-slate-300 font-mono">PICO 3 PRO: <strong className="text-emerald-400">TELEMETRÍA 6DoF ACTIVA</strong></span>
         <div className="h-4 w-px bg-slate-800" />
@@ -458,10 +766,17 @@ export const VrPatientExperience: React.FC<Props> = ({
         <span>Holograma: <strong className="text-purple-300 font-mono">{activeParadigm}</strong></span>
       </div>
 
-      {onClose && <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white cursor-pointer hover:bg-slate-800"><X className="w-5 h-5" /></button>}
+      {onClose && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onClose(); }} 
+          className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white cursor-pointer hover:bg-slate-800 shadow-lg active:scale-95 transition"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      )}
 
       <div className="absolute z-10 bottom-32 flex flex-col items-center gap-3 pointer-events-none">
-        <div className="text-center bg-slate-950/90 p-5 rounded-3xl border border-slate-800 shadow-2xl">
+        <div className="text-center bg-slate-950/90 p-5 rounded-3xl border border-slate-800 shadow-2xl max-w-sm">
           <h1 className="text-slate-100 font-black text-sm uppercase">{currentDisorderName}</h1>
           <p className="text-[11px] text-amber-300 font-mono font-bold mt-1 mb-2">{hudStats}</p>
           <p className="text-[10px] text-slate-400 font-mono border-t border-slate-800 pt-2">Fase de Simulación: <strong>{phaseLabel}</strong></p>
