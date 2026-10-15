@@ -59,8 +59,8 @@ const STUDY_SUBTYPES: SubtypeStudy[] = [
   },
   {
     id: 'COVERT',
-    videoKey: 'covert_rejection',
-    videoPath: '/video/covert_rejection.mp4',
+    videoKey: 'narcissism_collapse',
+    videoPath: '/video/narcissism_collapse.mp4',
     protocolKey: 'COVERT_SHAME_REJECTION',
     title: 'Perfilado Narcisista Vulnerable / Encubierto (Covert)',
     dsmCode: 'Cluster B / F60.81',
@@ -96,7 +96,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
   const [isVrConnected, setIsVrConnected] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
-  // Estados de Telemetría Biológica en Vivo
   const [hrvBpm, setHrvBpm] = useState<number | null>(null);
   const [gsrValue, setGsrValue] = useState<number | null>(null);
   const [totalHits, setTotalHits] = useState<number>(0);
@@ -114,11 +113,9 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     return `${origin}${cleanPath}`;
   };
 
-  // Función esencial: despacha el video 360 al visor Pico 3 mediante WebSocket
   const broadcastVideoToVisor = (subtype: SubtypeStudy) => {
     const fullVideoUrl = buildFullVideoUrl(subtype.videoPath);
 
-    // 1. Comando principal de carga de video para VrPatientExperience
     const loadMediaPayload = {
       type: 'LOAD_CUSTOM_MEDIA',
       mediaUrl: fullVideoUrl,
@@ -128,31 +125,11 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
       timestamp: Date.now()
     };
 
-    // 2. Comando complementario de contexto clínico
-    const syncContextPayload = {
-      type: 'SYNC_CLINICAL_CONTEXT',
-      moduleId: subtype.id,
-      category: 'DIAGNOSTIC',
-      disorderId: subtype.id,
-      disorderName: subtype.title,
-      ecosystem: subtype.videoKey,
-      patientId: activePatientId,
-      timestamp: Date.now()
-    };
+    VrControlService.sendCommand(loadMediaPayload);
 
-    // Despacho vía VrControlService
-    try {
-      VrControlService.sendCommand(loadMediaPayload);
-      VrControlService.sendCommand(syncContextPayload);
-    } catch (e) {
-      console.warn('[AMIE Cluster B] VrControlService send error:', e);
-    }
-
-    // Despacho directo vía WebSocket local si está abierto
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify(loadMediaPayload));
-        wsRef.current.send(JSON.stringify(syncContextPayload));
         wsRef.current.send(JSON.stringify({
           type: 'CHANGE_ENVIRONMENT',
           environment: subtype.videoKey,
@@ -168,7 +145,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     setTimeout(() => setStatusMsg(null), 4000);
   };
 
-  // Conexión WebSocket Bidireccional
   useEffect(() => {
     const rawWsUrl = (import.meta as any).env?.VITE_WS_URL || (import.meta as any).env?.VITE_API_URL;
     let wsUrl: string;
@@ -279,7 +255,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     };
   }, [activePatientId]);
 
-  // Cronómetro del Ensayo Clínico
   useEffect(() => {
     if (isAssayRunning) {
       timerRef.current = setInterval(() => {
@@ -300,7 +275,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     };
   }, [isAssayRunning]);
 
-  // Al seleccionar subtipo, proyectar inmediatamente al visor y sincronizar preview
   const handleSelectSubtype = (subtype: SubtypeStudy) => {
     setSelectedSubtype(subtype);
     setAssayTime(0);
@@ -314,7 +288,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     }
   };
 
-  // Iniciar / Detener Ensayo Bio-VR
   const toggleAssay = () => {
     if (!hasConsent && !isAssayRunning) return;
 
@@ -322,7 +295,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     setIsAssayRunning(nextState);
 
     if (nextState) {
-      // Iniciar: asegurar que el video esté proyectado y mandar fase activa
       broadcastVideoToVisor(selectedSubtype);
 
       const startPayload = {
@@ -352,7 +324,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         videoPreviewRef.current.play().catch(() => {});
       }
     } else {
-      // Detener
       const stopPayload = {
         type: 'START_PIPELINE_PHASE',
         phase: 'PHASE_3_RECOVERY',
@@ -381,7 +352,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     }
   };
 
-  // Persistencia de Telemetría Forense en MongoDB Atlas
   const persistCurrentAssay = async () => {
     const backendBaseUrl = (import.meta as any).env?.VITE_API_URL || 'https://amieneurogical.onrender.com';
     const payload = {
@@ -408,7 +378,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
     }
   };
 
-  // Exportar Dictamen Oficial Seguro
   const handleExportReport = () => {
     const reportData = {
       titulo: 'DICTAMEN PERICIAL FORENSE - CLUSTER B (AMIE ENGINE)',
@@ -444,7 +413,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
 
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 p-6 font-sans">
-      {/* Barra Superior */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-pink-950/40 border border-pink-500/40 text-pink-400">
@@ -508,7 +476,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         </div>
       )}
 
-      {/* Alerta de Protocolo y Consentimiento */}
       <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-4 mb-6 text-xs text-amber-200/90 space-y-2">
         <div className="flex items-center gap-2 font-bold text-amber-400 uppercase tracking-wide">
           <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -531,9 +498,7 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         </label>
       </div>
 
-      {/* Panel Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
-        {/* Selector de Subtipo Izquierdo */}
         <div className="lg:col-span-4 space-y-3">
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
             SELECCIONAR SUBTIPO DE ESTUDIO:
@@ -564,7 +529,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
           })}
         </div>
 
-        {/* Detalles de la Prueba Activa y Preview de Video */}
         <div className="lg:col-span-8 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
@@ -586,7 +550,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
               {selectedSubtype.description}
             </p>
 
-            {/* Reproductor de Vista Previa Local del Video 360 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/70 p-4 rounded-xl border border-slate-800">
               <div className="aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 relative flex items-center justify-center">
                 <video
@@ -624,7 +587,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
             </div>
           </div>
 
-          {/* Tarjetas de Telemetría Biológica en Tiempo Real */}
           <div className="pt-6 border-t border-slate-800/80 mt-6">
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 text-center">
@@ -646,7 +608,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
               </div>
             </div>
 
-            {/* Controles del Ensayo */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="text-xs text-slate-400 font-mono">
                 Tiempo Ensayo VR: <strong className="text-slate-100">{assayTime}s</strong> / 300s
@@ -684,7 +645,6 @@ export const PsychopathyNarcissismModule: React.FC<Props> = ({ patient, onClose 
         </div>
       </div>
 
-      {/* Dimensiones TRIPM */}
       <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
           <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
