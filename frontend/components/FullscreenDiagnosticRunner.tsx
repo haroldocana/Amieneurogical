@@ -62,9 +62,6 @@ export interface ClinicalDisorderDefinition {
   sdHealthy: number;
 }
 
-// ----------------------------------------------------------------------------
-// 1. LOS 7 MÓDULOS LÓGICOS INSTITUCIONALES
-// ----------------------------------------------------------------------------
 export const CLINICAL_MODULES: ModuleCategoryDefinition[] = [
   { id: 'MOD_NEURODEV', name: 'I. Neurodesarrollo & Control Motor', description: 'TDAH, TEA, Asperger, Demencias y Parkinson', iconName: 'Sparkles' },
   { id: 'MOD_AFFECTIVE', name: 'II. Afectivo, Psicosis & Trauma', description: 'Depresión, Esquizofrenia, EMDR y Trauma Complejo', iconName: 'Brain' },
@@ -75,9 +72,6 @@ export const CLINICAL_MODULES: ModuleCategoryDefinition[] = [
   { id: 'MOD_SEXOLOGY', name: 'VII. Salud Sexual & Modelo Dual', description: 'Inhibición SIS, Activación SES y Ansiedad Sexual', iconName: 'Activity' }
 ];
 
-// ----------------------------------------------------------------------------
-// 2. MATRIZ NOSOLÓGICA DE 30 TRASTORNOS (DIAGNÓSTICO HABILITADO EN EL 100%)
-// ----------------------------------------------------------------------------
 export const CLINICAL_MASTER_CATALOG: ClinicalDisorderDefinition[] = [
   // MÓDULO I: NEURODESARROLLO
   {
@@ -476,7 +470,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
   const [selectedMode, setSelectedMode] = useState<ClinicalMode>(initialMode || 'DIAGNOSTIC');
   const [guidanceMode, setGuidanceMode] = useState<GuidanceMode>('AUTOMATIC_GUIDELINES');
 
-  // Integración de Medios 360° Personalizados
   const [mediaSourceMode, setMediaSourceMode] = useState<MediaSourceMode>('OFFICIAL_CATALOG');
   const [customMediaType, setCustomMediaType] = useState<'image' | 'video'>('image');
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
@@ -489,18 +482,15 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
 
   const [customScript, setCustomScript] = useState<string>('');
 
-  // Biometría y Curvas
   const [currentGsr, setCurrentGsr] = useState<number>(2.4);
   const [currentHrv, setCurrentHrv] = useState<number>(40);
   const [currentKpi, setCurrentKpi] = useState<number>(10);
   const [liveCurve, setLiveCurve] = useState<Array<{ t: number; gsr: number; hrv: number; kpi: number; phase: PipelinePhase }>>([]);
 
-  // Estados de Neurohipnosis, Regulación de Salida y Abreacción (Emergencia)
   const [isDeinducting, setIsDeinducting] = useState<boolean>(false);
   const [isEmergencyAborted, setIsEmergencyAborted] = useState<boolean>(false);
   const [stressWatchdogAlert, setStressWatchdogAlert] = useState<string | null>(null);
 
-  // Historial Acumulativo de Ensayos para la Triangulación Global
   const [sessionHistory, setSessionHistory] = useState<Array<{
     disorderName: string;
     mode: ClinicalMode;
@@ -532,7 +522,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     };
   }, [pipelinePhase, phaseTime, totalElapsedTime, currentGsr, currentHrv, currentKpi, customScript, currentDisorder, selectedMode, guidanceMode, isDeinducting, isEmergencyAborted, mediaSourceMode, customMediaUrl, customMediaType]);
 
-  // Sincronización del módulo inicial
   useEffect(() => {
     if (initialDisorderId) {
       const match = CLINICAL_MASTER_CATALOG.find(d => d.id === initialDisorderId);
@@ -543,14 +532,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     }
   }, [initialDisorderId]);
 
-  // Asegurar compatibilidad de modo (Diagnóstico vs Tratamiento)
   useEffect(() => {
     if (!currentDisorder.supportedModes.includes(selectedMode)) {
       setSelectedMode(currentDisorder.supportedModes[0]);
     }
   }, [currentDisorder]);
 
-  // Actualización Automática del Guion IA según la Guía Internacional
   useEffect(() => {
     if (guidanceMode === 'AUTOMATIC_GUIDELINES') {
       const script = selectedMode === 'DIAGNOSTIC' 
@@ -565,14 +552,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     setStressWatchdogAlert(null);
   }, [currentDisorder, selectedMode, guidanceMode]);
 
-  // Conexión WebSockets Pico
   useEffect(() => {
     if (!VrControlService.isConnected()) VrControlService.connect(undefined, patientId);
     const unsub = VrControlService.subscribeStatus((status) => setIsVisorLinked(status === 'CONNECTED'));
     return () => { if(unsub) unsub(); };
   }, [patientId]);
 
-  // Gestor de Archivos Locales para Entornos 360 Propios
   const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -596,7 +581,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     setTimeout(() => setVisorStatusMsg(null), 3500);
   };
 
-  // Enviar el Entorno 360 al Visor Pico
   const handleDeployEnvironment = () => {
     if (!isVisorLinked) {
       setVisorStatusMsg('⚠️ Enciende el visor Pico e ingresa a la sesión del paciente primero.');
@@ -674,9 +658,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     });
   };
 
-  // ------------------------------------------------------------------------
-  // PROTOCOLOS DE SEGURIDAD EN NEUROHIPNOSIS Y ESTRÉS
-  // ------------------------------------------------------------------------
   const handleStartDeinduction = () => {
     if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED') return;
     setIsDeinducting(true);
@@ -721,7 +702,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     finishPipelineAndCompileReports(true, reason);
   };
 
-  // Motor del Pipeline en 3 Fases
   useEffect(() => {
     if (pipelinePhase === 'IDLE' || pipelinePhase === 'FINISHED' || isEmergencyAborted) return;
 
@@ -775,7 +755,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
         setPhaseTime(nextPhaseTime);
       }
 
-      // Cinemática adaptativa con Watchdog en Hipnosis
       let deltaGsr = (Math.random() - 0.48) * 0.14;
       if (s.currentDisorder.id === 'CLINICAL_HYPNOSIS_DEEP') deltaGsr -= 0.08; 
       else if (s.pipelinePhase === 'PHASE_2_ACTIVE') deltaGsr += s.selectedMode === 'DIAGNOSTIC' ? 0.09 : -0.05;
@@ -809,7 +788,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     return () => clearInterval(timer);
   }, [pipelinePhase, patientId, isEmergencyAborted]);
 
-  // Reporte Individual (ROI)
   const finishPipelineAndCompileReports = (wasEmergency = false, customNote = '') => {
     setPipelinePhase('FINISHED');
     VrControlService.stopLightStimulation(patientId);
@@ -900,7 +878,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
     }
   };
 
-  // Reporte Global Triangulado Acumulativo
   const compileGlobalTriangulationReport = () => {
     let global = `================================================================================\n`;
     global += `EXPEDIENTE PERICIAL GLOBAL TRIANGULADO • HISTORIA CLÍNICA INTEGRAL\n`;
@@ -1276,4 +1253,84 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({
                   <Activity className="w-4 h-4 text-emerald-400" />
                   Monitor Fisiológico 6DoF (Closed-Loop)
                 </span>
-                <span
+                <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-900 border border-slate-800 rounded text-amber-400">
+                  {pipelinePhase} ({totalElapsedTime}s / {totalProtocolDuration}s)
+                </span>
+              </div>
+
+              <div className="flex-1 w-full bg-slate-900 rounded-xl border border-slate-800 p-2 relative flex items-end overflow-hidden">
+                {liveCurve.length > 1 ? (
+                  <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${totalProtocolDuration} 100`} preserveAspectRatio="none">
+                    <line x1={currentDisorder.phase1Sec} y1="0" x2={currentDisorder.phase1Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
+                    <line x1={currentDisorder.phase1Sec + currentDisorder.phase2Sec} y1="0" x2={currentDisorder.phase1Sec + currentDisorder.phase2Sec} y2="100" stroke="#334155" strokeDasharray="2 2" strokeWidth="0.8" />
+                    <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.gsr * 12))}`).join(' ')} />
+                    <polyline fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="2 2" points={liveCurve.map(p => `${p.t},${Math.max(10, 100 - (p.hrv * 0.9))}`).join(' ')} />
+                  </svg>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 text-[11px] font-mono">
+                    <Clock className="w-6 h-6 mb-2 opacity-30 animate-pulse" />
+                    <span>Pulsa 'INICIAR PRUEBA CLÍNICA' para registrar biometría</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2 flex justify-between text-[9px] text-slate-500 font-mono">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-400 rounded-full"></span> GSR Conductancia (µS)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full"></span> HRV Vagal (ms)</span>
+                <span>Líneas punteadas: Fases</span>
+              </div>
+            </div>
+          </section>
+
+          {/* COLUMNA 3: REPORTES (INDIVIDUAL ROI & TRIANGULACIÓN GLOBAL) */}
+          <section className="col-span-12 lg:col-span-3 flex flex-col gap-3.5">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+              
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2.5">
+                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+                  <button
+                    onClick={() => setReportTypeView('INDIVIDUAL_ROI')}
+                    className={`px-2 py-1 rounded font-bold transition flex items-center gap-1 ${
+                      reportTypeView === 'INDIVIDUAL_ROI' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>ROI Individual</span>
+                  </button>
+                  <button
+                    onClick={() => setReportTypeView('GLOBAL_TRIANGULATION')}
+                    className={`px-2 py-1 rounded font-bold transition flex items-center gap-1 ${
+                      reportTypeView === 'GLOBAL_TRIANGULATION' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <GitMerge className="w-3 h-3" />
+                    <span>Triangulación ({sessionHistory.length})</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={handlePrint}
+                  className="px-2.5 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-200 rounded text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer"
+                >
+                  <Printer className="w-3 h-3" />
+                  <span>Imprimir A4</span>
+                </button>
+              </div>
+
+              <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-3 overflow-y-auto font-mono text-[9.5px] leading-relaxed text-slate-300 shadow-inner whitespace-pre-wrap">
+                {reportTypeView === 'INDIVIDUAL_ROI' ? (
+                  roiReportText || 'El dictamen pericial individual se generará automáticamente al concluir las 3 fases del ensayo clínico.'
+                ) : (
+                  compileGlobalTriangulationReport()
+                )}
+              </div>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default FullscreenDiagnosticRunner;
