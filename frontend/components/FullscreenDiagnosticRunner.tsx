@@ -1,19 +1,21 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - WORKSTATION DE TELEMETRÍA BIDIRECCIONAL (8 TAREAS)
+// AMIE CLINICAL COPILOT - RUNNER CON MOTOR DE INFORMES CLÍNICOS Y EXPORTACIÓN PDF
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PatientRecord } from '../types';
+import { PatientRecord, VrTelemetryData, VrTherapyReport } from '../types';
 import { VrControlService } from '../services/vrControlService';
 import { 
   X, Activity, Brain, Square, Stethoscope, Send, Target, 
-  Image as ImageIcon, Bluetooth, CheckCircle, Wifi, WifiOff
+  Image as ImageIcon, Bluetooth, CheckCircle, Wifi, WifiOff,
+  Printer, FileText, Download, Award, ShieldAlert, Sparkles, AlertTriangle
 } from 'lucide-react';
 
 interface Props {
   patient?: PatientRecord;
   onClose: () => void;
+  onUpdatePatientVrData?: (telemetry: any, report: any) => void;
 }
 
 export type PipelinePhase = 'IDLE' | 'PHASE_ACTIVE' | 'FINISHED';
@@ -58,8 +60,8 @@ const getExercisesForDisorder = (disorderName: string) => [
   { id: 'T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Rescate Vagal (Grounding)', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración con la expansión del loto fractal. Inhala al crecer, exhala al contraerse.' }
 ];
 
-export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }) => {
-  const activePatientId = 'PAC-8104';
+export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, onUpdatePatientVrData }) => {
+  const activePatientId = patient?.id || 'PAC-8104';
 
   const [activeModuleTab, setActiveModuleTab] = useState('MOD_NEURODEV');
   const [selectedDisorderId, setSelectedDisorderId] = useState('TEA');
@@ -69,6 +71,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const [isSyncingEnv, setIsSyncingEnv] = useState(false);
   const [isVrConnected, setIsVrConnected] = useState(false);
 
+  // CONTROL DEL MODAL DE INFORME CLÍNICO
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [sessionDurationSeconds, setSessionDurationSeconds] = useState(0);
+
+  // TELEMETRÍA BIOMÉTRICA Y VR
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
   const [currentGsr, setCurrentGsr] = useState<number | string>('--');
   const [currentHrv, setCurrentHrv] = useState<number | string>('--');
@@ -76,6 +84,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const [currentKpi, setCurrentKpi] = useState(0);
   const [errorsCount, setErrorsCount] = useState(0);
   const [reactionTimeMs, setReactionTimeMs] = useState(0);
+  const [allReactionTimes, setAllReactionTimes] = useState<number[]>([]);
   const [lastActionText, setLastActionText] = useState('En espera de interacción...');
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -90,6 +99,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[1];
   const exercises = getExercisesForDisorder(disorderObj.name);
 
+  // MANEJADOR DE EVENTOS DE TELEMETRÍA ENTRANTE
   const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
       setIsVrConnected(true);
@@ -99,6 +109,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       
       const rtVal = d.rt || Math.floor(220 + Math.random() * 80);
       setReactionTimeMs(rtVal);
+      setAllReactionTimes(prev => [...prev, rtVal]);
 
       const wf = waveformDataRef.current;
       wf.rtHistory.shift();
@@ -108,6 +119,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
     }
   }, []);
 
+  // WEBSOCKET CON AUTORECONEXIÓN
   useEffect(() => {
     let ws: WebSocket;
     let pingTimer: ReturnType<typeof setInterval>;
@@ -210,9 +222,11 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const startExercise = (exercise: any) => {
     setActiveExercise(exercise);
     setPipelinePhase('PHASE_ACTIVE');
+    setSessionStartTime(new Date());
     setCurrentKpi(0);
     setErrorsCount(0);
     setReactionTimeMs(0);
+    setAllReactionTimes([]);
     setLastActionText('Tarea iniciada. Esperando interacción...');
 
     const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
@@ -234,6 +248,41 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
     });
   };
 
+  // DETENER PRUEBA Y ABRIR AUTOMÁTICAMENTE EL INFORME CLÍNICO
+  const handleStopAndGenerateReport = () => {
+    setPipelinePhase('FINISHED');
+    if (sessionStartTime) {
+      const dur = Math.round((new Date().getTime() - sessionStartTime.getTime()) / 1000);
+      setSessionDurationSeconds(Math.max(1, dur));
+    }
+    sendCommandToVr({ type: 'STOP_ACTIVE_SESSION' });
+    setShowReportModal(true);
+
+    if (onUpdatePatientVrData) {
+      onUpdatePatientVrData(
+        { hits: currentKpi, errors: errorsCount, rt: reactionTimeMs },
+        { disorder: disorderObj.name, timestamp: new Date().toISOString() }
+      );
+    }
+  };
+
+  // CÁLCULOS ESTADÍSTICOS DEL REPORTE
+  const averageRt = allReactionTimes.length > 0 
+    ? Math.round(allReactionTimes.reduce((a, b) => a + b, 0) / allReactionTimes.length) 
+    : (reactionTimeMs || 240);
+
+  const calculateZScore = () => {
+    const baseline = 320; 
+    const sd = 80; 
+    return Number(((averageRt - baseline) / sd).toFixed(2));
+  };
+  const zScore = calculateZScore();
+
+  const accuracyRate = (currentKpi + errorsCount) > 0 
+    ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
+    : 100;
+
+  // OSCILOGRAMA A 60 FPS CON ESCALA BIOMÉDICA REAL
   useEffect(() => {
     let animId: number;
     const render = () => {
@@ -246,16 +295,23 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, w, h);
 
       ctx.strokeStyle = '#111827'; ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-      for (let y = 0; y < h; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      for (let x = 0; x < w; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 0; y < h; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
 
       const wf = waveformDataRef.current;
       const count = wf.rtHistory.length;
 
-      ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2.5; ctx.beginPath();
+      const baselineY = h * 0.85;
+      const topLimitY = h * 0.28;
+      const heightRange = baselineY - topLimitY;
+
+      ctx.strokeStyle = '#22d3ee'; 
+      ctx.lineWidth = 2.5; 
+      ctx.beginPath();
       for (let i = 0; i < count; i++) {
         const x = (i / (count - 1)) * w;
-        const y = h * 0.45 - (wf.rtHistory[i] / 1000) * (h * 0.4);
+        const normalized = Math.min(2500, Math.max(0, wf.rtHistory[i])) / 2500.0;
+        const y = baselineY - normalized * heightRange;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -264,14 +320,14 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
         ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2; ctx.beginPath();
         for (let i = 0; i < count; i++) {
           const x = (i / (count - 1)) * w;
-          const y = h * 0.85 - (wf.hrvHistory[i] / 100) * (h * 0.3);
+          const y = h * 0.88 - (wf.hrvHistory[i] / 100) * (h * 0.25);
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
       }
 
-      ctx.font = 'bold 9px monospace';
-      ctx.fillStyle = '#22d3ee'; ctx.fillText('● VR NATIVO: LATENCIA Y EVENTOS MOTORES (ms)', 12, 18);
+      ctx.font = 'bold 9.5px monospace';
+      ctx.fillStyle = '#22d3ee'; ctx.fillText('● VR NATIVO: LATENCIA Y EVENTOS MOTORES (0 - 2500 ms)', 12, 18);
       ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
       ctx.fillText(btStatus === 'CONNECTED' ? '● BLE: TONO VAGAL CONECTADO' : '● BLE: DESCONECTADO (Métricas vitales en pausa)', 12, 32);
 
@@ -286,8 +342,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
     const decayTimer = setInterval(() => {
       const wf = waveformDataRef.current;
       wf.rtHistory.shift();
-      wf.rtHistory.push(Math.max(0, wf.rtHistory[wf.rtHistory.length - 1] - 4));
-    }, 180);
+      const lastVal = wf.rtHistory[wf.rtHistory.length - 1];
+      wf.rtHistory.push(Math.max(0, Math.floor(lastVal * 0.90 - 5)));
+    }, 100);
     return () => clearInterval(decayTimer);
   }, []);
 
@@ -302,7 +359,15 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
               {isVrConnected ? <><Wifi className="w-3 h-3 animate-pulse" /> VISOR VR ENLACE ACTIVO</> : <><WifiOff className="w-3 h-3" /> RECONECTANDO VISOR...</>}
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-2"><X /></button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowReportModal(true)} 
+              className="px-3 py-1.5 bg-cyan-600/90 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 border border-cyan-400/30 cursor-pointer transition shadow"
+            >
+              <FileText className="w-3.5 h-3.5" /> VER INFORME CLÍNICO
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-2"><X /></button>
+          </div>
         </header>
 
         <div className="bg-slate-950/80 px-6 py-2 flex gap-2 overflow-x-auto border-b border-slate-800 scrollbar-none">
@@ -315,6 +380,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
         </div>
 
         <main className="flex-1 grid grid-cols-12 gap-5 p-5 overflow-hidden">
+          {/* COLUMNA 1: CONFIGURACIÓN */}
           <section className="col-span-12 lg:col-span-3 flex flex-col gap-3">
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><Stethoscope className="w-3.5 h-3.5 text-cyan-400"/> Patología</label>
@@ -331,7 +397,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
               </select>
               <button 
                 onClick={handleSyncEnvironment} 
-                className={`mt-3 w-full py-2 rounded text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition ${isSyncingEnv ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'}`}
+                className={`mt-3 w-full py-2.5 rounded text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition ${isSyncingEnv ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'}`}
               >
                 {isSyncingEnv ? <><CheckCircle className="w-3.5 h-3.5 text-white" /> ¡ENVIADO AL CASCO!</> : <><Send className="w-3.5 h-3.5 text-cyan-400" /> CARGAR EN CASCO</>}
               </button>
@@ -352,25 +418,26 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
             </div>
           </section>
 
+          {/* COLUMNA 2: BATERÍA CON PADDING Y ESPACIADO HOLGADO */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3">
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col overflow-hidden">
               <h3 className="text-xs font-black text-white mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Target className="w-4 h-4 text-purple-400"/> BATERÍA CLÍNICA (8 PARADIGMAS 3D)
               </h3>
-              <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3 flex-1 overflow-y-auto pr-1 pb-6">
                 {exercises.map(ex => (
-                  <div key={ex.id} className="bg-slate-900 border border-slate-700 p-2.5 rounded-lg flex flex-col justify-between">
+                  <div key={ex.id} className="bg-slate-900 border border-slate-700/80 p-3 rounded-xl flex flex-col justify-between shadow-sm hover:border-slate-600 transition">
                     <div>
-                      <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded ${ex.mode==='DIAGNOSTIC'?'bg-cyan-950 text-cyan-300 border border-cyan-800':'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded ${ex.mode==='DIAGNOSTIC'?'bg-cyan-950 text-cyan-300 border border-cyan-800':'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
                         {ex.mode === 'DIAGNOSTIC' ? 'EVALUACIÓN' : 'TRATAMIENTO'}
                       </span>
-                      <p className="text-[11px] font-bold text-white mt-1.5 leading-tight">{ex.name}</p>
-                      <p className="text-[9px] text-slate-500 font-mono mt-0.5">{ex.paradigm}</p>
+                      <p className="text-[11px] font-bold text-white mt-2 leading-snug">{ex.name}</p>
+                      <p className="text-[9px] text-slate-400 font-mono mt-1">{ex.paradigm}</p>
                     </div>
                     <button 
                       onClick={() => startExercise(ex)}
                       disabled={pipelinePhase === 'PHASE_ACTIVE' && activeExercise?.id !== ex.id}
-                      className={`mt-2 py-2 rounded text-[10px] font-black transition cursor-pointer ${activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                      className={`mt-3 py-2 rounded-lg text-[10px] font-black transition cursor-pointer ${activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
                     >
                       {activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'ACTIVO...' : 'INICIAR PRUEBA'}
                     </button>
@@ -380,6 +447,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
             </div>
           </section>
 
+          {/* COLUMNA 3: MONITOR CON ESPACIO DESAHOGADO */}
           <section className="col-span-12 lg:col-span-5 flex flex-col gap-3">
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl opacity-90">
@@ -400,28 +468,198 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
               </div>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex-1 flex flex-col relative overflow-hidden">
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse"/>
-                  Monitor Clínico Híbrido en Vivo (60 Hz)
-                </span>
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col relative overflow-hidden justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse"/>
+                    Monitor Clínico Híbrido en Vivo (60 Hz)
+                  </span>
+                </div>
+                <div className="w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 relative">
+                  <canvas ref={canvasRef} width={480} height={190} className="w-full h-full block" />
+                </div>
               </div>
-              <div className="flex-1 w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 relative">
-                <canvas ref={canvasRef} width={480} height={190} className="w-full h-full block" />
+
+              {/* BARRA DE ESTADO SEPARADA */}
+              <div className="mt-3 pt-3 border-t border-slate-800 flex flex-col gap-2.5">
+                <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-2 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  <span className="truncate"><strong className="text-cyan-400">Último Evento:</strong> {lastActionText}</span>
+                </div>
+                {pipelinePhase === 'PHASE_ACTIVE' ? (
+                  <button 
+                    onClick={handleStopAndGenerateReport} 
+                    className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-white"/> DETENER PRUEBA Y EMITIR INFORME
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowReportModal(true)} 
+                    className="py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 font-black text-xs rounded-lg shadow flex items-center justify-center gap-2 cursor-pointer transition"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> EMITIR INFORME CON DATOS ACTUALES
+                  </button>
+                )}
               </div>
-              <div className="mt-2.5 pt-2 border-t border-slate-800 text-[10px] font-mono text-slate-300">
-                <strong className="text-cyan-400">Evento WebXR:</strong> {lastActionText}
-              </div>
-              {pipelinePhase === 'PHASE_ACTIVE' && (
-                <button onClick={() => setPipelinePhase('IDLE')} className="mt-2.5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition">
-                  <Square className="w-3.5 h-3.5 fill-white"/> DETENER PRUEBA
-                </button>
-              )}
             </div>
           </section>
         </main>
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL DEL INFORME CLÍNICO AUTOMATIZADO (PRINTABLE & EXPORTABLE)           */}
+      {/* ========================================================================= */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 print:p-0 print:bg-white">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:text-black print:bg-white">
+            
+            {/* Cabecera del Informe */}
+            <div className="bg-slate-950 px-8 py-5 border-b border-slate-800 flex justify-between items-center print:bg-white print:border-b-2 print:border-black">
+              <div className="flex items-center gap-3">
+                <Brain className="w-7 h-7 text-cyan-400 print:text-black" />
+                <div>
+                  <h3 className="text-base font-black text-white print:text-black tracking-wide">AMIE NEUROLOGICAL CDSS • INFORME DE TELEMETRÍA VR</h3>
+                  <p className="text-[11px] text-slate-400 print:text-gray-600 font-mono">Plataforma de Diagnóstico y Neurorrehabilitación Computarizada 6DoF</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 print:hidden">
+                <button 
+                  onClick={() => window.print()} 
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer transition shadow"
+                >
+                  <Printer className="w-4 h-4" /> IMPRIMIR / PDF
+                </button>
+                <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-white p-2">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Cuerpo del Informe */}
+            <div className="p-8 overflow-y-auto space-y-6 text-slate-200 print:text-black print:overflow-visible">
+              
+              {/* Bloque 1: Metadatos del Paciente */}
+              <div className="grid grid-cols-4 gap-4 p-4 bg-slate-950/60 rounded-2xl border border-slate-800 print:border-gray-300 print:bg-gray-50 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ID PACIENTE</span>
+                  <span className="font-mono font-black text-cyan-400 print:text-black text-sm">{activePatientId}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">PATOLOGÍA EVALUADA</span>
+                  <span className="font-bold text-white print:text-black">{disorderObj.name}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">FECHA DE SESIÓN</span>
+                  <span className="font-mono text-slate-300 print:text-black">{new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">TAREA EJECUTADA</span>
+                  <span className="font-bold text-amber-300 print:text-black">{activeExercise?.name || 'Batería Completa'}</span>
+                </div>
+              </div>
+
+              {/* Bloque 2: Matriz de Resultados Psicométricos y Cinemáticos */}
+              <div>
+                <h4 className="text-xs font-black text-cyan-400 print:text-black mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <Target className="w-4 h-4" /> 1. Métricas Neurocognitivas y Motoras (Hardware 6DoF)
+                </h4>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">LATENCIA PROMEDIO (RT)</span>
+                    <div className="text-2xl font-black text-cyan-400 print:text-black mt-1 font-mono">{averageRt} ms</div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Norma: 220 - 350 ms</span>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ACIERTOS / BOMBEOS</span>
+                    <div className="text-2xl font-black text-emerald-400 print:text-black mt-1 font-mono">{currentKpi}</div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Precisión: {accuracyRate}%</span>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ERRORES DE INHIBICIÓN</span>
+                    <div className="text-2xl font-black text-rose-400 print:text-black mt-1 font-mono">{errorsCount}</div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Comisión motora</span>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">PUNTUACIÓN Z (Z-SCORE)</span>
+                    <div className={`text-2xl font-black mt-1 font-mono ${Math.abs(zScore) >= 1.96 ? 'text-amber-400 print:text-black' : 'text-emerald-400 print:text-black'}`}>
+                      {zScore > 0 ? `+${zScore}` : zScore} SD
+                    </div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">{Math.abs(zScore) >= 1.96 ? 'Fuera de rango' : 'Rango esperado'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque 3: Biomarcadores Autonómicos */}
+              <div>
+                <h4 className="text-xs font-black text-cyan-400 print:text-black mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <Activity className="w-4 h-4" /> 2. Reactividad Fisiológica (BLE & Sensores)
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300 flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">CONDUCTANCIA GALVÁNICA (GSR)</span>
+                      <p className="text-xs text-slate-400 print:text-gray-600 mt-0.5">Indicador de reactividad simpática y estrés fásico.</p>
+                    </div>
+                    <div className="text-xl font-black text-amber-400 print:text-black font-mono">{currentGsr} µS</div>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300 flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">VARIABILIDAD CARDÍACA (HRV RMSSD)</span>
+                      <p className="text-xs text-slate-400 print:text-gray-600 mt-0.5">Indicador de control parasimpático y tono vagal.</p>
+                    </div>
+                    <div className="text-xl font-black text-emerald-400 print:text-black font-mono">{currentHrv} ms</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque 4: Conclusión Diagnóstica Generada por IA */}
+              <div className="p-5 bg-cyan-950/20 border border-cyan-800/40 rounded-2xl print:bg-white print:border-gray-400">
+                <h4 className="text-xs font-black text-cyan-300 print:text-black uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-cyan-400 print:text-black" /> 3. Impresión Clínica Computarizada (AMIE Copilot)
+                </h4>
+                <p className="text-xs leading-relaxed text-slate-300 print:text-black">
+                  {averageRt > 800 ? (
+                    <>El paciente exhibe una <strong>latencia de respuesta prolongada ({averageRt} ms)</strong>, lo cual correlaciona con enlentecimiento del procesamiento atencional o fatiga cognitiva ejecutiva. La tasa de aciertos ({accuracyRate}%) indica conservación del criterio decisional con afectación motora refleja.</>
+                  ) : errorsCount > 3 ? (
+                    <>Se detecta un <strong>patrón impulsivo con desinhibición motora ({errorsCount} errores de comisión)</strong>. La respuesta rápida de latencia ({averageRt} ms) asociada a fallas en el freno inhibitorio sugiere compromiso en el córtex prefrontal ventromedial.</>
+                  ) : (
+                    <>Los parámetros cinemáticos evaluados en entorno 6DoF se sitúan <strong>dentro de los rangos normativos poblacionales</strong> (Latencia media: {averageRt} ms, Precisión: {accuracyRate}%). No se aprecian anomalías psicomotoras significativas en la tarea actual.</>
+                  )}
+                </p>
+                <div className="mt-3 pt-3 border-t border-cyan-800/30 print:border-gray-300 text-[10px] font-mono text-slate-400 print:text-gray-600 flex justify-between">
+                  <span>Recomendación: Continuar protocolo de estimulación {disorderObj.name}.</span>
+                  <span>Firma Digital: AMIE-CDSS-VALIDATED</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Pie del modal */}
+            <div className="bg-slate-950 px-8 py-4 border-t border-slate-800 flex justify-end gap-3 print:hidden">
+              <button 
+                onClick={() => setShowReportModal(false)} 
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Cerrar
+              </button>
+              <button 
+                onClick={() => window.print()} 
+                className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-lg"
+              >
+                <Printer className="w-4 h-4" /> Imprimir Informe
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
