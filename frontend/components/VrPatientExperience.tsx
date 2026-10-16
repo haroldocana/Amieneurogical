@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (BYPASS DE AUDIO AUTOPLAY)
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (VOZ EN AUDIOCONTEXT + AUTO-DESBLOQUEO)
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -46,10 +46,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const wsRef = useRef<WebSocket | null>(null);
 
-  // REPRODUCTORES DE AUDIO DESBLOQUEADOS
   const audioContextRef = useRef<AudioContext | null>(null);
-  const bgOscillatorRef = useRef<OscillatorNode | null>(null);
-  const ttsPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   const paradigmStateRef = useRef({
     paradigm: 'IDLE' as InteractiveParadigm,
@@ -63,40 +60,38 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     lastSpawnTime: 0
   });
 
-  // =====================================================================
-  // 1. MOTOR DE AUDIO RESILIENTE (BYPASS AUTOPLAY)
-  // =====================================================================
-  
-  // Esta función DEBE ejecutarse únicamente cuando haces clic en el botón principal
-  const unlockAudioSystems = () => {
+  const triggerHaptic = (intensity = 0.8, durationMs = 60) => {
     try {
-      // 1. Desbloquear Web Audio API
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        audioContextRef.current = new AudioCtx();
-        audioContextRef.current.resume();
+      const session = rendererRef.current?.xr.getSession();
+      if (session?.inputSources) {
+        for (const src of session.inputSources) {
+          if (src.gamepad?.hapticActuators?.length) {
+            src.gamepad.hapticActuators[0].pulse(intensity, durationMs);
+          }
+        }
       }
-
-      // 2. Crear reproductor HTML5 con Bypass (reproducir audio de silencio en Base64)
-      if (!ttsPlayerRef.current) {
-        const audioEl = document.createElement('audio');
-        audioEl.crossOrigin = 'anonymous';
-        // Base64 de un mp3 de 0.1 segundos de silencio absoluto
-        audioEl.src = "data:audio/mp3;base64,//OExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
-        document.body.appendChild(audioEl);
-        audioEl.play().catch(() => {});
-        ttsPlayerRef.current = audioEl;
-      }
-      
-      setIsAudioUnlocked(true);
-      playChimes();
     } catch (e) {}
   };
 
-  const playSynthesizedTone = (freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 0.8) => {
+  // DESBLOQUEO MAESTRO DE AUDIO
+  const ensureAudioUnlocked = useCallback(() => {
     try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!audioContextRef.current && AudioCtx) {
+        audioContextRef.current = new AudioCtx();
+      }
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      setIsAudioUnlocked(true);
+    } catch (e) {}
+  }, []);
+
+  const playSynthesizedTone = (freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 1.0) => {
+    try {
+      ensureAudioUnlocked();
       const ctx = audioContextRef.current;
-      if (!ctx || ctx.state === 'suspended') return;
+      if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type;
@@ -111,54 +106,48 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   };
 
   const playChimes = () => {
-    [440, 554, 659].forEach((note, idx) => {
-      setTimeout(() => playSynthesizedTone(note, 0.2, 'sine', 0.8), idx * 120);
+    [440, 554, 659, 880].forEach((note, idx) => {
+      setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 1.0), idx * 100);
     });
   };
 
-  // Reproductor de Voz de Guía (Usando el player previamente desbloqueado)
-  const speakVoiceGuide = (text: string) => {
-    if (!text || !ttsPlayerRef.current) return;
-    playChimes(); // Tono de alerta antes de hablar
-    
+  // REPRODUCTOR DE VOZ DE IA DECODIFICADO DIRECTAMENTE EN AUDIOCONTEXT
+  const playSpeechAudio = async (text: string) => {
+    if (!text) return;
+    ensureAudioUnlocked();
+    playChimes();
+
     try {
-      const clean = text.replace(/['"]/g, '').slice(0, 200);
+      const clean = text.replace(/['"]/g, '').slice(0, 180);
       const url = `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(clean)}`;
-      
-      ttsPlayerRef.current.src = url;
-      ttsPlayerRef.current.volume = 1.0;
-      
-      const playPromise = ttsPlayerRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Fallback final a SpeechSynthesis nativo si la web bloquea el fetch
-          if ('speechSynthesis' in window) {
-            const utt = new SpeechSynthesisUtterance(clean);
-            utt.lang = 'es-ES';
-            window.speechSynthesis.speak(utt);
-          }
-        });
+      const res = await fetch(url);
+      if (res.ok && audioContextRef.current) {
+        const arrayBuf = await res.arrayBuffer();
+        const audioBuf = await audioContextRef.current.decodeAudioData(arrayBuf);
+        const source = audioContextRef.current.createBufferSource();
+        const gainNode = audioContextRef.current.createGain();
+        gainNode.gain.value = 1.0;
+        source.buffer = audioBuf;
+        source.connect(gainNode);
+        gainNode.connect(audioContextRef.current.destination);
+        source.start(0);
+        return;
       }
     } catch (e) {}
-  };
 
-  // =====================================================================
-  // 2. HUD, RAYCASTING Y COLISIONES
-  // =====================================================================
-  
-  const triggerHaptic = (intensity = 0.8, durationMs = 60) => {
+    // Fallback secundario Web Speech API
     try {
-      const session = rendererRef.current?.xr.getSession();
-      if (session?.inputSources) {
-        for (const src of session.inputSources) {
-          if (src.gamepad?.hapticActuators?.length) {
-            src.gamepad.hapticActuators[0].pulse(intensity, durationMs);
-          }
-        }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'es-ES';
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
       }
     } catch (e) {}
   };
 
+  // BANNER 3D VISIBLE DENTRO DEL CASCO
   const update3dInVrBanner = (title: string, sub: string, score: string) => {
     if (!hudMeshRef.current) return;
     const canvas = document.createElement('canvas');
@@ -166,19 +155,19 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
     ctx.fillRect(0, 0, 1024, 256);
     ctx.strokeStyle = '#00f0ff';
     ctx.lineWidth = 6;
     ctx.strokeRect(6, 6, 1012, 244);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 40px sans-serif';
+    ctx.font = 'bold 38px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(title, 512, 65);
 
     ctx.fillStyle = '#fde047';
-    ctx.font = '30px sans-serif';
+    ctx.font = '28px sans-serif';
     ctx.fillText(sub, 512, 135);
 
     ctx.fillStyle = '#38bdf8';
@@ -188,6 +177,37 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     const tex = new THREE.CanvasTexture(canvas);
     (hudMeshRef.current.material as THREE.MeshBasicMaterial).map = tex;
     (hudMeshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
+  };
+
+  const createProcedural360Canvas = () => {
+    const c = document.createElement('canvas');
+    c.width = 2048; c.height = 1024;
+    const ctx = c.getContext('2d');
+    if (!ctx) return c;
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 1024);
+    grad.addColorStop(0, '#0f172a');
+    grad.addColorStop(0.48, '#1e293b');
+    grad.addColorStop(0.5, '#334155');
+    grad.addColorStop(0.52, '#0f172a');
+    grad.addColorStop(1, '#020617');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 2048, 1024);
+
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 1.5;
+    for (let x = 0; x < 2048; x += 64) {
+      ctx.beginPath(); ctx.moveTo(x, 512); ctx.lineTo(x, 1024); ctx.stroke();
+    }
+    for (let y = 512; y < 1024; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(2048, y); ctx.stroke();
+    }
+
+    ctx.fillStyle = '#38bdf8';
+    for (let x = 120; x < 2048; x += 256) {
+      ctx.beginPath(); ctx.arc(x, 220, 25, 0, Math.PI * 2); ctx.fill();
+    }
+    return c;
   };
 
   const apply360Background = (rawPath: string) => {
@@ -215,6 +235,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         mat.needsUpdate = true;
       }
     };
+    img.onerror = () => {
+      const tex = new THREE.CanvasTexture(createProcedural360Canvas());
+      tex.colorSpace = THREE.SRGBColorSpace;
+      (bgMeshRef.current!.material as THREE.MeshBasicMaterial).map = tex;
+      (bgMeshRef.current!.material as THREE.MeshBasicMaterial).needsUpdate = true;
+    };
     img.src = fullUrl;
   };
 
@@ -235,6 +261,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   };
 
   const handleTrigger = useCallback((event: any) => {
+    ensureAudioUnlocked();
     if (!interactiveGroupRef.current) return;
     const ctrl = event.target;
     ctrl.updateMatrixWorld(true);
@@ -251,12 +278,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     if (hits.length > 0) {
       const hitObj = hits[0].object;
-      triggerHaptic(0.9, 80); // Vibración fuerte en todos los aciertos
+      triggerHaptic(0.9, 80);
 
       if (s.paradigm === 'BART_3D') {
         if (hitObj.name === 'BART_BANK_BTN') {
           s.hits += s.balloonPumps * 10;
-          playSynthesizedTone(780, 0.25, 'sine', 0.9);
+          playSynthesizedTone(780, 0.25, 'sine', 1.0);
           setHudStats(`💰 Puntos cobrados: +${s.balloonPumps * 10} pts`);
           update3dInVrBanner('BART: RIESGO Y CONTROL', '¡PUNTOS COBRADOS!', `Aciertos: ${s.hits} pts`);
           transmitInteraction({ hits: s.hits, errors: s.errors, pumps: s.balloonPumps, rt, action: `Puntos cobrados (+${s.balloonPumps * 10})` });
@@ -264,14 +291,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         } else {
           s.balloonPumps += 1;
           if (Math.random() < (s.balloonPumps / s.balloonMaxCap) || s.balloonPumps >= s.balloonMaxCap) {
-            playSynthesizedTone(75, 0.35, 'sawtooth', 0.9);
+            playSynthesizedTone(75, 0.35, 'sawtooth', 1.0);
             triggerHaptic(1.0, 250);
             s.errors += 1;
             update3dInVrBanner('BART: RIESGO Y CONTROL', '💥 ¡EXPLOSIÓN!', `Fallos: ${s.errors}`);
             transmitInteraction({ hits: s.hits, errors: s.errors, pumps: s.balloonPumps, rt, action: `💥 Explosión del globo a ${s.balloonPumps} bombeos` });
             s.scale = 1.0; s.balloonPumps = 0; s.balloonMaxCap = Math.floor(10 + Math.random() * 12);
           } else {
-            playSynthesizedTone(220 + s.balloonPumps * 32, 0.1, 'sine', 0.85);
+            playSynthesizedTone(220 + s.balloonPumps * 32, 0.1, 'sine', 1.0);
             s.scale += 0.12; s.hits += 1;
             update3dInVrBanner('BART: RIESGO Y CONTROL', `Bombeo: ${s.balloonPumps}`, `Aciertos: ${s.hits}`);
             transmitInteraction({ hits: s.hits, errors: s.errors, pumps: s.balloonPumps, rt, action: `Inflado: Bombeo ${s.balloonPumps}` });
@@ -279,35 +306,33 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         }
       } else if (s.paradigm === 'CHOICE_3D') {
         s.hits += 1;
-        playSynthesizedTone(440, 0.15, 'sine', 0.85);
+        playSynthesizedTone(440, 0.15, 'sine', 1.0);
         const name = hitObj.name.includes('LEFT') ? 'Opción Roja (A)' : 'Opción Azul (B)';
         update3dInVrBanner('DILEMA RÁPIDO', `Selección: ${name}`, `Aciertos: ${s.hits}`);
         transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Elección: ${name}` });
       } else if (s.paradigm === 'CPT_3D') {
         if (s.cptTargetType === 'GO') {
           s.hits += 1;
-          playSynthesizedTone(580, 0.12, 'sine', 0.85);
+          playSynthesizedTone(580, 0.12, 'sine', 1.0);
           update3dInVrBanner('CPT: ATENCIÓN SOSTENIDA', `¡IMPACTO GO! ${rt}ms`, `Aciertos: ${s.hits}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Impacto Go (${rt}ms)` });
         } else {
           s.errors += 1;
-          playSynthesizedTone(90, 0.25, 'sawtooth', 0.9);
-          triggerHaptic(1.0, 150); // Castigo háptico por comisión
+          playSynthesizedTone(90, 0.25, 'sawtooth', 1.0);
+          triggerHaptic(1.0, 150);
           update3dInVrBanner('CPT: ATENCIÓN SOSTENIDA', '❌ ERROR COMISIÓN', `Fallos: ${s.errors}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Error Comisión No-Go` });
         }
       } else {
         s.hits += 1;
-        playSynthesizedTone(520, 0.1, 'sine', 0.85);
+        playSynthesizedTone(520, 0.1, 'sine', 1.0);
         update3dInVrBanner(`TAREA: ${s.paradigm}`, '¡IMPACTO REGISTRADO!', `Aciertos: ${s.hits}`);
         transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Acierto tarea ${s.paradigm}` });
       }
     }
-  }, [activePatientId]);
+  }, [activePatientId, ensureAudioUnlocked]);
 
-  // =====================================================================
-  // 3. WEBSOCKET NETWORK LAYER
-  // =====================================================================
+  // WEBSOCKET CON HEARTBEAT ANTI-TIMEOUT
   useEffect(() => {
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;
@@ -340,9 +365,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               s.hits = 0; s.errors = 0; s.scale = 1.0; s.balloonPumps = 0; s.zOffset = -2.0;
               if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
               setHudStats(`Tarea Activa: ${d.paradigm}`);
-              update3dInVrBanner(`TAREA: ${d.paradigm}`, 'Apunta con el láser y dispara', 'Aciertos: 0');
-              
-              if (d.speechScript) speakVoiceGuide(d.speechScript);
+              update3dInVrBanner(`TAREA: ${d.paradigm}`, d.speechScript || 'Apunta con el láser y presiona el gatillo', 'Aciertos: 0');
+              if (d.speechScript) playSpeechAudio(d.speechScript);
             }
           } else if (d.type === 'STOP_ACTIVE_SESSION') {
             setActiveParadigm('IDLE');
@@ -365,9 +389,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return () => { clearInterval(heartbeatTimer); if (ws) ws.close(); };
   }, [activePatientId]);
 
-  // =====================================================================
-  // 4. MOTOR THREE.JS Y ARQUITECTURA GRÁFICA WEBXR
-  // =====================================================================
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -386,11 +407,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Reactivar Audio al entrar físicamente a VR
+    // AUTO-DESBLOQUEO AL ENTRAR A VR
     renderer.xr.addEventListener('sessionstart', () => {
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
-      }
+      ensureAudioUnlocked();
       playChimes();
     });
 
@@ -400,7 +419,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     scene.add(bgMesh);
     bgMeshRef.current = bgMesh;
 
-    // HUD Flotante (Banner superior de la vista)
     const hudGeo = new THREE.PlaneGeometry(1.6, 0.4);
     const hudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95 });
     const hudMesh = new THREE.Mesh(hudGeo, hudMat);
@@ -528,21 +546,23 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       bgMesh.material.dispose();
       renderer.dispose();
     };
-  }, [handleTrigger]);
+  }, [handleTrigger, ensureAudioUnlocked]);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
       {!isAudioUnlocked && (
-        <div className="absolute inset-0 z-[999999] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8">
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4">
+        <div 
+          onPointerDown={ensureAudioUnlocked}
+          onClick={ensureAudioUnlocked}
+          className="absolute inset-0 z-[999999] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 cursor-pointer"
+        >
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4 pointer-events-auto">
             <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
             <h2 className="text-xl font-black text-white">Activar Experiencia WebXR</h2>
-            <p className="text-xs text-slate-400">Habilita los sensores 6DoF, láser y audio espacial en el visor.</p>
+            <p className="text-xs text-slate-400">Toca en cualquier parte de la pantalla o presiona el gatillo para habilitar audio y mandos.</p>
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                unlockAudioSystems(); // <--- BYPASS DE AUTOPLAY VITAL AQUÍ
-              }}
+              onPointerDown={ensureAudioUnlocked}
+              onClick={ensureAudioUnlocked}
               className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition"
             >
               <Play className="w-5 h-5 fill-white" /> INICIAR SESIÓN VR
@@ -560,10 +580,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       </div>
 
       {onClose && (
-        <button
-          onClick={onClose}
-          className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white hover:bg-slate-800 transition cursor-pointer"
-        >
+        <button onClick={onClose} className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white hover:bg-slate-800 transition">
           <X className="w-5 h-5" />
         </button>
       )}
