@@ -1,11 +1,10 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - WORKSTATION (INFORME CLÍNICO, SCROLL LIBRE Y OSCILOGRAMA)
+// AMIE CLINICAL COPILOT - WORKSTATION (COMUNICACIÓN DIRECTA RAW WEBSOCKET)
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PatientRecord } from '../types';
-import { VrControlService } from '../services/vrControlService';
 import { 
   X, Activity, Brain, Square, Stethoscope, Send, Target, 
   Image as ImageIcon, Bluetooth, CheckCircle, Wifi, WifiOff,
@@ -88,6 +87,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rawWsRef = useRef<WebSocket | null>(null);
 
+  const waveformDataRef = useRef({
+    gsrHistory: new Array(120).fill(0),
+    hrvHistory: new Array(120).fill(0),
+    rtHistory: new Array(120).fill(0)
+  });
+
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[1];
   const exercises = getExercisesForDisorder(disorderObj.name);
 
@@ -100,7 +105,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       
       const rtVal = d.rt || Math.floor(220 + Math.random() * 80);
       setReactionTimeMs(rtVal);
-      setRtHistoryTrials(prev => [...prev.slice(-30), rtVal]); // Mantener los últimos 30 ensayos
+      setRtHistoryTrials(prev => [...prev.slice(-29), rtVal]); // Mantener últimos 30 ensayos
     } else if (d.type === 'PONG' || d.type === 'HANDSHAKE_ACK' || d.type === 'PING') {
       setIsVrConnected(true);
     }
@@ -144,22 +149,50 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     };
 
     connectWs();
-    VrControlService.connect((data) => handleIncomingTelemetry(data), activePatientId);
 
     return () => {
       isMounted = false;
       clearInterval(pingTimer);
-      VrControlService.disconnect();
       if (ws) ws.close();
     };
   }, [activePatientId, handleIncomingTelemetry]);
 
+  // FUNCIÓN CRÍTICA DE DESPACHO
   const sendCommandToVr = (payload: any) => {
-    const enriched = { ...payload, patientId: activePatientId };
-    VrControlService.sendCommand(enriched);
-
-    if (rawWsRef.current?.readyState === WebSocket.OPEN) {
+    if (rawWsRef.current && rawWsRef.current.readyState === WebSocket.OPEN) {
+      const enriched = { ...payload, patientId: activePatientId };
       rawWsRef.current.send(JSON.stringify(enriched));
+      console.log("Comando enviado al VR:", enriched.type);
+    } else {
+      console.error("El WebSocket no está abierto. No se puede enviar comando.");
+      setLastActionText("⚠️ Error de Red: Visor desconectado.");
+    }
+  };
+
+  const connectBluetoothSensors = async () => {
+    try {
+      setBtStatus('SEARCHING');
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ['heart_rate'] }]
+      });
+      const server = await device.gatt?.connect();
+      if (!server) throw new Error("GATT no disponible");
+      const hrService = await server.getPrimaryService('heart_rate');
+      const hrCharacteristic = await hrService.getCharacteristic('heart_rate_measurement');
+      await hrCharacteristic.startNotifications();
+      setBtStatus('CONNECTED');
+
+      hrCharacteristic.addEventListener('characteristicvaluechanged', (event: any) => {
+        const value = event.target.value;
+        const heartRate = (value.getUint8(0) & 0x01) === 1 ? value.getUint16(1, true) : value.getUint8(1);
+        const hrvReal = Math.floor(100000 / (heartRate * heartRate));
+        setCurrentHrv(hrvReal);
+        const wf = waveformDataRef.current;
+        wf.hrvHistory.shift();
+        wf.hrvHistory.push(hrvReal);
+      });
+    } catch (error) {
+      setBtStatus('DISCONNECTED');
     }
   };
 
@@ -171,17 +204,21 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   };
 
   const startExercise = (exercise: any) => {
+    if (!isVrConnected) {
+      alert("El visor VR no está enlazado. Espere a que la luz esté en VERDE.");
+      return;
+    }
+
     setActiveExercise(exercise);
     setPipelinePhase('PHASE_ACTIVE');
     setCurrentKpi(0);
     setErrorsCount(0);
     setReactionTimeMs(0);
     setRtHistoryTrials([]);
-    setLastActionText('Tarea iniciada. Paciente interactuando en VR...');
+    setLastActionText('Tarea enviada. Inicializando holograma...');
 
     const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
 
-    // Locución también en la laptop
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utt = new SpeechSynthesisUtterance(exercise.script);
@@ -222,7 +259,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
     : 100;
 
-  // OSCILOGRAMA EN TIEMPO REAL CON HISTORIAL DE ENSAYOS
+  // OSCILOGRAMA EN TIEMPO REAL
   useEffect(() => {
     let animId: number;
     const render = () => {
@@ -234,7 +271,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       const w = canvas.width; const h = canvas.height;
       ctx.fillStyle = '#030712'; ctx.fillRect(0, 0, w, h);
 
-      // Cuadrícula limpia
       ctx.strokeStyle = '#111827'; ctx.lineWidth = 1;
       for (let x = 0; x < w; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
       for (let y = 0; y < h; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
@@ -262,7 +298,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       }
       ctx.stroke();
 
-      // Puntos en cada ensayo
       if (rtHistoryTrials.length > 0) {
         ctx.fillStyle = '#38bdf8';
         const total = Math.max(10, rtHistoryTrials.length);
@@ -286,6 +321,16 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     return () => cancelAnimationFrame(animId);
   }, [rtHistoryTrials, btStatus]);
 
+  useEffect(() => {
+    const decayTimer = setInterval(() => {
+      const wf = waveformDataRef.current;
+      wf.rtHistory.shift();
+      const lastVal = wf.rtHistory[wf.rtHistory.length - 1];
+      wf.rtHistory.push(Math.max(0, Math.floor(lastVal * 0.90 - 5)));
+    }, 100);
+    return () => clearInterval(decayTimer);
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950/95 flex items-center justify-center p-6 font-sans text-slate-100 select-none">
       <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-[1500px] flex flex-col h-[94vh]">
@@ -302,7 +347,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
               onClick={() => setShowReportModal(true)} 
               className="px-3 py-1.5 bg-cyan-600/90 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 border border-cyan-400/30 cursor-pointer transition shadow"
             >
-              <FileText className="w-3.5 h-3.5" /> VER INFORME CLÍNICO
+              <FileText className="w-3.5 h-3.5" /> VER INFORME
             </button>
             <button onClick={onClose} className="text-slate-400 hover:text-white p-2"><X /></button>
           </div>
@@ -318,7 +363,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </div>
 
         <main className="flex-1 grid grid-cols-12 gap-5 p-5 min-h-0 overflow-hidden">
-          {/* COLUMNA 1 */}
           <section className="col-span-12 lg:col-span-3 flex flex-col gap-3 min-h-0">
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><Stethoscope className="w-3.5 h-3.5 text-cyan-400"/> Patología</label>
@@ -355,13 +399,11 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             </div>
           </section>
 
-          {/* COLUMNA 2: BATERÍA CON SCROLL CORREGIDO Y LIBRE */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col min-h-0 overflow-hidden">
               <h3 className="text-xs font-black text-white mb-2.5 flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Target className="w-4 h-4 text-purple-400"/> BATERÍA CLÍNICA (8 PARADIGMAS 3D)
               </h3>
-              {/* Contenedor con scroll habilitado y visible */}
               <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto pr-1 pb-4 min-h-0">
                 {exercises.map(ex => (
                   <div key={ex.id} className="bg-slate-900 border border-slate-700/80 p-2.5 rounded-lg flex flex-col justify-between shadow-sm hover:border-slate-600 transition">
@@ -385,7 +427,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             </div>
           </section>
 
-          {/* COLUMNA 3 */}
           <section className="col-span-12 lg:col-span-5 flex flex-col gap-3 min-h-0">
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-slate-950 border border-slate-800 p-2 rounded-xl opacity-90">
@@ -424,19 +465,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                   <span className="truncate"><strong className="text-cyan-400">Último Evento:</strong> {lastActionText}</span>
                 </div>
-                {pipelinePhase === 'PHASE_ACTIVE' ? (
+                {pipelinePhase === 'PHASE_ACTIVE' && (
                   <button 
                     onClick={handleStopAndGenerateReport} 
-                    className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition"
+                    className="py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition"
                   >
                     <Square className="w-3.5 h-3.5 fill-white"/> DETENER PRUEBA Y EMITIR INFORME
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => setShowReportModal(true)} 
-                    className="py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 font-black text-xs rounded-lg shadow flex items-center justify-center gap-2 cursor-pointer transition"
-                  >
-                    <FileText className="w-3.5 h-3.5" /> EMITIR INFORME CON DATOS ACTUALES
                   </button>
                 )}
               </div>
@@ -445,7 +479,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </main>
       </div>
 
-      {/* MODAL DE INFORME CLÍNICO */}
       {showReportModal && (
         <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 print:p-0 print:bg-white">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:text-black print:bg-white">
@@ -500,19 +533,16 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                     <div className="text-2xl font-black text-cyan-400 print:text-black mt-1 font-mono">{averageRt} ms</div>
                     <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Norma: 220 - 350 ms</span>
                   </div>
-
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
                     <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ACIERTOS / IMPACTOS</span>
                     <div className="text-2xl font-black text-emerald-400 print:text-black mt-1 font-mono">{currentKpi}</div>
                     <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Precisión: {accuracyRate}%</span>
                   </div>
-
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
                     <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ERRORES DE FRENO</span>
                     <div className="text-2xl font-black text-rose-400 print:text-black mt-1 font-mono">{errorsCount}</div>
                     <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Comisión motora</span>
                   </div>
-
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
                     <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">PUNTUACIÓN Z</span>
                     <div className={`text-2xl font-black mt-1 font-mono ${Math.abs(zScore) >= 1.96 ? 'text-amber-400 print:text-black' : 'text-emerald-400 print:text-black'}`}>
@@ -541,15 +571,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                   <span>Firma Digital: AMIE-CDSS-VALIDATED</span>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-slate-950 px-8 py-4 border-t border-slate-800 flex justify-end gap-3 print:hidden">
-              <button onClick={() => setShowReportModal(false)} className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer">
-                Cerrar
-              </button>
-              <button onClick={() => window.print()} className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-lg">
-                <Printer className="w-4 h-4" /> Imprimir Informe
-              </button>
             </div>
           </div>
         </div>
