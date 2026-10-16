@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (AUDIO ROBUSTO Y TELEMETRÍA)
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (DESTRUCTOR DE MEMORIA 3D SEGURO)
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -90,7 +90,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     try {
       ensureAudioUnlocked();
       const ctx = audioContextRef.current;
-      if (!ctx || ctx.state === 'suspended') return;
+      if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type;
@@ -108,6 +108,42 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [440, 554, 659, 880].forEach((note, idx) => {
       setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 1.0), idx * 100);
     });
+  };
+
+  // NATIVE WEB AUDIO SPEECH DECODER (FORZAR AUDIO EN PICO OS)
+  const playSpeechAudio = async (text: string) => {
+    if (!text) return;
+    ensureAudioUnlocked();
+    playChimes();
+
+    try {
+      const clean = text.replace(/['"]/g, '').slice(0, 180);
+      const url = `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(clean)}`;
+      const res = await fetch(url);
+      if (res.ok && audioContextRef.current) {
+        const arrayBuf = await res.arrayBuffer();
+        const audioBuf = await audioContextRef.current.decodeAudioData(arrayBuf);
+        const source = audioContextRef.current.createBufferSource();
+        const gainNode = audioContextRef.current.createGain();
+        gainNode.gain.value = 1.0;
+        source.buffer = audioBuf;
+        source.connect(gainNode);
+        gainNode.connect(audioContextRef.current.destination);
+        source.start(0);
+        return;
+      }
+    } catch (e) {}
+
+    // Fallback nativo
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'es-ES';
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (e) {}
   };
 
   // BANNER 3D VISIBLE DENTRO DEL CASCO
@@ -207,6 +243,21 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     img.src = fullUrl;
   };
 
+  // LIMPIEZA DE MEMORIA A PRUEBA DE FALLOS
+  const safeClearInteractiveGroup = () => {
+    if (!interactiveGroupRef.current) return;
+    const group = interactiveGroupRef.current;
+    while (group.children.length > 0) {
+      const child = group.children[0] as THREE.Mesh;
+      if (child.material) {
+        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+        else child.material.dispose();
+      }
+      if (child.geometry) child.geometry.dispose();
+      group.remove(child);
+    }
+  };
+
   const transmitInteraction = (data: { hits: number; errors: number; rt?: number; pumps?: number; action: string }) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -294,7 +345,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     }
   }, [activePatientId, ensureAudioUnlocked]);
 
-  // WEBSOCKET CON RECONEXIÓN
   useEffect(() => {
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;
@@ -325,18 +375,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               const s = paradigmStateRef.current;
               s.paradigm = d.paradigm;
               s.hits = 0; s.errors = 0; s.scale = 1.0; s.balloonPumps = 0; s.zOffset = -2.0;
-              if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
+              
+              // VACIADO ABSOLUTO DE MEMORIA DE HOLOGRAMAS ANTERIORES
+              safeClearInteractiveGroup();
+              
               setHudStats(`Tarea Activa: ${d.paradigm}`);
-              
-              // Al recibir una tarea del PC, forzamos un pitido agudo en el visor para confirmar recepción
-              playChimes();
-              
               update3dInVrBanner(`TAREA: ${d.paradigm}`, d.speechScript || 'Apunta con el láser y presiona el gatillo', 'Aciertos: 0');
+              if (d.speechScript) playSpeechAudio(d.speechScript);
             }
           } else if (d.type === 'STOP_ACTIVE_SESSION') {
             setActiveParadigm('IDLE');
             paradigmStateRef.current.paradigm = 'IDLE';
-            if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
+            safeClearInteractiveGroup();
             setHudStats('Sesión Concluida');
             update3dInVrBanner('SESIÓN FINALIZADA', 'Datos transmitidos con éxito', '');
           }
@@ -390,7 +440,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     bgMesh.material.color.setHex(0xffffff);
     bgMesh.material.needsUpdate = true;
 
-    // HUD 3D HOLOGRÁFICO
     const hudGeo = new THREE.PlaneGeometry(1.6, 0.4);
     const hudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95 });
     const hudMesh = new THREE.Mesh(hudGeo, hudMat);
@@ -525,13 +574,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       {!isAudioUnlocked && (
         <div 
           onClick={() => { ensureAudioUnlocked(); playChimes(); }}
+          onPointerDown={() => { ensureAudioUnlocked(); playChimes(); }}
           className="absolute inset-0 z-[999999] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 cursor-pointer"
         >
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4 pointer-events-auto">
             <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
             <h2 className="text-xl font-black text-white">Activar Experiencia WebXR</h2>
-            <p className="text-xs text-slate-400">Toca en cualquier parte de la pantalla o presiona el gatillo para habilitar audio y mandos.</p>
-            <button className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition">
+            <p className="text-xs text-slate-400">Toca esta pantalla con el dedo o aprieta el gatillo del mando.</p>
+            <button className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg">
               <Play className="w-5 h-5 fill-white" /> INICIAR SESIÓN VR
             </button>
           </div>
@@ -544,10 +594,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         <div className="h-4 w-px bg-slate-800" />
         <Target className="text-purple-400 w-4 h-4" />
         <span>TAREA: <strong className="text-purple-300">{activeParadigm}</strong></span>
-      </div>
-
-      <div className="absolute bottom-32 text-center bg-slate-950/90 p-4 rounded-3xl border border-slate-800 text-white z-10 pointer-events-none max-w-xs shadow-2xl">
-        <p className="text-[11px] text-amber-300 font-mono font-bold">{hudStats}</p>
       </div>
 
       <div ref={mountRef} className="w-full h-full absolute inset-0" />
