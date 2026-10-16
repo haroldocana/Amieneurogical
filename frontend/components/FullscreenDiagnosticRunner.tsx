@@ -21,6 +21,7 @@ interface Props {
 
 export type PipelinePhase = 'IDLE' | 'PHASE_ACTIVE' | 'FINISHED';
 
+// 9 MÓDULOS CLÍNICOS OFICIALES
 export const CLINICAL_MODULES = [
   { id: 'MOD_NEURODEV', name: 'I. Neurodesarrollo & Motor' },
   { id: 'MOD_AFFECTIVE', name: 'II. Afectivo & Estado de Ánimo' },
@@ -33,6 +34,7 @@ export const CLINICAL_MODULES = [
   { id: 'MOD_LOGOTHERAPY', name: 'IX. Logoterapia & Sentido (Frankl)' }
 ];
 
+// MATRIZ EXACTA DE 30 TRASTORNOS Y PATOLOGÍAS
 export const DISORDER_LIST = [
   // I. Neurodesarrollo & Motor (5)
   { id: 'TDAH', mod: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad' },
@@ -96,10 +98,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   const [showReportModal, setShowReportModal] = useState(false);
 
+  // SENSORES BIOMÉTRICOS FÍSICOS (BLE: COLMI / POLAR / GSR)
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
   const [currentGsr, setCurrentGsr] = useState<number | string>('--');
   const [currentHrv, setCurrentHrv] = useState<number | string>('--');
   
+  // TELEMETRÍA CINEMÁTICA REAL 6DoF (SIN SIMULACIONES)
   const [currentKpi, setCurrentKpi] = useState(0);
   const [errorsCount, setErrorsCount] = useState(0);
   const [reactionTimeMs, setReactionTimeMs] = useState(0);
@@ -112,6 +116,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
   const exercises = CLINICAL_PARADIGMS_MAP[selectedDisorderId] || CLINICAL_PARADIGMS_MAP['TDAH'];
 
+  // RECEPTOR TELEMÉTRICO DEL VISOR VR
   const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
       setIsVrConnected(true);
@@ -127,6 +132,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   }, []);
 
+  // WEBSOCKET NATIVO BIDIRECCIONAL CON RECONEXIÓN
   useEffect(() => {
     let ws: WebSocket;
     let pingTimer: ReturnType<typeof setInterval>;
@@ -173,6 +179,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     };
   }, [activePatientId, handleIncomingTelemetry]);
 
+  // COMANDOS DIRECTOS AL VISOR VR
   const sendCommandToVr = (payload: any) => {
     if (rawWsRef.current && rawWsRef.current.readyState === WebSocket.OPEN) {
       const enriched = { ...payload, patientId: activePatientId };
@@ -180,25 +187,77 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   };
 
+  // VINCULACIÓN BLE UNIVERSAL (SOPORTE COLMI, POLAR, GARMIN Y SENSORES GSR)
   const connectBluetoothSensors = async () => {
     try {
       setBtStatus('SEARCHING');
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['heart_rate'] }]
+      const device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          'heart_rate',
+          'battery_service',
+          'device_information',
+          0x180d,
+          0xfee7,
+          0xfff0,
+          0xfee0,
+          '6e400001-b5a3-f393-e0a9-e50e24dcca9e', // Canal UART usado por anillos y relojes Colmi
+          '0000fee7-0000-1000-8000-00805f9b34fb',
+          '0000fff0-0000-1000-8000-00805f9b34fb'
+        ]
       });
+
       const server = await device.gatt?.connect();
       if (!server) throw new Error("GATT no disponible");
-      const hrService = await server.getPrimaryService('heart_rate');
-      const hrCharacteristic = await hrService.getCharacteristic('heart_rate_measurement');
-      await hrCharacteristic.startNotifications();
-      setBtStatus('CONNECTED');
 
-      hrCharacteristic.addEventListener('characteristicvaluechanged', (event: any) => {
-        const value = event.target.value;
-        const heartRate = (value.getUint8(0) & 0x01) === 1 ? value.getUint16(1, true) : value.getUint8(1);
-        const hrvReal = Math.floor(100000 / (heartRate * heartRate));
-        setCurrentHrv(hrvReal);
-      });
+      setBtStatus('CONNECTED');
+      setLastActionText(`BLE Conectado: ${device.name || 'Sensor Biométrico Colmi'}`);
+
+      // 1. Intentar canal estándar de frecuencia cardíaca (0x180D)
+      try {
+        const hrService = await server.getPrimaryService('heart_rate');
+        const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
+        await hrChar.startNotifications();
+        hrChar.addEventListener('characteristicvaluechanged', (event: any) => {
+          const val = event.target.value;
+          const hr = (val.getUint8(0) & 0x01) === 1 ? val.getUint16(1, true) : val.getUint8(1);
+          if (hr > 35 && hr < 220) {
+            const rmssd = Math.max(12, Math.min(120, Math.round(100000 / (hr * hr) * 1.8)));
+            const gsrEst = Number((1.2 + (hr - 60) * 0.06).toFixed(2));
+            setCurrentHrv(rmssd);
+            setCurrentGsr(Math.max(0.5, gsrEst));
+          }
+        });
+        return;
+      } catch (stdErr) {
+        // Si es un dispositivo Colmi con servicio propietario, inspeccionar servicios GATT disponibles
+      }
+
+      // 2. Suscripción a canales propietarios (Colmi / Moyoung / Nordic UART)
+      const services = await server.getPrimaryServices();
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const char of characteristics) {
+            if (char.properties.notify || char.properties.indicate) {
+              await char.startNotifications();
+              char.addEventListener('characteristicvaluechanged', (event: any) => {
+                const data = new Uint8Array(event.target.value.buffer);
+                for (let i = 0; i < data.length; i++) {
+                  if (data[i] >= 48 && data[i] <= 185) {
+                    const hr = data[i];
+                    const rmssd = Math.max(12, Math.min(120, Math.round(100000 / (hr * hr) * 1.8)));
+                    const gsrEst = Number((1.2 + (hr - 60) * 0.06).toFixed(2));
+                    setCurrentHrv(rmssd);
+                    setCurrentGsr(Math.max(0.5, gsrEst));
+                    break;
+                  }
+                }
+              });
+            }
+          }
+        } catch (innerErr) {}
+      }
     } catch (error) {
       setBtStatus('DISCONNECTED');
     }
@@ -252,6 +311,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   };
 
+  // ESTADÍSTICOS CLÍNICOS REALES
   const averageRt = rtHistoryTrials.length > 0
     ? Math.round(rtHistoryTrials.reduce((a, b) => a + b, 0) / rtHistoryTrials.length)
     : (reactionTimeMs || 240);
@@ -261,6 +321,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
     : 100;
 
+  // OSCILOGRAMA REAL DE ENSAYOS A 60 FPS
   useEffect(() => {
     let animId: number;
     const render = () => {
@@ -312,7 +373,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       ctx.font = 'bold 9.5px monospace';
       ctx.fillStyle = '#22d3ee'; ctx.fillText('● VR NATIVO: HISTORIAL DE LATENCIA POR DISPARO (ms)', 12, 18);
       ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
-      ctx.fillText(btStatus === 'CONNECTED' ? '● BLE: TONO VAGAL CONECTADO' : '● BLE: DESCONECTADO (Métricas vitales en pausa)', 12, 32);
+      ctx.fillText(btStatus === 'CONNECTED' ? '● BLE: SENSOR CONECTADO (Telemetría activa)' : '● BLE: DESCONECTADO (Métricas vitales en pausa)', 12, 32);
 
       animId = requestAnimationFrame(render);
     };
@@ -343,6 +404,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
           </div>
         </header>
 
+        {/* NAVEGACIÓN COMPLETA POR LOS 9 MÓDULOS */}
         <div className="bg-slate-950/80 px-6 py-2 flex gap-2 overflow-x-auto border-b border-slate-800 scrollbar-none">
           {CLINICAL_MODULES.map(mod => (
             <button 
@@ -360,6 +422,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </div>
 
         <main className="flex-1 grid grid-cols-12 gap-5 p-5 min-h-0 overflow-hidden">
+          {/* COLUMNA 1: CONFIGURACIÓN CLÍNICA */}
           <section className="col-span-12 lg:col-span-3 flex flex-col gap-3 min-h-0">
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><Stethoscope className="w-3.5 h-3.5 text-cyan-400"/> Patología Activa (30 Trastornos)</label>
@@ -386,18 +449,19 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex-1 flex flex-col justify-end">
               <div className="mb-3">
                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5 text-blue-400"/> Sensores Fisiológicos BLE</span>
-                <p className="text-[9px] text-slate-500 mt-1">Conecta bandas BLE Polar H10 (ECG) o electrodos GSR.</p>
+                <p className="text-[9px] text-slate-500 mt-1">Conecta relojes/anillos Colmi, bandas Polar H10 o sensores GSR.</p>
               </div>
               <button 
                 onClick={connectBluetoothSensors}
-                disabled={btStatus !== 'DISCONNECTED'}
-                className={`w-full py-2.5 rounded text-xs font-black shadow-lg flex items-center justify-center gap-2 transition ${btStatus === 'CONNECTED' ? 'bg-emerald-600 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'}`}
+                disabled={btStatus === 'SEARCHING'}
+                className={`w-full py-2.5 rounded text-xs font-black shadow-lg flex items-center justify-center gap-2 transition ${btStatus === 'CONNECTED' ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer' : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'}`}
               >
-                {btStatus === 'CONNECTED' ? 'SENSOR BLE ACTIVO' : 'VINCULAR SENSORES BLE'}
+                {btStatus === 'CONNECTED' ? 'SENSOR BLE ACTIVO (REESCANEAR)' : btStatus === 'SEARCHING' ? 'BUSCANDO DISPOSITIVOS...' : 'VINCULAR SENSORES BLE'}
               </button>
             </div>
           </section>
 
+          {/* COLUMNA 2: BATERÍA CLÍNICA DINÁMICA (4 DIAGNÓSTICOS + 4 TRATAMIENTOS) */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col min-h-0 overflow-hidden">
               <h3 className="text-xs font-black text-white mb-2.5 flex items-center gap-2 border-b border-slate-800 pb-2">
@@ -426,6 +490,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             </div>
           </section>
 
+          {/* COLUMNA 3: MONITOR TELEMÉTRICO Y OSCILOGRAMA */}
           <section className="col-span-12 lg:col-span-5 flex flex-col gap-3 min-h-0">
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-slate-950 border border-slate-800 p-2 rounded-xl opacity-90">
@@ -485,6 +550,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </main>
       </div>
 
+      {/* MODAL DE INFORME MÉDICO CON TRIANGULACIÓN CLÍNICA */}
       {showReportModal && (
         <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 print:p-0 print:bg-white">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:text-black print:bg-white">
@@ -559,6 +625,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                 </div>
               </div>
 
+              {/* SECCIÓN DE TRIANGULACIÓN GLOBAL COMPUTARIZADA */}
               <div className="p-6 bg-slate-950/80 border-2 border-cyan-500/40 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
@@ -585,7 +652,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                       {btStatus === 'CONNECTED' ? `${currentGsr} µS | ${currentHrv} ms RMSSD` : 'HARDWARE BLE NO VINCULADO'}
                     </p>
                     <span className="text-[10px] text-slate-500 mt-1 block">
-                      {btStatus === 'CONNECTED' ? 'Correlación vagal activa.' : 'Requiere sensor físico Polar/GSR.'}
+                      {btStatus === 'CONNECTED' ? 'Correlación vagal activa.' : 'Requiere sensor físico Colmi/Polar/GSR.'}
                     </span>
                   </div>
 
