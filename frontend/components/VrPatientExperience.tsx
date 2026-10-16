@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (VOZ EN AUDIOCONTEXT + AUTO-DESBLOQUEO)
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF (AUDIO ROBUSTO Y TELEMETRÍA)
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -73,7 +73,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   };
 
-  // DESBLOQUEO MAESTRO DE AUDIO
   const ensureAudioUnlocked = useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -91,7 +90,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     try {
       ensureAudioUnlocked();
       const ctx = audioContextRef.current;
-      if (!ctx) return;
+      if (!ctx || ctx.state === 'suspended') return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type;
@@ -109,42 +108,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [440, 554, 659, 880].forEach((note, idx) => {
       setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 1.0), idx * 100);
     });
-  };
-
-  // REPRODUCTOR DE VOZ DE IA DECODIFICADO DIRECTAMENTE EN AUDIOCONTEXT
-  const playSpeechAudio = async (text: string) => {
-    if (!text) return;
-    ensureAudioUnlocked();
-    playChimes();
-
-    try {
-      const clean = text.replace(/['"]/g, '').slice(0, 180);
-      const url = `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(clean)}`;
-      const res = await fetch(url);
-      if (res.ok && audioContextRef.current) {
-        const arrayBuf = await res.arrayBuffer();
-        const audioBuf = await audioContextRef.current.decodeAudioData(arrayBuf);
-        const source = audioContextRef.current.createBufferSource();
-        const gainNode = audioContextRef.current.createGain();
-        gainNode.gain.value = 1.0;
-        source.buffer = audioBuf;
-        source.connect(gainNode);
-        gainNode.connect(audioContextRef.current.destination);
-        source.start(0);
-        return;
-      }
-    } catch (e) {}
-
-    // Fallback secundario Web Speech API
-    try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'es-ES';
-        u.volume = 1.0;
-        window.speechSynthesis.speak(u);
-      }
-    } catch (e) {}
   };
 
   // BANNER 3D VISIBLE DENTRO DEL CASCO
@@ -284,7 +247,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         if (hitObj.name === 'BART_BANK_BTN') {
           s.hits += s.balloonPumps * 10;
           playSynthesizedTone(780, 0.25, 'sine', 1.0);
-          setHudStats(`💰 Puntos cobrados: +${s.balloonPumps * 10} pts`);
           update3dInVrBanner('BART: RIESGO Y CONTROL', '¡PUNTOS COBRADOS!', `Aciertos: ${s.hits} pts`);
           transmitInteraction({ hits: s.hits, errors: s.errors, pumps: s.balloonPumps, rt, action: `Puntos cobrados (+${s.balloonPumps * 10})` });
           s.balloonPumps = 0; s.scale = 1.0;
@@ -295,7 +257,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             triggerHaptic(1.0, 250);
             s.errors += 1;
             update3dInVrBanner('BART: RIESGO Y CONTROL', '💥 ¡EXPLOSIÓN!', `Fallos: ${s.errors}`);
-            transmitInteraction({ hits: s.hits, errors: s.errors, pumps: s.balloonPumps, rt, action: `💥 Explosión del globo a ${s.balloonPumps} bombeos` });
+            transmitInteraction({ hits: s.hits, errors: s.errors, pumps: s.balloonPumps, rt, action: `💥 Explosión a ${s.balloonPumps} bombeos` });
             s.scale = 1.0; s.balloonPumps = 0; s.balloonMaxCap = Math.floor(10 + Math.random() * 12);
           } else {
             playSynthesizedTone(220 + s.balloonPumps * 32, 0.1, 'sine', 1.0);
@@ -332,7 +294,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     }
   }, [activePatientId, ensureAudioUnlocked]);
 
-  // WEBSOCKET CON HEARTBEAT ANTI-TIMEOUT
+  // WEBSOCKET CON RECONEXIÓN
   useEffect(() => {
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;
@@ -365,8 +327,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               s.hits = 0; s.errors = 0; s.scale = 1.0; s.balloonPumps = 0; s.zOffset = -2.0;
               if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
               setHudStats(`Tarea Activa: ${d.paradigm}`);
+              
+              // Al recibir una tarea del PC, forzamos un pitido agudo en el visor para confirmar recepción
+              playChimes();
+              
               update3dInVrBanner(`TAREA: ${d.paradigm}`, d.speechScript || 'Apunta con el láser y presiona el gatillo', 'Aciertos: 0');
-              if (d.speechScript) playSpeechAudio(d.speechScript);
             }
           } else if (d.type === 'STOP_ACTIVE_SESSION') {
             setActiveParadigm('IDLE');
@@ -407,7 +372,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // AUTO-DESBLOQUEO AL ENTRAR A VR
     renderer.xr.addEventListener('sessionstart', () => {
       ensureAudioUnlocked();
       playChimes();
@@ -419,6 +383,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     scene.add(bgMesh);
     bgMeshRef.current = bgMesh;
 
+    const initialCanvas = createProcedural360Canvas();
+    const initTex = new THREE.CanvasTexture(initialCanvas);
+    initTex.colorSpace = THREE.SRGBColorSpace;
+    bgMesh.material.map = initTex;
+    bgMesh.material.color.setHex(0xffffff);
+    bgMesh.material.needsUpdate = true;
+
+    // HUD 3D HOLOGRÁFICO
     const hudGeo = new THREE.PlaneGeometry(1.6, 0.4);
     const hudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95 });
     const hudMesh = new THREE.Mesh(hudGeo, hudMat);
@@ -552,19 +524,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     <div className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden">
       {!isAudioUnlocked && (
         <div 
-          onPointerDown={ensureAudioUnlocked}
-          onClick={ensureAudioUnlocked}
+          onClick={() => { ensureAudioUnlocked(); playChimes(); }}
           className="absolute inset-0 z-[999999] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 cursor-pointer"
         >
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4 pointer-events-auto">
+          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4">
             <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
             <h2 className="text-xl font-black text-white">Activar Experiencia WebXR</h2>
             <p className="text-xs text-slate-400">Toca en cualquier parte de la pantalla o presiona el gatillo para habilitar audio y mandos.</p>
-            <button
-              onPointerDown={ensureAudioUnlocked}
-              onClick={ensureAudioUnlocked}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition"
-            >
+            <button className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition">
               <Play className="w-5 h-5 fill-white" /> INICIAR SESIÓN VR
             </button>
           </div>
@@ -578,12 +545,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         <Target className="text-purple-400 w-4 h-4" />
         <span>TAREA: <strong className="text-purple-300">{activeParadigm}</strong></span>
       </div>
-
-      {onClose && (
-        <button onClick={onClose} className="absolute top-6 right-6 z-30 p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white hover:bg-slate-800 transition">
-          <X className="w-5 h-5" />
-        </button>
-      )}
 
       <div className="absolute bottom-32 text-center bg-slate-950/90 p-4 rounded-3xl border border-slate-800 text-white z-10 pointer-events-none max-w-xs shadow-2xl">
         <p className="text-[11px] text-amber-300 font-mono font-bold">{hudStats}</p>
