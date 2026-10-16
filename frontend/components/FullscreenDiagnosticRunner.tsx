@@ -1,14 +1,14 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - WORKSTATION DE TELEMETRÍA (8 EJERCICIOS + OSCILOGRAMA)
+// AMIE CLINICAL COPILOT - WORKSTATION DE TELEMETRÍA BIDIRECCIONAL (8 TAREAS)
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PatientRecord } from '../types';
 import { VrControlService } from '../services/vrControlService';
 import { 
   X, Activity, Brain, Square, Stethoscope, Send, Target, 
-  Image as ImageIcon, Bluetooth, CheckCircle
+  Image as ImageIcon, Bluetooth, CheckCircle, Wifi, WifiOff
 } from 'lucide-react';
 
 interface Props {
@@ -59,7 +59,7 @@ const getExercisesForDisorder = (disorderName: string) => [
 ];
 
 export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }) => {
-  const patientId = patient?.id || 'PAC-8104';
+  const activePatientId = 'PAC-8104';
 
   const [activeModuleTab, setActiveModuleTab] = useState('MOD_NEURODEV');
   const [selectedDisorderId, setSelectedDisorderId] = useState('TEA');
@@ -67,6 +67,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const [activeExercise, setActiveExercise] = useState<any>(null);
   const [pipelinePhase, setPipelinePhase] = useState<PipelinePhase>('IDLE');
   const [isSyncingEnv, setIsSyncingEnv] = useState(false);
+  const [isVrConnected, setIsVrConnected] = useState(false);
 
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
   const [currentGsr, setCurrentGsr] = useState<number | string>('--');
@@ -89,8 +90,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[1];
   const exercises = getExercisesForDisorder(disorderObj.name);
 
-  const handleIncomingTelemetry = (d: any) => {
+  const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
+      setIsVrConnected(true);
       if (d.hits !== undefined) setCurrentKpi(d.hits);
       if (d.errors !== undefined) setErrorsCount(d.errors);
       if (d.action) setLastActionText(d.action);
@@ -101,37 +103,67 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       const wf = waveformDataRef.current;
       wf.rtHistory.shift();
       wf.rtHistory.push(rtVal);
+    } else if (d.type === 'PONG' || d.type === 'HANDSHAKE_ACK' || d.type === 'PING') {
+      setIsVrConnected(true);
     }
-  };
+  }, []);
 
-  // ENLACE WEBSOCKET BIDIRECCIONAL CON RECONEXIÓN
   useEffect(() => {
-    VrControlService.connect((data) => handleIncomingTelemetry(data), patientId);
+    let ws: WebSocket;
+    let pingTimer: ReturnType<typeof setInterval>;
+    let isMounted = true;
 
-    const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
-    const ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
-    rawWsRef.current = ws;
+    const connectWs = () => {
+      const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
+      ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
+      rawWsRef.current = ws;
 
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId }));
-    ws.onmessage = (event) => {
-      try {
-        const d = JSON.parse(event.data);
-        handleIncomingTelemetry(d);
-      } catch (e) {}
+      ws.onopen = () => {
+        if (!isMounted) return;
+        setIsVrConnected(true);
+        ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId: activePatientId }));
+        
+        pingTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'PING', patientId: activePatientId }));
+          }
+        }, 15000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          handleIncomingTelemetry(d);
+        } catch (e) {}
+      };
+
+      ws.onclose = () => {
+        if (!isMounted) return;
+        setIsVrConnected(false);
+        clearInterval(pingTimer);
+        setTimeout(connectWs, 2000);
+      };
     };
 
-    const pingTimer = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'PING', patientId }));
-      }
-    }, 20000);
+    connectWs();
+    VrControlService.connect((data) => handleIncomingTelemetry(data), activePatientId);
 
     return () => {
+      isMounted = false;
       clearInterval(pingTimer);
       VrControlService.disconnect();
-      try { ws.close(); } catch (e) {}
+      if (ws) ws.close();
     };
-  }, [patientId]);
+  }, [activePatientId, handleIncomingTelemetry]);
+
+  const sendCommandToVr = (payload: any) => {
+    const enriched = { ...payload, patientId: activePatientId };
+    VrControlService.sendCommand(enriched);
+
+    if (rawWsRef.current?.readyState === WebSocket.OPEN) {
+      rawWsRef.current.send(JSON.stringify(enriched));
+    }
+  };
 
   const connectBluetoothSensors = async () => {
     try {
@@ -167,19 +199,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
     setIsSyncingEnv(true);
     const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
 
-    VrControlService.sendCommand({
+    sendCommandToVr({
       type: 'SYNC_CLINICAL_CONTEXT',
-      ecosystem: envPayload,
-      patientId
+      ecosystem: envPayload
     });
-
-    if (rawWsRef.current?.readyState === WebSocket.OPEN) {
-      rawWsRef.current.send(JSON.stringify({
-        type: 'SYNC_CLINICAL_CONTEXT',
-        ecosystem: envPayload,
-        patientId
-      }));
-    }
 
     setTimeout(() => setIsSyncingEnv(false), 2500);
   };
@@ -190,32 +213,27 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
     setCurrentKpi(0);
     setErrorsCount(0);
     setReactionTimeMs(0);
-    setLastActionText('Tarea iniciada. Paciente interactuando en VR...');
+    setLastActionText('Tarea iniciada. Esperando interacción...');
 
     const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
 
-    VrControlService.sendCommand({
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(exercise.script);
+      utt.lang = 'es-ES'; 
+      window.speechSynthesis.speak(utt);
+    }
+
+    sendCommandToVr({
       type: 'START_PIPELINE_PHASE',
       paradigm: exercise.paradigm,
       bgAudio: exercise.bgAudio,
       speechScript: exercise.script,
       ecosystem: envPayload,
-      patientId
+      disorderName: disorderObj.name
     });
-
-    if (rawWsRef.current?.readyState === WebSocket.OPEN) {
-      rawWsRef.current.send(JSON.stringify({
-        type: 'START_PIPELINE_PHASE',
-        paradigm: exercise.paradigm,
-        bgAudio: exercise.bgAudio,
-        speechScript: exercise.script,
-        ecosystem: envPayload,
-        patientId
-      }));
-    }
   };
 
-  // OSCILOGRAMA A 60 FPS
   useEffect(() => {
     let animId: number;
     const render = () => {
@@ -234,7 +252,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       const wf = waveformDataRef.current;
       const count = wf.rtHistory.length;
 
-      // CURVA DE LATENCIA VR EN VIVO
       ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2.5; ctx.beginPath();
       for (let i = 0; i < count; i++) {
         const x = (i / (count - 1)) * w;
@@ -243,7 +260,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
       }
       ctx.stroke();
 
-      // CURVA HRV BLE
       if (btStatus === 'CONNECTED') {
         ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2; ctx.beginPath();
         for (let i = 0; i < count; i++) {
@@ -282,6 +298,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose }
           <div className="flex items-center gap-3">
             <Brain className="w-6 h-6 text-cyan-400" />
             <h2 className="text-sm font-black">AMIE CDSS • ENTORNO CLÍNICO HÍBRIDO</h2>
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold ${isVrConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}`}>
+              {isVrConnected ? <><Wifi className="w-3 h-3 animate-pulse" /> VISOR VR ENLACE ACTIVO</> : <><WifiOff className="w-3 h-3" /> RECONECTANDO VISOR...</>}
+            </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-2"><X /></button>
         </header>
