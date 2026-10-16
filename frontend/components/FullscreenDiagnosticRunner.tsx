@@ -21,7 +21,6 @@ interface Props {
 
 export type PipelinePhase = 'IDLE' | 'PHASE_ACTIVE' | 'FINISHED';
 
-// 9 MÓDULOS CLÍNICOS OFICIALES
 export const CLINICAL_MODULES = [
   { id: 'MOD_NEURODEV', name: 'I. Neurodesarrollo & Motor' },
   { id: 'MOD_AFFECTIVE', name: 'II. Afectivo & Estado de Ánimo' },
@@ -34,7 +33,6 @@ export const CLINICAL_MODULES = [
   { id: 'MOD_LOGOTHERAPY', name: 'IX. Logoterapia & Sentido (Frankl)' }
 ];
 
-// MATRIZ EXACTA DE 30 TRASTORNOS Y PATOLOGÍAS
 export const DISORDER_LIST = [
   // I. Neurodesarrollo & Motor (5)
   { id: 'TDAH', mod: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad' },
@@ -98,12 +96,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // SENSORES BIOMÉTRICOS FÍSICOS (BLE)
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
   const [currentGsr, setCurrentGsr] = useState<number | string>('--');
   const [currentHrv, setCurrentHrv] = useState<number | string>('--');
   
-  // TELEMETRÍA CINEMÁTICA REAL 6DoF (SIN SIMULACIONES)
   const [currentKpi, setCurrentKpi] = useState(0);
   const [errorsCount, setErrorsCount] = useState(0);
   const [reactionTimeMs, setReactionTimeMs] = useState(0);
@@ -114,11 +110,8 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const rawWsRef = useRef<WebSocket | null>(null);
 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
-  
-  // OBTENCIÓN DINÁMICA DE LOS 4 DIAGNÓSTICOS + 4 TRATAMIENTOS DESDE EL MAPA MAESTRO
   const exercises = CLINICAL_PARADIGMS_MAP[selectedDisorderId] || CLINICAL_PARADIGMS_MAP['TDAH'];
 
-  // RECEPTOR TELEMÉTRICO DEL VISOR VR
   const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
       setIsVrConnected(true);
@@ -128,13 +121,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       
       const rtVal = d.rt || Math.floor(220 + Math.random() * 80);
       setReactionTimeMs(rtVal);
-      setRtHistoryTrials(prev => [...prev.slice(-29), rtVal]); // Ventana de 30 ensayos reales
+      setRtHistoryTrials(prev => [...prev.slice(-29), rtVal]);
     } else if (d.type === 'PONG' || d.type === 'HANDSHAKE_ACK' || d.type === 'PING') {
       setIsVrConnected(true);
     }
   }, []);
 
-  // WEBSOCKET NATIVO BIDIRECCIONAL CON RECONEXIÓN
   useEffect(() => {
     let ws: WebSocket;
     let pingTimer: ReturnType<typeof setInterval>;
@@ -181,7 +173,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     };
   }, [activePatientId, handleIncomingTelemetry]);
 
-  // COMANDOS DIRECTOS AL VISOR VR
   const sendCommandToVr = (payload: any) => {
     if (rawWsRef.current && rawWsRef.current.readyState === WebSocket.OPEN) {
       const enriched = { ...payload, patientId: activePatientId };
@@ -189,7 +180,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   };
 
-  // VINCULACIÓN BLE FÍSICA
   const connectBluetoothSensors = async () => {
     try {
       setBtStatus('SEARCHING');
@@ -232,7 +222,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
     const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
 
-    // Locución clínica en estación de control
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utt = new SpeechSynthesisUtterance(exercise.script);
@@ -263,7 +252,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   };
 
-  // ESTADÍSTICOS CLÍNICOS REALES
   const averageRt = rtHistoryTrials.length > 0
     ? Math.round(rtHistoryTrials.reduce((a, b) => a + b, 0) / rtHistoryTrials.length)
     : (reactionTimeMs || 240);
@@ -273,7 +261,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
     : 100;
 
-  // OSCILOGRAMA REAL DE ENSAYOS A 60 FPS
   useEffect(() => {
     let animId: number;
     const render = () => {
@@ -356,7 +343,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
           </div>
         </header>
 
-        {/* NAVEGACIÓN COMPLETA POR LOS 9 MÓDULOS */}
         <div className="bg-slate-950/80 px-6 py-2 flex gap-2 overflow-x-auto border-b border-slate-800 scrollbar-none">
           {CLINICAL_MODULES.map(mod => (
             <button 
@@ -374,7 +360,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </div>
 
         <main className="flex-1 grid grid-cols-12 gap-5 p-5 min-h-0 overflow-hidden">
-          {/* COLUMNA 1: CONFIGURACIÓN CLÍNICA */}
           <section className="col-span-12 lg:col-span-3 flex flex-col gap-3 min-h-0">
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><Stethoscope className="w-3.5 h-3.5 text-cyan-400"/> Patología Activa (30 Trastornos)</label>
@@ -413,7 +398,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             </div>
           </section>
 
-          {/* COLUMNA 2: BATERÍA CLÍNICA DINÁMICA (4 DIAGNÓSTICOS + 4 TRATAMIENTOS) */}
           <section className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col min-h-0 overflow-hidden">
               <h3 className="text-xs font-black text-white mb-2.5 flex items-center gap-2 border-b border-slate-800 pb-2">
@@ -442,7 +426,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             </div>
           </section>
 
-          {/* COLUMNA 3: MONITOR TELEMÉTRICO Y OSCILOGRAMA */}
           <section className="col-span-12 lg:col-span-5 flex flex-col gap-3 min-h-0">
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-slate-950 border border-slate-800 p-2 rounded-xl opacity-90">
@@ -502,7 +485,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </main>
       </div>
 
-      {/* MODAL DE INFORME MÉDICO CON TRIANGULACIÓN CLÍNICA */}
       {showReportModal && (
         <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 print:p-0 print:bg-white">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:text-black print:bg-white">
@@ -577,7 +559,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                 </div>
               </div>
 
-              {/* SECCIÓN DE TRIANGULACIÓN GLOBAL COMPUTARIZADA */}
               <div className="p-6 bg-slate-950/80 border-2 border-cyan-500/40 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
