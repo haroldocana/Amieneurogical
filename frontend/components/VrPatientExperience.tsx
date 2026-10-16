@@ -42,6 +42,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const interactiveGroupRef = useRef<THREE.Group | null>(null);
+  const hudMeshRef = useRef<THREE.Mesh | null>(null);
   const bgMeshRef = useRef<THREE.Mesh | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const wsRef = useRef<WebSocket | null>(null);
@@ -110,6 +111,58 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [440, 554, 659, 880].forEach((note, idx) => {
       setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 0.8), idx * 100);
     });
+  };
+
+  // GUÍA DE VOZ DIRECTA PARA PICO OS
+  const speakVoiceGuide = (text: string) => {
+    if (!text) return;
+    playChimes();
+
+    try {
+      const clean = text.replace(/['"]/g, '').slice(0, 200);
+      const url = `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(clean)}`;
+      const audio = new Audio(url);
+      audio.volume = 1.0;
+      audio.play().catch(() => {
+        if ('speechSynthesis' in window) {
+          const utt = new SpeechSynthesisUtterance(clean);
+          utt.lang = 'es-ES';
+          window.speechSynthesis.speak(utt);
+        }
+      });
+    } catch (e) {}
+  };
+
+  // BANNER 3D FLOTANTE DENTRO DE WEBXR
+  const update3dInVrBanner = (title: string, sub: string, score: string) => {
+    if (!hudMeshRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillRect(0, 0, 1024, 256);
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(6, 6, 1012, 244);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, 512, 65);
+
+    ctx.fillStyle = '#fde047';
+    ctx.font = '30px sans-serif';
+    ctx.fillText(sub, 512, 135);
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 34px monospace';
+    ctx.fillText(score, 512, 205);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    (hudMeshRef.current.material as THREE.MeshBasicMaterial).map = tex;
+    (hudMeshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
   };
 
   const createProcedural360Canvas = () => {
@@ -219,6 +272,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           playSynthesizedTone(780, 0.25, 'sine', 0.9);
           triggerHaptic(1.0, 120);
           setHudStats(`💰 Puntos cobrados: +${s.balloonPumps * 10} pts`);
+          update3dInVrBanner('BART: RIESGO Y CONTROL', '¡PUNTOS COBRADOS!', `Aciertos: ${s.hits} pts`);
           transmitInteraction({
             hits: s.hits,
             errors: s.errors,
@@ -237,6 +291,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             triggerHaptic(1.0, 220);
             s.errors += 1;
             setHudStats('💥 ¡EXPLOSIÓN! Globo reventado');
+            update3dInVrBanner('BART: RIESGO Y CONTROL', '💥 ¡EXPLOSIÓN!', `Fallos: ${s.errors}`);
             transmitInteraction({
               hits: s.hits,
               errors: s.errors,
@@ -252,6 +307,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             s.scale += 0.12;
             s.hits += 1;
             setHudStats(`🎈 Bombeo ${s.balloonPumps} | Apunta a "Cobrar" o sigue`);
+            update3dInVrBanner('BART: RIESGO Y CONTROL', `Bombeo: ${s.balloonPumps}`, `Aciertos: ${s.hits}`);
             transmitInteraction({
               hits: s.hits,
               errors: s.errors,
@@ -266,29 +322,33 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         playSynthesizedTone(440, 0.15, 'sine', 0.85);
         const name = hitObj.name.includes('LEFT') ? 'Opción Roja (A)' : 'Opción Azul (B)';
         setHudStats(`⚖️ Decisión: ${name}`);
+        update3dInVrBanner('DILEMA RÁPIDO', `Selección: ${name}`, `Aciertos: ${s.hits}`);
         transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Elección: ${name}` });
       } else if (s.paradigm === 'CPT_3D') {
         if (s.cptTargetType === 'GO') {
           s.hits += 1;
           playSynthesizedTone(580, 0.12, 'sine', 0.85);
           setHudStats(`✅ ¡Impacto Go! RT: ${rt} ms`);
+          update3dInVrBanner('CPT: ATENCIÓN SOSTENIDA', `¡IMPACTO GO! ${rt}ms`, `Aciertos: ${s.hits}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Impacto Go (${rt}ms)` });
         } else {
           s.errors += 1;
           playSynthesizedTone(90, 0.25, 'sawtooth', 0.9);
           setHudStats(`❌ Error de Inhibición`);
+          update3dInVrBanner('CPT: ATENCIÓN SOSTENIDA', '❌ ERROR COMISIÓN', `Fallos: ${s.errors}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Error Comisión No-Go` });
         }
       } else {
         s.hits += 1;
         playSynthesizedTone(520, 0.1, 'sine', 0.85);
         setHudStats(`Acierto registrado (${s.hits})`);
+        update3dInVrBanner(`TAREA: ${s.paradigm}`, '¡IMPACTO REGISTRADO!', `Aciertos: ${s.hits}`);
         transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Acierto tarea ${s.paradigm}` });
       }
     }
   }, [activePatientId]);
 
-  // ENLACE WEBSOCKET CON HEARTBEAT ANTI-TIMEOUT Y AUTORECONEXIÓN
+  // WEBSOCKET CON HEARTBEAT ANTI-TIMEOUT Y AUTORECONEXIÓN
   useEffect(() => {
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;
@@ -305,7 +365,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'PING', patientId: activePatientId }));
           }
-        }, 20000);
+        }, 15000);
       };
 
       ws.onmessage = (e) => {
@@ -322,13 +382,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               s.hits = 0; s.errors = 0; s.scale = 1.0; s.balloonPumps = 0; s.zOffset = -2.0;
               if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
               setHudStats(`Tarea Activa: ${d.paradigm}`);
-              playChimes();
+              update3dInVrBanner(`TAREA: ${d.paradigm}`, 'Apunta con el láser y dispara', 'Aciertos: 0');
+              if (d.speechScript) speakVoiceGuide(d.speechScript);
             }
           } else if (d.type === 'STOP_ACTIVE_SESSION') {
             setActiveParadigm('IDLE');
             paradigmStateRef.current.paradigm = 'IDLE';
             if (interactiveGroupRef.current) interactiveGroupRef.current.clear();
             setHudStats('Sesión Concluida');
+            update3dInVrBanner('SESIÓN FINALIZADA', 'Datos transmitidos con éxito', '');
           }
         } catch (err) {}
       };
@@ -347,7 +409,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
   }, [activePatientId]);
 
-  // MOTOR THREE.JS Y REANUDACIÓN DE AUDIO EN WEBXR
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -366,7 +427,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Reactivar AudioContext tan pronto se inicia la sesión WebXR
     renderer.xr.addEventListener('sessionstart', () => {
       ensureAudioUnlocked();
       playChimes();
@@ -384,6 +444,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     bgMesh.material.map = initTex;
     bgMesh.material.color.setHex(0xffffff);
     bgMesh.material.needsUpdate = true;
+
+    // HUD 3D VISIBLE DENTRO DEL CASCO
+    const hudGeo = new THREE.PlaneGeometry(1.6, 0.4);
+    const hudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95 });
+    const hudMesh = new THREE.Mesh(hudGeo, hudMat);
+    hudMesh.position.set(0, 2.1, -2.0);
+    scene.add(hudMesh);
+    hudMeshRef.current = hudMesh;
+    update3dInVrBanner('AMIE CLINICAL COPILOT', 'Esperando inicio de prueba...', '');
 
     const interactiveGroup = new THREE.Group();
     scene.add(interactiveGroup);
