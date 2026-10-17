@@ -1,6 +1,7 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF CON ESCENARIOS REALES,
-// AVATAR MÉDICO 3D SIEMPRE ACTIVO Y MULTI-SALA WEBSOCKET
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO
+// Con Auto-Purga de Caché PWA, Alineación de Mirada 6DoF, Avatar Médico 3D,
+// Generador de Ondas Acústicas Terapéuticas y Retícula Láser Interactiva
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -36,9 +37,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const activePatientIdRef = useRef<string>(initialPatientId);
 
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-  const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('N_BACK_3D');
+  const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('CPT_3D');
   const [wsOnline, setWsOnline] = useState(false);
-  const [disorderTitle, setDisorderTitle] = useState('AVATAR CLÍNICO Y HOLOGRAMAS 3D ACTIVOS');
+  const [disorderTitle, setDisorderTitle] = useState('AVATAR CLÍNICO 3D Y HOLOGRAMAS ACTIVOS');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -51,9 +52,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const wsListRef = useRef<WebSocket[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const bgOscillatorRef = useRef<{ stop: () => void } | null>(null);
+  const needsAutoCenterRef = useRef<boolean>(true);
 
   const paradigmStateRef = useRef({
-    paradigm: 'N_BACK_3D' as InteractiveParadigm,
+    paradigm: 'CPT_3D' as InteractiveParadigm,
     hits: 0,
     errors: 0,
     scale: 1.0,
@@ -63,6 +66,20 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     lastSpawnTime: Date.now()
   });
 
+  // 1. AUTO-PURGA DE SERVICE WORKERS ANTIGUOS (ELIMINA CACHÉ DEL FONDO DE BOLAS EN EL TECHO)
+  useEffect(() => {
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister();
+          }
+        });
+      }
+    } catch (e) {}
+  }, []);
+
+  // 2. VIBRACIÓN HÁPTICA PICO 3 PRO
   const triggerHaptic = (intensity = 0.9, durationMs = 80) => {
     try {
       const session = rendererRef.current?.xr.getSession();
@@ -76,6 +93,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   };
 
+  // 3. DESBLOQUEO DE HARDWARE DE AUDIO WEB
   const ensureAudioUnlocked = useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -89,7 +107,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   }, []);
 
-  const playSynthesizedTone = (freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 1.0) => {
+  // 4. SINTETIZADOR DE TONOS DE FEEDBACK CLÍNICO
+  const playSynthesizedTone = (freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 0.9) => {
     try {
       ensureAudioUnlocked();
       const ctx = audioContextRef.current;
@@ -109,17 +128,78 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
   const playChimes = () => {
     [440, 554, 659, 880].forEach((note, idx) => {
-      setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 1.0), idx * 90);
+      setTimeout(() => playSynthesizedTone(note, 0.18, 'sine', 0.85), idx * 90);
     });
   };
 
+  // 5. GENERADOR DE FRECUENCIAS NEUROACÚSTICAS DE TRATAMIENTO / DIAGNÓSTICO (bgAudio)
+  const startTherapeuticBackgroundSound = (audioType?: string) => {
+    try {
+      ensureAudioUnlocked();
+      if (bgOscillatorRef.current) {
+        bgOscillatorRef.current.stop();
+        bgOscillatorRef.current = null;
+      }
+      if (!audioType || !audioContextRef.current) return;
+
+      const ctx = audioContextRef.current;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      // Volumen sutil envolvente para no opacar la voz guía
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+
+      if (audioType === 'DELTA_WAVES') {
+        osc1.frequency.value = 180;
+        osc2.frequency.value = 182.5; // Diferencial 2.5 Hz Delta (Calma vagal profunda)
+      } else if (audioType === 'THETA_WAVES') {
+        osc1.frequency.value = 200;
+        osc2.frequency.value = 206; // Diferencial 6 Hz Theta (Hipnosis y reprocesamiento)
+      } else if (audioType === 'ALPHA_WAVES') {
+        osc1.frequency.value = 220;
+        osc2.frequency.value = 230; // Diferencial 10 Hz Alfa (Foco relajado)
+      } else if (audioType === 'BETA_WAVES') {
+        osc1.frequency.value = 250;
+        osc2.frequency.value = 268; // Diferencial 18 Hz Beta (Activación ejecutiva N-Back)
+      } else if (audioType === 'BILATERAL_SWEEP') {
+        osc1.frequency.value = 196;
+        osc2.frequency.value = 200; // Pulso bilateral EMDR
+      } else {
+        osc1.frequency.value = 140;
+        osc2.frequency.value = 144;
+      }
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+      osc1.start();
+      osc2.start();
+
+      bgOscillatorRef.current = {
+        stop: () => {
+          try {
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+            setTimeout(() => {
+              osc1.stop();
+              osc2.stop();
+              osc1.disconnect();
+              osc2.disconnect();
+            }, 350);
+          } catch (e) {}
+        }
+      };
+    } catch (e) {}
+  };
+
+  // 6. VOZ GUÍA CLÍNICA DE IA DECODIFICADA POR HARDWARE (SIN BLOQUEO DE AUTOPLAY EN PICO)
   const playSpeechAudio = async (text: string) => {
     if (!text) return;
     ensureAudioUnlocked();
     playChimes();
 
     try {
-      const clean = text.replace(/['"]/g, '').slice(0, 200);
+      const clean = text.replace(/['"]/g, '').slice(0, 220);
       const url = `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(clean)}`;
       const res = await fetch(url);
       if (res.ok && audioContextRef.current) {
@@ -147,6 +227,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   };
 
+  // 7. BANNER HOLOGRÁFICO DE ALTA DEFINICIÓN DENTRO DEL VISOR
   const update3dInVrBanner = (title: string, sub: string, score: string) => {
     if (!hudMeshRef.current) return;
     const canvas = document.createElement('canvas');
@@ -155,7 +236,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
     ctx.fillRect(0, 0, 1024, 256);
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 8;
@@ -168,18 +249,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     ctx.fillStyle = '#fde047';
     ctx.font = '24px sans-serif';
-    ctx.fillText(sub.slice(0, 62), 512, 130);
+    ctx.fillText(sub.slice(0, 64), 512, 132);
 
     ctx.fillStyle = '#22d3ee';
     ctx.font = 'bold 32px monospace';
-    ctx.fillText(score, 512, 202);
+    ctx.fillText(score, 512, 204);
 
     const tex = new THREE.CanvasTexture(canvas);
     (hudMeshRef.current.material as THREE.MeshBasicMaterial).map = tex;
     (hudMeshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
   };
 
-  // ESCENARIOS 360° REALISTAS (CONSULTORIO MÉDICO, BOSQUE Y CALLE SIN BOLAS EN EL TECHO)
+  // 8. ENTORNOS 360° REALISTAS ILUMINADOS (CONSULTORIO, BOSQUE Y AUDITORIO)
   const createRealisticEnvironmentCanvas = (theme: 'OFFICE' | 'FOREST' | 'STREET' = 'OFFICE') => {
     const c = document.createElement('canvas');
     c.width = 2048;
@@ -189,38 +270,38 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     const grad = ctx.createLinearGradient(0, 0, 0, 1024);
     if (theme === 'FOREST') {
-      grad.addColorStop(0, '#0c4a6e');
-      grad.addColorStop(0.45, '#bae6fd');
+      grad.addColorStop(0, '#0284c7');
+      grad.addColorStop(0.46, '#bae6fd');
       grad.addColorStop(0.5, '#15803d');
-      grad.addColorStop(1, '#052e16');
+      grad.addColorStop(1, '#064e3b');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 2048, 1024);
 
-      ctx.fillStyle = '#14532d';
-      for (let x = 40; x < 2048; x += 110) {
+      ctx.fillStyle = '#166534';
+      for (let x = 40; x < 2048; x += 95) {
         ctx.beginPath();
-        ctx.moveTo(x, 340);
-        ctx.lineTo(x - 45, 530);
-        ctx.lineTo(x + 45, 530);
+        ctx.moveTo(x, 320);
+        ctx.lineTo(x - 45, 525);
+        ctx.lineTo(x + 45, 525);
         ctx.closePath();
         ctx.fill();
       }
     } else if (theme === 'STREET') {
       grad.addColorStop(0, '#1e1b4b');
-      grad.addColorStop(0.48, '#4338ca');
+      grad.addColorStop(0.48, '#3730a3');
       grad.addColorStop(0.5, '#334155');
       grad.addColorStop(1, '#0f172a');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 2048, 1024);
 
       ctx.fillStyle = '#1e293b';
-      for (let x = 20; x < 2048; x += 140) {
-        const h = 140 + (x % 90);
-        ctx.fillRect(x, 512 - h, 105, h);
+      for (let x = 20; x < 2048; x += 130) {
+        const h = 150 + (x % 90);
+        ctx.fillRect(x, 512 - h, 100, h);
       }
     } else {
-      grad.addColorStop(0, '#e2e8f0');
-      grad.addColorStop(0.25, '#cbd5e1');
+      grad.addColorStop(0, '#f1f5f9');
+      grad.addColorStop(0.28, '#cbd5e1');
       grad.addColorStop(0.5, '#94a3b8');
       grad.addColorStop(0.52, '#475569');
       grad.addColorStop(1, '#1e293b');
@@ -230,7 +311,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       ctx.strokeStyle = '#64748b';
       ctx.lineWidth = 4;
       for (let x = 0; x < 2048; x += 256) {
-        ctx.strokeRect(x + 12, 260, 232, 250);
+        ctx.strokeRect(x + 14, 250, 228, 255);
       }
     }
     return c;
@@ -286,15 +367,26 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     }
   };
 
-  const recenterStageToPatientView = () => {
-    if (!stageGroupRef.current || !cameraRef.current) return;
-    const camPos = new THREE.Vector3();
-    cameraRef.current.getWorldPosition(camPos);
-    const eyeHeightOffset = camPos.y > 0.4 ? camPos.y - 1.45 : 0;
-    stageGroupRef.current.position.y = eyeHeightOffset;
-  };
+  // 9. CENTRADO INTELIGENTE 6DoF (COLOCA EL AVATAR Y HOLOGRAMAS FRENTE A LA MIRADA REAL DEL PACIENTE)
+  const recenterStageToPatientView = useCallback(() => {
+    if (!stageGroupRef.current || !rendererRef.current || !cameraRef.current) return;
+    const xrCam = rendererRef.current.xr.isPresenting
+      ? rendererRef.current.xr.getCamera()
+      : cameraRef.current;
 
-  const spawnParadigmHolograms = (paradigm: InteractiveParadigm) => {
+    const camPos = new THREE.Vector3();
+    const camQuat = new THREE.Quaternion();
+    xrCam.getWorldPosition(camPos);
+    xrCam.getWorldQuaternion(camQuat);
+
+    // Extraer únicamente el giro horizontal (Yaw) para que el escenario quede derecho frente al usuario
+    const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+    stageGroupRef.current.position.set(camPos.x, camPos.y - 1.42, camPos.z);
+    stageGroupRef.current.rotation.set(0, euler.y, 0);
+  }, []);
+
+  // 10. CONSTRUCCIÓN DE HOLOGRAMAS INTERACTIVOS 3D
+  const spawnParadigmHolograms = useCallback((paradigm: InteractiveParadigm) => {
     if (!interactiveGroupRef.current) return;
     safeClearInteractiveGroup();
 
@@ -379,11 +471,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       group.add(h1);
       group.add(h2);
     }
+  }, []);
 
-    recenterStageToPatientView();
-  };
-
-  // AVATAR MÉDICO 3D SIEMPRE PRESENTE FRENTE AL PACIENTE
+  // 11. AVATAR MÉDICO 3D COMPLETO (SIEMPRE PRESENTE Y ARTICULADO)
   const createPermanentClinicalAvatar = (parentStage: THREE.Group) => {
     const avatarGroup = new THREE.Group();
     avatarGroup.name = 'CLINICAL_AVATAR_3D';
@@ -461,6 +551,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     permanentAvatarRef.current = avatarGroup;
   };
 
+  // 12. TRANSMISIÓN TELEMÉTRICA MULTI-CANAL AL DOCTOR
   const transmitInteraction = (data: { hits: number; errors: number; rt?: number; pumps?: number; action: string }) => {
     const basePayload = {
       type: 'CLINICAL_TEST_INTERACTION',
@@ -482,6 +573,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     });
   };
 
+  // 13. GESTIÓN DE DISPARO 6DoF (GATILLO PICO 3 O CLIC EN PANTALLA)
   const handleTrigger = useCallback(
     (event: any) => {
       ensureAudioUnlocked();
@@ -497,7 +589,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       const hits = raycasterRef.current.intersectObjects(interactiveGroupRef.current.children, true);
       const s = paradigmStateRef.current;
       const now = Date.now();
-      const rt = s.lastSpawnTime > 0 ? Math.min(1400, now - s.lastSpawnTime) : Math.floor(215 + Math.random() * 85);
+      const rt = s.lastSpawnTime > 0 ? Math.min(1400, Math.max(150, now - s.lastSpawnTime)) : Math.floor(215 + Math.random() * 85);
 
       if (hits.length > 0 || interactiveGroupRef.current.children.length > 0) {
         const hitObj = hits.length > 0 ? hits[0].object : interactiveGroupRef.current.children[0];
@@ -507,7 +599,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         if (s.paradigm === 'BART_3D') {
           if (hitObj?.name === 'BART_BANK_BTN') {
             s.hits += s.balloonPumps * 10;
-            playSynthesizedTone(780, 0.25, 'sine', 1.0);
+            playSynthesizedTone(780, 0.25, 'sine', 0.9);
             update3dInVrBanner('BART: RIESGO Y CONTROL', '¡PUNTOS COBRADOS!', `Aciertos: ${s.hits} pts`);
             transmitInteraction({
               hits: s.hits,
@@ -521,7 +613,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           } else {
             s.balloonPumps += 1;
             if (Math.random() < s.balloonPumps / s.balloonMaxCap || s.balloonPumps >= s.balloonMaxCap) {
-              playSynthesizedTone(75, 0.35, 'sawtooth', 1.0);
+              playSynthesizedTone(75, 0.35, 'sawtooth', 0.9);
               triggerHaptic(1.0, 250);
               s.errors += 1;
               update3dInVrBanner('BART: RIESGO Y CONTROL', '💥 ¡EXPLOSIÓN!', `Fallos: ${s.errors}`);
@@ -536,7 +628,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               s.balloonPumps = 0;
               s.balloonMaxCap = Math.floor(10 + Math.random() * 12);
             } else {
-              playSynthesizedTone(220 + s.balloonPumps * 32, 0.1, 'sine', 1.0);
+              playSynthesizedTone(220 + s.balloonPumps * 32, 0.1, 'sine', 0.9);
               s.scale += 0.12;
               s.hits += 1;
               update3dInVrBanner('BART: RIESGO Y CONTROL', `Bombeo: ${s.balloonPumps}`, `Aciertos: ${s.hits}`);
@@ -551,26 +643,26 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           }
         } else if (s.paradigm === 'CHOICE_3D') {
           s.hits += 1;
-          playSynthesizedTone(440, 0.15, 'sine', 1.0);
+          playSynthesizedTone(440, 0.15, 'sine', 0.9);
           const name = hitObj?.name?.includes('LEFT') ? 'Opción Roja (A)' : 'Opción Azul (B)';
           update3dInVrBanner('DILEMA CLÍNICO', `Selección: ${name}`, `Aciertos: ${s.hits}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Elección: ${name}` });
         } else if (s.paradigm === 'CPT_3D') {
           if (s.cptTargetType === 'GO') {
             s.hits += 1;
-            playSynthesizedTone(580, 0.12, 'sine', 1.0);
+            playSynthesizedTone(580, 0.12, 'sine', 0.9);
             update3dInVrBanner('CPT: ATENCIÓN SOSTENIDA', `¡IMPACTO GO! ${rt}ms`, `Aciertos: ${s.hits}`);
             transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Impacto Go (${rt}ms)` });
           } else {
             s.errors += 1;
-            playSynthesizedTone(90, 0.25, 'sawtooth', 1.0);
+            playSynthesizedTone(90, 0.25, 'sawtooth', 0.9);
             triggerHaptic(1.0, 150);
             update3dInVrBanner('CPT: ATENCIÓN SOSTENIDA', '❌ ERROR COMISIÓN', `Fallos: ${s.errors}`);
             transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Error Comisión No-Go` });
           }
         } else {
           s.hits += 1;
-          playSynthesizedTone(520, 0.1, 'sine', 1.0);
+          playSynthesizedTone(520, 0.1, 'sine', 0.9);
           update3dInVrBanner(`TAREA: ${s.paradigm}`, `¡IMPACTO REGISTRADO! (${rt}ms)`, `Aciertos: ${s.hits}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Acierto en ${s.paradigm} (${rt}ms)` });
         }
@@ -579,7 +671,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [ensureAudioUnlocked]
   );
 
-  // CONEXIÓN WEBSOCKET MULTI-SALA
+  // 14. CONEXIÓN WEBSOCKET MULTI-SALA
   useEffect(() => {
     let heartbeatTimer: ReturnType<typeof setInterval>;
     let isMounted = true;
@@ -603,6 +695,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
           if (d.type === 'SYNC_CLINICAL_CONTEXT' || d.type === 'START_PIPELINE_PHASE') {
             if (d.ecosystem) apply360Background(d.ecosystem);
+            if (d.bgAudio) startTherapeuticBackgroundSound(d.bgAudio);
 
             if (d.paradigm) {
               setActiveParadigm(d.paradigm);
@@ -615,6 +708,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               s.lastSpawnTime = Date.now();
 
               spawnParadigmHolograms(d.paradigm);
+              needsAutoCenterRef.current = true;
+
               const headerText = d.disorderName ? `${d.disorderName}` : `PROTOCOLO: ${d.paradigm}`;
               setDisorderTitle(headerText);
 
@@ -626,7 +721,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               if (d.speechScript) playSpeechAudio(d.speechScript);
             }
           } else if (d.type === 'STOP_ACTIVE_SESSION') {
-            update3dInVrBanner('SESIÓN FINALIZADA', 'Informe clínico generado en la estación médica', `Total Aciertos: ${paradigmStateRef.current.hits}`);
+            if (bgOscillatorRef.current) {
+              bgOscillatorRef.current.stop();
+              bgOscillatorRef.current = null;
+            }
+            update3dInVrBanner(
+              'SESIÓN FINALIZADA',
+              'Informe clínico generado en la estación médica',
+              `Total Aciertos: ${paradigmStateRef.current.hits}`
+            );
           }
         } catch (err) {}
       };
@@ -656,10 +759,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return () => {
       isMounted = false;
       clearInterval(heartbeatTimer);
+      if (bgOscillatorRef.current) bgOscillatorRef.current.stop();
       wsListRef.current.forEach((s) => s.close());
     };
-  }, [initialPatientId]);
+  }, [initialPatientId, spawnParadigmHolograms]);
 
+  // 15. ESCENA THREE.JS + BUCLE WEBXR A 90 FPS
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -684,9 +789,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     renderer.xr.addEventListener('sessionstart', () => {
       ensureAudioUnlocked();
       playChimes();
-      setTimeout(() => recenterStageToPatientView(), 400);
+      needsAutoCenterRef.current = true;
     });
 
+    const handleResize = () => {
+      if (!cameraRef.current || !rendererRef.current) return;
+      cameraRef.current.aspect = window.innerWidth / window.innerHeight;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // DOMO 360° REALISTA
     const bgGeo = new THREE.SphereGeometry(100, 60, 40);
     bgGeo.scale(-1, 1, 1);
     const bgMesh = new THREE.Mesh(bgGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -698,44 +812,56 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     bgMesh.material.map = initTex;
     bgMesh.material.needsUpdate = true;
 
+    // CONTENEDOR DEL ESCENARIO CLÍNICO (SE ALINEA CON LA MIRADA DEL PACIENTE)
     const stageGroup = new THREE.Group();
     scene.add(stageGroup);
     stageGroupRef.current = stageGroup;
 
+    // BANNER HOLOGRÁFICO A LA ALTURA DE LA MIRADA
     const hudGeo = new THREE.PlaneGeometry(1.75, 0.44);
     const hudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.96 });
     const hudMesh = new THREE.Mesh(hudGeo, hudMat);
     hudMesh.position.set(0, 1.78, -2.1);
     stageGroup.add(hudMesh);
     hudMeshRef.current = hudMesh;
-    update3dInVrBanner('AMIE CLINICAL COPILOT', 'Avatar Clínico y Cubos 3D Activos • Dispara con el gatillo', 'Aciertos: 0');
+    update3dInVrBanner('AMIE CLINICAL COPILOT', 'Avatar Clínico y Holograma 3D Activos • Dispara con el gatillo', 'Aciertos: 0');
 
-    // CREAR AVATAR MÉDICO 3D SIEMPRE VISIBLE
+    // AVATAR MÉDICO 3D SIEMPRE PRESENTE
     createPermanentClinicalAvatar(stageGroup);
 
-    // GRUPO DE HOLOGRAMAS INTERACTIVOS FRENTE A LOS OJOS
+    // GRUPO DE HOLOGRAMAS INTERACTIVOS
     const interactiveGroup = new THREE.Group();
     interactiveGroup.position.set(0.32, 1.28, -1.85);
     stageGroup.add(interactiveGroup);
     interactiveGroupRef.current = interactiveGroup;
 
-    // Inicia mostrando los 3 cubos de Memoria Visuoespacial (N_BACK_3D)
-    spawnParadigmHolograms('N_BACK_3D');
+    spawnParadigmHolograms('CPT_3D');
 
-    const buildLaser = () =>
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)]),
+    // LÁSER CON MIRA RETÍCULA EN LA PUNTA PARA APUNTADO FÁCIL
+    const buildControllerLaserWithReticle = () => {
+      const group = new THREE.Group();
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -2.2)]),
         new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 3 })
       );
+      const reticle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.025, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x00ffcc })
+      );
+      reticle.position.set(0, 0, -1.9);
+      group.add(line);
+      group.add(reticle);
+      return group;
+    };
 
     const c1 = renderer.xr.getController(0);
     c1.addEventListener('selectstart', handleTrigger);
-    c1.add(buildLaser());
+    c1.add(buildControllerLaserWithReticle());
     scene.add(c1);
 
     const c2 = renderer.xr.getController(1);
     c2.addEventListener('selectstart', handleTrigger);
-    c2.add(buildLaser());
+    c2.add(buildControllerLaserWithReticle());
     scene.add(c2);
 
     try {
@@ -747,6 +873,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     renderer.setAnimationLoop(() => {
       const t = clock.getElapsedTime();
       const s = paradigmStateRef.current;
+
+      // Auto-centrado en cuanto el visor WebXR reporta posición de la cabeza
+      if (needsAutoCenterRef.current && t > 0.3) {
+        recenterStageToPatientView();
+        needsAutoCenterRef.current = false;
+      }
 
       if (permanentAvatarRef.current) {
         permanentAvatarRef.current.position.y = Math.sin(t * 1.6) * 0.02;
@@ -793,12 +925,13 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     });
 
     return () => {
+      window.removeEventListener('resize', handleResize);
       renderer.setAnimationLoop(null);
       bgGeo.dispose();
       bgMesh.material.dispose();
       renderer.dispose();
     };
-  }, [handleTrigger, ensureAudioUnlocked]);
+  }, [handleTrigger, ensureAudioUnlocked, recenterStageToPatientView, spawnParadigmHolograms]);
 
   return (
     <div
