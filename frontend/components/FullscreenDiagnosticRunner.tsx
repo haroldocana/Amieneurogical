@@ -1,5 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - WORKSTATION MÉDICA INTEGRAL COMPLETA (SIN OMISIONES)
+// AMIE CLINICAL COPILOT - WORKSTATION MÉDICA INTEGRAL COMPLETA
 // 9 Módulos Clínicos • 30 Trastornos • 240 Paradigmas Inmersivos Integrados
 // Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Triangulación Real IA
 // frontend/components/FullscreenDiagnosticRunner.tsx
@@ -30,9 +30,6 @@ export interface ClinicalExercise {
   script: string;
 }
 
-// ============================================================================
-// 1. LOS 9 MÓDULOS CLÍNICOS OFICIALES
-// ============================================================================
 export const CLINICAL_MODULES = [
   { id: 'MOD_NEURODEV', name: 'I. Neurodesarrollo & Motor' },
   { id: 'MOD_AFFECTIVE', name: 'II. Afectivo & Estado de Ánimo' },
@@ -45,9 +42,6 @@ export const CLINICAL_MODULES = [
   { id: 'MOD_LOGOTHERAPY', name: 'IX. Logoterapia & Sentido (Frankl)' }
 ];
 
-// ============================================================================
-// 2. LOS 30 TRASTORNOS CLÍNICOS OFICIALES
-// ============================================================================
 export const DISORDER_LIST = [
   { id: 'TDAH', mod: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad' },
   { id: 'TEA_1', mod: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 1 (Asperger)' },
@@ -89,9 +83,6 @@ export const DISORDER_LIST = [
   { id: 'VACIO_EXISTENCIAL', mod: 'MOD_LOGOTHERAPY', name: 'Vacío Existencial & Análisis Existencial (Frankl)' }
 ];
 
-// ============================================================================
-// 3. MATRIZ MAESTRA INTEGRADA DE 240 PARADIGMAS (30 TRASTORNOS X 8 PRUEBAS)
-// ============================================================================
 export const FULL_CLINICAL_PARADIGMS_MATRIX: Record<string, ClinicalExercise[]> = {
   TDAH: [
     { id: 'TDAH_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Conners CPT: Freno Go/No-Go', bgAudio: 'BROWN_NOISE', script: 'Dispara únicamente a las esferas verdes. Suprime el disparo ante esferas rojas para registrar tu freno inhibitorio.' },
@@ -395,7 +386,6 @@ export const FULL_CLINICAL_PARADIGMS_MATRIX: Record<string, ClinicalExercise[]> 
   ]
 };
 
-// CONSTRUCTOR DE TRAMAS HEXADECIMALES DE 16 BYTES PARA COLMI R02/R06/R10
 const buildColmiPacket = (commandByte: number, subData: number[] = []): Uint8Array => {
   const packet = new Uint8Array(16);
   packet[0] = commandByte & 0xff;
@@ -423,13 +413,11 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // SENSORES BIOMÉTRICOS FÍSICOS (COLMI R10 / POLAR / GSR)
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
   const [currentGsr, setCurrentGsr] = useState<number | string>('--');
   const [currentHrv, setCurrentHrv] = useState<number | string>('--');
   const [bleWaveHistory, setBleWaveHistory] = useState<number[]>([]);
   
-  // TELEMETRÍA CINEMÁTICA REAL 6DoF
   const [currentKpi, setCurrentKpi] = useState(0);
   const [errorsCount, setErrorsCount] = useState(0);
   const [reactionTimeMs, setReactionTimeMs] = useState(0);
@@ -443,7 +431,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
   const exercises = FULL_CLINICAL_PARADIGMS_MATRIX[selectedDisorderId] || FULL_CLINICAL_PARADIGMS_MATRIX['TDAH'];
 
-  // FILTRO FISIOLÓGICO INTELIGENTE COLMI R10 (DESCARTA BYTES DE ACELERÓMETRO DE MANO > 115 BPM)
   const pushBiometricReading = useCallback((rawHrValue: number, sourceLabel?: string) => {
     const cleanHr = (rawHrValue >= 54 && rawHrValue <= 112)
       ? Math.round(rawHrValue)
@@ -690,10 +677,16 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
     const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
 
+    // Reproducción de voz en la laptop
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(exercise.script);
+      utt.lang = 'es-ES'; 
+      utt.rate = 0.96;
+      window.speechSynthesis.speak(utt);
     }
 
+    // Envío del guion al casco para reproducción simultánea
     sendCommandToVr({
       type: 'START_PIPELINE_PHASE',
       paradigm: exercise.paradigm,
@@ -728,7 +721,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
     : 100;
 
-  // MOTOR DE DECISIÓN CLÍNICA SIN CONTRADICCIONES
   const isPerformanceNormal = accuracyRate >= 85 && averageRt <= 420 && errorsCount <= 2;
   const isCautiousHighAccuracy = accuracyRate >= 85 && errorsCount <= 2 && averageRt > 420;
   const hasSympatheticStress = typeof currentHrv === 'number' && currentHrv < 32;
@@ -977,7 +969,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         </main>
       </div>
 
-      {/* MODAL DE INFORME MÉDICO CON ALGORITMO DE VEREDICTO REAL */}
       {showReportModal && (
         <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 print:p-0 print:bg-white">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:text-black print:bg-white">
@@ -1095,7 +1086,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                   </div>
                 </div>
 
-                {/* SÍNTESIS CLÍNICA INTELIGENTE (SIN CONTRADICCIONES) */}
                 <div className="pt-2">
                   <span className="text-[11px] font-bold text-amber-300 print:text-black uppercase tracking-wide block mb-1">
                     Síntesis Diagnóstica Cruzada:
@@ -1140,4 +1130,4 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   );
 };
 
-export default FullscreenDiagnosticRunner; lo revisaste para mi ?
+export default FullscreenDiagnosticRunner;
