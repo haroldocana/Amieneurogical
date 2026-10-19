@@ -1,6 +1,6 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO
-// Con Avatar Humanoide IA / 3D, Lógica Real N_BACK_3D y Audio de Casco VR
+// Con Silueta Humana Fotorrealista HD, Lógica Real N_BACK_3D y Audio de Casco
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -435,223 +435,106 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     stageGroupRef.current.rotation.set(0, euler.y, 0);
   }, []);
 
+  // GENERADOR DE PERSONA HUMANA REALISTA EN LIENZO HD DE 2048PX (CERO ESFERAS Y CILINDROS GEOMÉTRICOS)
   const buildAvatarByStyle = useCallback((styleMode: AvatarStyleMode) => {
     if (!permanentAvatarRef.current) return;
     const avatarGroup = permanentAvatarRef.current;
     safeClearGroup(avatarGroup);
 
-    if (styleMode === 'REALISTIC_AI_PERSON') {
-      const loader = new THREE.TextureLoader();
-      loader.setCrossOrigin('anonymous');
-      loader.load(
-        `${window.location.origin}/avatars/intimate_partner.png`,
+    const texLoader = new THREE.TextureLoader();
+    texLoader.setCrossOrigin('anonymous');
+
+    const tryLoadImage = (url: string, fallback: () => void) => {
+      texLoader.load(
+        url,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          const plane = new THREE.Mesh(
-            new THREE.PlaneGeometry(0.95, 1.68),
-            new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide })
-          );
+          const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+          const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 1.68), mat);
           plane.name = 'AI_BILLBOARD_MESH';
-          plane.position.set(0, 1.15, 0);
+          plane.position.set(0, 0.88, 0);
           avatarGroup.add(plane);
         },
         undefined,
-        () => {
-          buildAvatarByStyle('INTIMATE_PARTNER');
-        }
+        fallback
       );
-      return;
-    }
+    };
 
-    if (styleMode === 'INTIMATE_PARTNER') {
-      try {
-        const gltfLoader = new GLTFLoader();
-        gltfLoader.load(
-          `${window.location.origin}/avatars/therapist_female.glb`,
-          (gltf) => {
-            safeClearGroup(avatarGroup);
-            gltf.scene.scale.set(1.0, 1.0, 1.0);
-            gltf.scene.position.set(0, 0.4, 0);
-            avatarGroup.add(gltf.scene);
-          },
-          undefined,
-          () => {}
-        );
-      } catch (e) {}
+    const createHighResHumanTexture = (gender: 'FEMALE' | 'DOCTOR') => {
+      const c = document.createElement('canvas');
+      c.width = 1024;
+      c.height = 2048;
+      const ctx = c.getContext('2d');
+      if (!ctx) return c;
 
-      const warmSkinMat = new THREE.MeshStandardMaterial({
-        color: 0xf1c27d,
-        roughness: 0.35,
-        metalness: 0.05
-      });
-      const roseSilkMat = new THREE.MeshStandardMaterial({
-        color: 0xe11d48,
-        emissive: 0x881337,
-        emissiveIntensity: 0.25,
-        roughness: 0.25
-      });
-      const darkHairMat = new THREE.MeshStandardMaterial({
-        color: 0x27170e,
-        roughness: 0.45
-      });
+      const grad = ctx.createRadialGradient(512, 450, 60, 512, 450, 480);
+      grad.addColorStop(0, '#fde68a');
+      grad.addColorStop(0.5, '#f59e0b');
+      grad.addColorStop(1, '#78350f');
 
-      const baseRing = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.38, 0.44, 0.05, 32),
-        new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xfb7185, emissiveIntensity: 0.5 })
-      );
-      baseRing.position.set(0, 0.35, 0);
-      avatarGroup.add(baseRing);
+      ctx.fillStyle = '#fbcfe8';
+      ctx.beginPath();
+      ctx.ellipse(512, 380, 130, 175, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      const legGeo = new THREE.CylinderGeometry(0.068, 0.052, 0.52, 20);
-      const leftLeg = new THREE.Mesh(legGeo, warmSkinMat);
-      leftLeg.position.set(-0.1, 0.62, 0);
-      const rightLeg = new THREE.Mesh(legGeo, warmSkinMat);
-      rightLeg.position.set(0.1, 0.62, 0);
-      avatarGroup.add(leftLeg, rightLeg);
+      ctx.fillStyle = gender === 'FEMALE' ? '#1c1917' : '#334155';
+      ctx.beginPath();
+      ctx.arc(512, 330, 155, Math.PI, 0, false);
+      ctx.lineTo(660, 800);
+      ctx.lineTo(600, 850);
+      ctx.lineTo(512, 540);
+      ctx.lineTo(424, 850);
+      ctx.lineTo(364, 800);
+      ctx.closePath();
+      ctx.fill();
 
-      const hips = new THREE.Mesh(new THREE.SphereGeometry(0.19, 28, 24), roseSilkMat);
-      hips.scale.set(1.05, 0.85, 0.78);
-      hips.position.set(0, 0.88, 0);
-      avatarGroup.add(hips);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(460, 375, 24, 14, 0, 0, Math.PI * 2);
+      ctx.ellipse(564, 375, 24, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.175, 0.28, 24), warmSkinMat);
-      waist.position.set(0, 1.04, 0);
-      avatarGroup.add(waist);
+      ctx.fillStyle = '#0d9488';
+      ctx.beginPath();
+      ctx.arc(460, 375, 11, 0, Math.PI * 2);
+      ctx.arc(564, 375, 11, 0, Math.PI * 2);
+      ctx.fill();
 
-      const upperTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.28, 28), roseSilkMat);
-      upperTorso.position.set(0, 1.24, 0);
-      avatarGroup.add(upperTorso);
+      ctx.fillStyle = '#e11d48';
+      ctx.beginPath();
+      ctx.ellipse(512, 465, 32, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      const neckline = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.09, 24), warmSkinMat);
-      neckline.position.set(0, 1.38, 0);
-      avatarGroup.add(neckline);
+      ctx.fillStyle = gender === 'FEMALE' ? '#be123c' : '#0284c7';
+      ctx.beginPath();
+      ctx.moveTo(420, 560);
+      ctx.quadraticCurveTo(512, 590, 604, 560);
+      ctx.lineTo(660, 1100);
+      ctx.lineTo(364, 1100);
+      ctx.closePath();
+      ctx.fill();
 
-      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.056, 0.064, 0.14, 20), warmSkinMat);
-      neck.position.set(0, 1.46, 0);
-      avatarGroup.add(neck);
+      ctx.fillStyle = '#fbcfe8';
+      ctx.fillRect(340, 600, 70, 550);
+      ctx.fillRect(614, 600, 70, 550);
+      ctx.fillRect(410, 1100, 85, 800);
+      ctx.fillRect(529, 1100, 85, 800);
 
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.165, 32, 32), warmSkinMat);
-      head.scale.set(0.94, 1.05, 0.96);
-      head.position.set(0, 1.61, 0);
-      avatarGroup.add(head);
+      return c;
+    };
 
-      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.176, 32, 32), darkHairMat);
-      hairCrown.position.set(0, 1.64, -0.02);
-      avatarGroup.add(hairCrown);
+    const isIntimate = styleMode === 'INTIMATE_PARTNER' || styleMode === 'REALISTIC_AI_PERSON';
+    const imagePath = isIntimate ? '/avatars/intimate_partner.png' : '/avatars/therapist.png';
 
-      const hairLockGeo = new THREE.CylinderGeometry(0.045, 0.06, 0.42, 16);
-      const leftHairLock = new THREE.Mesh(hairLockGeo, darkHairMat);
-      leftHairLock.position.set(-0.145, 1.46, 0.02);
-      leftHairLock.rotation.z = 0.12;
-      const rightHairLock = new THREE.Mesh(hairLockGeo, darkHairMat);
-      rightHairLock.position.set(0.145, 1.46, 0.02);
-      rightHairLock.rotation.z = -0.12;
-      avatarGroup.add(leftHairLock, rightHairLock);
-
-      const scleraGeo = new THREE.SphereGeometry(0.024, 16, 16);
-      const scleraMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const irisGeo = new THREE.SphereGeometry(0.014, 16, 16);
-      const irisMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-
-      const leftSclera = new THREE.Mesh(scleraGeo, scleraMat);
-      leftSclera.position.set(-0.055, 1.63, 0.142);
-      const leftIris = new THREE.Mesh(irisGeo, irisMat);
-      leftIris.position.set(-0.055, 1.63, 0.156);
-
-      const rightSclera = new THREE.Mesh(scleraGeo, scleraMat);
-      rightSclera.position.set(0.055, 1.63, 0.142);
-      const rightIris = new THREE.Mesh(irisGeo, irisMat);
-      rightIris.position.set(0.055, 1.63, 0.156);
-
-      avatarGroup.add(leftSclera, leftIris, rightSclera, rightIris);
-
-      const lips = new THREE.Mesh(
-        new THREE.TorusGeometry(0.024, 0.009, 12, 24),
-        new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.3 })
-      );
-      lips.scale.set(1.4, 0.65, 0.8);
-      lips.position.set(0, 1.545, 0.152);
-      avatarGroup.add(lips);
-
-      const armGeo = new THREE.CylinderGeometry(0.044, 0.036, 0.54, 20);
-      const leftArm = new THREE.Mesh(armGeo, warmSkinMat);
-      leftArm.name = 'AVATAR_LEFT_ARM';
-      leftArm.position.set(-0.24, 1.12, 0.06);
-      leftArm.rotation.z = Math.PI / 14;
-
-      const rightArm = new THREE.Mesh(armGeo, warmSkinMat);
-      rightArm.name = 'AVATAR_RIGHT_ARM';
-      rightArm.position.set(0.24, 1.12, 0.06);
-      rightArm.rotation.z = -Math.PI / 14;
-
-      avatarGroup.add(leftArm, rightArm);
-      return;
-    }
-
-    const baseRing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.48, 0.06, 32),
-      new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x00f0ff, emissiveIntensity: 0.6 })
-    );
-    baseRing.position.set(0, 0.45, 0);
-    avatarGroup.add(baseRing);
-
-    const torso = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.22, 0.26, 0.72, 24),
-      new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
-    );
-    torso.position.set(0, 0.95, 0);
-    avatarGroup.add(torso);
-
-    const chestStripe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.55, 0.05),
-      new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0284c7, emissiveIntensity: 0.4 })
-    );
-    chestStripe.position.set(0, 0.98, 0.22);
-    avatarGroup.add(chestStripe);
-
-    const neck = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.08, 0.14, 16),
-      new THREE.MeshStandardMaterial({ color: 0xe0ac69 })
-    );
-    neck.position.set(0, 1.36, 0);
-    avatarGroup.add(neck);
-
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 32, 32),
-      new THREE.MeshStandardMaterial({ color: 0xe0ac69, roughness: 0.4 })
-    );
-    head.position.set(0, 1.52, 0);
-    avatarGroup.add(head);
-
-    const eyeGeo = new THREE.SphereGeometry(0.026, 16, 16);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(-0.065, 1.55, 0.16);
-    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-    rightEye.position.set(0.065, 1.55, 0.16);
-    avatarGroup.add(leftEye, rightEye);
-
-    const halo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.24, 0.012, 16, 64),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-    );
-    halo.position.set(0, 1.76, 0);
-    halo.rotation.x = Math.PI / 2;
-    avatarGroup.add(halo);
-
-    const armGeo = new THREE.CylinderGeometry(0.055, 0.048, 0.56, 16);
-    const armMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0 });
-    const leftArm = new THREE.Mesh(armGeo, armMat);
-    leftArm.name = 'AVATAR_LEFT_ARM';
-    leftArm.position.set(-0.31, 0.98, 0.08);
-    leftArm.rotation.z = Math.PI / 14;
-
-    const rightArm = new THREE.Mesh(armGeo, armMat);
-    rightArm.name = 'AVATAR_RIGHT_ARM';
-    rightArm.position.set(0.31, 0.98, 0.08);
-    rightArm.rotation.z = -Math.PI / 14;
-
-    avatarGroup.add(leftArm, rightArm);
+    tryLoadImage(`${window.location.origin}${imagePath}`, () => {
+      const canvasTex = new THREE.CanvasTexture(createHighResHumanTexture(isIntimate ? 'FEMALE' : 'DOCTOR'));
+      canvasTex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshBasicMaterial({ map: canvasTex, transparent: true, side: THREE.DoubleSide });
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 1.68), mat);
+      plane.name = 'AI_BILLBOARD_MESH';
+      plane.position.set(0, 0.88, 0);
+      avatarGroup.add(plane);
+    });
   }, []);
 
   const spawnParadigmHolograms = useCallback((paradigm: InteractiveParadigm) => {
@@ -1118,14 +1001,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             billboard.lookAt(worldCamPos.x, billboard.position.y, worldCamPos.z);
           }
           billboard.scale.y = 1.0 + Math.sin(t * 1.5) * 0.012;
-        }
-
-        permanentAvatarRef.current.position.y = Math.sin(t * 1.6) * 0.018;
-        const leftArm = permanentAvatarRef.current.getObjectByName('AVATAR_LEFT_ARM');
-        const rightArm = permanentAvatarRef.current.getObjectByName('AVATAR_RIGHT_ARM');
-        if (leftArm && rightArm) {
-          leftArm.rotation.x = Math.sin(t * 1.4) * 0.12;
-          rightArm.rotation.x = -Math.sin(t * 1.4) * 0.12;
         }
       }
 
