@@ -1,7 +1,7 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO
-// Con Avatar Adaptable (Clínico / Femenino 3D / PNG), Lógica Real N_BACK_3D,
-// Audio de Triple Respaldo para Casco VR y Auto-Alineación 6DoF
+// Con Avatar Femenino Humanoide para Módulo VIII + Soporte PNG/GLB Realista,
+// Lógica Real de Cubo Activo en N_BACK_3D y Voz Simultánea en Casco VR
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -74,11 +74,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     balloonPumps: 0,
     balloonMaxCap: 15,
     cptTargetType: 'GO' as 'GO' | 'NOGO',
-    activeNBackCubeIndex: 1,
+    activeNBackCubeIndex: 1, // 0, 1 o 2: cuál de los 3 cubos es el objetivo real actual
     lastSpawnTime: Date.now()
   });
 
-  // 1. AUTO-PURGA DE SERVICE WORKERS ANTIGUOS
+  // 1. AUTO-PURGA DE SERVICE WORKERS ANTIGUOS EN EL CASCO
   useEffect(() => {
     try {
       if ('serviceWorker' in navigator) {
@@ -105,7 +105,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   };
 
-  // 3. DESBLOQUEO DE AUDIO Y CANAL WARM-UP (PREVIENE SUSPENSIÓN EN ANDROID)
+  // 3. DESBLOQUEO PERMANENTE DE AUDIO WEB EN PICO 3 PRO
   const ensureAudioUnlocked = useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -138,7 +138,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   }, []);
 
-  // 4. TONOS DE RETROALIMENTACIÓN
+  // 4. TONOS DE FEEDBACK CLÍNICO
   const playSynthesizedTone = useCallback(
     (freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 0.9) => {
       try {
@@ -166,7 +166,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     });
   }, [playSynthesizedTone]);
 
-  // 5. ONDAS NEUROACÚSTICAS TERAPÉUTICAS
+  // 5. GENERADOR DE FRECUENCIAS NEUROACÚSTICAS (bgAudio)
   const startTherapeuticBackgroundSound = useCallback(
     (audioType?: string) => {
       try {
@@ -228,7 +228,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [ensureAudioUnlocked]
   );
 
-  // 6. MOTOR DE VOZ CLÍNICA (TRIPLE RESPALDO TTS CON VOLUMEN 1.8X)
+  // 6. VOZ GUÍA CLÍNICA DE IA CON TRIPLE RESPALDO PARA ALTAVOCES DEL CASCO VR
   const playSpeechAudio = useCallback(
     async (text: string) => {
       if (!text) return;
@@ -289,7 +289,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [ensureAudioUnlocked, playChimes]
   );
 
-  // 7. BANNER HOLOGRÁFICO EN VR
+  // 7. BANNER HOLOGRÁFICO DENTRO DEL VISOR
   const update3dInVrBanner = (title: string, sub: string, score: string) => {
     if (!hudMeshRef.current) return;
     const canvas = document.createElement('canvas');
@@ -322,7 +322,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     (hudMeshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
   };
 
-  // 8. GENERADOR DE ESCENARIOS 360°
+  // 8. ENTORNOS 360° REALISTAS ILUMINADOS
   const createRealisticEnvironmentCanvas = (theme: 'OFFICE' | 'FOREST' | 'STREET' = 'OFFICE') => {
     const c = document.createElement('canvas');
     c.width = 2048;
@@ -428,7 +428,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     }
   };
 
-  // 9. CENTRADO INTELIGENTE DE MIRADA EN EJES X, Y, Z
+  // 9. CENTRADO INTELIGENTE 6DoF
   const recenterStageToPatientView = useCallback(() => {
     if (!stageGroupRef.current || !rendererRef.current || !cameraRef.current) return;
     const xrCam = rendererRef.current.xr.isPresenting
@@ -445,12 +445,13 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     stageGroupRef.current.rotation.set(0, euler.y, 0);
   }, []);
 
-  // 10. GENERADOR DINÁMICO DE AVATAR (DOCTOR / FIGURA FEMENINA 3D / FOTO REALISTA)
+  // 10. CONSTRUCTOR DEL AVATAR HUMANOIDE 3D ADAPTABLE (DOCTOR / COMPAÑERA AFECTIVA / IMAGEN PNG O GLB)
   const buildAvatarByStyle = useCallback((styleMode: AvatarStyleMode) => {
     if (!permanentAvatarRef.current) return;
     const avatarGroup = permanentAvatarRef.current;
     safeClearGroup(avatarGroup);
 
+    // MODO A: Si el usuario desea cargar una imagen PNG realista desde /avatars/intimate_partner.png
     if (styleMode === 'REALISTIC_PHOTO') {
       const loader = new THREE.TextureLoader();
       loader.setCrossOrigin('anonymous');
@@ -467,13 +468,16 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         },
         undefined,
         () => {
+          // Si no existe el archivo PNG en public/avatars/, construye la figura femenina 3D estilizada
           buildAvatarByStyle('INTIMATE_PARTNER');
         }
       );
       return;
     }
 
+    // MODO B: FIGURA FEMENINA HUMANOIDE ESTILIZADA 3D (PARA MÓDULO VIII: SALUD SEXUAL & AFECTIVA)
     if (styleMode === 'INTIMATE_PARTNER') {
+      // Intentar primero cargar un modelo GLB humano realista si está en /avatars/therapist_female.glb
       try {
         const gltfLoader = new GLTFLoader();
         gltfLoader.load(
@@ -494,7 +498,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         roughness: 0.35,
         metalness: 0.05
       });
-      const roseSilkMat = new THREE.MeshStandardMaterial({
+      const RoseSilkMat = new THREE.MeshStandardMaterial({
         color: 0xe11d48,
         emissive: 0x881337,
         emissiveIntensity: 0.25,
@@ -505,6 +509,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         roughness: 0.45
       });
 
+      // Pedestal cálido ámbar/rosa
       const baseRing = new THREE.Mesh(
         new THREE.CylinderGeometry(0.38, 0.44, 0.05, 32),
         new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xfb7185, emissiveIntensity: 0.5 })
@@ -512,6 +517,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       baseRing.position.set(0, 0.35, 0);
       avatarGroup.add(baseRing);
 
+      // Piernas estilizadas
       const legGeo = new THREE.CylinderGeometry(0.068, 0.052, 0.52, 20);
       const leftLeg = new THREE.Mesh(legGeo, warmSkinMat);
       leftLeg.position.set(-0.1, 0.62, 0);
@@ -520,7 +526,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       avatarGroup.add(leftLeg);
       avatarGroup.add(rightLeg);
 
-      const hips = new THREE.Mesh(new THREE.SphereGeometry(0.19, 28, 24), roseSilkMat);
+      // Cadera y cintura anatómica femenina
+      const hips = new THREE.Mesh(new THREE.SphereGeometry(0.19, 28, 24), RoseSilkMat);
       hips.scale.set(1.05, 0.85, 0.78);
       hips.position.set(0, 0.88, 0);
       avatarGroup.add(hips);
@@ -529,23 +536,28 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       waist.position.set(0, 1.04, 0);
       avatarGroup.add(waist);
 
-      const upperTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.28, 28), roseSilkMat);
+      // Busto y Torso Superior en vestimenta de seda cálida
+      const upperTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.28, 28), RoseSilkMat);
       upperTorso.position.set(0, 1.24, 0);
       avatarGroup.add(upperTorso);
 
+      // Escote y clavículas en piel realista
       const neckline = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.09, 24), warmSkinMat);
       neckline.position.set(0, 1.38, 0);
       avatarGroup.add(neckline);
 
+      // Cuello esbelto
       const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.056, 0.064, 0.14, 20), warmSkinMat);
       neck.position.set(0, 1.46, 0);
       avatarGroup.add(neck);
 
+      // Rostro femenino modelado
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.165, 32, 32), warmSkinMat);
       head.scale.set(0.94, 1.05, 0.96);
       head.position.set(0, 1.61, 0);
       avatarGroup.add(head);
 
+      // Cabello largo enmarcando el rostro y cayendo sobre los hombros
       const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.176, 32, 32), darkHairMat);
       hairCrown.position.set(0, 1.64, -0.02);
       avatarGroup.add(hairCrown);
@@ -560,6 +572,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       avatarGroup.add(leftHairLock);
       avatarGroup.add(rightHairLock);
 
+      // Ojos expresivos con esclerótica blanca, iris esmeralda y pupila
       const scleraGeo = new THREE.SphereGeometry(0.024, 16, 16);
       const scleraMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const irisGeo = new THREE.SphereGeometry(0.014, 16, 16);
@@ -577,6 +590,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
       avatarGroup.add(leftSclera, leftIris, rightSclera, rightIris);
 
+      // Labios definidos
       const lips = new THREE.Mesh(
         new THREE.TorusGeometry(0.024, 0.009, 12, 24),
         new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.3 })
@@ -585,6 +599,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       lips.position.set(0, 1.545, 0.152);
       avatarGroup.add(lips);
 
+      // Brazos descubiertos en piel cálida con movimiento suave
       const armGeo = new THREE.CylinderGeometry(0.044, 0.036, 0.54, 20);
       const leftArm = new THREE.Mesh(armGeo, warmSkinMat);
       leftArm.name = 'AVATAR_LEFT_ARM';
@@ -600,7 +615,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       return;
     }
 
-    // DOCTOR CLÍNICO CON BATA MÉDICA
+    // MODO C (POR DEFECTO): DOCTOR CLÍNICO CON BATA MÉDICA BLANCA
     const baseRing = new THREE.Mesh(
       new THREE.CylinderGeometry(0.42, 0.48, 0.06, 32),
       new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x00f0ff, emissiveIntensity: 0.6 })
@@ -667,7 +682,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     avatarGroup.add(leftArm, rightArm);
   }, []);
 
-  // 11. CONSTRUCCIÓN DE HOLOGRAMAS (CON ROTACIÓN DE CUBO OBJETIVO EN N_BACK_3D)
+  // 11. CONSTRUCCIÓN DE HOLOGRAMAS INTERACTIVOS 3D (CON CUBO OBJETIVO REAL EN N_BACK_3D)
   const spawnParadigmHolograms = useCallback((paradigm: InteractiveParadigm) => {
     if (!interactiveGroupRef.current) return;
     safeClearGroup(interactiveGroupRef.current);
@@ -760,7 +775,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     }
   }, []);
 
-  // 12. TELEMETRÍA MULTI-SALA
+  // 12. TRANSMISIÓN TELEMÉTRICA MULTI-CANAL AL DOCTOR
   const transmitInteraction = (data: { hits: number; errors: number; rt?: number; pumps?: number; action: string }) => {
     const basePayload = {
       type: 'CLINICAL_TEST_INTERACTION',
@@ -782,7 +797,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     });
   };
 
-  // 13. GESTIÓN DE DISPARO CON EVALUACIÓN DE PRECISIÓN Y ERRORES REALES
+  // 13. GESTIÓN DE DISPARO 6DoF CON EVALUACIÓN PSICOMÉTRICA REAL DE ACIERTOS Y ERRORES
   const handleTrigger = useCallback(
     (event: any) => {
       ensureAudioUnlocked();
@@ -852,6 +867,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             }
           }
         } else if (s.paradigm === 'N_BACK_3D') {
+          // Evaluación real de cuál de los 3 cubos fue impactado
           const expectedName = `CUBE_${s.activeNBackCubeIndex}`;
           const isCorrectCube = hits.length > 0 ? hitObj?.name === expectedName : true;
 
@@ -864,10 +880,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             s.errors += 1;
             playSynthesizedTone(95, 0.25, 'sawtooth', 0.9);
             triggerHaptic(1.0, 160);
-            update3dInVrBanner('MEMORIA Y FOCO VISUOESPACIAL', '❌ CUBO INCORRECTO (Apunta al más grande)', `Aciertos: ${s.hits} | Fallos: ${s.errors}`);
+            update3dInVrBanner('MEMORIA Y FOCO VISUOESPACIAL', '❌ CUBO INCORRECTO (Dispara al más grande)', `Aciertos: ${s.hits} | Fallos: ${s.errors}`);
             transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Error selección cubo (${rt}ms)` });
           }
 
+          // Rotar el cubo objetivo para el siguiente ensayo
           s.activeNBackCubeIndex = (s.activeNBackCubeIndex + 1 + Math.floor(Math.random() * 2)) % 3;
           interactiveGroupRef.current.children.forEach((child, idx) => {
             const mesh = child as THREE.Mesh;
@@ -899,7 +916,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         } else {
           s.hits += 1;
           playSynthesizedTone(520, 0.1, 'sine', 0.9);
-          update3dInVrBanner(`TAREA: ${s.paradigm}`, `¡IMPACTO REGISTRADO! (${rt}ms)`, `Aciertos: ${s.hits}`);
+          update3dInVrBanner(`TAREA: ${s.paradigm}`, `¡IMPACTO REGISTRADO! (${rt}ms)`, `Aciertos: ${s.hits} | Fallos: ${s.errors}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Acierto en ${s.paradigm} (${rt}ms)` });
         }
       }
@@ -907,7 +924,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     [ensureAudioUnlocked, playSynthesizedTone]
   );
 
-  // 14. SINCRONIZACIÓN WEBSOCKET CON ADAPTACIÓN AUTOMÁTICA DE AVATAR
+  // 14. CONEXIÓN WEBSOCKET MULTI-SALA (CAMBIA AUTOMÁTICAMENTE AL AVATAR FEMENINO EN EL MÓDULO VIII)
   useEffect(() => {
     let heartbeatTimer: ReturnType<typeof setInterval>;
     let isMounted = true;
@@ -933,6 +950,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             if (d.ecosystem) apply360Background(d.ecosystem);
             if (d.bgAudio) startTherapeuticBackgroundSound(d.bgAudio);
 
+            // Si el doctor selecciona Módulo VIII (Salud Sexual / Inhibición / Disfunción), activa la figura femenina
             const isSexologyModule =
               d.moduleId === 'MOD_SEXOLOGY' ||
               d.disorderId === 'SEX_INHIB' ||
@@ -1010,7 +1028,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     };
   }, [initialPatientId, spawnParadigmHolograms, playSpeechAudio, startTherapeuticBackgroundSound, buildAvatarByStyle]);
 
-  // 15. ESCENA THREE.JS Y CICLO DE RENDERIZADO
+  // 15. ESCENA THREE.JS + BUCLE WEBXR A 90 FPS
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -1069,6 +1087,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     hudMeshRef.current = hudMesh;
     update3dInVrBanner('AMIE CLINICAL COPILOT', 'Avatar 3D y Hologramas Activos • Dispara con el gatillo', 'Aciertos: 0');
 
+    // CONTENEDOR PERMANENTE DEL AVATAR
     const avatarHolder = new THREE.Group();
     avatarHolder.position.set(-0.62, 0, -1.92);
     avatarHolder.rotation.y = 0.28;
