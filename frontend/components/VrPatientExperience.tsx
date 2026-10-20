@@ -1,13 +1,14 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO
-// Con Avatares Fotorrealistas IA Dinámicos por Trastorno Clínico
+// Avatares Clínicos Dedicados (Sexual, Narcisismo, Hipnosis, General)
+// Espacio Despejado Anticolisión + Audio Amplificado 1.8x
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Target, VolumeX, Play, RefreshCw, Volume2, UserCheck } from 'lucide-react';
+import { Target, VolumeX, Play, RefreshCw, Volume2 } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -26,6 +27,8 @@ export type InteractiveParadigm =
   | 'BIO_3D'
   | 'MIRROR_3D';
 
+export type ClinicalArchetype = 'DOCTOR' | 'SEXUAL_PARTNER' | 'FORENSIC_PEER' | 'HYPNOTIC_GUIDE';
+
 export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -39,8 +42,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('CPT_3D');
   const [wsOnline, setWsOnline] = useState(false);
   const [disorderTitle, setDisorderTitle] = useState('ENTORNO CLÍNICO INMERSIVO');
+  const [currentArchetype, setCurrentArchetype] = useState<ClinicalArchetype>('DOCTOR');
   const [lastSpokenScript, setLastSpokenScript] = useState(
-    'Bienvenido al entorno clínico inmersivo. Apunta al holograma iluminado y presiona el gatillo.'
+    'Bienvenido al entorno clínico. Apunta al holograma iluminado y presiona el gatillo.'
   );
 
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -58,7 +62,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const bgOscillatorRef = useRef<{ stop: () => void } | null>(null);
   const needsAutoCenterRef = useRef<boolean>(true);
   const lastSpokenScriptRef = useRef<string>(
-    'Bienvenido al entorno clínico inmersivo. Apunta al holograma iluminado y presiona el gatillo.'
+    'Bienvenido al entorno clínico. Apunta al holograma iluminado y presiona el gatillo.'
   );
 
   const paradigmStateRef = useRef({
@@ -73,14 +77,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     lastSpawnTime: Date.now()
   });
 
-  // 1. AUTO-PURGA DE SERVICE WORKERS ANTIGUOS
   useEffect(() => {
     try {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (const reg of registrations) {
-            reg.unregister();
-          }
+          for (const reg of registrations) reg.unregister();
         });
       }
     } catch (e) {}
@@ -431,72 +432,165 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   }, []);
 
   // ============================================================================
-  // CARGADOR DE PERSONAJE FOTORREALISTA 2.5D (BILLBOARD CON TRANSPARENCIA IA)
-  // Reemplaza por completo el avatar de cilindros. Usa rostros realistas generados
+  // CONSTRUCTOR DE AVATARES CLÍNICOS DEDICADOS (POSICIONADOS LATERALMENTE A LA IZQUIERDA)
+  // Ubicación: x = -1.15, z = -2.1 -> NUNCA TAPA EL TABLERO (x=0, y=1.78) NI LOS CUBOS (x=+0.28)
   // ============================================================================
-  const buildRealisticAiAvatar = useCallback((moduleId?: string, disorderId?: string) => {
+  const buildDedicatedClinicalAvatar = useCallback((archetype: ClinicalArchetype) => {
     if (!permanentAvatarRef.current) return;
-    const avatarGroup = permanentAvatarRef.current;
-    safeClearGroup(avatarGroup);
+    const group = permanentAvatarRef.current;
+    safeClearGroup(group);
 
-    const texLoader = new THREE.TextureLoader();
-    texLoader.setCrossOrigin('anonymous');
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5d0b0, roughness: 0.35 });
+    const hairDarkMat = new THREE.MeshStandardMaterial({ color: 0x1f1712, roughness: 0.5 });
+    const eyeSclera = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const eyeIris = new THREE.MeshBasicMaterial({ color: 0x059669 });
 
-    // Selección inteligente de la URL fotorrealista basada en el módulo clínico evaluado
-    let avatarUrl = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=600&auto=format&fit=crop'; // Doctor Clínico Default
+    // 1. CABEZA Y ROSTRO ANATÓMICO COMÚN DE ALTA CALIDAD
+    const headGroup = new THREE.Group();
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.165, 32, 32), skinMat);
+    headMesh.scale.set(0.92, 1.05, 0.96);
+    headGroup.add(headMesh);
 
-    if (moduleId === 'MOD_SEXOLOGY' || disorderId === 'SEX_INHIB' || disorderId === 'DISFUNCION_SOM') {
-      // Pareja Íntima / Figura Sensorial Fotorrealista
-      avatarUrl = 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?q=80&w=600&auto=format&fit=crop'; 
-    } else if (moduleId === 'MOD_TRAUMA' || disorderId === 'TEPT') {
-      // Terapeuta Contenedora Calma (Trauma)
-      avatarUrl = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&auto=format&fit=crop';
-    } else if (moduleId === 'MOD_ADDICTIONS' || disorderId === 'LUDOPATIA' || disorderId === 'ATRACON') {
-      // Persona Joven / Paciente Simulado (como Sofía)
-      avatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop';
-    } else if (moduleId === 'MOD_NEURODEV' || disorderId === 'ALZHEIMER') {
-      // Neurólogo Senior
-      avatarUrl = 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=600&auto=format&fit=crop';
+    // Ojos
+    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 16), eyeSclera);
+    leftEye.position.set(-0.052, 0.03, 0.14);
+    const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.013, 16, 16), eyeIris);
+    leftPupil.position.set(-0.052, 0.03, 0.155);
+
+    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 16), eyeSclera);
+    rightEye.position.set(0.052, 0.03, 0.14);
+    const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.013, 16, 16), eyeIris);
+    rightPupil.position.set(0.052, 0.03, 0.155);
+
+    headGroup.add(leftEye, leftPupil, rightEye, rightPupil);
+
+    // Labios
+    const lips = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.008, 12, 24), new THREE.MeshStandardMaterial({ color: 0xd9777f, roughness: 0.3 }));
+    lips.scale.set(1.4, 0.6, 0.8);
+    lips.position.set(0, -0.06, 0.145);
+    headGroup.add(lips);
+
+    headGroup.position.set(0, 1.58, 0);
+    group.add(headGroup);
+
+    // Cuello
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.14, 20), skinMat);
+    neck.position.set(0, 1.44, 0);
+    group.add(neck);
+
+    // 2. CONFIGURACIÓN ESPECÍFICA SEGÚN MÓDULO CLÍNICO
+    if (archetype === 'SEXUAL_PARTNER') {
+      // SALUD SEXUAL & AFECTIVA: Figura cercana con vestimenta cálida en tono vino/rosa suave
+      const dressMat = new THREE.MeshStandardMaterial({ color: 0x9f1239, roughness: 0.3, emissive: 0x4c0519, emissiveIntensity: 0.2 });
+      
+      // Cabello largo que cae sobre los hombros
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.176, 32, 32), hairDarkMat);
+      hairCrown.position.set(0, 1.62, -0.02);
+      const leftLock = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.45, 16), hairDarkMat);
+      leftLock.position.set(-0.14, 1.42, 0.02);
+      leftLock.rotation.z = 0.12;
+      const rightLock = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.45, 16), hairDarkMat);
+      rightLock.position.set(0.14, 1.42, 0.02);
+      rightLock.rotation.z = -0.12;
+      group.add(hairCrown, leftLock, rightLock);
+
+      // Torso y silueta anatómica suave
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.46, 24), dressMat);
+      torso.position.set(0, 1.16, 0);
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.26, 0.65, 24), dressMat);
+      skirt.position.set(0, 0.68, 0);
+      group.add(torso, skirt);
+
+      // Brazos descubiertos en postura relajada
+      const armGeo = new THREE.CylinderGeometry(0.042, 0.035, 0.54, 16);
+      const leftArm = new THREE.Mesh(armGeo, skinMat);
+      leftArm.name = 'AVATAR_LEFT_ARM';
+      leftArm.position.set(-0.24, 1.12, 0.04);
+      leftArm.rotation.z = Math.PI / 14;
+      const rightArm = new THREE.Mesh(armGeo, skinMat);
+      rightArm.name = 'AVATAR_RIGHT_ARM';
+      rightArm.position.set(0.24, 1.12, 0.04);
+      rightArm.rotation.z = -Math.PI / 14;
+      group.add(leftArm, rightArm);
+
+    } else if (archetype === 'FORENSIC_PEER') {
+      // NARCISISMO & FORENSE: Interlocutor en traje formal oscuro para evaluación social
+      const suitMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+      const shirtMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 });
+
+      // Cabello corto ordenado
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.174, 32, 32), hairDarkMat);
+      hairCrown.position.set(0, 1.63, -0.01);
+      group.add(hairCrown);
+
+      // Torso en traje formal con camisa
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.58, 0.22), suitMat);
+      torso.position.set(0, 1.14, 0);
+      const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.24), shirtMat);
+      shirt.position.set(0, 1.20, 0);
+      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.72, 0.18), suitMat);
+      legs.position.set(0, 0.52, 0);
+      group.add(torso, shirt, legs);
+
+      const armGeo = new THREE.CylinderGeometry(0.052, 0.046, 0.55, 16);
+      const leftArm = new THREE.Mesh(armGeo, suitMat);
+      leftArm.name = 'AVATAR_LEFT_ARM';
+      leftArm.position.set(-0.28, 1.10, 0);
+      const rightArm = new THREE.Mesh(armGeo, suitMat);
+      rightArm.name = 'AVATAR_RIGHT_ARM';
+      rightArm.position.set(0.28, 1.10, 0);
+      group.add(leftArm, rightArm);
+
+    } else if (archetype === 'HYPNOTIC_GUIDE') {
+      // NEUROHIPNOSIS & DOLOR: Túnica relajante celeste con aura luminosa Theta
+      const robeMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, emissive: 0x0369a1, emissiveIntensity: 0.3 });
+      
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.175, 32, 32), hairDarkMat);
+      hairCrown.position.set(0, 1.62, -0.02);
+      group.add(hairCrown);
+
+      const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.38, 1.18, 28), robeMat);
+      robe.position.set(0, 0.88, 0);
+      group.add(robe);
+
+      // Aura hipnótica sutil en la espalda
+      const aura = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.45, 32), new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
+      aura.position.set(0, 1.45, -0.15);
+      group.add(aura);
+
+      const armGeo = new THREE.CylinderGeometry(0.048, 0.042, 0.52, 16);
+      const leftArm = new THREE.Mesh(armGeo, robeMat);
+      leftArm.name = 'AVATAR_LEFT_ARM';
+      leftArm.position.set(-0.25, 1.12, 0);
+      const rightArm = new THREE.Mesh(armGeo, robeMat);
+      rightArm.name = 'AVATAR_RIGHT_ARM';
+      rightArm.position.set(0.25, 1.12, 0);
+      group.add(leftArm, rightArm);
+
+    } else {
+      // DOCTOR GENERAL: Bata médica blanca
+      const coatMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
+      const blueStripe = new THREE.MeshStandardMaterial({ color: 0x0284c7 });
+
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.174, 32, 32), hairDarkMat);
+      hairCrown.position.set(0, 1.63, -0.01);
+      group.add(hairCrown);
+
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.72, 24), coatMat);
+      torso.position.set(0, 1.05, 0);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.54, 0.06), blueStripe);
+      stripe.position.set(0, 1.08, 0.22);
+      group.add(torso, stripe);
+
+      const armGeo = new THREE.CylinderGeometry(0.052, 0.045, 0.54, 16);
+      const leftArm = new THREE.Mesh(armGeo, coatMat);
+      leftArm.name = 'AVATAR_LEFT_ARM';
+      leftArm.position.set(-0.28, 1.08, 0);
+      const rightArm = new THREE.Mesh(armGeo, coatMat);
+      rightArm.name = 'AVATAR_RIGHT_ARM';
+      rightArm.position.set(0.28, 1.08, 0);
+      group.add(leftArm, rightArm);
     }
-
-    // Nota: Unsplash no tiene fondo transparente real. En producción real puedes apuntar a tu carpeta:
-    // avatarUrl = `${window.location.origin}/avatars/${disorderId || 'default'}.png`;
-
-    texLoader.load(
-      avatarUrl,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        
-        // Creamos un material que emule un borde suave si la imagen no tiene alfa puro
-        const mat = new THREE.MeshBasicMaterial({ 
-          map: tex, 
-          transparent: true,
-          opacity: 0.96,
-          side: THREE.DoubleSide
-        });
-
-        // Plano de escala anatómica humana real (Ancho: 0.85m, Alto: 1.25m - torso superior)
-        const planeGeo = new THREE.PlaneGeometry(0.85, 1.25);
-
-        // Curvamos ligeramente el plano para darle ilusión volumétrica
-        const positions = planeGeo.attributes.position;
-        for (let i = 0; i < positions.count; i++) {
-          const x = positions.getX(i);
-          positions.setZ(i, -Math.pow(x, 2) * 0.4); 
-        }
-        planeGeo.computeVertexNormals();
-
-        const plane = new THREE.Mesh(planeGeo, mat);
-        plane.name = 'AI_BILLBOARD_MESH';
-        plane.position.set(0, 1.15, 0); // Altura de los ojos a 1.60m aprox
-        
-        avatarGroup.add(plane);
-      },
-      undefined,
-      (err) => {
-        console.error("No se pudo cargar la textura fotorrealista del avatar", err);
-      }
-    );
   }, []);
 
   const spawnParadigmHolograms = useCallback((paradigm: InteractiveParadigm) => {
@@ -728,7 +822,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         } else {
           s.hits += 1;
           playSynthesizedTone(520, 0.1, 'sine', 0.9);
-          update3dInVrBanner(`TAREA: ${s.paradigm}`, `¡IMPACTO REGISTRADO! (${rt}ms)`, `Aciertos: ${s.hits} | Fallos: ${s.errors}`);
+          update3dInVrBanner(`TAREA: ${s.paradigm}`, `¡IMPACTO REGISTRADO! (${rt}ms)`, `Aciertos: ${s.hits}`);
           transmitInteraction({ hits: s.hits, errors: s.errors, rt, action: `Acierto en ${s.paradigm} (${rt}ms)` });
         }
       }
@@ -761,8 +855,18 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             if (d.ecosystem) apply360Background(d.ecosystem);
             if (d.bgAudio) startTherapeuticBackgroundSound(d.bgAudio);
 
-            // Cargar avatar fotorrealista adecuado según el módulo
-            buildRealisticAiAvatar(d.moduleId, d.disorderId);
+            // DETECCIÓN INTELIGENTE DEL ARQUETIPO SEGÚN EL MÓDULO CLÍNICO
+            let archetype: ClinicalArchetype = 'DOCTOR';
+            if (d.moduleId === 'MOD_SEXOLOGY' || d.disorderId === 'SEX_INHIB' || d.disorderId === 'DISFUNCION_SOM') {
+              archetype = 'SEXUAL_PARTNER';
+            } else if (d.moduleId === 'MOD_FORENSIC' || d.disorderId === 'NARCISISMO' || d.disorderId === 'TLP' || d.disorderId === 'PSICOPATIA') {
+              archetype = 'FORENSIC_PEER';
+            } else if (d.moduleId === 'MOD_HYPNOSIS_PAIN' || d.disorderId === 'HIPNO_ERICKSONIANA' || d.disorderId === 'HIPNO_ANALGESIA') {
+              archetype = 'HYPNOTIC_GUIDE';
+            }
+
+            setCurrentArchetype(archetype);
+            buildDedicatedClinicalAvatar(archetype);
 
             if (d.paradigm) {
               setActiveParadigm(d.paradigm);
@@ -829,7 +933,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       if (bgOscillatorRef.current) bgOscillatorRef.current.stop();
       wsListRef.current.forEach((s) => s.close());
     };
-  }, [initialPatientId, spawnParadigmHolograms, playSpeechAudio, startTherapeuticBackgroundSound, buildRealisticAiAvatar]);
+  }, [initialPatientId, spawnParadigmHolograms, playSpeechAudio, startTherapeuticBackgroundSound, buildDedicatedClinicalAvatar]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -881,26 +985,27 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     scene.add(stageGroup);
     stageGroupRef.current = stageGroup;
 
+    // TABLERO HUD EN ALTURA CENTRAL (y = 1.78, z = -2.1) -> NO TAPA NINGÚN OBJETO
     const hudGeo = new THREE.PlaneGeometry(1.75, 0.44);
     const hudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.96 });
     const hudMesh = new THREE.Mesh(hudGeo, hudMat);
     hudMesh.position.set(0, 1.78, -2.1);
     stageGroup.add(hudMesh);
     hudMeshRef.current = hudMesh;
-    update3dInVrBanner('AMIE CLINICAL COPILOT', 'Persona IA Fotorrealista • Dispara con el gatillo', 'Aciertos: 0');
+    update3dInVrBanner('AMIE CLINICAL COPILOT', 'Entorno Clínico Activo • Dispara con el gatillo', 'Aciertos: 0');
 
-    // CONTENEDOR DEL AVATAR (POSICIÓN FRENTE AL PACIENTE)
+    // POSICIONAMIENTO LATERAL DESPEJADO DEL AVATAR (x = -1.15, z = -2.1) -> NUNCA TAPA EL CENTRO
     const avatarHolder = new THREE.Group();
-    avatarHolder.position.set(-0.62, 0, -1.92);
-    avatarHolder.rotation.y = 0.28;
+    avatarHolder.position.set(-1.15, 0, -2.1);
+    avatarHolder.rotation.y = 0.35; // Mirando hacia el paciente
     stageGroup.add(avatarHolder);
     permanentAvatarRef.current = avatarHolder;
     
-    // Carga inicial del doctor default
-    buildRealisticAiAvatar('MOD_NEURODEV', 'TDAH');
+    buildDedicatedClinicalAvatar('DOCTOR');
 
+    // HOLOGRAMAS INTERACTIVOS AL CENTRO DERECHO (x = +0.28, y = 1.25, z = -1.85) -> VISIÓN 100% LIMPIA
     const interactiveGroup = new THREE.Group();
-    interactiveGroup.position.set(0.32, 1.28, -1.85);
+    interactiveGroup.position.set(0.28, 1.25, -1.85);
     stageGroup.add(interactiveGroup);
     interactiveGroupRef.current = interactiveGroup;
 
@@ -947,21 +1052,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         needsAutoCenterRef.current = false;
       }
 
-      // Animación viva del Billboard 2.5D generado por IA
+      // Respiración anatómica del avatar a 90 FPS
       if (permanentAvatarRef.current) {
-        const billboard = permanentAvatarRef.current.getObjectByName('AI_BILLBOARD_MESH');
-        if (billboard && rendererRef.current) {
-          const xrCam = rendererRef.current.xr.isPresenting
-            ? rendererRef.current.xr.getCamera()
-            : cameraRef.current;
-          if (xrCam) {
-            const worldCamPos = new THREE.Vector3();
-            xrCam.getWorldPosition(worldCamPos);
-            // El retrato siempre mirará a los ojos del usuario sin importar dónde se mueva
-            billboard.lookAt(worldCamPos.x, billboard.position.y, worldCamPos.z);
-          }
-          // Movimiento sutil de respiración fisiológica (expansión/contracción del tórax)
-          billboard.scale.y = 1.0 + Math.sin(t * 1.5) * 0.012;
+        permanentAvatarRef.current.position.y = Math.sin(t * 1.5) * 0.015;
+        const leftArm = permanentAvatarRef.current.getObjectByName('AVATAR_LEFT_ARM');
+        const rightArm = permanentAvatarRef.current.getObjectByName('AVATAR_RIGHT_ARM');
+        if (leftArm && rightArm) {
+          leftArm.rotation.x = Math.sin(t * 1.3) * 0.10;
+          rightArm.rotation.x = -Math.sin(t * 1.3) * 0.10;
         }
       }
 
@@ -973,7 +1071,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         const ball = interactiveGroup.getObjectByName('BART_BALL');
         if (ball) ball.scale.lerp(new THREE.Vector3(s.scale, s.scale * 1.15, s.scale), 0.1);
       } else if (s.paradigm === 'EMDR_3D') {
-        interactiveGroup.position.x = Math.sin(t * 2.4) * 0.95;
+        interactiveGroup.position.x = 0.28 + Math.sin(t * 2.4) * 0.85;
       } else if (s.paradigm === 'BIO_3D') {
         const breath = 0.85 + Math.sin(t * Math.PI * 2 * 0.1) * 0.42;
         interactiveGroup.scale.set(breath, breath, breath);
@@ -991,7 +1089,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           }
         }
       } else {
-        interactiveGroup.position.x = 0.32;
+        interactiveGroup.position.x = 0.28;
         interactiveGroup.scale.set(1, 1, 1);
         interactiveGroup.rotation.y = Math.sin(t * 0.9) * 0.22;
       }
@@ -1006,7 +1104,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       bgMesh.material.dispose();
       renderer.dispose();
     };
-  }, [handleTrigger, ensureAudioUnlocked, recenterStageToPatientView, spawnParadigmHolograms, playSpeechAudio, buildRealisticAiAvatar]);
+  }, [handleTrigger, ensureAudioUnlocked, recenterStageToPatientView, spawnParadigmHolograms, playSpeechAudio, buildDedicatedClinicalAvatar]);
 
   return (
     <div
@@ -1033,10 +1131,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
             <h2 className="text-xl font-black text-white">Activar Voz y Entorno 3D</h2>
             <p className="text-xs text-slate-400">
-              Toca la pantalla o presiona el gatillo del mando para habilitar los altavoces del casco Pico 3 Pro.
+              Presiona el gatillo del mando para habilitar los altavoces de las gafas Pico 3 Pro.
             </p>
             <button className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer">
-              <Play className="w-5 h-5 fill-white" /> ENTRAR Y ACTIVAR VOZ VR
+              <Play className="w-5 h-5 fill-white" /> ENTRAR A LA SESIÓN
             </button>
           </div>
         </div>
@@ -1056,7 +1154,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             onClick={() => playSpeechAudio(lastSpokenScript)}
             className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded border border-emerald-600 flex items-center gap-1 cursor-pointer"
           >
-            <Volume2 className="w-3 h-3" /> Probar Voz Casco
+            <Volume2 className="w-3 h-3" /> Repetir Voz
           </button>
           <button
             onClick={() => recenterStageToPatientView()}
