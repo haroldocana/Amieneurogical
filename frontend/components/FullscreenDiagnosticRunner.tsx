@@ -1,8 +1,8 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - WORKSTATION MÉDICA INTEGRAL COMPLETA
 // 9 Módulos Clínicos • 30 Trastornos • 240 Paradigmas Inmersivos Integrados
-// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Curva PPG Pulsátil a 60Hz
-// Sincronización de Avatares Fotorrealistas Dinámicos por Patología
+// Monitor Clínico Dual-Channel a 60 Hz (Canal 1: Onda PPG Continua | Canal 2: Latencia VR 6DoF)
+// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Triangulación Computarizada
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -724,6 +724,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const isCautiousHighAccuracy = accuracyRate >= 85 && errorsCount <= 2 && averageRt > 420;
   const hasSympatheticStress = typeof currentHrv === 'number' && currentHrv < 32;
 
+  // ============================================================================
+  // MONITOR CLÍNICO DUAL-CHANNEL A 60 HZ (PPG VITAL SUPERIOR + LATENCIA 6DoF INFERIOR)
+  // Desacopla las curvas para que jamás se peguen o confundan
+  // ============================================================================
   useEffect(() => {
     let animId: number;
     let phase = 0;
@@ -739,69 +743,116 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       ctx.fillStyle = '#030712';
       ctx.fillRect(0, 0, w, h);
 
+      // Rejilla médica de precisión (tipo monitor hospitalario)
       ctx.strokeStyle = '#111827';
       ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-      for (let y = 0; y < h; y += 25) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      for (let x = 0; x < w; x += 28) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 0; y < h; y += 22) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
 
-      const baselineY = h * 0.72;
-      phase += (currentBpm / 60) * 0.08;
+      // Línea divisoria central entre ambos canales
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.52);
+      ctx.lineTo(w, h * 0.52);
+      ctx.stroke();
+
+      // ========================================================================
+      // CANAL 1 (SUPERIOR): ONDA DE PULSO PLETISMOGRÁFICA ARTERIAL CONTINUA (PPG)
+      // Oscila suavemente entre y = 20 y y = 85 (nunca se vuelve una línea plana muerta)
+      // ========================================================================
+      const ppgCenterY = h * 0.32;
+      phase += (currentBpm / 60) * 0.085;
 
       if (btStatus === 'CONNECTED') {
         ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
 
         for (let x = 0; x < w; x++) {
-          const t = (x * 0.035) - phase;
-          const cycle = (t % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
-          let pulseHeight = 0;
-          if (cycle < 1.0) {
-            pulseHeight = Math.sin(cycle * Math.PI) * 48;
-          } else if (cycle >= 1.2 && cycle < 1.9) {
-            pulseHeight = Math.sin((cycle - 1.2) * Math.PI * 1.4) * 16;
-          }
-          const y = baselineY - pulseHeight;
+          const t = (x * 0.04) - phase;
+          // Ecuación arterial fisiológica: onda sistólica principal + muesca dícrota + diástole continua
+          const harmonic1 = Math.sin(t);
+          const harmonic2 = Math.sin(t * 2 + 0.6) * 0.38;
+          const harmonic3 = Math.cos(t * 3) * 0.12;
+          const waveVal = (harmonic1 + harmonic2 + harmonic3); // oscila entre -1.4 y +1.4
+
+          const y = ppgCenterY - (waveVal * (h * 0.16));
           if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
       }
 
+      // ========================================================================
+      // CANAL 2 (INFERIOR): TREND CINEMÁTICO DE LATENCIA VR 6DoF (ms)
+      // Escala dedicada (150 ms - 600 ms). 270 ms queda perfectamente en el medio
+      // ========================================================================
+      const vrBaselineY = h * 0.88;
+      const vrHeightRange = h * 0.32;
+
+      // Línea de referencia normativa a 280 ms (Verde atenuada)
+      const target280Norm = (280 - 150) / 450;
+      const target280Y = vrBaselineY - target280Norm * vrHeightRange;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, target280Y);
+      ctx.lineTo(w, target280Y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
       ctx.strokeStyle = '#22d3ee';
       ctx.lineWidth = 2.2;
       ctx.beginPath();
+
       if (rtHistoryTrials.length === 0) {
-        ctx.moveTo(0, h * 0.88);
-        ctx.lineTo(w, h * 0.88);
+        ctx.moveTo(0, target280Y);
+        ctx.lineTo(w, target280Y);
       } else {
         const total = Math.max(10, rtHistoryTrials.length);
         rtHistoryTrials.forEach((rt, idx) => {
           const x = (idx / (total - 1)) * (w - 30) + 15;
-          const norm = Math.min(1.0, Math.max(0.0, (rt - 150) / 900.0));
-          const y = (h * 0.90) - norm * (h * 0.35);
+          const clampedRt = Math.min(600, Math.max(150, rt));
+          const norm = (clampedRt - 150) / 450; // 150ms es el piso, 600ms es el techo
+          const y = vrBaselineY - norm * vrHeightRange;
           if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
       }
       ctx.stroke();
 
+      // Puntos de ensayo cinemáticos
+      if (rtHistoryTrials.length > 0) {
+        ctx.fillStyle = '#38bdf8';
+        const total = Math.max(10, rtHistoryTrials.length);
+        rtHistoryTrials.forEach((rt, idx) => {
+          const x = (idx / (total - 1)) * (w - 30) + 15;
+          const clampedRt = Math.min(600, Math.max(150, rt));
+          const norm = (clampedRt - 150) / 450;
+          const y = vrBaselineY - norm * vrHeightRange;
+          ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+        });
+      }
+
+      // Rótulos de telemetría médica en cabeceras de canal
       ctx.font = 'bold 9.5px monospace';
-      ctx.fillStyle = '#22d3ee';
-      ctx.fillText('● VR NATIVO: LATENCIA CINEMÁTICA 6DoF (ms)', 12, 18);
       ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
       ctx.fillText(
         btStatus === 'CONNECTED'
-          ? `● BLE EN VIVO: PULSO ${currentBpm} BPM | HRV ${currentHrv} ms | GSR ${currentGsr} µS`
-          : '● BLE: DESCONECTADO (Métricas vitales en pausa)',
+          ? `● CH-1 [PPG VITAL]: ${currentBpm} BPM | HRV ${currentHrv} ms | GSR ${currentGsr} µS`
+          : '● CH-1 [PPG VITAL]: BLE DESCONECTADO',
         12,
-        32
+        18
       );
+
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillText(`● CH-2 [VR 6DoF LATENCIA]: ${reactionTimeMs} ms (Norma: 220-350 ms)`, 12, h * 0.52 + 16);
 
       animId = requestAnimationFrame(render);
     };
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [currentBpm, currentHrv, currentGsr, btStatus, rtHistoryTrials]);
+  }, [currentBpm, currentHrv, currentGsr, btStatus, rtHistoryTrials, reactionTimeMs]);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950/95 flex items-center justify-center p-6 font-sans text-slate-100 select-none">
@@ -933,7 +984,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1.5">
                     <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse"/>
-                    Monitor Clínico Híbrido en Vivo (60 Hz)
+                    Monitor Clínico Dual-Channel (60 Hz)
                   </span>
                 </div>
                 <div className="w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 relative">
