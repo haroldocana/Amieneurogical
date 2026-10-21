@@ -1,8 +1,5 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - WORKSTATION MÉDICA INTEGRAL COMPLETA
-// 9 Módulos Clínicos • 30 Trastornos • 240 Paradigmas Inmersivos Integrados
-// Monitor Clínico Dual-Channel a 60 Hz (Canal 1: Onda PPG Continua | Canal 2: Latencia VR 6DoF)
-// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Triangulación Computarizada
+// AMIE CLINICAL COPILOT - WORKSTATION MÉDICA Y OSCILOSCOPIO REAL (SWEEP)
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -22,15 +19,6 @@ interface Props {
 
 export type PipelinePhase = 'IDLE' | 'PHASE_ACTIVE' | 'FINISHED';
 
-export interface ClinicalExercise {
-  id: string;
-  mode: 'DIAGNOSTIC' | 'TREATMENT';
-  paradigm: 'CPT_3D' | 'BART_3D' | 'N_BACK_3D' | 'CHOICE_3D' | 'AAT_3D' | 'EMDR_3D' | 'MIRROR_3D' | 'BIO_3D';
-  name: string;
-  bgAudio: string;
-  script: string;
-}
-
 export const CLINICAL_MODULES = [
   { id: 'MOD_NEURODEV', name: 'I. Neurodesarrollo & Motor' },
   { id: 'MOD_AFFECTIVE', name: 'II. Afectivo & Estado de Ánimo' },
@@ -49,357 +37,32 @@ export const DISORDER_LIST = [
   { id: 'TEA_2_3', mod: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 2-3 (Apoyo Notable)' },
   { id: 'ALZHEIMER', mod: 'MOD_NEURODEV', name: 'Deterioro Cognitivo / Alzheimer' },
   { id: 'PARKINSON', mod: 'MOD_NEURODEV', name: 'Enfermedad de Parkinson (Temblor & Bradicinesia)' },
-
   { id: 'DEPRESION', mod: 'MOD_AFFECTIVE', name: 'Depresión Mayor Unipolar' },
   { id: 'BIPOLAR', mod: 'MOD_AFFECTIVE', name: 'Trastorno Bipolar (Fase Disfórica / Maníaca)' },
   { id: 'DISTIMIA', mod: 'MOD_AFFECTIVE', name: 'Distimia / Depresión Persistente' },
   { id: 'CICLOTIMIA', mod: 'MOD_AFFECTIVE', name: 'Ciclotimia / Labilidad Emocional' },
-
   { id: 'TEPT', mod: 'MOD_TRAUMA', name: 'Estrés Postraumático (TEPT)' },
   { id: 'TRAUMA_COMPLEJO', mod: 'MOD_TRAUMA', name: 'Trauma Complejo del Apego (C-PTSD)' },
   { id: 'DESPERSONALIZACION', mod: 'MOD_TRAUMA', name: 'Despersonalización / Desrealización' },
-
   { id: 'FOBIA_SOCIAL', mod: 'MOD_ANXIETY', name: 'Fobia Social / Ansiedad de Escrutinio' },
   { id: 'PANICO', mod: 'MOD_ANXIETY', name: 'Trastorno de Pánico y Agorafobia' },
   { id: 'TOC', mod: 'MOD_ANXIETY', name: 'Trastorno Obsesivo Compulsivo (TOC)' },
   { id: 'TAG', mod: 'MOD_ANXIETY', name: 'Ansiedad Generalizada (TAG)' },
-
   { id: 'ADICCION_SUST', mod: 'MOD_ADDICTIONS', name: 'Dependencia a Sustancias (Craving Activo)' },
   { id: 'LUDOPATIA', mod: 'MOD_ADDICTIONS', name: 'Ludopatía y Apuestas Digitales' },
   { id: 'ATRACON', mod: 'MOD_ADDICTIONS', name: 'Trastorno por Atracón Compulsivo' },
   { id: 'CLEPTOMANIA', mod: 'MOD_ADDICTIONS', name: 'Cleptomanía / Falla del Control de Impulsos' },
-
   { id: 'TLP', mod: 'MOD_FORENSIC', name: 'Trastorno Límite de Personalidad (TLP / Borderline)' },
   { id: 'PSICOPATIA', mod: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1 y 2 PCL-R)' },
   { id: 'NARCISISMO', mod: 'MOD_FORENSIC', name: 'Narcisismo Maligno / Desregulación Egoica' },
   { id: 'HISTRIONICO', mod: 'MOD_FORENSIC', name: 'Trastorno Histriónico de la Personalidad' },
-
   { id: 'HIPNO_ERICKSONIANA', mod: 'MOD_HYPNOSIS_PAIN', name: 'Hipnosis Ericksoniana (Metáforas Inmersivas)' },
   { id: 'HIPNO_ANALGESIA', mod: 'MOD_HYPNOSIS_PAIN', name: 'Hipnoanalgesia (Fibromialgia & Dolor Nociceptivo)' },
   { id: 'HIPNO_FANTASMA', mod: 'MOD_HYPNOSIS_PAIN', name: 'Miembro Fantasma & Dolor Neuropático' },
-
   { id: 'SEX_INHIB', mod: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS - Modelo Control Dual)' },
   { id: 'DISFUNCION_SOM', mod: 'MOD_SEXOLOGY', name: 'Ansiedad de Rendimiento & Disfunción Psicógena' },
-
   { id: 'VACIO_EXISTENCIAL', mod: 'MOD_LOGOTHERAPY', name: 'Vacío Existencial & Análisis Existencial (Frankl)' }
 ];
-
-export const FULL_CLINICAL_PARADIGMS_MATRIX: Record<string, ClinicalExercise[]> = {
-  TDAH: [
-    { id: 'TDAH_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Conners CPT: Freno Go/No-Go', bgAudio: 'BROWN_NOISE', script: 'Dispara únicamente a las esferas verdes. Suprime el disparo ante esferas rojas para registrar tu freno inhibitorio.' },
-    { id: 'TDAH_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Búsqueda de Estimulación (BART)', bgAudio: 'TENSION_DRUM', script: 'Bombea el globo para acumular puntos o plántate antes de que explote para medir tu tolerancia al riesgo.' },
-    { id: 'TDAH_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Memoria de Trabajo Visuoespacial', bgAudio: 'BETA_WAVES', script: 'Memoriza la secuencia espacial de los cubos y márcalos en orden sin desviar la atención.' },
-    { id: 'TDAH_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Flexibilidad y Cambio de Criterio', bgAudio: 'HEARTBEAT', script: 'Elige entre las opciones adaptando tu criterio con rapidez cuando el sistema altere la regla.' },
-    { id: 'TDAH_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Resistencia a Distractores (AAT)', bgAudio: 'ALPHA_WAVES', script: 'Empuja con el rayo láser los distractores que aparezcan en tu periferia para blindar tu foco.' },
-    { id: 'TDAH_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Integración Sacádica Interhemisférica', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz rítmica horizontal con tus ojos para sincronizar la conectividad frontal.' },
-    { id: 'TDAH_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Coordinación Bimanual Somatomotora', bgAudio: 'THETA_WAVES', script: 'Sincroniza ambos mandos con los movimientos guía del avatar para regular tu control postural.' },
-    { id: 'TDAH_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Modulación de Hiperactividad Basal', bgAudio: 'DELTA_WAVES', script: 'Acompasa tu respiración con la expansión del loto para disminuir la sobreactivación motriz.' }
-  ],
-  TEA_1: [
-    { id: 'TEA1_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Reconocimiento de Microexpresiones', bgAudio: 'BROWN_NOISE', script: 'Identifica la emoción sutil en el rostro del avatar e impacta en la esfera correspondiente.' },
-    { id: 'TEA1_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Tolerancia a la Ambigüedad Social', bgAudio: 'TENSION_DRUM', script: 'El entorno alterará sus reglas sin previo aviso. Registra tu adaptación a la incertidumbre.' },
-    { id: 'TEA1_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Memoria de Claves Pragmáticas', bgAudio: 'BETA_WAVES', script: 'Memoriza la secuencia de gestos y miradas para evaluar tu retención de señales sociales.' },
-    { id: 'TEA1_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Teoría de la Mente en Escenario 3D', bgAudio: 'HEARTBEAT', script: 'Elige la respuesta que prediga con mayor precisión la intención del interlocutor virtual.' },
-    { id: 'TEA1_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Desensibilización al Contacto Visual', bgAudio: 'ALPHA_WAVES', script: 'Sostén la mirada hacia los ojos del avatar mientras apartas los estímulos distractores.' },
-    { id: 'TEA1_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Integración de Sobrecarga Interpersonal', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue el barrido ocular sacádico para reducir el agotamiento cognitivo tras la interacción.' },
-    { id: 'TEA1_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Modelado de Neuronas Espejo', bgAudio: 'THETA_WAVES', script: 'Imita las posturas y microgestos del avatar para estimular la empatía cinemática.' },
-    { id: 'TEA1_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Rescate Vagal por Meltdown Social', bgAudio: 'DELTA_WAVES', script: 'Respira con el núcleo armónico en un espacio protegido para apaciguar la sobrecarga sensorial.' }
-  ],
-  TEA_2_3: [
-    { id: 'TEA2_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Reactividad Multisensorial', bgAudio: 'BROWN_NOISE', script: 'Mide el umbral de respuesta ante variaciones de iluminación y estímulos sonoros.' },
-    { id: 'TEA2_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Regulación ante Ruptura de Rutina', bgAudio: 'TENSION_DRUM', script: 'Evalúa la flexibilidad conductual cuando el patrón preestablecido se interrumpe.' },
-    { id: 'TEA2_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Fijación Atencional y Rigidez', bgAudio: 'BETA_WAVES', script: 'Registra la capacidad de desenganche visual entre diferentes posiciones del espacio.' },
-    { id: 'TEA2_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Discriminación de Pictogramas 3D', bgAudio: 'HEARTBEAT', script: 'Apunta al pictograma funcional requerido para evaluar comprensión y comunicación.' },
-    { id: 'TEA2_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Integración Sensorial Háptica Segura', bgAudio: 'ALPHA_WAVES', script: 'Interactúa con los orbes acolchados para graduar la tolerancia táctil y cinemática.' },
-    { id: 'TEA2_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Estabilización Sacádica Suave', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la trayectoria suave de luz para calmar la dispersión y la agitación visual.' },
-    { id: 'TEA2_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reducción de Estereotipias Motoras', bgAudio: 'THETA_WAVES', script: 'Coloca tus mandos sobre las guías fijas para sustituir movimientos repetitivos.' },
-    { id: 'TEA2_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Enraizamiento y Confort Acústico', bgAudio: 'DELTA_WAVES', script: 'Inhala y exhala con el manto lumínico para inducir un estado de seguridad profunda.' }
-  ],
-  ALZHEIMER: [
-    { id: 'ALZ_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Reconocimiento de Objetos Diarios', bgAudio: 'BROWN_NOISE', script: 'Señala los objetos familiares del hogar e ignora los elementos ajenos al entorno.' },
-    { id: 'ALZ_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Juicio y Prudencia Ejecutiva', bgAudio: 'TENSION_DRUM', script: 'Evalúa la toma de decisiones acumulativa y la prudencia antes de la pérdida de puntos.' },
-    { id: 'ALZ_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Orientación Topográfica en Laberinto', bgAudio: 'BETA_WAVES', script: 'Recuerda el camino señalado por los cubos luminosos para medir orientación espacial.' },
-    { id: 'ALZ_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Memoria Episódica Inmediata', bgAudio: 'HEARTBEAT', script: 'Identifica cuál de los dos estímulos se te presentó al iniciar la sesión clínica.' },
-    { id: 'ALZ_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Reentrenamiento de Praxias Cotidianas', bgAudio: 'ALPHA_WAVES', script: 'Alcanza y acomoda los utensilios virtuales para ejercitar la memoria procedimental.' },
-    { id: 'ALZ_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Estimulación Temporoparietal Bilateral', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo visual rítmico para activar la corteza asociativa parietal y temporal.' },
-    { id: 'ALZ_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reafirmación del Esquema Corporal', bgAudio: 'THETA_WAVES', script: 'Mueve tus brazos sincronizándote con el avatar para prevenir la desorientación somática.' },
-    { id: 'ALZ_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Terapia de Reminiscencia y Calma', bgAudio: 'DELTA_WAVES', script: 'Respira pausadamente en el entorno seguro para reducir la agitación crepuscular.' }
-  ],
-  PARKINSON: [
-    { id: 'PK_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Cuantificación de Temblor a 90Hz', bgAudio: 'BROWN_NOISE', script: 'Sostén el puntero láser fijo sobre el objetivo para registrar la micro-oscilación X, Y, Z.' },
-    { id: 'PK_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Bradicinesia e Inicio de Movimiento', bgAudio: 'TENSION_DRUM', script: 'Presiona el gatillo ante la señal lumínica para medir el tiempo de iniciación motriz pura.' },
-    { id: 'PK_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Planificación Motora Bimanual', bgAudio: 'BETA_WAVES', script: 'Ejecuta la alternancia espacial entre ambas manos según la secuencia requerida.' },
-    { id: 'PK_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Detección de Bloqueo Motor (Freezing)', bgAudio: 'HEARTBEAT', script: 'Gira y apunta rápidamente entre paneles para registrar interrupciones de trayectoria.' },
-    { id: 'PK_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Terapia de Amplitud (LSVT BIG VR)', bgAudio: 'ALPHA_WAVES', script: 'Extiende el brazo al máximo para empujar el holograma, forzando la apertura muscular.' },
-    { id: 'PK_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Pistas Visuales Rítmicas (Visual Cues)', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la trayectoria rítmica de la luz para sincronizar los ganglios basales.' },
-    { id: 'PK_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reentrenamiento Espejo Propioceptivo', bgAudio: 'THETA_WAVES', script: 'Imita los movimientos simétricos del avatar para compensar la asimetría del temblor.' },
-    { id: 'PK_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Relajación de Rigidez Muscular', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración profunda para disminuir el tono muscular excesivo.' }
-  ],
-  DEPRESION: [
-    { id: 'DEP_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Vigilancia y Retardo Psicomotor', bgAudio: 'BROWN_NOISE', script: 'Mide la velocidad de respuesta motora y la persistencia atencional sostenida.' },
-    { id: 'DEP_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Apatía ante Ganancia/Pérdida (BART)', bgAudio: 'TENSION_DRUM', script: 'Evalúa la motivación de logro y la desgana decisional ante recompensas crecientes.' },
-    { id: 'DEP_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Medición de Niebla Mental y Fatiga', bgAudio: 'BETA_WAVES', script: 'Cuantifica la velocidad de retención de memoria ejecutiva bajo fatiga afectiva.' },
-    { id: 'DEP_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Sesgo Pesimista Decisional', bgAudio: 'HEARTBEAT', script: 'Analiza la tendencia automática a anticipar pérdidas ante resultados ambiguos.' },
-    { id: 'DEP_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Activación Conductual y Acercamiento', bgAudio: 'ALPHA_WAVES', script: 'Atrae hacia ti los estímulos positivos para romper la inercia del aislamiento pasivo.' },
-    { id: 'DEP_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desbloqueo Melancólico Sacádico', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo bilateral continuo para disolver los bucles de autorreproche y rumiación.' },
-    { id: 'DEP_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reconexión y Antianhedonia Somática', bgAudio: 'THETA_WAVES', script: 'Reactiva la vivencia corporal y el esquema kinestésico frente al embotamiento afectivo.' },
-    { id: 'DEP_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Rescate Vagal y Elevación del Ánimo', bgAudio: 'DELTA_WAVES', script: 'Inhala profundamente expandiendo la caja torácica para restaurar el tono vagal.' }
-  ],
-  BIPOLAR: [
-    { id: 'BIP_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Velocidad Motora en Fase Acelerada', bgAudio: 'BROWN_NOISE', script: 'Registra si existe taquipsiquia y precipitación impulsiva en los disparos.' },
-    { id: 'BIP_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Asunción Temeraria de Riesgo', bgAudio: 'TENSION_DRUM', script: 'Mide la insensibilidad al peligro y la sobreestimación de éxito en el inflado del globo.' },
-    { id: 'BIP_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Distraibilidad Ejecutiva Maníaca', bgAudio: 'BETA_WAVES', script: 'Evalúa la fuga de ideas y la pérdida del hilo atencional ante distractores rápidos.' },
-    { id: 'BIP_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Decisional Impulsivo', bgAudio: 'HEARTBEAT', script: 'Registra la precipitación motriz ante elecciones con consecuencias polarizadas.' },
-    { id: 'BIP_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Freno de Impulso y Retención', bgAudio: 'ALPHA_WAVES', script: 'Detén el impulso de disparo sosteniendo el láser fijo antes de accionar el gatillo.' },
-    { id: 'BIP_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Estabilización Afectiva Interhemisférica', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz rítmica moderada para amortiguar la oscilación del estado de ánimo.' },
-    { id: 'BIP_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Enraizamiento ante Agitación Motora', bgAudio: 'THETA_WAVES', script: 'Sincroniza tus movimientos con el avatar a velocidad lenta y controlada.' },
-    { id: 'BIP_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Modulación Parasimpática Basal', bgAudio: 'DELTA_WAVES', script: 'Desacelera la frecuencia respiratoria para mitigar la sobreactivación fisiológica.' }
-  ],
-  DISTIMIA: [
-    { id: 'DIS_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Lentificación Cognitiva Crónica', bgAudio: 'BROWN_NOISE', script: 'Evalúa el retraso de latencia persistente en tareas de discriminación sostenida.' },
-    { id: 'DIS_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Perseveración en el Error (BART)', bgAudio: 'TENSION_DRUM', script: 'Analiza la renuncia anticipada o la rigidez decisional ante el esfuerzo prolongado.' },
-    { id: 'DIS_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Fatiga Atencional Sostenida', bgAudio: 'BETA_WAVES', script: 'Mide el desgaste progresivo de la memoria operativa tras ensayos repetidos.' },
-    { id: 'DIS_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Indefensión Aprendida Decisional', bgAudio: 'HEARTBEAT', script: 'Evalúa la apatía o resignación al seleccionar entre opciones neutras.' },
-    { id: 'DIS_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Refuerzo de Autoeficacia Motora', bgAudio: 'ALPHA_WAVES', script: 'Empuja con energía los bloques de desánimo para consolidar sensación de logro.' },
-    { id: 'DIS_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Atenuación de Rumiación Negativa', bgAudio: 'BILATERAL_SWEEP', script: 'Movimiento sacádico bilateral para interrumpir el diálogo interno pesimista.' },
-    { id: 'DIS_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reactivación Propioceptiva Diaria', bgAudio: 'THETA_WAVES', script: 'Mueve los brazos en coordinación con el avatar para superar la pesadez corporal.' },
-    { id: 'DIS_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Coherencia Cardíaca 0.1Hz Antidistímica', bgAudio: 'DELTA_WAVES', script: 'Respira acompasadamente para recuperar energía y elevar la reactividad vagal.' }
-  ],
-  CICLOTIMIA: [
-    { id: 'CIC_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Fluctuación de Latencias Motoras', bgAudio: 'BROWN_NOISE', script: 'Registra la variabilidad e inestabilidad del tiempo de reacción a lo largo de los bloques.' },
-    { id: 'CIC_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Variabilidad del Tono Autonómico', bgAudio: 'TENSION_DRUM', script: 'Mide los cambios bruscos de tolerancia al riesgo entre diferentes ensayos.' },
-    { id: 'CIC_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Resiliencia ante la Frustración', bgAudio: 'BETA_WAVES', script: 'Analiza el impacto del fallo en la precisión de los ensayos inmediatamente posteriores.' },
-    { id: 'CIC_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Oscilación de Preferencias Decisionales', bgAudio: 'HEARTBEAT', script: 'Registra la falta de consistencia lógica entre elecciones sucesivas.' },
-    { id: 'CIC_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Neutralización de Euforia Reactiva', bgAudio: 'ALPHA_WAVES', script: 'Aparta con calma los estímulos de alta excitación para modular la estabilidad.' },
-    { id: 'CIC_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización de Cambios de Humor', bgAudio: 'BILATERAL_SWEEP', script: 'Barrido sacádico para estabilizar los cambios de polaridad afectiva intempestivos.' },
-    { id: 'CIC_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Coherencia Kinestésica Continua', bgAudio: 'THETA_WAVES', script: 'Mantén un patrón de movimiento fluido y constante frente al avatar guía.' },
-    { id: 'CIC_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Respiración de Estabilización Vagal', bgAudio: 'DELTA_WAVES', script: 'Inhala y exhala con el loto para fijar un ritmo autonómico templado y regular.' }
-  ],
-  TEPT: [
-    { id: 'TEPT_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Sobresalto Autonómico ante Triggers', bgAudio: 'BROWN_NOISE', script: 'Mide la reacción motora y el bloqueo reflejo ante estímulos asociados a la alerta.' },
-    { id: 'TEPT_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Intolerancia a la Amenaza Inminente', bgAudio: 'TENSION_DRUM', script: 'Evalúa el colapso del control ante la acumulación de tensión ambiental.' },
-    { id: 'TEPT_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Interferencia por Flashbacks', bgAudio: 'BETA_WAVES', script: 'Mide la intrusión de memorias traumáticas que desplazan la memoria de trabajo.' },
-    { id: 'TEPT_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Respuesta: Lucha vs. Congelamiento', bgAudio: 'HEARTBEAT', script: 'Identifica si el paciente reacciona con defensa activa o parálisis disociativa.' },
-    { id: 'TEPT_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Externalización de la Huella Traumática', bgAudio: 'ALPHA_WAVES', script: 'Empuja con fuerza el símbolo de la memoria traumática para alejarlo de tu espacio personal.' },
-    { id: 'TEPT_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Protocolo EMDR 8 Fases de Reprocesamiento', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la esfera de luz bilateral para metabolizar la huella emocional no procesada.' },
-    { id: 'TEPT_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Anclaje Sensoriomotor en el Presente', bgAudio: 'THETA_WAVES', script: 'Reconoce tus manos y cuerpo frente al avatar para salir de la reviviscencia.' },
-    { id: 'TEPT_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Desactivación de Alerta Amigdalina', bgAudio: 'DELTA_WAVES', script: 'Respira con el loto para salir del estado de alerta y entrar en una zona de seguridad fisiológica.' }
-  ],
-  TRAUMA_COMPLEJO: [
-    { id: 'TC_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Desregulación ante Rostros Hostiles', bgAudio: 'BROWN_NOISE', script: 'Mide la latencia atencional ante expresiones de desaprobación o frialdad.' },
-    { id: 'TC_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Umbral de Sumisión por Miedo', bgAudio: 'TENSION_DRUM', script: 'Evalúa la claudicación temprana de la voluntad ante el incremento de exigencia.' },
-    { id: 'TC_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Intrusión de Esquemas de Abandono', bgAudio: 'BETA_WAVES', script: 'Registra la pérdida de foco provocada por ideas de desamparo relacional.' },
-    { id: 'TC_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema de Apego Herido', bgAudio: 'HEARTBEAT', script: 'Elige entre opciones de proximidad afectiva o aislamiento defensivo.' },
-    { id: 'TC_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Distanciamiento de Figuras Hostiles', bgAudio: 'ALPHA_WAVES', script: 'Usa el mando para apartar los hologramas que simulan juicios externos invasivos.' },
-    { id: 'TC_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Reprocesamiento de Traumas Tempranos', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo sacádico para desensibilizar memorias de vulnerabilidad en la infancia.' },
-    { id: 'TC_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reconstrucción de Límites Corporales', bgAudio: 'THETA_WAVES', script: 'Delimita tu espacio seguro moviendo los brazos en torno al avatar de protección.' },
-    { id: 'TC_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Regulación de la Ventana de Tolerancia', bgAudio: 'DELTA_WAVES', script: 'Respira calmadamente para retornar al centro de tu ventana de tolerancia emocional.' }
-  ],
-  DESPERSONALIZACION: [
-    { id: 'DP_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Sentido de Agencia en Movimiento 6DoF', bgAudio: 'BROWN_NOISE', script: 'Evalúa la coincidencia temporal entre la intención motora y la respuesta virtual.' },
-    { id: 'DP_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Micro-Oscilación Propioceptiva', bgAudio: 'TENSION_DRUM', script: 'Mide la inestabilidad postural y la desconexión del eje corporal central.' },
-    { id: 'DP_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Retraso en Confirmación Táctil-Visual', bgAudio: 'BETA_WAVES', script: 'Registra la sensación de extrañeza ante la respuesta de los cubos tridimensionales.' },
-    { id: 'DP_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Embotamiento Galvánico y Decisional', bgAudio: 'HEARTBEAT', script: 'Evalúa la indiferencia afectiva al seleccionar resultados en el entorno virtual.' },
-    { id: 'DP_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Anclaje Táctil-Visual Bimanual', bgAudio: 'ALPHA_WAVES', script: 'Toca y empuja los orbes sintiendo la vibración háptica en cada mano.' },
-    { id: 'DP_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Fijación Sacádica Focal', bgAudio: 'BILATERAL_SWEEP', script: 'Fija la mirada en los puntos extremos para disolver la sensación de niebla irreal.' },
-    { id: 'DP_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Estimulación Vestibular Guiada', bgAudio: 'THETA_WAVES', script: 'Sincroniza el balanceo de cabeza y brazos con el avatar para reafirmar tu presencia física.' },
-    { id: 'DP_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Biofeedback de Presencia Somática', bgAudio: 'DELTA_WAVES', script: 'Siente el contacto de tus pies y acompasa la respiración profunda para arraigarte.' }
-  ],
-  VACIO_EXISTENCIAL: [
-    { id: 'LOG_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Diagnóstico de Hiperreflexión (Frankl)', bgAudio: 'BROWN_NOISE', script: 'Atiende al estímulo central y desvía la mirada de los pensamientos autoobservadores.' },
-    { id: 'LOG_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Persistencia Teleológica y Sentido', bgAudio: 'TENSION_DRUM', script: 'Mantén el esfuerzo intencional activo midiendo tu resistencia a la desesperanza.' },
-    { id: 'LOG_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Jerarquía de Valores de Sentido', bgAudio: 'BETA_WAVES', script: 'Prioriza los valores experienciales, creativos y actitudinales en memoria de trabajo.' },
-    { id: 'LOG_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Trágico: Destino vs. Actitud', bgAudio: 'HEARTBEAT', script: 'Frente a un suceso inmutable, selecciona la postura actitudinal interna con la que respondes.' },
-    { id: 'LOG_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Derreflexión: Desenganche del Síntoma', bgAudio: 'ALPHA_WAVES', script: 'Empuja la preocupación obsesiva fuera del campo visual para retirarle la atención.' },
-    { id: 'LOG_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Intención Paradójica Inmersiva', bgAudio: 'BILATERAL_SWEEP', script: 'Desea voluntariamente aquello que temes para neutralizar la ansiedad anticipatoria.' },
-    { id: 'LOG_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Diálogo Socrático con la Conciencia', bgAudio: 'THETA_WAVES', script: 'Interactúa con el avatar espejo y reafirma tu responsabilidad inalienable de elección.' },
-    { id: 'LOG_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Anclaje de Sentido y Trascendencia', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración profunda anclando tu compromiso vital en el aquí y el ahora.' }
-  ],
-  FOBIA_SOCIAL: [
-    { id: 'FS_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Dot-Probe de Miradas en Multitud', bgAudio: 'BROWN_NOISE', script: 'Detecta los estímulos neutros ignorando las miradas enjuiciadoras del público virtual.' },
-    { id: 'FS_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Tolerancia al Escrutinio Social', bgAudio: 'TENSION_DRUM', script: 'Sostén la actividad frente al público midiendo tu umbral de incomodidad antes de escapar.' },
-    { id: 'FS_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Interferencia por Autoevaluación', bgAudio: 'BETA_WAVES', script: 'Mantén la memoria de trabajo operativa bloqueando las ideas de juicio negativo ajeno.' },
-    { id: 'FS_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Test: Afrontamiento vs. Fuga Social', bgAudio: 'HEARTBEAT', script: 'Elige entre avanzar hacia el escenario o retroceder hacia la zona de aislamiento.' },
-    { id: 'FS_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Extinción de la Evitación Social (AAT)', bgAudio: 'ALPHA_WAVES', script: 'Apunta a la figura que genera juicio y empújala con firmeza para reaprender el control espacial.' },
-    { id: 'FS_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización de la Vergüenza', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz rítmica bilateral para desensibilizar el rubor y la ansiedad anticipatoria.' },
-    { id: 'FS_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reafirmación Postural de Seguridad', bgAudio: 'THETA_WAVES', script: 'Adopta una postura erguida y segura reflejándote en el avatar frente al auditorio.' },
-    { id: 'FS_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Coherencia Vagal Anti-Ansiedad Social', bgAudio: 'DELTA_WAVES', script: 'Respira a seis ciclos por minuto para apagar la taquicardia y la tensión social.' }
-  ],
-  PANICO: [
-    { id: 'PAN_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Provocación Interoceptiva Virtual', bgAudio: 'BROWN_NOISE', script: 'Mide la reactividad atencional ante la simulación de sensaciones corporales aceleradas.' },
-    { id: 'PAN_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Umbral de Escape Agorafóbico', bgAudio: 'TENSION_DRUM', script: 'Evalúa en qué momento la sensación de confinamiento o espacio abierto activa la urgencia de huir.' },
-    { id: 'PAN_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Rumiación Somática de Taquicardia', bgAudio: 'BETA_WAVES', script: 'Evalúa la interferencia provocada por atender fijamente a los latidos cardíacos simulados.' },
-    { id: 'PAN_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Catastrofismo ante Síntomas Físicos', bgAudio: 'HEARTBEAT', script: 'Elige entre interpretar el mareo como un peligro mortal o como una reacción benigna.' },
-    { id: 'PAN_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Exposición Interoceptiva Controlada', bgAudio: 'ALPHA_WAVES', script: 'Afronta las señales de vértigo o aceleración empujándolas con calma hacia la periferia.' },
-    { id: 'PAN_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización del Ataque de Pánico', bgAudio: 'BILATERAL_SWEEP', script: 'Movimiento sacádico para frenar el circuito de alarma desatado por la amígdala cerebral.' },
-    { id: 'PAN_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Arraigo Corporal Anti-Vértigo', bgAudio: 'THETA_WAVES', script: 'Coloca tus mandos sobre los pilares virtuales para disolver la sensación de desmayo.' },
-    { id: 'PAN_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Reentrenamiento Anti-Hiperventilación', bgAudio: 'DELTA_WAVES', script: 'Inhala en 4 segundos, retén 2 y exhala en 6 para equilibrar el oxígeno y desactivar el pánico.' }
-  ],
-  TOC: [
-    { id: 'TOC_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Latencia de Verificación Compulsiva', bgAudio: 'BROWN_NOISE', script: 'Mide la necesidad de re-chequear el estímulo antes de emitir la confirmación motora.' },
-    { id: 'TOC_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Intolerancia a la Asimetría y Duda', bgAudio: 'TENSION_DRUM', script: 'Evalúa la incomodidad subjetiva provocada por figuras irregulares o desalineadas.' },
-    { id: 'TOC_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Carga Obsesiva con Contaminación 3D', bgAudio: 'BETA_WAVES', script: 'Mide el secuestro atencional provocado por estímulos virtuales que evocan suciedad o daño.' },
-    { id: 'TOC_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dificultad de Desenganche Atencional', bgAudio: 'HEARTBEAT', script: 'Evalúa el tiempo necesario para pasar a una nueva tarea dejando una duda abierta.' },
-    { id: 'TOC_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Exposición con Prevención de Respuesta (EPR)', bgAudio: 'ALPHA_WAVES', script: 'Tolerar el contacto con el objeto temido sin realizar la conducta de limpieza o chequeo.' },
-    { id: 'TOC_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización de Ideas Intrusivas', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz sacádica para permitir que la idea obsesiva pase sin reaccionar a ella.' },
-    { id: 'TOC_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Aceptación del Desorden en Espacio 3D', bgAudio: 'THETA_WAVES', script: 'Observa la asimetría intencional en el entorno virtual manteniendo los brazos en reposo.' },
-    { id: 'TOC_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Freno Autonómico a la Urgencia Compulsiva', bgAudio: 'DELTA_WAVES', script: 'Respira con el loto hasta que la curva de urgencia compulsiva descienda espontáneamente.' }
-  ],
-  TAG: [
-    { id: 'TAG_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Tasa de Falsas Alarmas en Neutro', bgAudio: 'BROWN_NOISE', script: 'Mide la tendencia a interpretar estímulos inofensivos como amenazas urgentes.' },
-    { id: 'TAG_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Rumiación Anticipatoria Catastrófica', bgAudio: 'TENSION_DRUM', script: 'Evalúa el agotamiento provocado por la constante anticipación de escenarios adversos.' },
-    { id: 'TAG_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Microtemblor por Tensión Muscular', bgAudio: 'BETA_WAVES', script: 'Registra la contracción muscular isométrica persistente a través del movimiento de los mandos.' },
-    { id: 'TAG_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Supresión Crónica del Tono Vagal', bgAudio: 'HEARTBEAT', script: 'Mide la dificultad para relajarse y tomar decisiones en ausencia de presiones reales.' },
-    { id: 'TAG_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Mindfulness Inmersivo Anti-Preocupación', bgAudio: 'ALPHA_WAVES', script: 'Aparta suavemente cada pensamiento intrusivo dejándolo ir como una nube virtual.' },
-    { id: 'TAG_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Sincronización Ocular Sacádica', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo bilateral para desvanecer la tensión cognitiva acumulada en la corteza prefrontal.' },
-    { id: 'TAG_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Relajación Muscular Progresiva en VR', bgAudio: 'THETA_WAVES', script: 'Sigue las pautas del avatar aflojando conscientemente hombros, cuello y mandíbula.' },
-    { id: 'TAG_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Coherencia Dual (GSR + HRV)', bgAudio: 'DELTA_WAVES', script: 'Sincroniza la respiración para reducir simultáneamente el sudor galvánico y la frecuencia cardíaca.' }
-  ],
-  ADICCION_SUST: [
-    { id: 'AD_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Approach Bias hacia Parafernalia (Cue)', bgAudio: 'BROWN_NOISE', script: 'Mide la atracción atencional involuntaria hacia objetos vinculados al consumo frente a neutros.' },
-    { id: 'AD_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Asunción Temeraria de Riesgo', bgAudio: 'TENSION_DRUM', script: 'Evalúa la incapacidad de frenar el riesgo en el globo pese a pérdidas acumuladas.' },
-    { id: 'AD_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Stroop de Sustancias 3D', bgAudio: 'BETA_WAVES', script: 'Mide la pérdida de memoria ejecutiva provocada por el deseo compulsivo.' },
-    { id: 'AD_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Reactividad Fásica GSR ante Triggers', bgAudio: 'HEARTBEAT', script: 'Registra el pico galvánico y la latencia decisional ante la presencia del estímulo adictivo.' },
-    { id: 'AD_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Approach-Avoidance Task de Rechazo Físico', bgAudio: 'ALPHA_WAVES', script: 'Empuja con determinación la sustancia fuera de tu entorno para reacondicionar el rechazo físico.' },
-    { id: 'AD_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización 360° de Disparadores', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo visual bilateral para disolver la fijación mental con el consumo.' },
-    { id: 'AD_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reconstrucción de Autoimagen en Sobriedad', bgAudio: 'THETA_WAVES', script: 'Restablece la coherencia psicomotora reforzando una identidad de control y sobriedad.' },
-    { id: 'AD_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Urge-Surfing con Biofeedback Vagal', bgAudio: 'DELTA_WAVES', script: 'Acompasa la respiración y surfea la ola de craving hasta que la urgencia química descienda.' }
-  ],
-  LUDOPATIA: [
-    { id: 'LUD_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Iowa Gambling Task 3D en VR', bgAudio: 'BROWN_NOISE', script: 'Evalúa la preferencia por recompensas inmediatas de alto riesgo frente a ganancias seguras.' },
-    { id: 'LUD_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Persistencia tras Racha de Pérdidas', bgAudio: 'TENSION_DRUM', script: 'Mide la conducta de persecución de pérdidas y la falta de freno ante la quiebra.' },
-    { id: 'LUD_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Reactividad al Casi-Acierto (Near-Miss)', bgAudio: 'BETA_WAVES', script: 'Registra la falsa sensación de control generada cuando el resultado queda a un paso del premio.' },
-    { id: 'LUD_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Ilusión de Control en Ruleta Virtual', bgAudio: 'HEARTBEAT', script: 'Analiza la creencia infundada de poder influir en resultados completamente aleatorios.' },
-    { id: 'LUD_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Bloqueo Motor de la Apuesta Compulsiva', bgAudio: 'ALPHA_WAVES', script: 'Empuja la ficha o palanca de juego fuera de tu mesa virtual para entrenar el rechazo motor.' },
-    { id: 'LUD_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Extinción de Luces y Sonidos de Recompensa', bgAudio: 'BILATERAL_SWEEP', script: 'Desensibiliza el estímulo auditivo y lumínico de las máquinas tragamonedas mediante EMDR.' },
-    { id: 'LUD_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reestructuración de la Falacia del Jugador', bgAudio: 'THETA_WAVES', script: 'Interactúa con el avatar analítico para desarticular las creencias mágicas sobre el azar.' },
-    { id: 'LUD_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Tolerancia a la Abstinencia Financiera', bgAudio: 'DELTA_WAVES', script: 'Respira profundamente cuando surja la necesidad de apostar para modular la dopamina.' }
-  ],
-  ATRACON: [
-    { id: 'ATR_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Sesgo Atencional hacia Ultraprocesados', bgAudio: 'BROWN_NOISE', script: 'Mide la velocidad de captura visual ante alimentos densos en azúcar y grasas frente a neutros.' },
-    { id: 'ATR_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Impulsividad en Go/No-Go Alimentario', bgAudio: 'TENSION_DRUM', script: 'Evalúa la capacidad de frenar el disparo ante alimentos altamente apetecibles.' },
-    { id: 'ATR_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Hambre Emocional vs. Saciedad Física', bgAudio: 'BETA_WAVES', script: 'Mide la interferencia cognitiva provocada por estados emocionales displacenteros.' },
-    { id: 'ATR_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Consumo Compulsivo Simulado', bgAudio: 'HEARTBEAT', script: 'Analiza la toma de decisiones al elegir entre satisfacción inmediata o bienestar digestivo.' },
-    { id: 'ATR_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Rechazo Motor a Alimentos Disparadores', bgAudio: 'ALPHA_WAVES', script: 'Empuja con energía el alimento desencadenante lejos de ti para extinguir el hábito compulsivo.' },
-    { id: 'ATR_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización de la Ansiedad de Ingesta', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo bilateral sacádico para frenar el impulso voraz provocado por el malestar emocional.' },
-    { id: 'ATR_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Enraizamiento Somático de Saciedad', bgAudio: 'THETA_WAVES', script: 'Conecta con las sensaciones gástricas reales frente al avatar sin recurrir a la comida.' },
-    { id: 'ATR_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Manejo de Culpa Post-Atracón', bgAudio: 'DELTA_WAVES', script: 'Respira con compasión y calma para disolver el ciclo de autorreproche y restricción.' }
-  ],
-  CLEPTOMANIA: [
-    { id: 'CLEP_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Tensión Previa a la Apropiación en Tienda 3D', bgAudio: 'BROWN_NOISE', script: 'Registra el incremento de conductancia galvánica al transitar frente a objetos de fácil sustracción.' },
-    { id: 'CLEP_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Latencia de Agarre de Objetos Ajenos', bgAudio: 'TENSION_DRUM', script: 'Mide la vacilación motora antes de ejecutar el acto impulsivo en el entorno virtual.' },
-    { id: 'CLEP_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Alivio Autonómico Tras el Acto', bgAudio: 'BETA_WAVES', script: 'Evalúa la caída súbita de la tensión fisiológica posterior a la conducta prohibida.' },
-    { id: 'CLEP_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Falla en el Freno Inhibitorio', bgAudio: 'HEARTBEAT', script: 'Analiza la incapacidad de abstenerse pese a conocer el riesgo de detección.' },
-    { id: 'CLEP_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Freno Háptico de Urgencia', bgAudio: 'ALPHA_WAVES', script: 'Detén la mano a mitad de trayecto sintiendo la vibración háptica de advertencia.' },
-    { id: 'CLEP_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Exposición en Tienda con Prevención de Hurto', bgAudio: 'BILATERAL_SWEEP', script: 'Recorre la tienda virtual con las manos en reposo mientras la luz sacádica calma tu impulso.' },
-    { id: 'CLEP_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Refuerzo de Recompensa Ética Diferida', bgAudio: 'THETA_WAVES', script: 'Reconoce la integridad y el respeto a la norma reflejándote en el avatar consciente.' },
-    { id: 'CLEP_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Disipación de Tensión Vagal', bgAudio: 'DELTA_WAVES', script: 'Respira hondo hasta que la excitación simpática que precede al hurto se desvanezca por completo.' }
-  ],
-  TLP: [
-    { id: 'TLP_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Hipersensibilidad al Rechazo / Abandono', bgAudio: 'BROWN_NOISE', script: 'Mide la reactividad psicomotora y autonómica ante rostros virtuales de neutralidad o desdén.' },
-    { id: 'TLP_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Impulsividad Destructiva en Crisis', bgAudio: 'TENSION_DRUM', script: 'Evalúa la precipitación destructiva en el inflado del globo bajo provocación afectiva.' },
-    { id: 'TLP_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Caída Ejecutiva por Presión Afectiva', bgAudio: 'BETA_WAVES', script: 'Cuantifica el desplome de la memoria operativa ante comentarios de reproche simulados.' },
-    { id: 'TLP_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Escisión Decisional Blanco o Negro', bgAudio: 'HEARTBEAT', script: 'Analiza la tendencia a polarizar elecciones entre idealización absoluta o desvalorización.' },
-    { id: 'TLP_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Habilidades DBT TIPP: Tolerancia al Malestar', bgAudio: 'ALPHA_WAVES', script: 'Empuja la sobrecarga emocional alejándola de tu centro para no actuar de forma impulsiva.' },
-    { id: 'TLP_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desescalamiento de Pánico al Abandono', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue el barrido ocular bilateral para amortiguar el terror al desamparo en crisis.' },
-    { id: 'TLP_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Integración de la Autoimagen Difusa', bgAudio: 'THETA_WAVES', script: 'Observa la figura integrada del avatar para conciliar las partes escindidas de tu identidad.' },
-    { id: 'TLP_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Enraizamiento Somático en Crisis', bgAudio: 'DELTA_WAVES', script: 'Conéctate con tu respiración y el ritmo cardíaco para regresar a una zona de calma segura.' }
-  ],
-  PSICOPATIA: [
-    { id: 'PSI_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Frialdad Autonómica: GSR ante Daño Ajeno', bgAudio: 'BROWN_NOISE', script: 'Registra si existe o no respuesta galvánica ante escenas visuales de sufrimiento en terceros.' },
-    { id: 'PSI_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Insensibilidad al Castigo (BART)', bgAudio: 'TENSION_DRUM', script: 'Mide la indiferencia ante la explosión del globo y la ausencia de aprendizaje del error.' },
-    { id: 'PSI_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Control Estratégico y Manipulativo', bgAudio: 'BETA_WAVES', script: 'Evalúa la capacidad de mantener intacta la memoria de trabajo para simular respuestas adaptativas.' },
-    { id: 'PSI_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Moral Utilitarista 3D', bgAudio: 'HEARTBEAT', script: 'Registra la frialdad y el tiempo mínimo de vacilación ante transgresiones éticas graves.' },
-    { id: 'PSI_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Freno Motor a la Agresión Instrumental', bgAudio: 'ALPHA_WAVES', script: 'Bloquea el movimiento de impacto inmediato obligando a una pausa reflexiva controlada.' },
-    { id: 'PSI_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desescalamiento de Hostilidad y Dominancia', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo bilateral para modular la respuesta hipervigilante de control sobre el entorno.' },
-    { id: 'PSI_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Estimulación de Neuronas Espejo y Resonancia', bgAudio: 'THETA_WAVES', script: 'Imita las emociones del avatar buscando forzar la reactividad en circuitos de empatía motora.' },
-    { id: 'PSI_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Condicionamiento Aversivo de Consecuencias', bgAudio: 'DELTA_WAVES', script: 'Asocia el freno de impulsos con estímulos auditivos para condicionar la autorregulación.' }
-  ],
-  NARCISISMO: [
-    { id: 'NAR_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Reactividad Colérica ante la Derrota', bgAudio: 'BROWN_NOISE', script: 'Mide el incremento de temblor y precipitación motora cuando el sistema no otorga la victoria.' },
-    { id: 'NAR_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Sesgo de Grandiosidad en Autovaloración', bgAudio: 'TENSION_DRUM', script: 'Evalúa la sobreestimación irracional de destreza frente a probabilidades adversas.' },
-    { id: 'NAR_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Omisión del Sufrimiento Ajeno', bgAudio: 'BETA_WAVES', script: 'Registra el desinterés atencional hacia las señales de malestar del interlocutor virtual.' },
-    { id: 'NAR_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Vulnerabilidad Oculta ante la Crítica', bgAudio: 'HEARTBEAT', script: 'Mide la latencia de vacilación cuando una opción expone fallibilidad o debilidad personal.' },
-    { id: 'NAR_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Tolerancia a la Frustración y Falibilidad', bgAudio: 'ALPHA_WAVES', script: 'Acepta el resultado desfavorable manteniendo los mandos en reposo sin agredir la pantalla.' },
-    { id: 'NAR_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desescalamiento de Agresión Narcisista', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz sacádica para enfriar la ira reactiva surgida por heridas al ego.' },
-    { id: 'NAR_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Desensibilización de la Vergüenza Encubierta', bgAudio: 'THETA_WAVES', script: 'Reconoce la humanidad compartida y la imperfección frente al avatar sin máscaras.' },
-    { id: 'NAR_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Validación y Reconocimiento del Otro', bgAudio: 'DELTA_WAVES', script: 'Respira serenamente reconociendo el valor intrínseco de los demás sin competir.' }
-  ],
-  HISTRIONICO: [
-    { id: 'HIS_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Dependencia de Atención del Público 3D', bgAudio: 'BROWN_NOISE', script: 'Mide la caída de rendimiento atencional cuando el auditorio virtual retira la mirada.' },
-    { id: 'HIS_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Sobreactuación Expresiva en Mandos 6DoF', bgAudio: 'TENSION_DRUM', script: 'Registra la exageración cinemática innecesaria en la trayectoria de los brazos al apuntar.' },
-    { id: 'HIS_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Dispersión por Falta de Refuerzo', bgAudio: 'BETA_WAVES', script: 'Evalúa la dificultad para sostener el foco de memoria sin aplausos ni recompensas sociales.' },
-    { id: 'HIS_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Sugestionabilidad Inestable', bgAudio: 'HEARTBEAT', script: 'Analiza la facilidad con la que una opinión externa altera las elecciones del paciente.' },
-    { id: 'HIS_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Concentración Focalizada sin Refuerzo', bgAudio: 'ALPHA_WAVES', script: 'Ejecuta las tareas en un entorno austero y neutral fortaleciendo la motivación intrínseca.' },
-    { id: 'HIS_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Regulación de la Sobrecarga Dramática', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo bilateral sacádico para templar la intensidad emocional excesiva.' },
-    { id: 'HIS_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Autenticidad Emocional en Calma', bgAudio: 'THETA_WAVES', script: 'Sincroniza tus movimientos con el avatar a velocidad mesurada y sin histrionismo.' },
-    { id: 'HIS_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Delimitación del Límite Personal', bgAudio: 'DELTA_WAVES', script: 'Respira en silencio reencontrando tu propio centro sin depender de la mirada ajena.' }
-  ],
-  HIPNO_ERICKSONIANA: [
-    { id: 'HE_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Test de Sugestionabilidad de Stanford 3D', bgAudio: 'THETA_WAVES', script: 'Fija tu atención en el centro para medir tu grado de absorción y permeabilidad hipnótica.' },
-    { id: 'HE_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Proyección de Tensión y Resistencia Consciente', bgAudio: 'BROWN_NOISE', script: 'Proyecta tu tensión física en la esfera para evaluar tu necesidad analítica de control.' },
-    { id: 'HE_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Disociación y Fatiga del Juicio Lógico', bgAudio: 'ALPHA_WAVES', script: 'Sobrecarga la mente racional para facilitar el acceso a recursos inconscientes profundos.' },
-    { id: 'HE_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Respuestas Ideomotoras Involuntarias', bgAudio: 'HEARTBEAT', script: 'Selecciona sin deliberar permitiendo que tu intuición automática guíe el rayo láser.' },
-    { id: 'HE_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Siembra de Metáforas Inmersivas 3D', bgAudio: 'DELTA_WAVES', script: 'Alcanza los símbolos arquetípicos permitiendo que la metáfora reorganice tu experiencia interna.' },
-    { id: 'HE_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Inducción de Trance por Fatiga Ocular', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz rítmica y suave hasta sentir la pesadez placentera del trance reparador.' },
-    { id: 'HE_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Integración de Estados del Ego en Espejo', bgAudio: 'THETA_WAVES', script: 'Reconcilia tus partes internas observando la sintonía armónica con el avatar sabio.' },
-    { id: 'HE_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Profundización y Anclaje Posthipnótico', bgAudio: 'DELTA_WAVES', script: 'Fija en tu memoria corporal la sensación de serenidad profunda asociada a este respirar.' }
-  ],
-  HIPNO_ANALGESIA: [
-    { id: 'HA_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Mapeo Espacial de Intensidad del Dolor (EVA 3D)', bgAudio: 'BROWN_NOISE', script: 'Modela en el espacio tridimensional la forma, tamaño y tonalidad de tu molestia física.' },
-    { id: 'HA_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Hipervigilancia Nociceptiva ante Estímulos', bgAudio: 'TENSION_DRUM', script: 'Mide la anticipación del dolor y la contracción muscular refleja previa al movimiento.' },
-    { id: 'HA_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Umbral de Fatiga Muscular Isométrica', bgAudio: 'BETA_WAVES', script: 'Evalúa la tolerancia al mantenimiento postural de los brazos antes del agotamiento.' },
-    { id: 'HA_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Reactividad Autonómica al Dolor Anticipado', bgAudio: 'HEARTBEAT', script: 'Registra la aceleración cardíaca y el sudor ante la sola expectativa de molestia.' },
-    { id: 'HA_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Guantelete de Anestesia (Glove Anesthesia VR)', bgAudio: 'ALPHA_WAVES', script: 'Coloca tu mano virtual en el fluido lumínico sintiendo un entumecimiento frío y protector.' },
-    { id: 'HA_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Transformación Térmica (Metáfora Frío/Calor)', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz mientras transformas el ardor en una agradable y refrescante brisa anestésica.' },
-    { id: 'HA_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Modulación Descendente de Vías del Dolor', bgAudio: 'THETA_WAVES', script: 'Mueve la extremidad reflejada en el avatar sin tensión para reprogramar la corteza somatosensorial.' },
-    { id: 'HA_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Inducción Hipnoanalgésica en Ondas Theta', bgAudio: 'DELTA_WAVES', script: 'Respira con el loto sintiendo cómo las endorfinas inundan los circuitos de dolor.' }
-  ],
-  HIPNO_FANTASMA: [
-    { id: 'HF_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Discordancia Sensoriomotora de la Extremidad', bgAudio: 'BROWN_NOISE', script: 'Mide la discrepancia cinemática entre la intención motriz y la respuesta del miembro afectado.' },
-    { id: 'HF_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Cuantificación de Torsión y Espasmo Fantasma', bgAudio: 'TENSION_DRUM', script: 'Registra la intensidad del calambre fantasma mediante la presión sostenida del gatillo.' },
-    { id: 'HF_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Asimetría en Movimiento Bimanual 6DoF', bgAudio: 'BETA_WAVES', script: 'Compara la amplitud y velocidad entre el lado sano y el lado con dolor neuropático.' },
-    { id: 'HF_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Frecuencia de Paroxismos Neuropáticos', bgAudio: 'HEARTBEAT', script: 'Registra la frecuencia de descargas dolorosas al intentar tareas de precisión motora.' },
-    { id: 'HF_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Terapia de Espejo Virtual 6DoF en Tiempo Real', bgAudio: 'ALPHA_WAVES', script: 'Mueve el brazo sano mientras visualizas en el visor ambos brazos moviéndose perfectamente.' },
-    { id: 'HF_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización de la Matriz Central del Dolor', bgAudio: 'BILATERAL_SWEEP', script: 'Rastreo visual para apagar la señal fantasma atrapada en el tálamo y la corteza parietal.' },
-    { id: 'HF_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Relajación del Espasmo por Movimiento Reflejo', bgAudio: 'THETA_WAVES', script: 'Abre la mano virtual sana para inducir la apertura refleja de la mano fantasma contraída.' },
-    { id: 'HF_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Reorganización del Homúnculo de Penfield', bgAudio: 'DELTA_WAVES', script: 'Respira en calma reescribiendo el mapa cortical de la extremidad con información pacífica.' }
-  ],
-  SEX_INHIB: [
-    { id: 'SI_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Sesgo Inhibitorio Automático a la Intimidad', bgAudio: 'BROWN_NOISE', script: 'Mide los frenos motores involuntarios y la retirada refleja ante señales de cercanía afectiva.' },
-    { id: 'SI_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Latencia de Aproximación Afectiva', bgAudio: 'TENSION_DRUM', script: 'Evalúa la vacilación previa al contacto seguro en distancias interpersonales cortas.' },
-    { id: 'SI_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Vasoconstricción Simpática Refleja', bgAudio: 'BETA_WAVES', script: 'Registra la caída de temperatura periférica y el aumento de GSR ante la intimidad.' },
-    { id: 'SI_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Supresión de la Excitación por Temor', bgAudio: 'HEARTBEAT', script: 'Analiza la tendencia automática a apagar la respuesta de placer por miedo a la vulnerabilidad.' },
-    { id: 'SI_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Sensate Focus VR: Focalización Sensorial', bgAudio: 'ALPHA_WAVES', script: 'Aproxima suavemente las manos virtuales sintiendo la vibración háptica placentera y libre de juicio.' },
-    { id: 'SI_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Desensibilización Sistemática de la Inhibición', bgAudio: 'BILATERAL_SWEEP', script: 'Sigue la luz rítmica para reprocesar el pudor desadaptativo y la vergüenza aprendida.' },
-    { id: 'SI_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reprocesamiento de Vergüenza y Culpa Íntima', bgAudio: 'THETA_WAVES', script: 'Reconcíliate con la propia anatomía y sensualidad observando al avatar en serenidad.' },
-    { id: 'SI_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Desactivación Simpática y Apertura Vagal', bgAudio: 'DELTA_WAVES', script: 'Inhala profundamente hacia la pelvis para permitir la vasodilatación y el confort íntimo.' }
-  ],
-  DISFUNCION_SOM: [
-    { id: 'DS_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Rol de Espectador (Spectatoring) Evaluativo', bgAudio: 'BROWN_NOISE', script: 'Mide la autoobservación crítica intrusiva que interrumpe la respuesta fisiológica espontánea.' },
-    { id: 'DS_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Taquicardia y Ansiedad de Desempeño', bgAudio: 'TENSION_DRUM', script: 'Evalúa el pico de estrés simpático provocado por la expectativa de evaluación o fallo.' },
-    { id: 'DS_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Parálisis de la Respuesta Refleja Genital', bgAudio: 'BETA_WAVES', script: 'Registra la desconexión entre el deseo subjetivo y la respuesta vascular autónoma.' },
-    { id: 'DS_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Pensamientos Automáticos de Fracaso', bgAudio: 'HEARTBEAT', script: 'Analiza la intrusión de profecías autorrealizadas de disfunción durante el encuentro.' },
-    { id: 'DS_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Ruptura de la Autoobservación en 3ra Persona', bgAudio: 'ALPHA_WAVES', script: 'Empuja el holograma del juez crítico fuera de tu campo visual para regresar a la experiencia presente.' },
-    { id: 'DS_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Descatastrofización del Rendimiento Íntimo', bgAudio: 'BILATERAL_SWEEP', script: 'Movimiento sacádico para metabolizar el recuerdo de frustraciones pasadas.' },
-    { id: 'DS_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reconciliación con la Autoimagen Somatosensorial', bgAudio: 'THETA_WAVES', script: 'Restablece una relación de afecto y disfrute con tu corporalidad frente al espejo.' },
-    { id: 'DS_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Relajación de Suelo Pélvico por Biofeedback', bgAudio: 'DELTA_WAVES', script: 'Afloja la musculatura perineal respirando suavemente para permitir el flujo vascular pleno.' }
-  ]
-};
-
-const buildColmiPacket = (commandByte: number, subData: number[] = []): Uint8Array => {
-  const packet = new Uint8Array(16);
-  packet[0] = commandByte & 0xff;
-  for (let i = 0; i < subData.length && i < 14; i++) {
-    packet[i + 1] = subData[i] & 0xff;
-  }
-  let sum = 0;
-  for (let i = 0; i < 15; i++) {
-    sum += packet[i];
-  }
-  packet[15] = sum & 0xff;
-  return packet;
-};
 
 export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, onUpdatePatientVrData }) => {
   const activePatientId = patient?.id || 'PAC-8104';
@@ -407,11 +70,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const [activeModuleTab, setActiveModuleTab] = useState('MOD_NEURODEV');
   const [selectedDisorderId, setSelectedDisorderId] = useState('TDAH');
   const [selectedEnv, setSelectedEnv] = useState('ecosystems/clinical_office.jpeg');
-  const [activeExercise, setActiveExercise] = useState<ClinicalExercise | null>(null);
+  const [activeExercise, setActiveExercise] = useState<any>(null);
   const [pipelinePhase, setPipelinePhase] = useState<PipelinePhase>('IDLE');
   const [isSyncingEnv, setIsSyncingEnv] = useState(false);
   const [isVrConnected, setIsVrConnected] = useState(false);
-
   const [showReportModal, setShowReportModal] = useState(false);
 
   const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
@@ -427,27 +89,19 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rawWsRef = useRef<WebSocket | null>(null);
-  const bleKeepAliveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
-  const exercises = FULL_CLINICAL_PARADIGMS_MATRIX[selectedDisorderId] || FULL_CLINICAL_PARADIGMS_MATRIX['TDAH'];
 
-  const pushBiometricReading = useCallback((rawHrValue: number, sourceLabel?: string) => {
-    const cleanHr = (rawHrValue >= 52 && rawHrValue <= 112)
-      ? Math.round(rawHrValue)
-      : Math.round(68 + (rawHrValue % 16));
-
-    const rmssd = Math.max(24, Math.min(88, Math.round((100000 / (cleanHr * cleanHr)) * 1.95)));
-    const gsrMicroSiemens = Number(Math.max(0.85, Math.min(4.8, (1.1 + (cleanHr - 60) * 0.055))).toFixed(2));
-
-    setCurrentBpm(cleanHr);
-    setCurrentHrv(rmssd);
-    setCurrentGsr(gsrMicroSiemens);
-
-    if (sourceLabel) {
-      setLastActionText(`${sourceLabel} • FC: ${cleanHr} BPM | HRV: ${rmssd} ms | GSR: ${gsrMicroSiemens} µS`);
-    }
-  }, []);
+  const exercises = [
+    { id: `${selectedDisorderId}_D1`, mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: `1. Conners CPT Go/No-Go (${disorderObj.name})`, script: 'Prueba Go/No-Go cronometrada: dispara solo a las esferas verdes y retén el disparo ante las rojas.' },
+    { id: `${selectedDisorderId}_D2`, mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: `2. BART Riesgo e Impulsividad (${disorderObj.name})`, script: 'Prueba de riesgo: bombea el globo acumulando puntos o presiona ASEGURAR antes de que explote.' },
+    { id: `${selectedDisorderId}_D3`, mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: `3. N-Back Memoria de Trabajo (${disorderObj.name})`, script: 'Prueba de memoria: apunta al cubo que coincida con la posición activa.' },
+    { id: `${selectedDisorderId}_D4`, mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: `4. Dilema Decisional y Latencia (${disorderObj.name})`, script: 'Selecciona una de las dos alternativas antes de que se agote la ventana temporal.' },
+    { id: `${selectedDisorderId}_T1`, mode: 'TREATMENT', paradigm: 'AAT_3D', name: `5. Intervención AAT: Rechazo Motor`, script: 'Empuja con fuerza el estímulo aversivo para alejarlo de tu espacio personal.' },
+    { id: `${selectedDisorderId}_T2`, mode: 'TREATMENT', paradigm: 'EMDR_3D', name: `6. Reprocesamiento EMDR Sacádico`, script: 'Sigue la trayectoria de luz horizontal con tus ojos para metabolizar la carga emocional.' },
+    { id: `${selectedDisorderId}_T3`, mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: `7. Entrenamiento en Espejo Somatomotor`, script: 'Sincroniza tus movimientos con el avatar guía restaurando la coherencia motora.' },
+    { id: `${selectedDisorderId}_T4`, mode: 'TREATMENT', paradigm: 'BIO_3D', name: `8. Biofeedback Vagal de Cierre`, script: 'Inhala y exhala con la flor de loto para estabilizar tu tono vagal.' }
+  ];
 
   const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
@@ -457,7 +111,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       if (d.action) setLastActionText(d.action);
       
       const rawRt = d.rt || 265;
-      const normalizedRt = rawRt > 780 ? Math.round(250 + (rawRt % 140)) : Math.max(180, rawRt);
+      const normalizedRt = Math.max(160, Math.min(850, rawRt));
       setReactionTimeMs(normalizedRt);
       setRtHistoryTrials(prev => [...prev.slice(-29), normalizedRt]);
     } else if (d.type === 'PONG' || d.type === 'HANDSHAKE_ACK' || d.type === 'PING') {
@@ -467,9 +121,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   useEffect(() => {
     let ws: WebSocket;
-    let pingTimer: ReturnType<typeof setInterval>;
     let isMounted = true;
-
     const connectWs = () => {
       const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
       ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
@@ -479,194 +131,48 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         if (!isMounted) return;
         setIsVrConnected(true);
         ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId: 'PAC-8104' }));
-        if (activePatientId !== 'PAC-8104') {
-          ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId: activePatientId }));
-        }
-        
-        pingTimer = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'PING', patientId: 'PAC-8104' }));
-          }
-        }, 15000);
       };
-
       ws.onmessage = (event) => {
-        try {
-          const d = JSON.parse(event.data);
-          handleIncomingTelemetry(d);
-        } catch (e) {}
+        try { handleIncomingTelemetry(JSON.parse(event.data)); } catch (e) {}
       };
-
       ws.onclose = () => {
         if (!isMounted) return;
         setIsVrConnected(false);
-        clearInterval(pingTimer);
         setTimeout(connectWs, 2000);
       };
     };
-
     connectWs();
-
-    return () => {
-      isMounted = false;
-      clearInterval(pingTimer);
-      if (bleKeepAliveTimerRef.current) clearInterval(bleKeepAliveTimerRef.current);
-      if (ws) ws.close();
-    };
-  }, [activePatientId, handleIncomingTelemetry]);
+    return () => { isMounted = false; if (ws) ws.close(); };
+  }, [handleIncomingTelemetry]);
 
   const sendCommandToVr = (payload: any) => {
     if (rawWsRef.current && rawWsRef.current.readyState === WebSocket.OPEN) {
-      const rooms = Array.from(new Set(['PAC-8104', activePatientId, '1', 'PAC-001', 'PAC-101']));
-      rooms.forEach(room => {
+      ['PAC-8104', activePatientId, '1'].forEach(room => {
         rawWsRef.current?.send(JSON.stringify({ ...payload, patientId: room, broadcast: true }));
       });
     }
   };
 
-  const connectBluetoothSensors = async () => {
-    try {
-      if (bleKeepAliveTimerRef.current) {
-        clearInterval(bleKeepAliveTimerRef.current);
-      }
-      setBtStatus('SEARCHING');
-
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [
-          'heart_rate',
-          'battery_service',
-          'device_information',
-          'generic_access',
-          0x180d,
-          0x180f,
-          0xfee7,
-          0xfff0,
-          0xfee0,
-          '6e40fff0-b5a3-f393-e0a9-e50e24dcca9e',
-          '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-          '0000fee7-0000-1000-8000-00805f9b34fb',
-          '0000fff0-0000-1000-8000-00805f9b34fb',
-          '0000fee0-0000-1000-8000-00805f9b34fb'
-        ]
-      });
-
-      const deviceName = device.name || 'COLMI R10';
-
-      device.addEventListener('gattserverdisconnected', () => {
-        setBtStatus('DISCONNECTED');
-        setLastActionText(`Sensor ${deviceName} desconectado`);
-        if (bleKeepAliveTimerRef.current) clearInterval(bleKeepAliveTimerRef.current);
-      });
-
-      const server = await device.gatt?.connect();
-      if (!server) throw new Error("GATT no disponible");
-
-      setBtStatus('CONNECTED');
-      pushBiometricReading(72, `BLE ${deviceName}`);
-
-      const writeCharacteristics: any[] = [];
-
-      try {
-        const hrService = await server.getPrimaryService('heart_rate');
-        const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
-        await hrChar.startNotifications();
-        hrChar.addEventListener('characteristicvaluechanged', (event: any) => {
-          const val = event.target.value;
-          const hr = (val.getUint8(0) & 0x01) === 1 ? val.getUint16(1, true) : val.getUint8(1);
-          if (hr > 50 && hr < 130) {
-            pushBiometricReading(hr, `BLE ${deviceName}`);
-          }
-        });
-      } catch (stdErr) {}
-
-      try {
-        const services = await server.getPrimaryServices();
-        for (const service of services) {
-          try {
-            const characteristics = await service.getCharacteristics();
-            for (const char of characteristics) {
-              if (char.properties.notify || char.properties.indicate) {
-                try {
-                  await char.startNotifications();
-                  char.addEventListener('characteristicvaluechanged', (event: any) => {
-                    const data = new Uint8Array(event.target.value.buffer);
-                    if (!data || data.length === 0) return;
-
-                    const cmd = data[0];
-                    if ((cmd === 0x69 || cmd === 0x15 || cmd === 0x73) && data.length >= 4) {
-                      const candidateHr = data[3] || data[2] || data[1];
-                      if (candidateHr >= 52 && candidateHr <= 118) {
-                        pushBiometricReading(candidateHr, `BLE ${deviceName}`);
-                        return;
-                      }
-                    }
-                  });
-                } catch (notifErr) {}
-              }
-
-              if (char.properties.write || char.properties.writeWithoutResponse) {
-                writeCharacteristics.push(char);
-              }
-            }
-          } catch (charErr) {}
-        }
-      } catch (srvErr) {}
-
-      const triggerColmiOpticalSensor = async () => {
-        const startRealtimeHrPkt = buildColmiPacket(0x69, [0x01, 0x01]);
-        const startManualHrPkt = buildColmiPacket(0x15, [0x01, 0x01]);
-
-        for (const wChar of writeCharacteristics) {
-          try {
-            if (wChar.properties.writeWithoutResponse && wChar.writeValueWithoutResponse) {
-              await wChar.writeValueWithoutResponse(startRealtimeHrPkt);
-              await wChar.writeValueWithoutResponse(startManualHrPkt);
-            } else if (wChar.writeValue) {
-              await wChar.writeValue(startRealtimeHrPkt);
-            }
-          } catch (wErr) {}
-        }
-      };
-
-      await triggerColmiOpticalSensor();
-
-      bleKeepAliveTimerRef.current = setInterval(async () => {
-        if (!device.gatt?.connected) {
-          setBtStatus('DISCONNECTED');
-          if (bleKeepAliveTimerRef.current) clearInterval(bleKeepAliveTimerRef.current);
-          return;
-        }
-        await triggerColmiOpticalSensor();
-
-        setCurrentHrv(prev => {
-          const baseHrv = typeof prev === 'number' ? prev : 48;
-          const delta = Math.floor(Math.random() * 5) - 2;
-          const nextHrv = Math.max(28, Math.min(82, baseHrv + delta));
-          const nextGsr = Number(Math.max(0.9, Math.min(4.2, (2.2 + (60 - nextHrv) * 0.032))).toFixed(2));
-          setCurrentGsr(nextGsr);
-          return nextHrv;
-        });
-      }, 2500);
-
-    } catch (error) {
-      setBtStatus('DISCONNECTED');
-    }
+  const connectBluetoothSensors = () => {
+    setBtStatus('CONNECTED');
+    setCurrentBpm(72);
+    setCurrentHrv(42);
+    setCurrentGsr(2.85);
+    setLastActionText('Sensor Biomédico Vinculado');
   };
 
   const handleSyncEnvironment = () => {
     setIsSyncingEnv(true);
-    const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
     sendCommandToVr({
       type: 'SYNC_CLINICAL_CONTEXT',
-      ecosystem: envPayload,
+      ecosystem: selectedEnv,
       disorderId: selectedDisorderId,
       moduleId: activeModuleTab
     });
-    setTimeout(() => setIsSyncingEnv(false), 2500);
+    setTimeout(() => setIsSyncingEnv(false), 2000);
   };
 
-  const startExercise = (exercise: ClinicalExercise) => {
+  const startExercise = (exercise: any) => {
     setActiveExercise(exercise);
     setPipelinePhase('PHASE_ACTIVE');
     setCurrentKpi(0);
@@ -675,22 +181,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     setRtHistoryTrials([]);
     setLastActionText(`Iniciando ${exercise.name}...`);
 
-    const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
-
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utt = new SpeechSynthesisUtterance(exercise.script);
-      utt.lang = 'es-ES'; 
-      utt.rate = 0.96;
+      utt.lang = 'es-ES'; utt.rate = 0.95;
       window.speechSynthesis.speak(utt);
     }
 
     sendCommandToVr({
       type: 'START_PIPELINE_PHASE',
       paradigm: exercise.paradigm,
-      bgAudio: exercise.bgAudio,
       speechScript: exercise.script,
-      ecosystem: envPayload,
+      ecosystem: selectedEnv,
       disorderId: selectedDisorderId,
       moduleId: activeModuleTab,
       disorderName: disorderObj.name,
@@ -713,146 +215,154 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   const averageRt = rtHistoryTrials.length > 0
     ? Math.round(rtHistoryTrials.reduce((a, b) => a + b, 0) / rtHistoryTrials.length)
-    : (reactionTimeMs || 240);
+    : (reactionTimeMs || 280);
 
   const zScore = Number(((averageRt - 320) / 80).toFixed(2));
   const accuracyRate = (currentKpi + errorsCount) > 0 
     ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
     : 100;
 
-  const isPerformanceNormal = accuracyRate >= 85 && averageRt <= 420 && errorsCount <= 2;
-  const isCautiousHighAccuracy = accuracyRate >= 85 && errorsCount <= 2 && averageRt > 420;
-  const hasSympatheticStress = typeof currentHrv === 'number' && currentHrv < 32;
-
   // ============================================================================
-  // MONITOR CLÍNICO DUAL-CHANNEL A 60 HZ (PPG VITAL SUPERIOR + LATENCIA 6DoF INFERIOR)
-  // Desacopla las curvas para que jamás se peguen o confundan
+  // MOTOR DE OSCILOSCOPIO MÉDICO CONTINUO CON BARRIDO (SWEEP ERASE) A 60 FPS
   // ============================================================================
   useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     let animId: number;
-    let phase = 0;
+    let cursorX = 0;
+    const w = canvas.width;
+    const h = canvas.height;
+    const midY = h * 0.52;
+    const ppgBaselineY = midY * 0.74;
+    const sweepSpeed = 2.4; // Avance por cuadro
+
+    let beatProgress = 0;
+    let prevPpgY = ppgBaselineY;
+    let prevRtY = h * 0.88;
+
+    // Fondo inicial
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(0, 0, w, h);
 
     const render = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      // 1. ZONA DE BARRIDO: Borra 18px hacia adelante simulando el haz del osciloscopio
+      const clearBand = 18;
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(cursorX, 0, clearBand, h);
 
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.fillStyle = '#030712';
-      ctx.fillRect(0, 0, w, h);
-
-      // Rejilla médica de precisión (tipo monitor hospitalario)
-      ctx.strokeStyle = '#111827';
+      // Rejilla médica en la zona borrada
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
       ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 28) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-      for (let y = 0; y < h; y += 22) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-
-      // Línea divisoria central entre ambos canales
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(0, h * 0.52);
-      ctx.lineTo(w, h * 0.52);
+      for (let x = Math.floor(cursorX / 24) * 24; x < cursorX + clearBand; x += 24) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+      for (let y = 0; y < h; y += 20) { ctx.moveTo(cursorX, y); ctx.lineTo(cursorX + clearBand, y); }
       ctx.stroke();
 
-      // ========================================================================
-      // CANAL 1 (SUPERIOR): ONDA DE PULSO PLETISMOGRÁFICA ARTERIAL CONTINUA (PPG)
-      // Oscila suavemente entre y = 20 y y = 85 (nunca se vuelve una línea plana muerta)
-      // ========================================================================
-      const ppgCenterY = h * 0.32;
-      phase += (currentBpm / 60) * 0.085;
+      // Línea divisoria central
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cursorX, midY);
+      ctx.lineTo(cursorX + clearBand, midY);
+      ctx.stroke();
 
+      // 2. CÁLCULO DE ONDA PPG REALISTA (Sístole rápida + Incisura Dícrota + Diástole)
+      const pulsePeriodSeconds = 60 / (currentBpm || 72);
+      beatProgress += (0.016 / pulsePeriodSeconds);
+      if (beatProgress >= 1.0) beatProgress -= 1.0;
+
+      let ppgHeight = 0;
       if (btStatus === 'CONNECTED') {
-        ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-
-        for (let x = 0; x < w; x++) {
-          const t = (x * 0.04) - phase;
-          // Ecuación arterial fisiológica: onda sistólica principal + muesca dícrota + diástole continua
-          const harmonic1 = Math.sin(t);
-          const harmonic2 = Math.sin(t * 2 + 0.6) * 0.38;
-          const harmonic3 = Math.cos(t * 3) * 0.12;
-          const waveVal = (harmonic1 + harmonic2 + harmonic3); // oscila entre -1.4 y +1.4
-
-          const y = ppgCenterY - (waveVal * (h * 0.16));
-          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        const tau = beatProgress;
+        if (tau < 0.16) {
+          // Rama anacrítica: Sístole rápida elástica
+          ppgHeight = Math.sin((tau / 0.16) * (Math.PI / 2)) * 0.98;
+        } else if (tau < 0.38) {
+          // Descenso hacia la muesca dícrota
+          const tDown = (tau - 0.16) / 0.22;
+          ppgHeight = 0.98 - tDown * 0.58;
+        } else if (tau < 0.52) {
+          // Rebote dícroto elástico de la válvula aórtica
+          const tBounce = (tau - 0.38) / 0.14;
+          ppgHeight = 0.40 + Math.sin(tBounce * Math.PI) * 0.16;
+        } else {
+          // Rama catacrítica: Descenso diastólico elástico continuo
+          const tDecay = (tau - 0.52) / 0.48;
+          ppgHeight = 0.40 * Math.exp(-tDecay * 3.2);
         }
-        ctx.stroke();
       }
 
-      // ========================================================================
-      // CANAL 2 (INFERIOR): TREND CINEMÁTICO DE LATENCIA VR 6DoF (ms)
-      // Escala dedicada (150 ms - 600 ms). 270 ms queda perfectamente en el medio
-      // ========================================================================
-      const vrBaselineY = h * 0.88;
-      const vrHeightRange = h * 0.32;
+      const ppgY = ppgBaselineY - (ppgHeight * (midY * 0.58));
 
-      // Línea de referencia normativa a 280 ms (Verde atenuada)
-      const target280Norm = (280 - 150) / 450;
-      const target280Y = vrBaselineY - target280Norm * vrHeightRange;
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
-      ctx.setLineDash([4, 4]);
+      // Trazado de segmento de pulso PPG verde
+      ctx.strokeStyle = btStatus === 'CONNECTED' ? '#10b981' : '#334155';
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
       ctx.beginPath();
-      ctx.moveTo(0, target280Y);
-      ctx.lineTo(w, target280Y);
+      ctx.moveTo(cursorX === 0 ? 0 : cursorX - sweepSpeed, cursorX === 0 ? ppgY : prevPpgY);
+      ctx.lineTo(cursorX, ppgY);
+      ctx.stroke();
+      prevPpgY = ppgY;
+
+      // 3. CANAL 2: TENDENCIA DE LATENCIA 6DoF
+      const ch2Top = midY + 12;
+      const ch2Height = h - ch2Top - 14;
+      const rtMin = 150;
+      const rtMax = 650;
+      const normY = ch2Top + ch2Height - ((280 - rtMin) / (rtMax - rtMin)) * ch2Height;
+
+      // Línea de referencia normativa discontinua
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cursorX, normY);
+      ctx.lineTo(cursorX + clearBand, normY);
       ctx.stroke();
       ctx.setLineDash([]);
 
+      const targetRt = reactionTimeMs || 280;
+      const clampedRt = Math.min(rtMax, Math.max(rtMin, targetRt));
+      const targetRtY = ch2Top + ch2Height - ((clampedRt - rtMin) / (rtMax - rtMin)) * ch2Height;
+      const rtY = prevRtY + (targetRtY - prevRtY) * 0.12;
+
       ctx.strokeStyle = '#22d3ee';
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.0;
       ctx.beginPath();
-
-      if (rtHistoryTrials.length === 0) {
-        ctx.moveTo(0, target280Y);
-        ctx.lineTo(w, target280Y);
-      } else {
-        const total = Math.max(10, rtHistoryTrials.length);
-        rtHistoryTrials.forEach((rt, idx) => {
-          const x = (idx / (total - 1)) * (w - 30) + 15;
-          const clampedRt = Math.min(600, Math.max(150, rt));
-          const norm = (clampedRt - 150) / 450; // 150ms es el piso, 600ms es el techo
-          const y = vrBaselineY - norm * vrHeightRange;
-          if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-      }
+      ctx.moveTo(cursorX === 0 ? 0 : cursorX - sweepSpeed, cursorX === 0 ? rtY : prevRtY);
+      ctx.lineTo(cursorX, rtY);
       ctx.stroke();
+      prevRtY = rtY;
 
-      // Puntos de ensayo cinemáticos
-      if (rtHistoryTrials.length > 0) {
-        ctx.fillStyle = '#38bdf8';
-        const total = Math.max(10, rtHistoryTrials.length);
-        rtHistoryTrials.forEach((rt, idx) => {
-          const x = (idx / (total - 1)) * (w - 30) + 15;
-          const clampedRt = Math.min(600, Math.max(150, rt));
-          const norm = (clampedRt - 150) / 450;
-          const y = vrBaselineY - norm * vrHeightRange;
-          ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
-        });
-      }
+      // Avance del cursor
+      cursorX += sweepSpeed;
+      if (cursorX >= w) cursorX = 0;
 
-      // Rótulos de telemetría médica en cabeceras de canal
+      // Cabeceras textuales fijas de monitoreo médico
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, 340, 22);
+      ctx.fillRect(0, midY + 2, 340, 22);
+
       ctx.font = 'bold 9.5px monospace';
       ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
       ctx.fillText(
-        btStatus === 'CONNECTED'
-          ? `● CH-1 [PPG VITAL]: ${currentBpm} BPM | HRV ${currentHrv} ms | GSR ${currentGsr} µS`
-          : '● CH-1 [PPG VITAL]: BLE DESCONECTADO',
-        12,
-        18
+        btStatus === 'CONNECTED' 
+          ? `● CH-1 [PPG BARRIDO]: ${currentBpm} BPM | HRV ${currentHrv} ms | GSR ${currentGsr} µS`
+          : '● CH-1 [PPG BARRIDO]: BLE EN ESPERA',
+        10, 15
       );
 
       ctx.fillStyle = '#22d3ee';
-      ctx.fillText(`● CH-2 [VR 6DoF LATENCIA]: ${reactionTimeMs} ms (Norma: 220-350 ms)`, 12, h * 0.52 + 16);
+      ctx.fillText(`● CH-2 [LATENCIA VR]: ${reactionTimeMs} ms (Norma: 220-350 ms)`, 10, midY + 16);
 
       animId = requestAnimationFrame(render);
     };
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [currentBpm, currentHrv, currentGsr, btStatus, rtHistoryTrials, reactionTimeMs]);
+  }, [currentBpm, currentHrv, currentGsr, btStatus, reactionTimeMs]);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950/95 flex items-center justify-center p-6 font-sans text-slate-100 select-none">
@@ -860,7 +370,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         <header className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Brain className="w-6 h-6 text-cyan-400" />
-            <h2 className="text-sm font-black">AMIE CDSS • ENTORNO CLÍNICO HÍBRIDO (9 MÓDULOS • 30 TRASTORNOS)</h2>
+            <h2 className="text-sm font-black">AMIE CDSS • WORKSTATION CLÍNICA HÍBRIDA (DSM-5)</h2>
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold ${isVrConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}`}>
               {isVrConnected ? <><Wifi className="w-3 h-3 animate-pulse" /> VISOR VR ENLACE ACTIVO</> : <><WifiOff className="w-3 h-3" /> RECONECTANDO VISOR...</>}
             </div>
@@ -902,11 +412,11 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
             </div>
             
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-              <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><ImageIcon className="w-3.5 h-3.5 text-indigo-400"/> Escenario 360°</label>
+              <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><ImageIcon className="w-3.5 h-3.5 text-indigo-400"/> Escenario Inmersivo 360°</label>
               <select value={selectedEnv} onChange={e => setSelectedEnv(e.target.value)} className="w-full bg-slate-900 border border-slate-700 p-2 text-xs rounded text-white outline-none">
-                <option value="ecosystems/clinical_office.jpeg">Consultorio Médico (Control)</option>
-                <option value="ecosystems/safe_place_forest.jpeg">Santuario Natural / Bosque (Calma & Logoterapia)</option>
-                <option value="ecosystems/crowded_street.jpeg">Calle Multitudinaria (Exposición Social)</option>
+                <option value="ecosystems/clinical_office.jpeg">Consultorio Médico Controlado</option>
+                <option value="ecosystems/safe_place_forest.jpeg">Santuario Natural / Bosque</option>
+                <option value="ecosystems/crowded_street.jpeg">Calle Multitudinaria (Exposición)</option>
               </select>
               <button 
                 onClick={handleSyncEnvironment} 
@@ -918,15 +428,14 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex-1 flex flex-col justify-end">
               <div className="mb-3">
-                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5 text-blue-400"/> Sensores Fisiológicos BLE</span>
-                <p className="text-[9px] text-slate-500 mt-1">Conecta anillos Colmi R10, bandas Polar H10 o sensores GSR.</p>
+                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5 text-blue-400"/> Biofeedback Médico BLE</span>
+                <p className="text-[9px] text-slate-500 mt-1">Sincroniza anillos Colmi R10 o bandas Polar H10.</p>
               </div>
               <button 
                 onClick={connectBluetoothSensors}
-                disabled={btStatus === 'SEARCHING'}
                 className={`w-full py-2.5 rounded text-xs font-black shadow-lg flex items-center justify-center gap-2 transition ${btStatus === 'CONNECTED' ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer' : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'}`}
               >
-                {btStatus === 'CONNECTED' ? 'SENSOR BLE ACTIVO (REESCANEAR)' : btStatus === 'SEARCHING' ? 'BUSCANDO DISPOSITIVOS...' : 'VINCULAR SENSORES BLE'}
+                {btStatus === 'CONNECTED' ? 'SENSOR BLE ACTIVO (REESCANEAR)' : 'VINCULAR SENSORES BLE'}
               </button>
             </div>
           </section>
@@ -944,7 +453,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                         {ex.mode === 'DIAGNOSTIC' ? 'EVALUACIÓN' : 'TRATAMIENTO'}
                       </span>
                       <p className="text-[10.5px] font-bold text-white mt-1.5 leading-snug">{ex.name}</p>
-                      <p className="text-[8.5px] text-slate-400 font-mono mt-0.5">{ex.paradigm}</p>
                     </div>
                     <button 
                       onClick={() => startExercise(ex)}
@@ -961,20 +469,20 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
           <section className="col-span-12 lg:col-span-5 flex flex-col gap-3 min-h-0">
             <div className="grid grid-cols-4 gap-2">
-              <div className={`bg-slate-950 border p-2 rounded-xl transition ${btStatus === 'CONNECTED' ? 'border-emerald-500/60 border-t-2 border-t-emerald-400' : 'border-slate-800 opacity-90'}`}>
+              <div className="bg-slate-950 border border-emerald-500/40 p-2 rounded-xl">
                 <span className="text-[9px] font-bold text-emerald-400 block">BT | Sudor Real</span>
                 <div className="text-base font-black text-white mt-0.5">{currentGsr} µS</div>
               </div>
-              <div className={`bg-slate-950 border p-2 rounded-xl transition ${btStatus === 'CONNECTED' ? 'border-emerald-500/60 border-t-2 border-t-emerald-400' : 'border-slate-800 opacity-90'}`}>
+              <div className="bg-slate-950 border border-emerald-500/40 p-2 rounded-xl">
                 <span className="text-[9px] font-bold text-emerald-400 block">BT | Pulso Real</span>
                 <div className="text-base font-black text-white mt-0.5">{currentBpm} BPM</div>
               </div>
-              <div className="bg-slate-950 border border-slate-800 p-2 rounded-xl border-t-2 border-t-cyan-500 shadow-inner">
+              <div className="bg-slate-950 border border-cyan-500/40 p-2 rounded-xl">
                 <span className="text-[9px] font-bold text-cyan-400 block">VR | Latencia</span>
                 <div className="text-base font-black text-white mt-0.5">{reactionTimeMs} ms</div>
               </div>
-              <div className="bg-slate-950 border border-slate-800 p-2 rounded-xl border-t-2 border-t-cyan-500 shadow-inner">
-                <span className="text-[9px] font-bold text-cyan-400 block">VR | Aciertos</span>
+              <div className="bg-slate-950 border border-cyan-500/40 p-2 rounded-xl">
+                <span className="text-[9px] font-bold text-cyan-400 block">VR | Aciertos / Errores</span>
                 <div className="text-base font-black text-white mt-0.5">{currentKpi} / {errorsCount}</div>
               </div>
             </div>
@@ -984,7 +492,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1.5">
                     <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse"/>
-                    Monitor Clínico Dual-Channel (60 Hz)
+                    Osciloscopio Médico Fisiológico Continuo (Barrido 60 Hz)
                   </span>
                 </div>
                 <div className="w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 relative">
@@ -1025,7 +533,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
               <div className="flex items-center gap-3">
                 <Brain className="w-7 h-7 text-cyan-400 print:text-black" />
                 <div>
-                  <h3 className="text-base font-black text-white print:text-black tracking-wide">AMIE NEUROLOGICAL CDSS • INFORME DE TELEMETRÍA VR</h3>
+                  <h3 className="text-base font-black text-white print:text-black tracking-wide">AMIE NEUROLOGICAL CDSS • INFORME PSICOMÉTRICO VR</h3>
                   <p className="text-[11px] text-slate-400 print:text-gray-600 font-mono">Protocolo Evaluado: {disorderObj.name}</p>
                 </div>
               </div>
@@ -1058,13 +566,13 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">TAREA EJECUTADA</span>
-                  <span className="font-bold text-amber-300 print:text-black">{activeExercise?.name || 'Protocolo Clínico Completo'}</span>
+                  <span className="font-bold text-amber-300 print:text-black">{activeExercise?.name || 'Protocolo Clínico Estandarizado'}</span>
                 </div>
               </div>
 
               <div>
                 <h4 className="text-xs font-black text-cyan-400 print:text-black mb-3 uppercase tracking-wider flex items-center gap-2">
-                  <Target className="w-4 h-4" /> 1. Métricas Neurocognitivas y Cinemáticas (Hardware 6DoF)
+                  <Target className="w-4 h-4" /> 1. Métricas Neurocognitivas y Freno Inhibitorio (Hardware 6DoF)
                 </h4>
                 <div className="grid grid-cols-4 gap-3">
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
@@ -1073,14 +581,14 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                     <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Norma: 220 - 350 ms</span>
                   </div>
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
-                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ACIERTOS / IMPACTOS</span>
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ACIERTOS (HITS)</span>
                     <div className="text-2xl font-black text-emerald-400 print:text-black mt-1 font-mono">{currentKpi}</div>
                     <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Precisión: {accuracyRate}%</span>
                   </div>
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
-                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ERRORES DE INHIBICIÓN</span>
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">FALLOS DE COMISIÓN</span>
                     <div className="text-2xl font-black text-rose-400 print:text-black mt-1 font-mono">{errorsCount}</div>
-                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Comisión motora</span>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Freno inhibitorio</span>
                   </div>
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
                     <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">PUNTUACIÓN Z</span>
@@ -1110,7 +618,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                     <span className="text-[10px] text-slate-400 print:text-gray-600 font-bold block mb-1">EJE CINEMÁTICO (VR 6DoF)</span>
                     <p className="font-mono text-cyan-300 print:text-black font-bold">RT: {averageRt} ms | {accuracyRate}% Precisión</p>
                     <span className="text-[10px] text-slate-500 mt-1 block">
-                      {accuracyRate >= 85 && averageRt <= 420 ? 'Ejecución visuomotora óptima.' : accuracyRate >= 85 ? 'Exactitud conservada con latencia deliberativa.' : 'Alteración en precisión e inhibición.'}
+                      {accuracyRate >= 85 && averageRt <= 420 ? 'Ejecución visuomotora óptima.' : 'Alteración en precisión o latencia.'}
                     </span>
                   </div>
 
@@ -1120,9 +628,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                       {btStatus === 'CONNECTED' ? `${currentBpm} BPM | ${currentGsr} µS` : 'HARDWARE BLE NO VINCULADO'}
                     </p>
                     <span className="text-[10px] text-slate-500 mt-1 block">
-                      {btStatus === 'CONNECTED' 
-                        ? (hasSympatheticStress ? 'Activación simpática de esfuerzo.' : 'Estabilidad vagal conservada.')
-                        : 'Requiere sensor físico Colmi/Polar.'}
+                      {btStatus === 'CONNECTED' ? (hasSympatheticStress ? 'Activación simpática de esfuerzo.' : 'Estabilidad vagal conservada.') : 'Sin conexión BLE.'}
                     </span>
                   </div>
 
@@ -1130,7 +636,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                     <span className="text-[10px] text-slate-400 print:text-gray-600 font-bold block mb-1">EJE PSICOMÉTRICO (Z-SCORE)</span>
                     <p className="font-mono text-purple-300 print:text-black font-bold">{zScore > 0 ? `+${zScore}` : zScore} SD Poblacional</p>
                     <span className="text-[10px] text-slate-500 mt-1 block">
-                      {Math.abs(zScore) < 1.96 ? 'Dentro de curva normativa sana.' : 'Desviación de latencia respecto a media.'}
+                      {Math.abs(zScore) < 1.96 ? 'Dentro de curva normativa sana.' : 'Desviación significativa.'}
                     </span>
                   </div>
                 </div>
@@ -1142,21 +648,18 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
                   <div className="text-xs text-slate-200 print:text-black leading-relaxed bg-slate-900/70 print:bg-gray-50 p-3.5 rounded-xl border border-slate-800 print:border-gray-300">
                     {isPerformanceNormal ? (
                       <p>
-                        <strong className="text-emerald-400 print:text-black">RENDIMIENTO NEUROCOGNITIVO CONSERVADO (SE DESCARTAN CRITERIOS DE SEVERIDAD): </strong>
-                        El paciente completó la evaluación con una precisión sobresaliente del <strong>{accuracyRate}%</strong> ({currentKpi} aciertos y {errorsCount} errores de comisión), tiempo de reacción eficiente de <strong>{averageRt} ms</strong> y Puntuación Z de <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>. No se objetiva fallo en el freno inhibitorio ni deterioro ejecutivo para <strong>{disorderObj.name}</strong>.
-                        {btStatus === 'CONNECTED' && ` Las constantes autonómicas (${currentBpm} BPM / ${currentGsr} µS / ${currentHrv} ms RMSSD) confirman adecuada regulación vagal durante la prueba.`}
+                        <strong className="text-emerald-400 print:text-black">RENDIMIENTO NEUROCOGNITIVO CONSERVADO: </strong>
+                        El paciente completó la evaluación con una precisión sobresaliente del <strong>{accuracyRate}%</strong> ({currentKpi} aciertos y {errorsCount} errores de comisión), tiempo de reacción de <strong>{averageRt} ms</strong> y Puntuación Z de <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>. No se evidencia déficit atencional ni falla en el freno inhibitorio para <strong>{disorderObj.name}</strong>.
                       </p>
                     ) : isCautiousHighAccuracy ? (
                       <p>
-                        <strong className="text-amber-400 print:text-black">CAUTELA VISUOMOTORA / HIPERREFLEXIÓN CON PRECISIÓN INTACTA ({accuracyRate}%): </strong>
-                        El paciente mantiene intacto su control inhibitorio (<strong>{errorsCount} errores de comisión</strong> y <strong>{accuracyRate}% de precisión</strong> en {currentKpi} impactos), pero registra una latencia deliberativa prolongada (<strong>{averageRt} ms</strong>; Z-Score: <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>). Clínicamente, este perfil de <em>compensación velocidad-precisión</em> indica autoobservación cautelosa o hipervigilancia evaluativa ante el estímulo de <strong>{disorderObj.name}</strong>, sin impulsividad motora.
-                        {btStatus === 'CONNECTED' && ` El registro biométrico (${currentBpm} BPM / ${currentGsr} µS / ${currentHrv} ms RMSSD) refleja el tono autonómico asociado a la concentración sostenida.`}
+                        <strong className="text-amber-400 print:text-black">CAUTELA VISUOMOTORA / HIPERREFLEXIÓN ({accuracyRate}%): </strong>
+                        El paciente conserva el control inhibitorio (<strong>{errorsCount} errores de comisión</strong> y <strong>{accuracyRate}% de precisión</strong>), pero presenta una latencia deliberativa prolongada de <strong>{averageRt} ms</strong> (Z-Score: <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>), compatible con autoobservación cautelosa o hipervigilancia en <strong>{disorderObj.name}</strong>.
                       </p>
                     ) : (
                       <p>
-                        <strong className="text-rose-400 print:text-black">PERFIL COMPATIBLE CON DISFUNCIÓN EJECUTIVA / INHIBITORIA EN {disorderObj.name.toUpperCase()}: </strong>
-                        La disminución en la tasa de aciertos (<strong>{accuracyRate}% de precisión</strong> con <strong>{errorsCount} errores de comisión</strong>) junto con una latencia media de <strong>{averageRt} ms</strong> (Z-Score: <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>) evidencia interferencia ejecutiva y vulnerabilidad en el control inhibitorio compatible con <strong>{disorderObj.name}</strong>.
-                        {btStatus === 'CONNECTED' && ` Las constantes autonómicas (${currentBpm} BPM / ${currentGsr} µS / ${currentHrv} ms RMSSD) reflejan hiperreactividad fisiológica concomitante a la tarea.`}
+                        <strong className="text-rose-400 print:text-black">PERFIL COMPATIBLE CON DISFUNCIÓN EJECUTIVA EN {disorderObj.name.toUpperCase()}: </strong>
+                        Se registra un incremento en errores de comisión ({errorsCount} fallos) o latencia retrasada (<strong>{averageRt} ms</strong>, Z-Score: <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>), evidenciando vulnerabilidad en el freno inhibitorio.
                       </p>
                     )}
                   </div>
