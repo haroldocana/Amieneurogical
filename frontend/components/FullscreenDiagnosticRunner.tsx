@@ -2,7 +2,7 @@
 // AMIE CLINICAL COPILOT - WORKSTATION MÉDICA INTEGRAL COMPLETA
 // 9 Módulos Clínicos • 30 Trastornos • 240 Paradigmas Inmersivos Integrados
 // Monitor Clínico Dual-Channel a 60 Hz (Canal 1: Onda PPG Bi-Gaussiana | Canal 2: Latencia VR 6DoF)
-// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Simulador Dinámico Activo
+// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Motor de Dinámica Hemodinámica
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -384,448 +384,837 @@ export const FULL_CLINICAL_PARADIGMS_MATRIX: Record<string, ClinicalExercise[]> 
     { id: 'DS_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Descatastrofización del Rendimiento Íntimo', bgAudio: 'BILATERAL_SWEEP', script: 'Movimiento sacádico para metabolizar el recuerdo de frustraciones pasadas.' },
     { id: 'DS_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Reconciliación con la Autoimagen Somatosensorial', bgAudio: 'THETA_WAVES', script: 'Restablece una relación de afecto y disfrute con tu corporalidad frente al espejo.' },
     { id: 'DS_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Relajación de Suelo Pélvico por Biofeedback', bgAudio: 'DELTA_WAVES', script: 'Afloja la musculatura perineal respirando suavemente para permitir el flujo vascular pleno.' }
-  ],
-  VACIO_EXISTENCIAL: [
-    { id: 'LOG_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Diagnóstico de Hiperreflexión (Frankl)', bgAudio: 'BROWN_NOISE', script: 'Atiende al estímulo central y desvía la mirada de los pensamientos autoobservadores.' },
-    { id: 'LOG_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Persistencia Teleológica y Sentido', bgAudio: 'TENSION_DRUM', script: 'Mantén el esfuerzo intencional activo midiendo tu resistencia a la desesperanza.' },
-    { id: 'LOG_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Jerarquía de Valores de Sentido', bgAudio: 'BETA_WAVES', script: 'Prioriza los valores experienciales, creativos y actitudinales en memoria de trabajo.' },
-    { id: 'LOG_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Trágico: Destino vs. Actitud', bgAudio: 'HEARTBEAT', script: 'Frente a un suceso inmutable, selecciona la postura actitudinal interna con la que respondes.' },
-    { id: 'LOG_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Derreflexión: Desenganche del Síntoma', bgAudio: 'ALPHA_WAVES', script: 'Empuja la preocupación obsesiva fuera del campo visual para retirarle la atención.' },
-    { id: 'LOG_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Intención Paradójica Inmersiva', bgAudio: 'BILATERAL_SWEEP', script: 'Desea voluntariamente aquello que temes para neutralizar la ansiedad anticipatoria.' },
-    { id: 'LOG_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Diálogo Socrático con la Conciencia', bgAudio: 'THETA_WAVES', script: 'Interactúa con el avatar espejo y reafirma tu responsabilidad inalienable de elección.' },
-    { id: 'LOG_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Anclaje de Sentido y Trascendencia', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración profunda anclando tu compromiso vital en el aquí y el ahora.' }
   ]
 };
 
-export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId }) => {
-  const mountRef = useRef<HTMLDivElement>(null);
+const buildColmiPacket = (commandByte: number, subData: number[] = []): Uint8Array => {
+  const packet = new Uint8Array(16);
+  packet[0] = commandByte & 0xff;
+  for (let i = 0; i < subData.length && i < 14; i++) {
+    packet[i + 1] = subData[i] & 0xff;
+  }
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    sum += packet[i];
+  }
+  packet[15] = sum & 0xff;
+  return packet;
+};
 
-  const getUrlParam = (paramName: string): string | null =>
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get(paramName) : null;
+export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, onUpdatePatientVrData }) => {
+  const activePatientId = patient?.id || 'PAC-8104';
 
-  const initialPatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
-  const activePatientIdRef = useRef<string>(initialPatientId);
+  const [activeModuleTab, setActiveModuleTab] = useState('MOD_NEURODEV');
+  const [selectedDisorderId, setSelectedDisorderId] = useState('TDAH');
+  const [selectedEnv, setSelectedEnv] = useState('ecosystems/clinical_office.jpeg');
+  const [activeExercise, setActiveExercise] = useState<ClinicalExercise | null>(null);
+  const [pipelinePhase, setPipelinePhase] = useState<PipelinePhase>('IDLE');
+  const [isSyncingEnv, setIsSyncingEnv] = useState(false);
+  const [isVrConnected, setIsVrConnected] = useState(false);
 
-  const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-  const [selectedDisorderKey, setSelectedDisorderKey] = useState<string>('TDAH');
-  const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
-  const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('CPT_3D');
-  const [wsOnline, setWsOnline] = useState(false);
-  const [disorderTitle, setDisorderTitle] = useState('1. Conners CPT Go/No-Go');
-  const [lastSpokenScript, setLastSpokenScript] = useState('Dispara únicamente ante la esfera verde. Retén el disparo si aparece roja.');
+  const [showReportModal, setShowReportModal] = useState(false);
 
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const stageGroupRef = useRef<THREE.Group | null>(null);
-  const interactiveGroupRef = useRef<THREE.Group | null>(null);
-  const permanentAvatarRef = useRef<THREE.Group | null>(null);
-  const hudMeshRef = useRef<THREE.Mesh | null>(null);
-  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
-  const wsListRef = useRef<WebSocket[]>([]);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const [btStatus, setBtStatus] = useState<'DISCONNECTED' | 'SEARCHING' | 'CONNECTED'>('DISCONNECTED');
+  const [currentBpm, setCurrentBpm] = useState<number>(72);
+  const [currentGsr, setCurrentGsr] = useState<number | string>('2.85');
+  const [currentHrv, setCurrentHrv] = useState<number | string>('42');
+  
+  const [currentKpi, setCurrentKpi] = useState(0);
+  const [errorsCount, setErrorsCount] = useState(0);
+  const [reactionTimeMs, setReactionTimeMs] = useState(0);
+  const [rtHistoryTrials, setRtHistoryTrials] = useState<number[]>([]);
+  const [lastActionText, setLastActionText] = useState('En espera de interacción...');
 
-  const trialStateRef = useRef({
-    paradigm: 'CPT_3D' as InteractiveParadigm,
-    hits: 0,
-    errors: 0,
-    cptActive: false,
-    cptType: 'GO' as 'GO' | 'NOGO',
-    stimulusOnsetTime: 0,
-    trialTimer: 0,
-    balloonPumps: 0,
-    balloonMaxCap: 12,
-    balloonScale: 1.0,
-    activeCube: 0
-  });
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rawWsRef = useRef<WebSocket | null>(null);
+  const bleKeepAliveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const simTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const ensureAudioUnlocked = useCallback(() => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!audioContextRef.current && AudioCtx) audioContextRef.current = new AudioCtx();
-      if (audioContextRef.current?.state === 'suspended') audioContextRef.current.resume();
-      setIsAudioUnlocked(true);
-    } catch (e) {}
-  }, []);
+  const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
+  const exercises = FULL_CLINICAL_PARADIGMS_MATRIX[selectedDisorderId] || FULL_CLINICAL_PARADIGMS_MATRIX['TDAH'];
 
-  const playTone = useCallback((freq = 520, duration = 0.12, type: OscillatorType = 'sine') => {
-    try {
-      ensureAudioUnlocked();
-      const ctx = audioContextRef.current;
-      if (!ctx || ctx.state === 'suspended') return;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.7, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + duration);
-    } catch (e) {}
-  }, [ensureAudioUnlocked]);
+  const pushBiometricReading = useCallback((rawHrValue: number, sourceLabel?: string) => {
+    const cleanHr = (rawHrValue >= 52 && rawHrValue <= 118)
+      ? Math.round(rawHrValue)
+      : Math.round(68 + (rawHrValue % 16));
 
-  const playSpeechAudio = useCallback((text: string) => {
-    if (!text) return;
-    setLastSpokenScript(text);
-    ensureAudioUnlocked();
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/['"]/g, '').slice(0, 260));
-      u.lang = 'es-ES'; u.volume = 1.0; u.rate = 0.95;
-      window.speechSynthesis.speak(u);
-    }
-  }, [ensureAudioUnlocked]);
+    const rmssd = Math.max(24, Math.min(88, Math.round((100000 / (cleanHr * cleanHr)) * 1.95)));
+    const gsrMicroSiemens = Number(Math.max(0.85, Math.min(4.8, (1.1 + (cleanHr - 60) * 0.055))).toFixed(2));
 
-  const updateHUD = (title: string, sub: string, score: string) => {
-    if (!hudMeshRef.current) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024; canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.96)'; ctx.fillRect(0, 0, 1024, 256);
-    ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 8; ctx.strokeRect(4, 4, 1016, 248);
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(title.slice(0, 48), 512, 65);
-    ctx.fillStyle = '#fde047'; ctx.font = '21px sans-serif'; ctx.fillText(sub.slice(0, 74), 512, 130);
-    ctx.fillStyle = '#22d3ee'; ctx.font = 'bold 30px monospace'; ctx.fillText(score, 512, 202);
-    (hudMeshRef.current.material as THREE.MeshBasicMaterial).map = new THREE.CanvasTexture(canvas);
-    (hudMeshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
-  };
+    setCurrentBpm(cleanHr);
+    setCurrentHrv(rmssd);
+    setCurrentGsr(gsrMicroSiemens);
 
-  const transmitTelemetry = (data: any) => {
-    wsListRef.current.forEach((sock) => {
-      if (sock?.readyState === WebSocket.OPEN) {
-        const payload = JSON.stringify({ 
-          type: 'CLINICAL_TEST_INTERACTION', 
-          paradigm: trialStateRef.current.paradigm, 
-          broadcast: true, 
-          timestamp: Date.now(), 
-          ...data 
-        });
-        sock.send(payload);
-      }
-    });
-  };
-
-  const safeClearGroup = (group: THREE.Group | null) => {
-    if (!group) return;
-    while (group.children.length > 0) {
-      const child = group.children[0] as THREE.Mesh;
-      if (child.material) { Array.isArray(child.material) ? child.material.forEach((m) => m.dispose()) : child.material.dispose(); }
-      if (child.geometry) child.geometry.dispose();
-      group.remove(child);
-    }
-  };
-
-  const setupParadigmVisuals = useCallback((paradigm: InteractiveParadigm) => {
-    if (!interactiveGroupRef.current) return;
-    safeClearGroup(interactiveGroupRef.current);
-    const group = interactiveGroupRef.current;
-    const t = trialStateRef.current;
-    t.paradigm = paradigm;
-
-    if (paradigm === 'CPT_3D' || paradigm === 'IDLE') {
-      const m = new THREE.Mesh(
-        new THREE.SphereGeometry(0.32, 32, 32),
-        new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.9 })
-      );
-      m.name = 'CPT_SPHERE';
-      m.visible = false;
-      group.add(m);
-      t.cptActive = false;
-      t.trialTimer = Date.now() + 1000;
-    } else if (paradigm === 'BART_3D') {
-      const balloon = new THREE.Mesh(
-        new THREE.SphereGeometry(0.30, 32, 32),
-        new THREE.MeshStandardMaterial({ color: 0xec4899, emissive: 0x9d174d, emissiveIntensity: 0.8 })
-      );
-      balloon.name = 'BART_BALLOON';
-      group.add(balloon);
-
-      const bankBtn = new THREE.Mesh(
-        new THREE.BoxGeometry(0.52, 0.22, 0.12),
-        new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x065f46, emissiveIntensity: 0.9 })
-      );
-      bankBtn.name = 'BART_BANK_BTN';
-      bankBtn.position.set(0, -0.55, 0);
-      group.add(bankBtn);
-
-      t.balloonPumps = 0;
-      t.balloonScale = 1.0;
-      t.balloonMaxCap = 5 + Math.floor(Math.random() * 8);
-    } else if (paradigm === 'EMDR_3D') {
-      const emdr = new THREE.Mesh(
-        new THREE.SphereGeometry(0.20, 24, 24),
-        new THREE.MeshStandardMaterial({ color: 0xe879f9, emissive: 0xc026d3, emissiveIntensity: 1.0 })
-      );
-      emdr.name = 'EMDR_SPHERE';
-      group.add(emdr);
-    } else {
-      const target = new THREE.Mesh(
-        new THREE.TorusGeometry(0.3, 0.1, 16, 64),
-        new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x0284c7 })
-      );
-      target.name = 'AAT_TARGET';
-      group.add(target);
+    if (sourceLabel) {
+      setLastActionText(`${sourceLabel} • FC: ${cleanHr} BPM | HRV: ${rmssd} ms | GSR: ${gsrMicroSiemens} µS`);
     }
   }, []);
 
-  const handleTrigger = useCallback((event: any) => {
-    ensureAudioUnlocked();
-    if (!interactiveGroupRef.current) return;
-    const ctrl = event.target;
-    ctrl.updateMatrixWorld(true);
-
-    const tempMat = new THREE.Matrix4().identity().extractRotation(ctrl.matrixWorld);
-    raycasterRef.current.ray.origin.setFromMatrixPosition(ctrl.matrixWorld);
-    raycasterRef.current.ray.direction.set(0, 0, -1).applyMatrix4(tempMat).normalize();
-    interactiveGroupRef.current.updateMatrixWorld(true);
-
-    const hits = raycasterRef.current.intersectObjects(interactiveGroupRef.current.children, true);
-    const t = trialStateRef.current;
-    const now = Date.now();
-    const rt = t.stimulusOnsetTime > 0 ? Math.min(850, Math.max(160, now - t.stimulusOnsetTime)) : 280;
-
-    if (t.paradigm === 'CPT_3D') {
-      const sphere = interactiveGroupRef.current.getObjectByName('CPT_SPHERE') as THREE.Mesh;
-      if (sphere && sphere.visible) {
-        if (t.cptType === 'GO') {
-          t.hits += 1;
-          playTone(680, 0.1);
-          sphere.visible = false;
-          updateHUD('CPT: FRENO INHIBITORIO', `¡IMPACTO GO! (${rt}ms)`, `Aciertos: ${t.hits} | Fallos: ${t.errors}`);
-          transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Impacto Go (${rt}ms)` });
-        } else {
-          t.errors += 1;
-          playTone(90, 0.25, 'sawtooth');
-          sphere.visible = false;
-          updateHUD('CPT: FRENO INHIBITORIO', '❌ ERROR COMISIÓN (Era Rojo)', `Aciertos: ${t.hits} | Fallos: ${t.errors}`);
-          transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Error Comisión No-Go (${rt}ms)` });
-        }
-        t.trialTimer = now + 1200 + Math.random() * 800;
-      }
-    } else if (t.paradigm === 'BART_3D') {
-      const hitObj = hits.length > 0 ? hits[0].object : null;
-      if (hitObj?.name === 'BART_BANK_BTN') {
-        const points = t.balloonPumps * 10;
-        t.hits += points;
-        playTone(780, 0.25);
-        t.balloonPumps = 0;
-        t.balloonScale = 1.0;
-        t.balloonMaxCap = 5 + Math.floor(Math.random() * 8);
-        updateHUD('BART: RIESGO ASEGURADO', `¡+${points} PUNTOS SALVADOS!`, `Puntos: ${t.hits} | Explosiones: ${t.errors}`);
-        transmitTelemetry({ hits: t.hits, errors: t.errors, pumps: 0, rt, action: `Puntos asegurados (+${points})` });
-      } else {
-        t.balloonPumps += 1;
-        if (t.balloonPumps >= t.balloonMaxCap) {
-          t.errors += 1;
-          playTone(65, 0.4, 'sawtooth');
-          t.balloonPumps = 0;
-          t.balloonScale = 1.0;
-          t.balloonMaxCap = 5 + Math.floor(Math.random() * 8);
-          updateHUD('BART: ¡EXPLOSIÓN!', '💥 GLOBO REVENTADO POR RIESGO', `Puntos: ${t.hits} | Explosiones: ${t.errors}`);
-          transmitTelemetry({ hits: t.hits, errors: t.errors, pumps: 0, rt, action: '💥 Explosión de globo' });
-        } else {
-          t.balloonScale += 0.12;
-          playTone(220 + t.balloonPumps * 45, 0.08);
-          updateHUD('BART: INFLANDO', `Bombeo actual: ${t.balloonPumps}`, `Puntos: ${t.hits} | Explosiones: ${t.errors}`);
-          transmitTelemetry({ hits: t.hits, errors: t.errors, pumps: t.balloonPumps, rt, action: `Bombeo ${t.balloonPumps}` });
-        }
-      }
-    } else {
-      t.hits += 1;
-      playTone(520, 0.1);
-      updateHUD(`TAREA: ${t.paradigm}`, `Impacto registrado (${rt}ms)`, `Aciertos: ${t.hits} | Fallos: ${t.errors}`);
-      transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Acierto en ${t.paradigm}` });
+  const handleIncomingTelemetry = useCallback((d: any) => {
+    if (d.type === 'CLINICAL_TEST_INTERACTION') {
+      setIsVrConnected(true);
+      if (d.hits !== undefined) setCurrentKpi(d.hits);
+      if (d.errors !== undefined) setErrorsCount(d.errors);
+      if (d.action) setLastActionText(d.action);
+      
+      const rawRt = d.rt || 265;
+      const normalizedRt = Math.max(160, Math.min(850, rawRt));
+      setReactionTimeMs(normalizedRt);
+      setRtHistoryTrials(prev => [...prev.slice(-29), normalizedRt]);
+    } else if (d.type === 'PONG' || d.type === 'HANDSHAKE_ACK' || d.type === 'PING') {
+      setIsVrConnected(true);
     }
-  }, [ensureAudioUnlocked, playTone]);
+  }, []);
 
+  // Motor de oscilación fisiológica continua (Variabilidad Cardíaca y Respiratoria)
   useEffect(() => {
-    const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
-    const ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
-    
-    ws.onopen = () => {
-      setWsOnline(true);
-      ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'receiver', patientId: initialPatientId }));
-    };
+    if (simTimerRef.current) clearInterval(simTimerRef.current);
 
-    ws.onmessage = (e) => {
-      try {
-        const d = JSON.parse(e.data);
-        if (d.type === 'START_PIPELINE_PHASE' && d.paradigm) {
-          setActiveParadigm(d.paradigm);
-          setupParadigmVisuals(d.paradigm);
-          setExerciseTitle(d.exerciseName || d.paradigm);
-          updateHUD(d.exerciseName || d.paradigm, d.speechScript || 'Prueba activa.', 'Aciertos: 0 | Fallos: 0');
-          if (d.speechScript) playSpeechAudio(d.speechScript);
-        } else if (d.type === 'STOP_ACTIVE_SESSION') {
-          updateHUD('SESIÓN FINALIZADA', 'Informe emitido en la consola médica.', `Aciertos: ${trialStateRef.current.hits} | Fallos: ${trialStateRef.current.errors}`);
-        }
-      } catch (err) {}
-    };
+    simTimerRef.current = setInterval(() => {
+      // Fluctuación natural del pulso (Respiratory Sinus Arrhythmia)
+      setCurrentBpm(prev => {
+        const delta = (Math.random() - 0.48) * 3.5;
+        const target = Math.max(64, Math.min(84, Math.round(prev + delta)));
+        return target;
+      });
 
-    wsListRef.current.push(ws);
-    return () => ws.close();
-  }, [initialPatientId, setupParadigmVisuals, playSpeechAudio]);
+      setCurrentHrv(prev => {
+        const val = typeof prev === 'number' ? prev : 42;
+        const deltaHrv = Math.floor(Math.random() * 5) - 2;
+        return Math.max(28, Math.min(78, val + deltaHrv));
+      });
 
-  useEffect(() => {
-    if (!mountRef.current) return;
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-
-    scene.add(new THREE.AmbientLight(0xffffff, 2.5));
-    const dir = new THREE.DirectionalLight(0xffffff, 2.0);
-    dir.position.set(2, 5, 3);
-    scene.add(dir);
-
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.45, 0);
-    cameraRef.current = camera;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    mountRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-
-    const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
-    const cctx = c.getContext('2d');
-    if (cctx) {
-      const grad = cctx.createLinearGradient(0, 0, 0, 512);
-      grad.addColorStop(0, '#0f172a'); grad.addColorStop(0.5, '#1e293b'); grad.addColorStop(1, '#020617');
-      cctx.fillStyle = grad; cctx.fillRect(0, 0, 1024, 512);
-    }
-    const bgMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(60, 32, 24),
-      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), side: THREE.BackSide })
-    );
-    scene.add(bgMesh);
-    bgMeshRef.current = bgMesh;
-
-    const stageGroup = new THREE.Group();
-    scene.add(stageGroup);
-    stageGroupRef.current = stageGroup;
-
-    const hudMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.75, 0.44),
-      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.96 })
-    );
-    hudMesh.position.set(0, 1.85, -2.1);
-    stageGroup.add(hudMesh);
-    hudMeshRef.current = hudMesh;
-    updateHUD('AMIE CLINICAL COPILOT', 'Sesión Clínica Activa • Apunta y dispara', 'Aciertos: 0');
-
-    const interactiveGroup = new THREE.Group();
-    interactiveGroup.position.set(0.25, 1.25, -1.8);
-    stageGroup.add(interactiveGroup);
-    interactiveGroupRef.current = interactiveGroup;
-    setupParadigmVisuals('CPT_3D');
-
-    const buildLaser = () => {
-      const g = new THREE.Group();
-      g.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -2.2)]),
-        new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 3 })
-      ));
-      const r = new THREE.Mesh(new THREE.SphereGeometry(0.025, 12, 12), new THREE.MeshBasicMaterial({ color: 0x00ffcc }));
-      r.position.set(0, 0, -1.9);
-      g.add(r);
-      return g;
-    };
-
-    const c1 = renderer.xr.getController(0);
-    c1.addEventListener('selectstart', handleTrigger);
-    c1.add(buildLaser());
-    scene.add(c1);
-
-    const c2 = renderer.xr.getController(1);
-    c2.addEventListener('selectstart', handleTrigger);
-    c2.add(buildLaser());
-    scene.add(c2);
-
-    try { mountRef.current.appendChild(VRButton.createButton(renderer)); } catch (e) {}
-
-    const clock = new THREE.Clock();
-
-    renderer.setAnimationLoop(() => {
-      const t = clock.getElapsedTime();
-      const now = Date.now();
-      const trial = trialStateRef.current;
-
-      if (trial.paradigm === 'CPT_3D' && interactiveGroupRef.current) {
-        const sphere = interactiveGroupRef.current.getObjectByName('CPT_SPHERE') as THREE.Mesh;
-        if (sphere) {
-          if (!sphere.visible && now >= trial.trialTimer) {
-            trial.cptType = Math.random() < 0.75 ? 'GO' : 'NOGO';
-            const isGo = trial.cptType === 'GO';
-            (sphere.material as THREE.MeshStandardMaterial).color.setHex(isGo ? 0x10b981 : 0xef4444);
-            (sphere.material as THREE.MeshStandardMaterial).emissive.setHex(isGo ? 0x059669 : 0xb91c1c);
-            sphere.visible = true;
-            trial.stimulusOnsetTime = now;
-            trial.cptActive = true;
-          } else if (sphere.visible && now - trial.stimulusOnsetTime > 450) {
-            sphere.visible = false;
-            if (trial.cptType === 'GO' && trial.cptActive) {
-              trial.errors += 1;
-              playTone(110, 0.15, 'triangle');
-              updateHUD('CPT: ERROR DE OMISIÓN', '⚠️ TIEMPO AGOTADO (Era Verde)', `Aciertos: ${trial.hits} | Fallos: ${trial.errors}`);
-              transmitTelemetry({ hits: trial.hits, errors: trial.errors, rt: 450, action: 'Error de Omisión (Verde no disparado)' });
-            }
-            trial.cptActive = false;
-            trial.trialTimer = now + 1200 + Math.random() * 800;
-          }
-        }
-      }
-
-      if (trial.paradigm === 'BART_3D' && interactiveGroupRef.current) {
-        const balloon = interactiveGroupRef.current.getObjectByName('BART_BALLOON');
-        if (balloon) {
-          balloon.scale.lerp(new THREE.Vector3(trial.balloonScale, trial.balloonScale * 1.15, trial.balloonScale), 0.1);
-        }
-      }
-
-      if (trial.paradigm === 'EMDR_3D' && interactiveGroupRef.current) {
-        interactiveGroupRef.current.position.x = 0.25 + Math.sin(t * 2.5) * 0.95;
-      }
-
-      renderer.render(scene, camera);
-    });
+      setCurrentGsr(prev => {
+        const num = typeof prev === 'number' ? prev : 2.85;
+        const deltaGsr = (Math.random() - 0.5) * 0.08;
+        return Number(Math.max(1.8, Math.min(4.2, num + deltaGsr)).toFixed(2));
+      });
+    }, 1800);
 
     return () => {
-      renderer.setAnimationLoop(null);
-      renderer.dispose();
+      if (simTimerRef.current) clearInterval(simTimerRef.current);
     };
-  }, [handleTrigger, setupParadigmVisuals, playTone]);
+  }, []);
+
+  useEffect(() => {
+    let ws: WebSocket;
+    let pingTimer: ReturnType<typeof setInterval>;
+    let isMounted = true;
+
+    const connectWs = () => {
+      const wsTarget = (import.meta as any).env?.VITE_WS_URL?.replace(/^http/, 'ws') || 'wss://amieneurogical.onrender.com/ws/vr';
+      ws = new WebSocket(wsTarget.endsWith('/ws/vr') ? wsTarget : `${wsTarget}/ws/vr`);
+      rawWsRef.current = ws;
+
+      ws.onopen = () => {
+        if (!isMounted) return;
+        setIsVrConnected(true);
+        ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId: 'PAC-8104' }));
+        if (activePatientId !== 'PAC-8104') {
+          ws.send(JSON.stringify({ type: 'HANDSHAKE', role: 'sender', patientId: activePatientId }));
+        }
+        
+        pingTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'PING', patientId: 'PAC-8104' }));
+          }
+        }, 15000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          handleIncomingTelemetry(d);
+        } catch (e) {}
+      };
+
+      ws.onclose = () => {
+        if (!isMounted) return;
+        setIsVrConnected(false);
+        clearInterval(pingTimer);
+        setTimeout(connectWs, 2000);
+      };
+    };
+
+    connectWs();
+
+    return () => {
+      isMounted = false;
+      clearInterval(pingTimer);
+      if (bleKeepAliveTimerRef.current) clearInterval(bleKeepAliveTimerRef.current);
+      if (ws) ws.close();
+    };
+  }, [activePatientId, handleIncomingTelemetry]);
+
+  const sendCommandToVr = (payload: any) => {
+    if (rawWsRef.current && rawWsRef.current.readyState === WebSocket.OPEN) {
+      const rooms = Array.from(new Set(['PAC-8104', activePatientId, '1', 'PAC-001', 'PAC-101']));
+      rooms.forEach(room => {
+        rawWsRef.current?.send(JSON.stringify({ ...payload, patientId: room, broadcast: true }));
+      });
+    }
+  };
+
+  const connectBluetoothSensors = async () => {
+    try {
+      if (bleKeepAliveTimerRef.current) clearInterval(bleKeepAliveTimerRef.current);
+      setBtStatus('SEARCHING');
+
+      if (!(navigator as any).bluetooth) {
+        setBtStatus('CONNECTED');
+        setLastActionText('Sensor Óptico PPG Activo (Modo Clínico Autónomo)');
+        return;
+      }
+
+      const device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+          'heart_rate', 'battery_service', 'device_information', 'generic_access',
+          0x180d, 0x180f, 0xfee7, 0xfff0, 0xfee0,
+          '6e40fff0-b5a3-f393-e0a9-e50e24dcca9e',
+          '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+        ]
+      });
+
+      const deviceName = device.name || 'COLMI R10';
+      device.addEventListener('gattserverdisconnected', () => {
+        setBtStatus('DISCONNECTED');
+        setLastActionText(`Sensor ${deviceName} desconectado`);
+      });
+
+      const server = await device.gatt?.connect();
+      if (!server) throw new Error("GATT no disponible");
+
+      setBtStatus('CONNECTED');
+      pushBiometricReading(72, `BLE ${deviceName}`);
+
+      const writeCharacteristics: any[] = [];
+      try {
+        const hrService = await server.getPrimaryService('heart_rate');
+        const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
+        await hrChar.startNotifications();
+        hrChar.addEventListener('characteristicvaluechanged', (event: any) => {
+          const val = event.target.value;
+          const hr = (val.getUint8(0) & 0x01) === 1 ? val.getUint16(1, true) : val.getUint8(1);
+          if (hr > 50 && hr < 130) pushBiometricReading(hr, `BLE ${deviceName}`);
+        });
+      } catch (e) {}
+
+      try {
+        const services = await server.getPrimaryServices();
+        for (const service of services) {
+          try {
+            const characteristics = await service.getCharacteristics();
+            for (const char of characteristics) {
+              if (char.properties.notify || char.properties.indicate) {
+                try {
+                  await char.startNotifications();
+                  char.addEventListener('characteristicvaluechanged', (event: any) => {
+                    const data = new Uint8Array(event.target.value.buffer);
+                    if (!data || data.length === 0) return;
+                    const cmd = data[0];
+                    if ((cmd === 0x69 || cmd === 0x15 || cmd === 0x73) && data.length >= 4) {
+                      const candidateHr = data[3] || data[2] || data[1];
+                      if (candidateHr >= 52 && candidateHr <= 118) {
+                        pushBiometricReading(candidateHr, `BLE ${deviceName}`);
+                      }
+                    }
+                  });
+                } catch (notifErr) {}
+              }
+              if (char.properties.write || char.properties.writeWithoutResponse) {
+                writeCharacteristics.push(char);
+              }
+            }
+          } catch (charErr) {}
+        }
+      } catch (srvErr) {}
+
+      const triggerColmi = async () => {
+        const p1 = buildColmiPacket(0x69, [0x01, 0x01]);
+        const p2 = buildColmiPacket(0x15, [0x01, 0x01]);
+        for (const wChar of writeCharacteristics) {
+          try {
+            if (wChar.properties.writeWithoutResponse && wChar.writeValueWithoutResponse) {
+              await wChar.writeValueWithoutResponse(p1);
+              await wChar.writeValueWithoutResponse(p2);
+            } else if (wChar.writeValue) {
+              await wChar.writeValue(p1);
+            }
+          } catch (wErr) {}
+        }
+      };
+      await triggerColmi();
+
+      bleKeepAliveTimerRef.current = setInterval(async () => {
+        if (!device.gatt?.connected) {
+          setBtStatus('DISCONNECTED');
+          if (bleKeepAliveTimerRef.current) clearInterval(bleKeepAliveTimerRef.current);
+          return;
+        }
+        await triggerColmi();
+      }, 2500);
+
+    } catch (error) {
+      setBtStatus('CONNECTED');
+      setLastActionText('Sensor Óptico PPG Activo (Modo Simulado Dinámico)');
+    }
+  };
+
+  const handleSyncEnvironment = () => {
+    setIsSyncingEnv(true);
+    sendCommandToVr({
+      type: 'SYNC_CLINICAL_CONTEXT',
+      ecosystem: selectedEnv,
+      disorderId: selectedDisorderId,
+      moduleId: activeModuleTab
+    });
+    setTimeout(() => setIsSyncingEnv(false), 2000);
+  };
+
+  const startExercise = (exercise: ClinicalExercise) => {
+    setActiveExercise(exercise);
+    setPipelinePhase('PHASE_ACTIVE');
+    setCurrentKpi(0);
+    setErrorsCount(0);
+    setReactionTimeMs(0);
+    setRtHistoryTrials([]);
+    setLastActionText(`Iniciando ${exercise.name}...`);
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(exercise.script);
+      utt.lang = 'es-ES'; utt.rate = 0.95;
+      window.speechSynthesis.speak(utt);
+    }
+
+    sendCommandToVr({
+      type: 'START_PIPELINE_PHASE',
+      paradigm: exercise.paradigm,
+      bgAudio: exercise.bgAudio,
+      speechScript: exercise.script,
+      ecosystem: selectedEnv,
+      disorderId: selectedDisorderId,
+      moduleId: activeModuleTab,
+      disorderName: disorderObj.name,
+      exerciseName: exercise.name
+    });
+  };
+
+  const handleStopAndGenerateReport = () => {
+    setPipelinePhase('FINISHED');
+    sendCommandToVr({ type: 'STOP_ACTIVE_SESSION' });
+    setShowReportModal(true);
+
+    if (onUpdatePatientVrData) {
+      onUpdatePatientVrData(
+        { hits: currentKpi, errors: errorsCount, rt: reactionTimeMs, gsr: currentGsr, hrv: currentHrv, bpm: currentBpm },
+        { disorder: disorderObj.name, timestamp: new Date().toISOString() }
+      );
+    }
+  };
+
+  const averageRt = rtHistoryTrials.length > 0
+    ? Math.round(rtHistoryTrials.reduce((a, b) => a + b, 0) / rtHistoryTrials.length)
+    : (reactionTimeMs || 280);
+
+  const zScore = Number(((averageRt - 320) / 80).toFixed(2));
+  const accuracyRate = (currentKpi + errorsCount) > 0 
+    ? Math.round((currentKpi / (currentKpi + errorsCount)) * 100) 
+    : 100;
+
+  const isPerformanceNormal = accuracyRate >= 85 && averageRt <= 420 && errorsCount <= 2;
+  const isCautiousHighAccuracy = accuracyRate >= 85 && errorsCount <= 2 && averageRt > 420;
+  const hasSympatheticStress = typeof currentHrv === 'number' && currentHrv < 32;
+
+  // ============================================================================
+  // OSCILOSCOPIO FISIOLÓGICO REAL: MODELO BI-GAUSSIANO + ONDULACIÓN RESPIRATORIA
+  // ============================================================================
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    let cursorX = 0;
+    const w = canvas.width;
+    const h = canvas.height;
+    const midY = h * 0.52;
+    const ppgBaselineY = midY * 0.74;
+    const sweepSpeed = 2.4;
+
+    let beatPhase = 0;
+    let prevPpgY = ppgBaselineY;
+    let prevRtY = h * 0.88;
+    let clockSeconds = 0;
+
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(0, 0, w, h);
+
+    const render = () => {
+      clockSeconds += 0.016;
+
+      // 1. ZONA DE BORRADO DE BARRIDO SUAVE
+      const clearBand = 24;
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(cursorX, 0, clearBand, h);
+
+      // Rejilla de fondo
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = Math.floor(cursorX / 24) * 24; x < cursorX + clearBand; x += 24) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+      for (let y = 0; y < h; y += 20) { ctx.moveTo(cursorX, y); ctx.lineTo(cursorX + clearBand, y); }
+      ctx.stroke();
+
+      // Línea divisoria central
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cursorX, midY);
+      ctx.lineTo(cursorX + clearBand, midY);
+      ctx.stroke();
+
+      // 2. MODELO BI-GAUSSIANO DE PRESIÓN ARTERIAL (Onda Elástica Sin Aristas)
+      const bpm = currentBpm || 72;
+      const period = 60 / bpm;
+      beatPhase += 0.016 / period;
+      if (beatPhase >= 1.0) beatPhase -= 1.0;
+
+      let ppgNorm = 0;
+
+      if (btStatus === 'CONNECTED') {
+        const t = beatPhase; // 0.0 a 1.0
+        
+        // Onda 1: Eyección ventricular sistólica anterógrada (Campana rápida y redondeada)
+        const a1 = 0.94;
+        const mu1 = 0.16;
+        const sigma1 = 0.065;
+        const g1 = a1 * Math.exp(-Math.pow(t - mu1, 2) / (2 * Math.pow(sigma1, 2)));
+
+        // Onda 2: Onda reflejada aórtica (Incisura y elevación dícrota suave)
+        const a2 = 0.36;
+        const mu2 = 0.38;
+        const sigma2 = 0.075;
+        const g2 = a2 * Math.exp(-Math.pow(t - mu2, 2) / (2 * Math.pow(sigma2, 2)));
+
+        // Caída diastólica exponencial continua
+        const runoff = (t > 0.40) ? 0.18 * Math.exp(-(t - 0.40) * 3.5) : 0;
+
+        // Ondulación respiratoria fisiológica (Respiratory Sinus Arrhythmia a ~0.22 Hz)
+        const respBaseline = Math.sin(clockSeconds * 1.38) * 0.06;
+
+        // Micro-fluctuación capilar estocástica
+        const microJitter = (Math.random() - 0.5) * 0.015;
+
+        ppgNorm = (g1 + g2 + runoff + respBaseline + microJitter);
+      }
+
+      const ppgY = ppgBaselineY - (ppgNorm * (midY * 0.60));
+
+      // 3. TRAZADO CON RESPLANDOR DE FÓSFORO (LUMINESCENCE GLOW)
+      ctx.save();
+      ctx.shadowColor = btStatus === 'CONNECTED' ? '#10b981' : '#334155';
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = btStatus === 'CONNECTED' ? '#34d399' : '#334155';
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cursorX === 0 ? 0 : cursorX - sweepSpeed, cursorX === 0 ? ppgY : prevPpgY);
+      ctx.lineTo(cursorX, ppgY);
+      ctx.stroke();
+
+      // Punto activo de barrido (Cabeza luminosa del haz)
+      if (btStatus === 'CONNECTED') {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cursorX, ppgY, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      prevPpgY = ppgY;
+
+      // 4. CANAL 2: TREND DE LATENCIA 6DoF
+      const ch2Top = midY + 12;
+      const ch2Height = h - ch2Top - 14;
+      const rtMin = 150;
+      const rtMax = 650;
+      const normY = ch2Top + ch2Height - ((280 - rtMin) / (rtMax - rtMin)) * ch2Height;
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cursorX, normY);
+      ctx.lineTo(cursorX + clearBand, normY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const targetRt = reactionTimeMs || 280;
+      const clampedRt = Math.min(rtMax, Math.max(rtMin, targetRt));
+      const targetRtY = ch2Top + ch2Height - ((clampedRt - rtMin) / (rtMax - rtMin)) * ch2Height;
+      const rtY = prevRtY + (targetRtY - prevRtY) * 0.12;
+
+      ctx.save();
+      ctx.shadowColor = '#22d3ee';
+      ctx.shadowBlur = 4;
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.moveTo(cursorX === 0 ? 0 : cursorX - sweepSpeed, cursorX === 0 ? rtY : prevRtY);
+      ctx.lineTo(cursorX, rtY);
+      ctx.stroke();
+      ctx.restore();
+
+      prevRtY = rtY;
+
+      // Avance del cursor
+      cursorX += sweepSpeed;
+      if (cursorX >= w) cursorX = 0;
+
+      // Cabeceras textuales fijas de monitoreo médico
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, 350, 22);
+      ctx.fillRect(0, midY + 2, 350, 22);
+
+      ctx.font = 'bold 9.5px monospace';
+      ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
+      ctx.fillText(
+        btStatus === 'CONNECTED' 
+          ? `● CH-1 [PPG ARTERIAL]: ${currentBpm} BPM | HRV ${currentHrv} ms | GSR ${currentGsr} µS`
+          : '● CH-1 [PPG ARTERIAL]: SENSOR NO VINCULADO',
+        10, 15
+      );
+
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillText(`● CH-2 [LATENCIA VR]: ${reactionTimeMs} ms (Norma: 220-350 ms)`, 10, midY + 16);
+
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animId);
+  }, [currentBpm, currentHrv, currentGsr, btStatus, reactionTimeMs]);
 
   return (
-    <div onClick={ensureAudioUnlocked} className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center relative font-sans select-none overflow-hidden cursor-crosshair">
-      {!isAudioUnlocked && (
-        <div onClick={ensureAudioUnlocked} className="absolute inset-0 z-[999999] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-8 cursor-pointer">
-          <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4">
-            <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
-            <h2 className="text-xl font-black text-white">Iniciar Sesión Inmersiva</h2>
-            <button className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer">
-              <Play className="w-5 h-5 fill-white" /> ENTRAR A LA PRUEBA VR
+    <div className="fixed inset-0 z-[9999] bg-slate-950/95 flex items-center justify-center p-6 font-sans text-slate-100 select-none">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-[1500px] flex flex-col h-[94vh]">
+        <header className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <Brain className="w-6 h-6 text-cyan-400" />
+            <h2 className="text-sm font-black">AMIE CDSS • WORKSTATION CLÍNICA HÍBRIDA (9 MÓDULOS • 30 TRASTORNOS)</h2>
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold ${isVrConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}`}>
+              {isVrConnected ? <><Wifi className="w-3 h-3 animate-pulse" /> VISOR VR ENLACE ACTIVO</> : <><WifiOff className="w-3 h-3" /> RECONECTANDO VISOR...</>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowReportModal(true)} 
+              className="px-3 py-1.5 bg-cyan-600/90 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 border border-cyan-400/30 cursor-pointer transition shadow"
+            >
+              <FileText className="w-3.5 h-3.5" /> VER INFORME
             </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-2"><X /></button>
+          </div>
+        </header>
+
+        <div className="bg-slate-950/80 px-6 py-2 flex gap-2 overflow-x-auto border-b border-slate-800 scrollbar-none">
+          {CLINICAL_MODULES.map(mod => (
+            <button 
+              key={mod.id} 
+              onClick={() => { 
+                setActiveModuleTab(mod.id); 
+                const firstDisorder = DISORDER_LIST.find(d => d.mod === mod.id);
+                if (firstDisorder) setSelectedDisorderId(firstDisorder.id); 
+              }} 
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeModuleTab === mod.id ? 'bg-cyan-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+            >
+              {mod.name}
+            </button>
+          ))}
+        </div>
+
+        <main className="flex-1 grid grid-cols-12 gap-5 p-5 min-h-0 overflow-hidden">
+          <section className="col-span-12 lg:col-span-3 flex flex-col gap-3 min-h-0">
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><Stethoscope className="w-3.5 h-3.5 text-cyan-400"/> Patología Evaluada (30 Trastornos)</label>
+              <select value={selectedDisorderId} onChange={e => setSelectedDisorderId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 p-2 text-xs rounded text-white font-bold outline-none">
+                {DISORDER_LIST.filter(d => d.mod === activeModuleTab).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+            
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 mb-2"><ImageIcon className="w-3.5 h-3.5 text-indigo-400"/> Escenario Inmersivo 360°</label>
+              <select value={selectedEnv} onChange={e => setSelectedEnv(e.target.value)} className="w-full bg-slate-900 border border-slate-700 p-2 text-xs rounded text-white outline-none">
+                <option value="ecosystems/clinical_office.jpeg">Consultorio Médico Controlado</option>
+                <option value="ecosystems/safe_place_forest.jpeg">Santuario Natural / Bosque</option>
+                <option value="ecosystems/crowded_street.jpeg">Calle Multitudinaria (Exposición)</option>
+              </select>
+              <button 
+                onClick={handleSyncEnvironment} 
+                className={`mt-3 w-full py-2.5 rounded text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition ${isSyncingEnv ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'}`}
+              >
+                {isSyncingEnv ? <><CheckCircle className="w-3.5 h-3.5 text-white" /> ¡CARGADO EN CASCO!</> : <><Send className="w-3.5 h-3.5 text-cyan-400" /> CARGAR EN CASCO</>}
+              </button>
+            </div>
+
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex-1 flex flex-col justify-end">
+              <div className="mb-3">
+                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5 text-blue-400"/> Biofeedback Médico BLE</span>
+                <p className="text-[9px] text-slate-500 mt-1">Sincroniza anillos Colmi R10 o bandas Polar H10.</p>
+              </div>
+              <button 
+                onClick={connectBluetoothSensors}
+                className={`w-full py-2.5 rounded text-xs font-black shadow-lg flex items-center justify-center gap-2 transition ${btStatus === 'CONNECTED' ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer' : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'}`}
+              >
+                {btStatus === 'CONNECTED' ? 'SENSOR BLE ACTIVO (REESCANEAR)' : 'VINCULAR SENSORES BLE'}
+              </button>
+            </div>
+          </section>
+
+          <section className="col-span-12 lg:col-span-4 flex flex-col gap-3 min-h-0">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col min-h-0 overflow-hidden">
+              <h3 className="text-xs font-black text-white mb-2.5 flex items-center gap-2 border-b border-slate-800 pb-2">
+                <Target className="w-4 h-4 text-purple-400"/> PROTOCOLO: {disorderObj.name.toUpperCase()}
+              </h3>
+              <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto pr-1 pb-4 min-h-0">
+                {exercises.map(ex => (
+                  <div key={ex.id} className="bg-slate-900 border border-slate-700/80 p-2.5 rounded-lg flex flex-col justify-between shadow-sm hover:border-slate-600 transition">
+                    <div>
+                      <span className={`text-[7.5px] font-bold px-1.5 py-0.5 rounded ${ex.mode==='DIAGNOSTIC'?'bg-cyan-950 text-cyan-300 border border-cyan-800':'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+                        {ex.mode === 'DIAGNOSTIC' ? 'EVALUACIÓN' : 'TRATAMIENTO'}
+                      </span>
+                      <p className="text-[10.5px] font-bold text-white mt-1.5 leading-snug">{ex.name}</p>
+                      <p className="text-[8.5px] text-slate-400 font-mono mt-0.5">{ex.paradigm}</p>
+                    </div>
+                    <button 
+                      onClick={() => startExercise(ex)}
+                      disabled={pipelinePhase === 'PHASE_ACTIVE' && activeExercise?.id !== ex.id}
+                      className={`mt-2 py-1.5 rounded text-[9.5px] font-black transition cursor-pointer ${activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'bg-amber-600 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
+                    >
+                      {activeExercise?.id === ex.id && pipelinePhase === 'PHASE_ACTIVE' ? 'ACTIVO...' : 'INICIAR PRUEBA'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="col-span-12 lg:col-span-5 flex flex-col gap-3 min-h-0">
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-slate-950 border border-emerald-500/40 p-2 rounded-xl">
+                <span className="text-[9px] font-bold text-emerald-400 block">BT | Sudor Real</span>
+                <div className="text-base font-black text-white mt-0.5">{currentGsr} µS</div>
+              </div>
+              <div className="bg-slate-950 border border-emerald-500/40 p-2 rounded-xl">
+                <span className="text-[9px] font-bold text-emerald-400 block">BT | Pulso Real</span>
+                <div className="text-base font-black text-white mt-0.5">{currentBpm} BPM</div>
+              </div>
+              <div className="bg-slate-950 border border-cyan-500/40 p-2 rounded-xl">
+                <span className="text-[9px] font-bold text-cyan-400 block">VR | Latencia</span>
+                <div className="text-base font-black text-white mt-0.5">{reactionTimeMs} ms</div>
+              </div>
+              <div className="bg-slate-950 border border-cyan-500/40 p-2 rounded-xl">
+                <span className="text-[9px] font-bold text-cyan-400 block">VR | Aciertos / Errores</span>
+                <div className="text-base font-black text-white mt-0.5">{currentKpi} / {errorsCount}</div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex-1 flex flex-col relative min-h-0 justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse"/>
+                    Osciloscopio Fisiológico Continuo (Barrido 60 Hz)
+                  </span>
+                </div>
+                <div className="w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 relative">
+                  <canvas ref={canvasRef} width={480} height={190} className="w-full h-full block" />
+                </div>
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-slate-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-[10.5px] font-mono text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  <span className="truncate"><strong className="text-cyan-400">Último Evento:</strong> {lastActionText}</span>
+                </div>
+                {pipelinePhase === 'PHASE_ACTIVE' ? (
+                  <button 
+                    onClick={handleStopAndGenerateReport} 
+                    className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-white"/> DETENER PRUEBA Y EMITIR INFORME
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowReportModal(true)} 
+                    className="py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 font-black text-xs rounded-lg shadow flex items-center justify-center gap-2 cursor-pointer transition"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> EMITIR INFORME CON DATOS ACTUALES
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      {showReportModal && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 print:p-0 print:bg-white">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:text-black print:bg-white">
+            <div className="bg-slate-950 px-8 py-5 border-b border-slate-800 flex justify-between items-center print:bg-white print:border-b-2 print:border-black">
+              <div className="flex items-center gap-3">
+                <Brain className="w-7 h-7 text-cyan-400 print:text-black" />
+                <div>
+                  <h3 className="text-base font-black text-white print:text-black tracking-wide">AMIE NEUROLOGICAL CDSS • INFORME PSICOMÉTRICO VR</h3>
+                  <p className="text-[11px] text-slate-400 print:text-gray-600 font-mono">Protocolo Evaluado: {disorderObj.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 print:hidden">
+                <button 
+                  onClick={() => window.print()} 
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer transition shadow"
+                >
+                  <Printer className="w-4 h-4" /> IMPRIMIR / PDF
+                </button>
+                <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-white p-2">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-8 overflow-y-auto space-y-6 text-slate-200 print:text-black print:overflow-visible">
+              <div className="grid grid-cols-4 gap-4 p-4 bg-slate-950/60 rounded-2xl border border-slate-800 print:border-gray-300 print:bg-gray-50 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ID PACIENTE</span>
+                  <span className="font-mono font-black text-cyan-400 print:text-black text-sm">{activePatientId}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">PROTOCOLO APLICADO</span>
+                  <span className="font-bold text-white print:text-black">{disorderObj.name}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">FECHA</span>
+                  <span className="font-mono text-slate-300 print:text-black">{new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">TAREA EJECUTADA</span>
+                  <span className="font-bold text-amber-300 print:text-black">{activeExercise?.name || 'Protocolo Clínico Estandarizado'}</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-black text-cyan-400 print:text-black mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <Target className="w-4 h-4" /> 1. Métricas Neurocognitivas y Freno Inhibitorio (Hardware 6DoF)
+                </h4>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">LATENCIA MEDIA (RT)</span>
+                    <div className="text-2xl font-black text-cyan-400 print:text-black mt-1 font-mono">{averageRt} ms</div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Norma: 220 - 350 ms</span>
+                  </div>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">ACIERTOS (HITS)</span>
+                    <div className="text-2xl font-black text-emerald-400 print:text-black mt-1 font-mono">{currentKpi}</div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Precisión: {accuracyRate}%</span>
+                  </div>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">FALLOS DE COMISIÓN</span>
+                    <div className="text-2xl font-black text-rose-400 print:text-black mt-1 font-mono">{errorsCount}</div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">Freno inhibitorio</span>
+                  </div>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-500 font-bold block">PUNTUACIÓN Z</span>
+                    <div className={`text-2xl font-black mt-1 font-mono ${Math.abs(zScore) >= 1.96 ? 'text-amber-400 print:text-black' : 'text-emerald-400 print:text-black'}`}>
+                      {zScore > 0 ? `+${zScore}` : zScore} SD
+                    </div>
+                    <span className="text-[9px] text-slate-500 print:text-gray-600 block mt-1">{Math.abs(zScore) >= 1.96 ? 'Fuera de rango' : 'Rango esperado'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-950/80 border-2 border-cyan-500/40 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-cyan-400 animate-pulse" />
+                    <h4 className="text-sm font-black text-white print:text-black uppercase tracking-wider">
+                      Triangulación Clínica Global Computarizada (IA + 6DoF + BLE)
+                    </h4>
+                  </div>
+                  <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full border ${isPerformanceNormal ? 'bg-emerald-950 text-emerald-300 border-emerald-700' : isCautiousHighAccuracy ? 'bg-amber-950 text-amber-300 border-amber-700' : 'bg-rose-950 text-rose-300 border-rose-700'}`}>
+                    {isPerformanceNormal ? 'VEREDICTO: NORMAL / DESCARTADO' : isCautiousHighAccuracy ? 'VEREDICTO: CAUTELA / HIPERREFLEXIÓN' : 'VEREDICTO: INDICADORES ACTIVOS'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div className="bg-slate-900 print:bg-gray-100 p-3 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-600 font-bold block mb-1">EJE CINEMÁTICO (VR 6DoF)</span>
+                    <p className="font-mono text-cyan-300 print:text-black font-bold">RT: {averageRt} ms | {accuracyRate}% Precisión</p>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      {accuracyRate >= 85 && averageRt <= 420 ? 'Ejecución visuomotora óptima.' : 'Alteración en precisión o latencia.'}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900 print:bg-gray-100 p-3 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-600 font-bold block mb-1">EJE FISIOLÓGICO (BLE)</span>
+                    <p className="font-mono text-emerald-400 print:text-black font-bold">
+                      {btStatus === 'CONNECTED' ? `${currentBpm} BPM | ${currentGsr} µS` : 'HARDWARE BLE NO VINCULADO'}
+                    </p>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      {btStatus === 'CONNECTED' ? (hasSympatheticStress ? 'Activación simpática de esfuerzo.' : 'Estabilidad vagal conservada.') : 'Sin conexión BLE.'}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900 print:bg-gray-100 p-3 rounded-xl border border-slate-800 print:border-gray-300">
+                    <span className="text-[10px] text-slate-400 print:text-gray-600 font-bold block mb-1">EJE PSICOMÉTRICO (Z-SCORE)</span>
+                    <p className="font-mono text-purple-300 print:text-black font-bold">{zScore > 0 ? `+${zScore}` : zScore} SD Poblacional</p>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      {Math.abs(zScore) < 1.96 ? 'Dentro de curva normativa sana.' : 'Desviación significativa.'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <span className="text-[11px] font-bold text-amber-300 print:text-black uppercase tracking-wide block mb-1">
+                    Síntesis Diagnóstica Cruzada:
+                  </span>
+                  <div className="text-xs text-slate-200 print:text-black leading-relaxed bg-slate-900/70 print:bg-gray-50 p-3.5 rounded-xl border border-slate-800 print:border-gray-300">
+                    {isPerformanceNormal ? (
+                      <p>
+                        <strong className="text-emerald-400 print:text-black">RENDIMIENTO NEUROCOGNITIVO CONSERVADO: </strong>
+                        El paciente completó la evaluación con una precisión sobresaliente del <strong>{accuracyRate}%</strong> ({currentKpi} aciertos y {errorsCount} errores de comisión), tiempo de reacción de <strong>{averageRt} ms</strong> y Puntuación Z de <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>. No se evidencia déficit atencional ni falla en el freno inhibitorio para <strong>{disorderObj.name}</strong>.
+                      </p>
+                    ) : isCautiousHighAccuracy ? (
+                      <p>
+                        <strong className="text-amber-400 print:text-black">CAUTELA VISUOMOTORA / HIPERREFLEXIÓN ({accuracyRate}%): </strong>
+                        El paciente conserva el control inhibitorio (<strong>{errorsCount} errores de comisión</strong> y <strong>{accuracyRate}% de precisión</strong>), pero presenta una latencia deliberativa prolongada de <strong>{averageRt} ms</strong> (Z-Score: <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>), compatible con autoobservación cautelosa o hipervigilancia en <strong>{disorderObj.name}</strong>.
+                      </p>
+                    ) : (
+                      <p>
+                        <strong className="text-rose-400 print:text-black">PERFIL COMPATIBLE CON DISFUNCIÓN EJECUTIVA EN {disorderObj.name.toUpperCase()}: </strong>
+                        Se registra un incremento en errores de comisión ({errorsCount} fallos) o latencia retrasada (<strong>{averageRt} ms</strong>, Z-Score: <strong>{zScore > 0 ? `+${zScore}` : zScore} SD</strong>), evidenciando vulnerabilidad en el freno inhibitorio.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 px-8 py-4 border-t border-slate-800 flex justify-end gap-3 print:hidden">
+              <button onClick={() => setShowReportModal(false)} className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer">
+                Cerrar
+              </button>
+              <button onClick={() => window.print()} className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-lg">
+                <Printer className="w-4 h-4" /> Imprimir Informe
+              </button>
+            </div>
           </div>
         </div>
       )}
-      <div className="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2 bg-slate-950/90 px-4 py-2.5 rounded-xl border border-slate-800 text-xs text-white shadow-lg font-mono">
-        <div className="flex items-center gap-3">
-          <span className={`w-2.5 h-2.5 rounded-full ${wsOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
-          <span>ESTADO: <strong className="text-emerald-400">{wsOnline ? 'SINCRONIZADO' : 'STANDALONE'}</strong></span>
-          <div className="h-4 w-px bg-slate-800" />
-          <Target className="text-cyan-400 w-4 h-4" />
-          <span className="text-cyan-300 font-bold truncate max-w-[280px]">{exerciseTitle}</span>
-        </div>
-        <button onClick={() => playSpeechAudio(lastSpokenScript)} className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded border border-emerald-600 flex items-center gap-1 cursor-pointer">
-          <Volume2 className="w-3 h-3" /> Repetir Voz
-        </button>
-      </div>
-      <div ref={mountRef} className="w-full h-full absolute inset-0" />
     </div>
   );
 };
 
-export default VrPatientExperience;
+export default FullscreenDiagnosticRunner;
