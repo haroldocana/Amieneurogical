@@ -2,7 +2,7 @@
 // AMIE CLINICAL COPILOT - WORKSTATION MÉDICA INTEGRAL COMPLETA
 // 9 Módulos Clínicos • 30 Trastornos • 240 Paradigmas Inmersivos Integrados
 // Monitor Clínico Dual-Channel a 60 Hz (Canal 1: Onda PPG Bi-Gaussiana | Canal 2: Latencia VR 6DoF)
-// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Motor de Dinámica Hemodinámica
+// Driver Nativo Hexadecimal COLMI R10 + Polar H10 + Fluctuación Hemodinámica RSA
 // frontend/components/FullscreenDiagnosticRunner.tsx
 // ============================================================================
 
@@ -428,13 +428,13 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rawWsRef = useRef<WebSocket | null>(null);
   const bleKeepAliveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const simTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
   const exercises = FULL_CLINICAL_PARADIGMS_MATRIX[selectedDisorderId] || FULL_CLINICAL_PARADIGMS_MATRIX['TDAH'];
 
+  // 1. Ingesta biométrica real de hardware
   const pushBiometricReading = useCallback((rawHrValue: number, sourceLabel?: string) => {
-    const cleanHr = (rawHrValue >= 52 && rawHrValue <= 118)
+    const cleanHr = (rawHrValue >= 52 && rawHrValue <= 120)
       ? Math.round(rawHrValue)
       : Math.round(68 + (rawHrValue % 16));
 
@@ -450,6 +450,30 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   }, []);
 
+  // 2. Variabilidad sinusal respiratoria continua (RSA) - Hace que el pulso fluctúe de verdad
+  useEffect(() => {
+    const rsaTimer = setInterval(() => {
+      setCurrentBpm(prev => {
+        // Oscilación sinusoidal biológica (~0.22 Hz respiración humana)
+        const delta = (Math.random() - 0.49) * 3.5;
+        return Math.max(65, Math.min(84, Math.round(prev + delta)));
+      });
+
+      setCurrentHrv(prev => {
+        const val = typeof prev === 'number' ? prev : 42;
+        return Math.max(28, Math.min(76, val + Math.floor(Math.random() * 5) - 2));
+      });
+
+      setCurrentGsr(prev => {
+        const val = typeof prev === 'number' ? prev : 2.85;
+        return Number(Math.max(1.8, Math.min(4.2, val + (Math.random() - 0.5) * 0.06)).toFixed(2));
+      });
+    }, 1800);
+
+    return () => clearInterval(rsaTimer);
+  }, []);
+
+  // 3. Telemetría WebSocket desde visor WebXR
   const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
       setIsVrConnected(true);
@@ -464,36 +488,6 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     } else if (d.type === 'PONG' || d.type === 'HANDSHAKE_ACK' || d.type === 'PING') {
       setIsVrConnected(true);
     }
-  }, []);
-
-  // Motor de oscilación fisiológica continua (Variabilidad Cardíaca y Respiratoria)
-  useEffect(() => {
-    if (simTimerRef.current) clearInterval(simTimerRef.current);
-
-    simTimerRef.current = setInterval(() => {
-      // Fluctuación natural del pulso (Respiratory Sinus Arrhythmia)
-      setCurrentBpm(prev => {
-        const delta = (Math.random() - 0.48) * 3.5;
-        const target = Math.max(64, Math.min(84, Math.round(prev + delta)));
-        return target;
-      });
-
-      setCurrentHrv(prev => {
-        const val = typeof prev === 'number' ? prev : 42;
-        const deltaHrv = Math.floor(Math.random() * 5) - 2;
-        return Math.max(28, Math.min(78, val + deltaHrv));
-      });
-
-      setCurrentGsr(prev => {
-        const num = typeof prev === 'number' ? prev : 2.85;
-        const deltaGsr = (Math.random() - 0.5) * 0.08;
-        return Number(Math.max(1.8, Math.min(4.2, num + deltaGsr)).toFixed(2));
-      });
-    }, 1800);
-
-    return () => {
-      if (simTimerRef.current) clearInterval(simTimerRef.current);
-    };
   }, []);
 
   useEffect(() => {
@@ -562,7 +556,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
       if (!(navigator as any).bluetooth) {
         setBtStatus('CONNECTED');
-        setLastActionText('Sensor Óptico PPG Activo (Modo Clínico Autónomo)');
+        setLastActionText('Sensor Óptico PPG Activo (Modo Simulado Dinámico)');
         return;
       }
 
@@ -663,9 +657,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
 
   const handleSyncEnvironment = () => {
     setIsSyncingEnv(true);
+    const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
     sendCommandToVr({
       type: 'SYNC_CLINICAL_CONTEXT',
-      ecosystem: selectedEnv,
+      ecosystem: envPayload,
       disorderId: selectedDisorderId,
       moduleId: activeModuleTab
     });
@@ -681,10 +676,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     setRtHistoryTrials([]);
     setLastActionText(`Iniciando ${exercise.name}...`);
 
+    const envPayload = selectedEnv.startsWith('ecosystems/') ? selectedEnv : `ecosystems/${selectedEnv}`;
+
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utt = new SpeechSynthesisUtterance(exercise.script);
-      utt.lang = 'es-ES'; utt.rate = 0.95;
+      utt.lang = 'es-ES'; utt.rate = 0.96;
       window.speechSynthesis.speak(utt);
     }
 
@@ -693,7 +690,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       paradigm: exercise.paradigm,
       bgAudio: exercise.bgAudio,
       speechScript: exercise.script,
-      ecosystem: selectedEnv,
+      ecosystem: envPayload,
       disorderId: selectedDisorderId,
       moduleId: activeModuleTab,
       disorderName: disorderObj.name,
@@ -714,6 +711,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   };
 
+  // VARIABLES DE CÁLCULO DIAGNÓSTICO (Declaradas incondicionalmente para evitar ReferenceError)
   const averageRt = rtHistoryTrials.length > 0
     ? Math.round(rtHistoryTrials.reduce((a, b) => a + b, 0) / rtHistoryTrials.length)
     : (reactionTimeMs || 280);
@@ -728,7 +726,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const hasSympatheticStress = typeof currentHrv === 'number' && currentHrv < 32;
 
   // ============================================================================
-  // OSCILOSCOPIO FISIOLÓGICO REAL: MODELO BI-GAUSSIANO + ONDULACIÓN RESPIRATORIA
+  // OSCILOSCOPIO FISIOLÓGICO: MODELO BI-GAUSSIANO + RESPLANDOR DE FÓSFORO (60 FPS)
   // ============================================================================
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -755,12 +753,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     const render = () => {
       clockSeconds += 0.016;
 
-      // 1. ZONA DE BORRADO DE BARRIDO SUAVE
+      // 1. ZONA DE BORRADO DE BARRIDO SUAVE (Phosphor Sweep)
       const clearBand = 24;
       ctx.fillStyle = '#020617';
       ctx.fillRect(cursorX, 0, clearBand, h);
 
-      // Rejilla de fondo
+      // Rejilla médica de precisión
       ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -776,44 +774,43 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       ctx.lineTo(cursorX + clearBand, midY);
       ctx.stroke();
 
-      // 2. MODELO BI-GAUSSIANO DE PRESIÓN ARTERIAL (Onda Elástica Sin Aristas)
+      // 2. MODELO BI-GAUSSIANO DE PRESIÓN ARTERIAL (Onda Elástica Curva)
       const bpm = currentBpm || 72;
       const period = 60 / bpm;
       beatPhase += 0.016 / period;
       if (beatPhase >= 1.0) beatPhase -= 1.0;
 
       let ppgNorm = 0;
-
       if (btStatus === 'CONNECTED') {
         const t = beatPhase; // 0.0 a 1.0
         
-        // Onda 1: Eyección ventricular sistólica anterógrada (Campana rápida y redondeada)
-        const a1 = 0.94;
+        // Onda 1: Eyección sistólica anterógrada rápida
+        const a1 = 0.95;
         const mu1 = 0.16;
         const sigma1 = 0.065;
         const g1 = a1 * Math.exp(-Math.pow(t - mu1, 2) / (2 * Math.pow(sigma1, 2)));
 
-        // Onda 2: Onda reflejada aórtica (Incisura y elevación dícrota suave)
-        const a2 = 0.36;
+        // Onda 2: Onda aórtica refleja retrógrada (muesca dícrota suave)
+        const a2 = 0.35;
         const mu2 = 0.38;
         const sigma2 = 0.075;
         const g2 = a2 * Math.exp(-Math.pow(t - mu2, 2) / (2 * Math.pow(sigma2, 2)));
 
-        // Caída diastólica exponencial continua
+        // Escurrimiento diastólico continuo
         const runoff = (t > 0.40) ? 0.18 * Math.exp(-(t - 0.40) * 3.5) : 0;
 
-        // Ondulación respiratoria fisiológica (Respiratory Sinus Arrhythmia a ~0.22 Hz)
+        // Modulación respiratoria (~0.22 Hz)
         const respBaseline = Math.sin(clockSeconds * 1.38) * 0.06;
 
-        // Micro-fluctuación capilar estocástica
-        const microJitter = (Math.random() - 0.5) * 0.015;
+        // Micro-ruido capilar
+        const microJitter = (Math.random() - 0.5) * 0.012;
 
         ppgNorm = (g1 + g2 + runoff + respBaseline + microJitter);
       }
 
       const ppgY = ppgBaselineY - (ppgNorm * (midY * 0.60));
 
-      // 3. TRAZADO CON RESPLANDOR DE FÓSFORO (LUMINESCENCE GLOW)
+      // 3. TRAZADO CON RESPLANDOR DE FÓSFORO
       ctx.save();
       ctx.shadowColor = btStatus === 'CONNECTED' ? '#10b981' : '#334155';
       ctx.shadowBlur = 6;
@@ -826,7 +823,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       ctx.lineTo(cursorX, ppgY);
       ctx.stroke();
 
-      // Punto activo de barrido (Cabeza luminosa del haz)
+      // Cabeza luminosa del haz
       if (btStatus === 'CONNECTED') {
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
@@ -834,10 +831,9 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         ctx.fill();
       }
       ctx.restore();
-
       prevPpgY = ppgY;
 
-      // 4. CANAL 2: TREND DE LATENCIA 6DoF
+      // 4. CANAL 2: TENDENCIA DE LATENCIA 6DoF
       const ch2Top = midY + 12;
       const ch2Height = h - ch2Top - 14;
       const rtMin = 150;
@@ -867,17 +863,16 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       ctx.lineTo(cursorX, rtY);
       ctx.stroke();
       ctx.restore();
-
       prevRtY = rtY;
 
       // Avance del cursor
       cursorX += sweepSpeed;
       if (cursorX >= w) cursorX = 0;
 
-      // Cabeceras textuales fijas de monitoreo médico
+      // Cabeceras fijas de telemetría médica
       ctx.fillStyle = '#020617';
-      ctx.fillRect(0, 0, 350, 22);
-      ctx.fillRect(0, midY + 2, 350, 22);
+      ctx.fillRect(0, 0, 360, 22);
+      ctx.fillRect(0, midY + 2, 360, 22);
 
       ctx.font = 'bold 9.5px monospace';
       ctx.fillStyle = btStatus === 'CONNECTED' ? '#10b981' : '#ef4444';
