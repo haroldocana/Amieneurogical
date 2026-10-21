@@ -47,90 +47,87 @@ export interface VrDisorderData {
   exercises: VrClinicalExercise[];
 }
 
-// ----------------------------------------------------------------------------
-// GENERADOR SISTEMÁTICO DE LOS 240 PROTOCOLOS (30 TRASTORNOS x 8 PARADIGMAS)
-// ----------------------------------------------------------------------------
 interface RawDisorderMeta {
   id: string;
   modId: string;
   name: string;
   archetype: ClinicalArchetype;
   environment: 'OFFICE' | 'FOREST' | 'STREET';
-  focus: string;
-  customScript?: string;
+  evalTest: string;
+  treatTest: string;
 }
 
 const RAW_DISORDERS: RawDisorderMeta[] = [
   // Módulo I: Neurodesarrollo & Motor
-  { id: 'TDAH', modId: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'freno inhibitorio y memoria de trabajo' },
-  { id: 'TEA_1', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 1 (Asperger)', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'claves sociales y teoría de la mente' },
-  { id: 'TEA_2_3', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 2-3 (Apoyo Notable)', archetype: 'DOCTOR', environment: 'FOREST', focus: 'integración sensorial y desenganche' },
-  { id: 'ALZHEIMER', modId: 'MOD_NEURODEV', name: 'Deterioro Cognitivo / Alzheimer', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'orientación espacial y praxias diarias' },
-  { id: 'PARKINSON', modId: 'MOD_NEURODEV', name: 'Enfermedad de Parkinson (Temblor & Bradicinesia)', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'iniciación motora y amplitud de movimiento' },
+  { id: 'TDAH', modId: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Conners CPT-3 (d\')', treatTest: 'Neurofeedback SMR' },
+  { id: 'TEA_1', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 1 (Asperger)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Microexpresiones Faciales', treatTest: 'Neuronas Espejo' },
+  { id: 'TEA_2_3', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 2-3', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad Multisensorial', treatTest: 'Integración Háptica Segura' },
+  { id: 'ALZHEIMER', modId: 'MOD_NEURODEV', name: 'Deterioro Cognitivo / Alzheimer', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Memoria Episódica Inmediata', treatTest: 'Terapia de Reminiscencia' },
+  { id: 'PARKINSON', modId: 'MOD_NEURODEV', name: 'Parkinson (Temblor & Bradicinesia)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Cuantificación 90Hz', treatTest: 'LSVT BIG VR / Amplitud' },
 
   // Módulo II: Afectivo & Estado de Ánimo
-  { id: 'DEPRESION', modId: 'MOD_AFFECTIVE', name: 'Depresión Mayor Unipolar', archetype: 'DOCTOR', environment: 'FOREST', focus: 'activación conductual y sesgo pesimista' },
-  { id: 'BIPOLAR', modId: 'MOD_AFFECTIVE', name: 'Trastorno Bipolar (Fase Disfórica / Maníaca)', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'contención de impulsos y estabilidad afectiva' },
-  { id: 'DISTIMIA', modId: 'MOD_AFFECTIVE', name: 'Distimia / Depresión Persistente', archetype: 'DOCTOR', environment: 'FOREST', focus: 'persistencia cognitiva y tono vagal' },
-  { id: 'CICLOTIMIA', modId: 'MOD_AFFECTIVE', name: 'Ciclotimia / Labilidad Emocional', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'estabilización del ritmo motor y ánimo' },
+  { id: 'DEPRESION', modId: 'MOD_AFFECTIVE', name: 'Depresión Mayor Unipolar', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Sesgo Cognitivo Dot-Probe', treatTest: 'Activación Conductual (BAT)' },
+  { id: 'BIPOLAR', modId: 'MOD_AFFECTIVE', name: 'Trastorno Bipolar', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Latencia Acelerada Maníaca', treatTest: 'Estabilización Interhemisférica' },
+  { id: 'DISTIMIA', modId: 'MOD_AFFECTIVE', name: 'Distimia / Depresión Persistente', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Perseveración en el Error', treatTest: 'Reactivación Propioceptiva' },
+  { id: 'CICLOTIMIA', modId: 'MOD_AFFECTIVE', name: 'Ciclotimia', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Fluctuación de Latencias', treatTest: 'Neutralización de Euforia' },
 
   // Módulo III: Trauma, TEPT & Disociación
-  { id: 'TEPT', modId: 'MOD_TRAUMA', name: 'Estrés Postraumático (TEPT)', archetype: 'DOCTOR', environment: 'FOREST', focus: 'desensibilización de memorias y anclaje somático' },
-  { id: 'TRAUMA_COMPLEJO', modId: 'MOD_TRAUMA', name: 'Trauma Complejo del Apego (C-PTSD)', archetype: 'DOCTOR', environment: 'FOREST', focus: 'regulación de ventana de tolerancia y límites' },
-  { id: 'DESPERSONALIZACION', modId: 'MOD_TRAUMA', name: 'Despersonalización / Desrealización', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'agencia motora 6DoF y anclaje propioceptivo' },
+  { id: 'TEPT', modId: 'MOD_TRAUMA', name: 'Estrés Postraumático (TEPT)', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad a Cues Fóbicos', treatTest: 'EMDR de 8 Fases (Shapiro)' },
+  { id: 'TRAUMA_COMPLEJO', modId: 'MOD_TRAUMA', name: 'Trauma Complejo (C-PTSD)', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Umbral de Sumisión por Miedo', treatTest: 'Reconstrucción de Límites' },
+  { id: 'DESPERSONALIZACION', modId: 'MOD_TRAUMA', name: 'Despersonalización / Desrealización', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Retraso Táctil-Visual 6DoF', treatTest: 'Anclaje Vestibular Somático' },
 
   // Módulo IV: Ansiedad, Fobias & TOC
-  { id: 'FOBIA_SOCIAL', modId: 'MOD_ANXIETY', name: 'Fobia Social / Ansiedad de Escrutinio', archetype: 'FORENSIC_PEER', environment: 'STREET', focus: 'tolerancia al escrutinio y desensibilización' },
-  { id: 'PANICO', modId: 'MOD_ANXIETY', name: 'Trastorno de Pánico y Agorafobia', archetype: 'DOCTOR', environment: 'STREET', focus: 'exposición interoceptiva y regulación respiratoria' },
-  { id: 'TOC', modId: 'MOD_ANXIETY', name: 'Trastorno Obsesivo Compulsivo (TOC)', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'prevención de respuesta y tolerancia a la duda' },
-  { id: 'TAG', modId: 'MOD_ANXIETY', name: 'Ansiedad Generalizada (TAG)', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'desconexión de rumiación y coherencia dual' },
+  { id: 'FOBIA_SOCIAL', modId: 'MOD_ANXIETY', name: 'Fobia Social / Ansiedad de Escrutinio', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Escrutinio Ocular en Multitud', treatTest: 'Desensibilización de Vergüenza' },
+  { id: 'PANICO', modId: 'MOD_ANXIETY', name: 'Trastorno de Pánico y Agorafobia', archetype: 'DOCTOR', environment: 'STREET', evalTest: 'Exposición Interoceptiva', treatTest: 'Reentrenamiento Capnográfico' },
+  { id: 'TOC', modId: 'MOD_ANXIETY', name: 'Trastorno Obsesivo Compulsivo (TOC)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Latencia de Verificación', treatTest: 'Prevención de Respuesta (EPR)' },
+  { id: 'TAG', modId: 'MOD_ANXIETY', name: 'Ansiedad Generalizada (TAG)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Supresión de Tono Vagal', treatTest: 'Mindfulness Anti-Preocupación' },
 
   // Módulo V: Adicciones & Control de Impulsos
-  { id: 'ADICCION_SUST', modId: 'MOD_ADDICTIONS', name: 'Dependencia a Sustancias (Craving Activo)', archetype: 'FORENSIC_PEER', environment: 'STREET', focus: 'rechazo motor AAT y desensibilización de cues' },
-  { id: 'LUDOPATIA', modId: 'MOD_ADDICTIONS', name: 'Ludopatía y Apuestas Digitales', archetype: 'FORENSIC_PEER', environment: 'STREET', focus: 'extinción de recompensas y control de pérdidas' },
-  { id: 'ATRACON', modId: 'MOD_ADDICTIONS', name: 'Trastorno por Atracón Compulsivo', archetype: 'DOCTOR', environment: 'OFFICE', focus: 'freno a ultraprocesados y saciedad física' },
-  { id: 'CLEPTOMANIA', modId: 'MOD_ADDICTIONS', name: 'Cleptomanía / Falla del Control de Impulsos', archetype: 'FORENSIC_PEER', environment: 'STREET', focus: 'freno de urgencia motriz y disipación simpática' },
+  { id: 'ADICCION_SUST', modId: 'MOD_ADDICTIONS', name: 'Dependencia a Sustancias', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Approach Bias hacia Cues', treatTest: 'Rechazo Motor AAT & Urge-Surfing' },
+  { id: 'LUDOPATIA', modId: 'MOD_ADDICTIONS', name: 'Ludopatía y Apuestas Digitales', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Iowa Gambling Task (IGT 3D)', treatTest: 'Extinción de Recompensas' },
+  { id: 'ATRACON', modId: 'MOD_ADDICTIONS', name: 'Trastorno por Atracón Compulsivo', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Sesgo hacia Ultraprocesados', treatTest: 'Rechazo Motor Háptico' },
+  { id: 'CLEPTOMANIA', modId: 'MOD_ADDICTIONS', name: 'Cleptomanía / Falla del Control', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Tensión Previa (Pico GSR)', treatTest: 'Freno Háptico de Urgencia' },
 
   // Módulo VI: Forense, Psicopatía & Cluster B
-  { id: 'TLP', modId: 'MOD_FORENSIC', name: 'Trastorno Límite de Personalidad (TLP / Borderline)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', focus: 'habilidades TIPP, freno y tolerancia afectiva' },
-  { id: 'PSICOPATIA', modId: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1 y 2 PCL-R)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', focus: 'freno motor a agresión y reactividad empática' },
-  { id: 'NARCISISMO', modId: 'MOD_FORENSIC', name: 'Narcisismo Maligno / Desregulación Egoica', archetype: 'FORENSIC_PEER', environment: 'OFFICE', focus: 'tolerancia a frustración y desensibilización de ira' },
-  { id: 'HISTRIONICO', modId: 'MOD_FORENSIC', name: 'Trastorno Histriónico de la Personalidad', archetype: 'FORENSIC_PEER', environment: 'STREET', focus: 'enfoque sin refuerzo social y calma expresiva' },
+  { id: 'TLP', modId: 'MOD_FORENSIC', name: 'Trastorno Límite de Personalidad (TLP)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Hipersensibilidad al Rechazo', treatTest: 'Habilidades DBT TIPP en VR' },
+  { id: 'PSICOPATIA', modId: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1 y 2 PCL-R)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Dilema Moral Utilitarista', treatTest: 'Condicionamiento Aversivo' },
+  { id: 'NARCISISMO', modId: 'MOD_FORENSIC', name: 'Narcisismo Maligno', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Reactividad Colérica ante Fallo', treatTest: 'Desescalamiento de Ira' },
+  { id: 'HISTRIONICO', modId: 'MOD_FORENSIC', name: 'Trastorno Histriónico', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Dependencia de Atención Social', treatTest: 'Concentración sin Refuerzo' },
 
   // Módulo VII: Neurohipnosis & Dolor Crónico
-  { id: 'HIPNO_ERICKSONIANA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnosis Ericksoniana (Metáforas Inmersivas)', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', focus: 'sugestionabilidad, metáforas y trance reparador' },
-  { id: 'HIPNO_ANALGESIA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnoanalgesia (Fibromialgia & Dolor Nociceptivo)', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', focus: 'guantelete anestésico y modulación descendente' },
-  { id: 'HIPNO_FANTASMA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Miembro Fantasma & Dolor Neuropático', archetype: 'HYPNOTIC_GUIDE', environment: 'OFFICE', focus: 'espejo virtual 6DoF y reorganización cortical' },
+  { id: 'HIPNO_ERICKSONIANA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnosis Ericksoniana', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', evalTest: 'Escala de Sugestionabilidad', treatTest: 'Siembra de Metáforas Inmersivas' },
+  { id: 'HIPNO_ANALGESIA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnoanalgesia (Dolor Crónico)', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', evalTest: 'Mapeo Espacial Nociceptivo', treatTest: 'Guantelete de Anestesia Térmica' },
+  { id: 'HIPNO_FANTASMA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Miembro Fantasma', archetype: 'HYPNOTIC_GUIDE', environment: 'OFFICE', evalTest: 'Discordancia Sensoriomotora', treatTest: 'Espejo Virtual 6DoF en Vivo' },
 
   // Módulo VIII: Salud Sexual & Psicosomática
-  { id: 'SEX_INHIB', modId: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS - Modelo Control Dual)', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', focus: 'sensate focus, desensibilización de pudor y confort' },
-  { id: 'DISFUNCION_SOM', modId: 'MOD_SEXOLOGY', name: 'Ansiedad de Rendimiento & Disfunción Psicógena', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', focus: 'ruptura de rol de espectador y relajación pélvica' },
+  { id: 'SEX_INHIB', modId: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS)', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', evalTest: 'Modelo de Control Dual (SIS)', treatTest: 'Sensate Focus VR (Focalización)' },
+  { id: 'DISFUNCION_SOM', modId: 'MOD_SEXOLOGY', name: 'Ansiedad de Rendimiento Sexual', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', evalTest: 'Rol de Espectador Crítico', treatTest: 'Descatastrofización y Confort' },
 
   // Módulo IX: Logoterapia & Sentido
-  { id: 'VACIO_EXISTENCIAL', modId: 'MOD_LOGOTHERAPY', name: 'Vacío Existencial & Logoterapia (Frankl)', archetype: 'DOCTOR', environment: 'FOREST', focus: 'derreflexión, valores de sentido e intención paradójica' }
+  { id: 'VACIO_EXISTENCIAL', modId: 'MOD_LOGOTHERAPY', name: 'Vacío Existencial / Logoterapia', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Diagnóstico de Hiperreflexión', treatTest: 'Intención Paradójica Inmersiva' }
 ];
 
 export const CLINICAL_VR_MATRIX: Record<string, VrDisorderData> = {};
 
-RAW_DISORDERS.forEach((item) => {
-  CLINICAL_VR_MATRIX[item.id] = {
-    id: item.id,
-    modId: item.modId,
-    name: item.name,
-    archetype: item.archetype,
-    environment: item.environment,
+RAW_DISORDERS.forEach((d) => {
+  CLINICAL_VR_MATRIX[d.id] = {
+    id: d.id,
+    modId: d.modId,
+    name: d.name,
+    archetype: d.archetype,
+    environment: d.environment,
     exercises: [
       // 4 Protocolos de Diagnóstico
-      { id: `${item.id}_D1`, mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: `1. CPT Go/No-Go: ${item.name}`, bgAudio: 'BROWN_NOISE', script: `Evalúa el freno inhibitorio en ${item.name}. Dispara solo a esferas verdes y suprime el disparo ante rojas.` },
-      { id: `${item.id}_D2`, mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: `2. BART Riesgo: ${item.name}`, bgAudio: 'TENSION_DRUM', script: `Mide la tolerancia al riesgo en ${item.name}. Bombea el globo para acumular puntos o asegúralos a tiempo.` },
-      { id: `${item.id}_D3`, mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: `3. N-Back Memoria: ${item.name}`, bgAudio: 'BETA_WAVES', script: `Evalúa la memoria operativa en ${item.name}. Apunta y dispara únicamente al cubo iluminado de mayor tamaño.` },
-      { id: `${item.id}_D4`, mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: `4. Dilema Decisional: ${item.name}`, bgAudio: 'HEARTBEAT', script: `Evalúa la flexibilidad decisional en ${item.name}. Selecciona la opción adecuada entre los dos paneles.` },
+      { id: `${d.id}_D1`, mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: `1. ${d.evalTest}: Freno Go/No-Go`, bgAudio: 'BROWN_NOISE', script: `Evaluación clínica de ${d.name}. Dispara únicamente a las esferas verdes y suprime el disparo ante rojas.` },
+      { id: `${d.id}_D2`, mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: `2. ${d.name}: Tolerancia al Riesgo (BART)`, bgAudio: 'TENSION_DRUM', script: `Evaluación de riesgo en ${d.name}. Bombea el globo para sumar puntos o asegúralos antes de que explote.` },
+      { id: `${d.id}_D3`, mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: `3. ${d.name}: Memoria de Trabajo Visuoespacial`, bgAudio: 'BETA_WAVES', script: `Evaluación ejecutiva. Apunta y dispara únicamente al cubo iluminado de mayor escala.` },
+      { id: `${d.id}_D4`, mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: `4. ${d.name}: Toma de Decisiones y Conflicto`, bgAudio: 'HEARTBEAT', script: `Evaluación decisional. Selecciona rápidamente entre las dos opciones presentadas en el panel.` },
 
       // 4 Protocolos de Tratamiento
-      { id: `${item.id}_T1`, mode: 'TREATMENT', paradigm: 'AAT_3D', name: `5. AAT Aproximación/Evitación: ${item.name}`, bgAudio: 'ALPHA_WAVES', script: `Intervención motora para ${item.focus}. Empuja con firmeza el holograma perturbador fuera de tu espacio.` },
-      { id: `${item.id}_T2`, mode: 'TREATMENT', paradigm: 'EMDR_3D', name: `6. EMDR Sacádico: ${item.name}`, bgAudio: 'BILATERAL_SWEEP', script: `Sigue la luz rítmica horizontal con tus ojos para reprocesar y regular la carga emocional.` },
-      { id: `${item.id}_T3`, mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: `7. Neuronas Espejo Somatomotor: ${item.name}`, bgAudio: 'THETA_WAVES', script: `Sincroniza tus brazos con el avatar clínico para consolidar la coherencia sensoriomotora.` },
-      { id: `${item.id}_T4`, mode: 'TREATMENT', paradigm: 'BIO_3D', name: `8. Biofeedback Vagal: ${item.name}`, bgAudio: 'DELTA_WAVES', script: `Acompasa tu respiración con la expansión del loto para restaurar el tono vagal y la calma.` }
+      { id: `${d.id}_T1`, mode: 'TREATMENT', paradigm: 'AAT_3D', name: `5. Intervención AAT: ${d.treatTest}`, bgAudio: 'ALPHA_WAVES', script: `Intervención motora de rechazo. Empuja con firmeza el holograma perturbador fuera de tu espacio vital.` },
+      { id: `${d.id}_T2`, mode: 'TREATMENT', paradigm: 'EMDR_3D', name: `6. Reprocesamiento Ocular Bilateral (EMDR)`, bgAudio: 'BILATERAL_SWEEP', script: `Sigue la esfera luminosa rítmica con la mirada para desensibilizar la carga emocional.` },
+      { id: `${d.id}_T3`, mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: `7. ${d.treatTest} en Espejo Somatomotor`, bgAudio: 'THETA_WAVES', script: `Sincroniza tus brazos con los movimientos guía del avatar para afianzar coherencia sensoriomotora.` },
+      { id: `${d.id}_T4`, mode: 'TREATMENT', paradigm: 'BIO_3D', name: `8. Biofeedback Vagal de Cierre Autonómico`, bgAudio: 'DELTA_WAVES', script: `Acompasa tu respiración con la expansión del loto para restaurar el tono vagal y la serenidad.` }
     ]
   };
 });
@@ -149,10 +146,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
   const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('CPT_3D');
   const [wsOnline, setWsOnline] = useState(false);
-  const [disorderTitle, setDisorderTitle] = useState('1. CPT Go/No-Go: TDAH');
-  const [lastSpokenScript, setLastSpokenScript] = useState(
-    'Dispara únicamente a las esferas verdes. Suprime el disparo ante esferas rojas.'
-  );
+  const [disorderTitle, setDisorderTitle] = useState('1. Conners CPT-3: Freno Go/No-Go');
+  const [lastSpokenScript, setLastSpokenScript] = useState('Dispara únicamente a las esferas verdes y suprime el disparo ante rojas.');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -235,143 +230,122 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } catch (e) {}
   }, []);
 
-  const playSynthesizedTone = useCallback(
-    (freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 0.9) => {
-      try {
-        ensureAudioUnlocked();
-        const ctx = audioContextRef.current;
-        if (!ctx || ctx.state === 'suspended') return;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(vol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + duration);
-      } catch (e) {}
-    },
-    [ensureAudioUnlocked]
-  );
-
-  const startTherapeuticBackgroundSound = useCallback(
-    (audioType?: string) => {
-      try {
-        ensureAudioUnlocked();
-        if (bgOscillatorRef.current) {
-          bgOscillatorRef.current.stop();
-          bgOscillatorRef.current = null;
-        }
-        if (!audioType || !audioContextRef.current) return;
-
-        const ctx = audioContextRef.current;
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        gain.gain.setValueAtTime(0.05, ctx.currentTime);
-
-        if (audioType === 'DELTA_WAVES') {
-          osc1.frequency.value = 180;
-          osc2.frequency.value = 182.5;
-        } else if (audioType === 'THETA_WAVES') {
-          osc1.frequency.value = 200;
-          osc2.frequency.value = 206;
-        } else if (audioType === 'ALPHA_WAVES') {
-          osc1.frequency.value = 220;
-          osc2.frequency.value = 230;
-        } else if (audioType === 'BETA_WAVES') {
-          osc1.frequency.value = 250;
-          osc2.frequency.value = 268;
-        } else if (audioType === 'BILATERAL_SWEEP') {
-          osc1.frequency.value = 196;
-          osc2.frequency.value = 200;
-        } else {
-          osc1.frequency.value = 140;
-          osc2.frequency.value = 144;
-        }
-
-        osc1.connect(gain);
-        osc2.connect(gain);
-        gain.connect(ctx.destination);
-        osc1.start();
-        osc2.start();
-
-        bgOscillatorRef.current = {
-          stop: () => {
-            try {
-              gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
-              setTimeout(() => {
-                osc1.stop();
-                osc2.stop();
-                osc1.disconnect();
-                osc2.disconnect();
-              }, 350);
-            } catch (e) {}
-          }
-        };
-      } catch (e) {}
-    },
-    [ensureAudioUnlocked]
-  );
-
-  const playSpeechAudio = useCallback(
-    async (text: string) => {
-      if (!text) return;
-      lastSpokenScriptRef.current = text;
-      setLastSpokenScript(text);
+  const playSynthesizedTone = useCallback((freq = 520, duration = 0.15, type: OscillatorType = 'sine', vol = 0.9) => {
+    try {
       ensureAudioUnlocked();
+      const ctx = audioContextRef.current;
+      if (!ctx || ctx.state === 'suspended') return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) {}
+  }, [ensureAudioUnlocked]);
 
-      const cleanText = text.replace(/['"]/g, '').slice(0, 260);
+  const startTherapeuticBackgroundSound = useCallback((audioType?: string) => {
+    try {
+      ensureAudioUnlocked();
+      if (bgOscillatorRef.current) {
+        bgOscillatorRef.current.stop();
+        bgOscillatorRef.current = null;
+      }
+      if (!audioType || !audioContextRef.current) return;
 
-      const ttsEndpoints = [
-        `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(cleanText)}`,
-        `https://api.streamelements.com/kappa/v2/speech?voice=Conchita&text=${encodeURIComponent(cleanText)}`,
-        `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=es&client=tw-ob`
-      ];
+      const ctx = audioContextRef.current;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-      for (const url of ttsEndpoints) {
-        try {
-          const res = await fetch(url);
-          if (res.ok && audioContextRef.current) {
-            const ctx = audioContextRef.current;
-            if (ctx.state === 'suspended') await ctx.resume();
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
 
-            const arrayBuf = await res.arrayBuffer();
-            const audioBuf = await ctx.decodeAudioData(arrayBuf);
-            const source = ctx.createBufferSource();
-            const gainNode = ctx.createGain();
-            gainNode.gain.setValueAtTime(1.8, ctx.currentTime);
-            source.buffer = audioBuf;
-            source.connect(gainNode);
-            gainNode.connect(ctx.destination);
-            source.start(0);
-            return;
-          }
-        } catch (err) {}
+      if (audioType === 'DELTA_WAVES') {
+        osc1.frequency.value = 180; osc2.frequency.value = 182.5;
+      } else if (audioType === 'THETA_WAVES') {
+        osc1.frequency.value = 200; osc2.frequency.value = 206;
+      } else if (audioType === 'ALPHA_WAVES') {
+        osc1.frequency.value = 220; osc2.frequency.value = 230;
+      } else if (audioType === 'BETA_WAVES') {
+        osc1.frequency.value = 250; osc2.frequency.value = 268;
+      } else if (audioType === 'BILATERAL_SWEEP') {
+        osc1.frequency.value = 196; osc2.frequency.value = 200;
+      } else {
+        osc1.frequency.value = 140; osc2.frequency.value = 144;
       }
 
-      try {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(cleanText);
-          u.lang = 'es-ES';
-          u.volume = 1.0;
-          u.rate = 0.95;
-          window.speechSynthesis.speak(u);
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+      osc1.start();
+      osc2.start();
+
+      bgOscillatorRef.current = {
+        stop: () => {
+          try {
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+            setTimeout(() => {
+              osc1.stop(); osc2.stop();
+              osc1.disconnect(); osc2.disconnect();
+            }, 350);
+          } catch (e) {}
         }
-      } catch (e) {}
-    },
-    [ensureAudioUnlocked]
-  );
+      };
+    } catch (e) {}
+  }, [ensureAudioUnlocked]);
+
+  const playSpeechAudio = useCallback(async (text: string) => {
+    if (!text) return;
+    lastSpokenScriptRef.current = text;
+    setLastSpokenScript(text);
+    ensureAudioUnlocked();
+
+    const cleanText = text.replace(/['"]/g, '').slice(0, 260);
+
+    const ttsEndpoints = [
+      `https://api.streamelements.com/kappa/v2/speech?voice=Mia&text=${encodeURIComponent(cleanText)}`,
+      `https://api.streamelements.com/kappa/v2/speech?voice=Conchita&text=${encodeURIComponent(cleanText)}`,
+      `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=es&client=tw-ob`
+    ];
+
+    for (const url of ttsEndpoints) {
+      try {
+        const res = await fetch(url);
+        if (res.ok && audioContextRef.current) {
+          const ctx = audioContextRef.current;
+          if (ctx.state === 'suspended') await ctx.resume();
+          const arrayBuf = await res.arrayBuffer();
+          const audioBuf = await ctx.decodeAudioData(arrayBuf);
+          const source = ctx.createBufferSource();
+          const gainNode = ctx.createGain();
+          gainNode.gain.setValueAtTime(1.8, ctx.currentTime);
+          source.buffer = audioBuf;
+          source.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          source.start(0);
+          return;
+        }
+      } catch (err) {}
+    }
+
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(cleanText);
+        u.lang = 'es-ES'; u.volume = 1.0; u.rate = 0.95;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (e) {}
+  }, [ensureAudioUnlocked]);
 
   const update3dInVrBanner = (title: string, sub: string, score: string) => {
     if (!hudMeshRef.current) return;
     const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 256;
+    canvas.width = 1024; canvas.height = 256;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -401,50 +375,31 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
   const createProceduralSkyCanvas = (theme: 'OFFICE' | 'FOREST' | 'STREET' = 'OFFICE') => {
     const c = document.createElement('canvas');
-    c.width = 2048;
-    c.height = 1024;
+    c.width = 2048; c.height = 1024;
     const ctx = c.getContext('2d');
     if (!ctx) return c;
 
     const grad = ctx.createLinearGradient(0, 0, 0, 1024);
     if (theme === 'FOREST') {
-      grad.addColorStop(0, '#0284c7');
-      grad.addColorStop(0.48, '#7dd3fc');
-      grad.addColorStop(0.50, '#166534');
-      grad.addColorStop(1, '#052e16');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 2048, 1024);
+      grad.addColorStop(0, '#0284c7'); grad.addColorStop(0.48, '#7dd3fc');
+      grad.addColorStop(0.50, '#166534'); grad.addColorStop(1, '#052e16');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, 2048, 1024);
 
       ctx.fillStyle = '#14532d';
       for (let x = 40; x < 2048; x += 90) {
-        ctx.beginPath();
-        ctx.moveTo(x, 340);
-        ctx.lineTo(x - 50, 520);
-        ctx.lineTo(x + 50, 520);
-        ctx.closePath();
-        ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x, 340); ctx.lineTo(x - 50, 520); ctx.lineTo(x + 50, 520); ctx.closePath(); ctx.fill();
       }
     } else if (theme === 'STREET') {
-      grad.addColorStop(0, '#1e1b4b');
-      grad.addColorStop(0.48, '#3730a3');
-      grad.addColorStop(0.50, '#334155');
-      grad.addColorStop(1, '#0f172a');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 2048, 1024);
+      grad.addColorStop(0, '#1e1b4b'); grad.addColorStop(0.48, '#3730a3');
+      grad.addColorStop(0.50, '#334155'); grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, 2048, 1024);
     } else {
-      grad.addColorStop(0, '#f8fafc');
-      grad.addColorStop(0.35, '#e2e8f0');
-      grad.addColorStop(0.50, '#94a3b8');
-      grad.addColorStop(0.52, '#334155');
-      grad.addColorStop(1, '#0f172a');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 2048, 1024);
+      grad.addColorStop(0, '#f8fafc'); grad.addColorStop(0.35, '#e2e8f0');
+      grad.addColorStop(0.50, '#94a3b8'); grad.addColorStop(0.52, '#334155'); grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, 2048, 1024);
 
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 4;
-      for (let x = 0; x < 2048; x += 256) {
-        ctx.strokeRect(x + 16, 260, 224, 250);
-      }
+      ctx.strokeStyle = '#64748b'; ctx.lineWidth = 4;
+      for (let x = 0; x < 2048; x += 256) { ctx.strokeRect(x + 16, 260, 224, 250); }
     }
     return c;
   };
@@ -489,8 +444,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
   const createProceduralHumanPortrait = (archetype: ClinicalArchetype) => {
     const c = document.createElement('canvas');
-    c.width = 1024;
-    c.height = 1800;
+    c.width = 1024; c.height = 1800;
     const ctx = c.getContext('2d');
     if (!ctx) return c;
 
@@ -517,8 +471,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     ctx.arc(574, 450, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#292524';
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#292524'; ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(420, 420); ctx.quadraticCurveTo(450, 410, 480, 422);
     ctx.moveTo(604, 420); ctx.quadraticCurveTo(574, 410, 544, 422);
@@ -533,19 +486,14 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     if (archetype === 'SEXUAL_PARTNER') {
       ctx.beginPath();
       ctx.arc(512, 400, 175, Math.PI, 0, false);
-      ctx.lineTo(690, 920);
-      ctx.lineTo(620, 980);
-      ctx.lineTo(512, 600);
-      ctx.lineTo(404, 980);
-      ctx.lineTo(334, 920);
+      ctx.lineTo(690, 920); ctx.lineTo(620, 980); ctx.lineTo(512, 600);
+      ctx.lineTo(404, 980); ctx.lineTo(334, 920);
       ctx.closePath();
       ctx.fill();
     } else {
       ctx.beginPath();
       ctx.arc(512, 400, 168, Math.PI, 0, false);
-      ctx.lineTo(670, 520);
-      ctx.lineTo(512, 380);
-      ctx.lineTo(354, 520);
+      ctx.lineTo(670, 520); ctx.lineTo(512, 380); ctx.lineTo(354, 520);
       ctx.closePath();
       ctx.fill();
     }
@@ -556,10 +504,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     if (archetype === 'SEXUAL_PARTNER') {
       ctx.fillStyle = '#881337';
       ctx.beginPath();
-      ctx.moveTo(420, 750);
-      ctx.quadraticCurveTo(512, 800, 604, 750);
-      ctx.lineTo(720, 1800);
-      ctx.lineTo(304, 1800);
+      ctx.moveTo(420, 750); ctx.quadraticCurveTo(512, 800, 604, 750);
+      ctx.lineTo(720, 1800); ctx.lineTo(304, 1800);
       ctx.closePath();
       ctx.fill();
     } else if (archetype === 'FORENSIC_PEER') {
