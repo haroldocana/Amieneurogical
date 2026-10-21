@@ -59,7 +59,7 @@ interface RawDisorderMeta {
 
 const RAW_DISORDERS: RawDisorderMeta[] = [
   // Módulo I: Neurodesarrollo & Motor
-  { id: 'TDAH', modId: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Conners CPT-3 (d\')', treatTest: 'Neurofeedback SMR' },
+  { id: 'TDAH', modId: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención e Impulsividad', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: "Conners CPT-3 (d')", treatTest: 'Neurofeedback SMR' },
   { id: 'TEA_1', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 1 (Asperger)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Microexpresiones Faciales', treatTest: 'Neuronas Espejo' },
   { id: 'TEA_2_3', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 2-3', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad Multisensorial', treatTest: 'Integración Háptica' },
   { id: 'ALZHEIMER', modId: 'MOD_NEURODEV', name: 'Deterioro Cognitivo / Alzheimer', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Memoria Episódica Inmediata', treatTest: 'Terapia de Reminiscencia' },
@@ -178,9 +178,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     balloonMaxCap: 12,
     balloonScale: 1.0,
     // N-Back
-    activeCube: 0,
-    // Choice
-    choicePending: false
+    activeCube: 0
   });
 
   useEffect(() => {
@@ -348,7 +346,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     if (env === 'FOREST') {
       sceneRef.current.fog = new THREE.FogExp2(0x064e3b, 0.04);
-      // Suelo verde musgo oscuro
       const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(30, 30),
         new THREE.MeshStandardMaterial({ color: 0x064e3b, roughness: 0.85 })
@@ -356,7 +353,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       ground.rotation.x = -Math.PI / 2;
       room.add(ground);
 
-      // Columnas que simulan árboles cilíndricos en la lejanía
       for (let i = 0; i < 20; i++) {
         const trunk = new THREE.Mesh(
           new THREE.CylinderGeometry(0.18, 0.25, 4.5, 8),
@@ -369,7 +365,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       }
     } else if (env === 'STREET') {
       sceneRef.current.fog = new THREE.FogExp2(0x0f172a, 0.035);
-      // Asfalto urbano
       const street = new THREE.Mesh(
         new THREE.PlaneGeometry(30, 30),
         new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
@@ -377,7 +372,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       street.rotation.x = -Math.PI / 2;
       room.add(street);
 
-      // Siluetas de edificios procedurales perimetrales
       for (let i = 0; i < 12; i++) {
         const bHeight = 4 + (i % 5) * 2;
         const bldg = new THREE.Mesh(
@@ -392,7 +386,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       // Consultorio Médico Controlado (OFFICE)
       sceneRef.current.fog = new THREE.FogExp2(0x0f172a, 0.02);
 
-      // Paredes de la sala (10m x 4m x 10m) renderizadas hacia el interior
       const walls = new THREE.Mesh(
         new THREE.BoxGeometry(10, 4, 10),
         new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.65, side: THREE.BackSide })
@@ -400,7 +393,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       walls.position.set(0, 2, 0);
       room.add(walls);
 
-      // Suelo clínico reflectante
       const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(10, 10),
         new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25, metalness: 0.2 })
@@ -409,14 +401,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       floor.position.set(0, 0.001, 0);
       room.add(floor);
 
-      // Zócalos cian médico
       const baseMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3 });
       const b1 = new THREE.Mesh(new THREE.BoxGeometry(10, 0.12, 0.04), baseMat); b1.position.set(0, 0.06, -4.98);
       const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 10), baseMat); b2.position.set(-4.98, 0.06, 0);
       const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 10), baseMat); b3.position.set(4.98, 0.06, 0);
       room.add(b1, b2, b3);
 
-      // Plafones LED de techo emisivos
       const lampMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x38bdf8, emissiveIntensity: 1.5 });
       const lamp1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 2.2), lampMat); lamp1.position.set(-2, 3.96, -1.5);
       const lamp2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 2.2), lampMat); lamp2.position.set(2, 3.96, -1.5);
@@ -436,7 +426,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     const hairMat = new THREE.MeshStandardMaterial({ color: 0x1f1712, roughness: 0.6 });
     const eyeWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const eyeIris = new THREE.MeshBasicMaterial({ color: archetype === 'SEXUAL_PARTNER' ? 0x0d9488 : 0x0284c7 });
-    const eyePupil = new THREE.MeshBasicMaterial({ color: 0x050505 });
     const lipsMat = new THREE.MeshStandardMaterial({ color: archetype === 'SEXUAL_PARTNER' ? 0xe11d48 : 0xbe123c, roughness: 0.35 });
 
     // 1. Cabeza
@@ -470,42 +459,56 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     // 2. Vestimenta y Cuerpo según Arquetipo Clínico
     if (archetype === 'SEXUAL_PARTNER') {
       const dressMat = new THREE.MeshStandardMaterial({ color: 0x881337, roughness: 0.35 });
-      // Cabello largo
-      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.175, 24, 24), hairMat); hairCrown.position.set(0, 1.62, -0.02);
-      const hairLockR = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 12), hairMat); hairLockR.position.set(0.14, 1.40, 0.02);
-      const hairLockL = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 12), hairLockL.position.set(-0.14, 1.40, 0.02);
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.175, 24, 24), hairMat);
+      hairCrown.position.set(0, 1.62, -0.02);
+      const hairLockR = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 12), hairMat);
+      hairLockR.position.set(0.14, 1.40, 0.02);
+      const hairLockL = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 12), hairMat);
+      hairLockL.position.set(-0.14, 1.40, 0.02);
       avatar.add(hairCrown, hairLockR, hairLockL);
 
-      // Torso y falda suave
-      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.14, 0.46, 20), dressMat); torso.position.set(0, 1.16, 0);
-      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.28, 0.70, 20), dressMat); skirt.position.set(0, 0.65, 0);
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.14, 0.46, 20), dressMat);
+      torso.position.set(0, 1.16, 0);
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.28, 0.70, 20), dressMat);
+      skirt.position.set(0, 0.65, 0);
       avatar.add(torso, skirt);
     } else if (archetype === 'FORENSIC_PEER') {
       const suitMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7 });
       const shirtMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 });
-      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.172, 24, 24), hairMat); hairCrown.position.set(0, 1.63, -0.01);
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.172, 24, 24), hairMat);
+      hairCrown.position.set(0, 1.63, -0.01);
       avatar.add(hairCrown);
 
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.58, 0.22), suitMat); torso.position.set(0, 1.14, 0);
-      const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.23), shirtMat); shirt.position.set(0, 1.20, 0);
-      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.72, 0.18), suitMat); legs.position.set(0, 0.52, 0);
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.58, 0.22), suitMat);
+      torso.position.set(0, 1.14, 0);
+      const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.23), shirtMat);
+      shirt.position.set(0, 1.20, 0);
+      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.72, 0.18), suitMat);
+      legs.position.set(0, 0.52, 0);
       avatar.add(torso, shirt, legs);
     } else if (archetype === 'HYPNOTIC_GUIDE') {
       const robeMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4, emissive: 0x0369a1, emissiveIntensity: 0.25 });
-      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.173, 24, 24), hairMat); hairCrown.position.set(0, 1.62, -0.02);
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.173, 24, 24), hairMat);
+      hairCrown.position.set(0, 1.62, -0.02);
       avatar.add(hairCrown);
 
-      const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.38, 1.20, 24), robeMat); robe.position.set(0, 0.86, 0);
-      const aura = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.46, 32), new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
+      const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.38, 1.20, 24), robeMat);
+      robe.position.set(0, 0.86, 0);
+      const aura = new THREE.Mesh(
+        new THREE.RingGeometry(0.35, 0.46, 32),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+      );
       aura.position.set(0, 1.45, -0.15);
       avatar.add(robe, aura);
     } else {
       // DOCTOR GENERAL: Bata médica blanca
       const coatMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
-      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.172, 24, 24), hairMat); hairCrown.position.set(0, 1.63, -0.01);
+      const hairCrown = new THREE.Mesh(new THREE.SphereGeometry(0.172, 24, 24), hairMat);
+      hairCrown.position.set(0, 1.63, -0.01);
       avatar.add(hairCrown);
 
-      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.72, 20), coatMat); torso.position.set(0, 1.05, 0);
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.72, 20), coatMat);
+      torso.position.set(0, 1.05, 0);
       const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.05), new THREE.MeshStandardMaterial({ color: 0x0284c7 }));
       stripe.position.set(0, 1.08, 0.22);
       avatar.add(torso, stripe);
@@ -514,8 +517,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     // Brazos articulados
     const armMat = archetype === 'DOCTOR' ? new THREE.MeshStandardMaterial({ color: 0xf8fafc }) : skinMat;
     const armGeo = new THREE.CylinderGeometry(0.045, 0.038, 0.54, 16);
-    const armL = new THREE.Mesh(armGeo, armMat); armL.name = 'AVATAR_ARM_L'; armL.position.set(-0.26, 1.10, 0);
-    const armR = new THREE.Mesh(armGeo, armMat); armR.name = 'AVATAR_ARM_R'; armR.position.set(0.26, 1.10, 0);
+    const armL = new THREE.Mesh(armGeo, armMat);
+    armL.name = 'AVATAR_ARM_L';
+    armL.position.set(-0.26, 1.10, 0);
+    const armR = new THREE.Mesh(armGeo, armMat);
+    armR.name = 'AVATAR_ARM_R';
+    armR.position.set(0.26, 1.10, 0);
     avatar.add(armL, armR);
   }, []);
 
@@ -535,7 +542,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.9 })
       );
       sphere.name = 'CPT_SPHERE';
-      sphere.visible = false; // Se activa solo en cada ensayo
+      sphere.visible = false;
       group.add(sphere);
       t.cptActive = false;
       t.trialTimer = Date.now() + 1000;
@@ -633,7 +640,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       const sphere = interactiveGroupRef.current.getObjectByName('CPT_SPHERE') as THREE.Mesh;
       if (sphere && sphere.visible && t.cptActive) {
         if (t.cptType === 'GO') {
-          // Acierto ante esfera verde
           t.hits += 1;
           playTone(680, 0.1, 'sine');
           sphere.visible = false;
@@ -641,7 +647,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           updateHUD('CPT: FRENO INHIBITORIO', `¡IMPACTO GO! (${rt}ms)`, `Aciertos: ${t.hits} | Fallos: ${t.errors}`);
           transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Impacto Go (${rt}ms)` });
         } else {
-          // Error de comisión ante esfera roja (impulso descontrolado)
           t.errors += 1;
           playTone(90, 0.25, 'sawtooth');
           sphere.visible = false;
@@ -649,7 +654,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           updateHUD('CPT: FRENO INHIBITORIO', '❌ ERROR COMISIÓN (Era Rojo)', `Aciertos: ${t.hits} | Fallos: ${t.errors}`);
           transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Error Comisión No-Go (${rt}ms)` });
         }
-        t.trialTimer = now + 1200 + Math.random() * 800; // ISI aleatorio
+        t.trialTimer = now + 1200 + Math.random() * 800;
       }
     } else if (t.paradigm === 'BART_3D') {
       const hitObj = hits.length > 0 ? hits[0].object : null;
@@ -903,7 +908,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         const sphere = interactiveGroupRef.current.getObjectByName('CPT_SPHERE') as THREE.Mesh;
         if (sphere) {
           if (!sphere.visible && now >= trial.trialTimer) {
-            // Estímulo aparece
             trial.cptType = Math.random() < 0.75 ? 'GO' : 'NOGO';
             const isGo = trial.cptType === 'GO';
             (sphere.material as THREE.MeshStandardMaterial).color.setHex(isGo ? 0x10b981 : 0xef4444);
@@ -912,10 +916,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             trial.stimulusOnsetTime = now;
             trial.cptActive = true;
           } else if (sphere.visible && now - trial.stimulusOnsetTime > 450) {
-            // Estímulo expira tras 450 ms
             sphere.visible = false;
             if (trial.cptType === 'GO' && trial.cptActive) {
-              // Error de omisión (falta de atención)
               trial.errors += 1;
               playTone(110, 0.15, 'triangle');
               updateHUD('CPT: ERROR DE OMISIÓN', '⚠️ TIEMPO AGOTADO (Era Verde)', `Aciertos: ${trial.hits} | Fallos: ${trial.errors}`);
