@@ -1,14 +1,14 @@
 // ============================================================================
-// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO
-// Soporte Nativo JPEG 360° (/ecosystems/) + Reproductor MP4 3D (/video/)
-// 240 Protocolos Clínicos DSM-5 • Hard Stop Inmediato • Cero Pantallas Negras
+// AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO COMPLETO
+// 240 Protocolos Clínicos DSM-5 • Soporte Nativo JPEG 360° y Videos MP4
+// Ensayos Estandarizados (30 Trials) • Hard Stop Inmediato • Cero Pantallas Negras
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Target, VolumeX, Play, Volume2 } from 'lucide-react';
+import { Target, VolumeX, Play, Volume2, Layers, Activity } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -27,6 +27,108 @@ export type InteractiveParadigm =
   | 'BIO_3D'
   | 'MIRROR_3D';
 
+export type ClinicalArchetype = 'DOCTOR' | 'SEXUAL_PARTNER' | 'FORENSIC_PEER' | 'HYPNOTIC_GUIDE';
+
+export interface VrClinicalExercise {
+  id: string;
+  mode: 'DIAGNOSTIC' | 'TREATMENT';
+  paradigm: InteractiveParadigm;
+  name: string;
+  bgAudio: string;
+  script: string;
+}
+
+export interface VrDisorderData {
+  id: string;
+  modId: string;
+  name: string;
+  archetype: ClinicalArchetype;
+  environment: 'OFFICE' | 'FOREST' | 'STREET';
+  exercises: VrClinicalExercise[];
+}
+
+interface RawDisorderMeta {
+  id: string;
+  modId: string;
+  name: string;
+  archetype: ClinicalArchetype;
+  environment: 'OFFICE' | 'FOREST' | 'STREET';
+  evalTest: string;
+  treatTest: string;
+}
+
+const RAW_DISORDERS: RawDisorderMeta[] = [
+  // Módulo I: Neurodesarrollo & Motor
+  { id: 'TDAH', modId: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: "Conners CPT-3 (d')", treatTest: 'Neurofeedback SMR' },
+  { id: 'TEA_1', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 1 (Asperger)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Microexpresiones Faciales', treatTest: 'Neuronas Espejo' },
+  { id: 'TEA_2_3', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 2-3', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad Multisensorial', treatTest: 'Integración Háptica' },
+  { id: 'ALZHEIMER', modId: 'MOD_NEURODEV', name: 'Deterioro Cognitivo / Alzheimer', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Memoria Episódica Inmediata', treatTest: 'Terapia de Reminiscencia' },
+  { id: 'PARKINSON', modId: 'MOD_NEURODEV', name: 'Parkinson (Temblor & Bradicinesia)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Cuantificación 90Hz', treatTest: 'LSVT BIG VR / Amplitud' },
+
+  // Módulo II: Afectivo & Estado de Ánimo
+  { id: 'DEPRESION', modId: 'MOD_AFFECTIVE', name: 'Depresión Mayor Unipolar', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Sesgo Cognitivo Dot-Probe', treatTest: 'Activación Conductual (BAT)' },
+  { id: 'BIPOLAR', modId: 'MOD_AFFECTIVE', name: 'Trastorno Bipolar', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Latencia Acelerada Maníaca', treatTest: 'Estabilización Interhemisférica' },
+  { id: 'DISTIMIA', modId: 'MOD_AFFECTIVE', name: 'Distimia / Depresión Persistente', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Perseveración en el Error', treatTest: 'Reactivación Propioceptiva' },
+  { id: 'CICLOTIMIA', modId: 'MOD_AFFECTIVE', name: 'Ciclotimia', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Fluctuación de Latencias', treatTest: 'Neutralización de Euforia' },
+
+  // Módulo III: Trauma, TEPT & Disociación
+  { id: 'TEPT', modId: 'MOD_TRAUMA', name: 'Estrés Postraumático (TEPT)', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad a Cues Fóbicos', treatTest: 'EMDR de 8 Fases (Shapiro)' },
+  { id: 'TRAUMA_COMPLEJO', modId: 'MOD_TRAUMA', name: 'Trauma Complejo (C-PTSD)', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Umbral de Sumisión por Miedo', treatTest: 'Reconstrucción de Límites' },
+  { id: 'DESPERSONALIZACION', modId: 'MOD_TRAUMA', name: 'Despersonalización / Desrealización', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Retraso Táctil-Visual 6DoF', treatTest: 'Anclaje Vestibular Somático' },
+
+  // Módulo IV: Ansiedad, Fobias & TOC
+  { id: 'FOBIA_SOCIAL', modId: 'MOD_ANXIETY', name: 'Fobia Social / Ansiedad de Escrutinio', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Escrutinio Ocular en Multitud', treatTest: 'Desensibilización de Vergüenza' },
+  { id: 'PANICO', modId: 'MOD_ANXIETY', name: 'Trastorno de Pánico y Agorafobia', archetype: 'DOCTOR', environment: 'STREET', evalTest: 'Exposición Interoceptiva', treatTest: 'Reentrenamiento Capnográfico' },
+  { id: 'TOC', modId: 'MOD_ANXIETY', name: 'Trastorno Obsesivo Compulsivo (TOC)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Latencia de Verificación', treatTest: 'Prevención de Respuesta (EPR)' },
+  { id: 'TAG', modId: 'MOD_ANXIETY', name: 'Ansiedad Generalizada (TAG)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Supresión de Tono Vagal', treatTest: 'Mindfulness Anti-Preocupación' },
+
+  // Módulo V: Adicciones & Control de Impulsos
+  { id: 'ADICCION_SUST', modId: 'MOD_ADDICTIONS', name: 'Dependencia a Sustancias', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Approach Bias hacia Cues', treatTest: 'Rechazo Motor AAT & Urge-Surfing' },
+  { id: 'LUDOPATIA', modId: 'MOD_ADDICTIONS', name: 'Ludopatía y Apuestas Digitales', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Iowa Gambling Task (IGT 3D)', treatTest: 'Extinción de Recompensas' },
+  { id: 'ATRACON', modId: 'MOD_ADDICTIONS', name: 'Trastorno por Atracón Compulsivo', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Sesgo hacia Ultraprocesados', treatTest: 'Rechazo Motor Háptico' },
+  { id: 'CLEPTOMANIA', modId: 'MOD_ADDICTIONS', name: 'Cleptomanía / Falla del Control', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Tensión Previa (Pico GSR)', treatTest: 'Freno Háptico de Urgencia' },
+
+  // Módulo VI: Forense, Psicopatía & Cluster B
+  { id: 'TLP', modId: 'MOD_FORENSIC', name: 'Trastorno Límite de Personalidad (TLP)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Hipersensibilidad al Rechazo', treatTest: 'Habilidades DBT TIPP en VR' },
+  { id: 'PSICOPATIA', modId: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1 y 2 PCL-R)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Dilema Moral Utilitarista', treatTest: 'Condicionamiento Aversivo' },
+  { id: 'NARCISISMO', modId: 'MOD_FORENSIC', name: 'Narcisismo Maligno', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Reactividad Colérica ante Fallo', treatTest: 'Desescalamiento de Ira' },
+  { id: 'HISTRIONICO', modId: 'MOD_FORENSIC', name: 'Trastorno Histriónico', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Dependencia de Atención Social', treatTest: 'Concentración sin Refuerzo' },
+
+  // Módulo VII: Neurohipnosis & Dolor Crónico
+  { id: 'HIPNO_ERICKSONIANA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnosis Ericksoniana', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', evalTest: 'Escala de Sugestionabilidad', treatTest: 'Siembra de Metáforas Inmersivas' },
+  { id: 'HIPNO_ANALGESIA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnoanalgesia (Dolor Crónico)', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', evalTest: 'Mapeo Espacial Nociceptivo', treatTest: 'Guantelete de Anestesia Térmica' },
+  { id: 'HIPNO_FANTASMA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Miembro Fantasma', archetype: 'HYPNOTIC_GUIDE', environment: 'OFFICE', evalTest: 'Discordancia Sensoriomotora', treatTest: 'Espejo Virtual 6DoF en Vivo' },
+
+  // Módulo VIII: Salud Sexual & Psicosomática
+  { id: 'SEX_INHIB', modId: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS)', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', evalTest: 'Modelo de Control Dual (SIS)', treatTest: 'Sensate Focus VR (Focalización)' },
+  { id: 'DISFUNCION_SOM', modId: 'MOD_SEXOLOGY', name: 'Ansiedad de Rendimiento Sexual', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', evalTest: 'Rol de Espectador Crítico', treatTest: 'Descatastrofización y Confort' },
+
+  // Módulo IX: Logoterapia & Sentido
+  { id: 'VACIO_EXISTENCIAL', modId: 'MOD_LOGOTHERAPY', name: 'Vacío Existencial / Logoterapia', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Diagnóstico de Hiperreflexión', treatTest: 'Intención Paradójica Inmersiva' }
+];
+
+export const CLINICAL_VR_MATRIX: Record<string, VrDisorderData> = {};
+
+RAW_DISORDERS.forEach((d) => {
+  CLINICAL_VR_MATRIX[d.id] = {
+    id: d.id,
+    modId: d.modId,
+    name: d.name,
+    archetype: d.archetype,
+    environment: d.environment,
+    exercises: [
+      { id: `${d.id}_D1`, mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: `1. ${d.evalTest}: Freno Go/No-Go`, bgAudio: 'BROWN_NOISE', script: `Evaluación clínica de ${d.name}. Dispara únicamente a las esferas verdes y suprime el disparo ante rojas.` },
+      { id: `${d.id}_D2`, mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: `2. ${d.name}: Tolerancia al Riesgo (BART)`, bgAudio: 'TENSION_DRUM', script: `Evaluación de riesgo en ${d.name}. Bombea el globo para sumar puntos o asegúralos antes de que explote.` },
+      { id: `${d.id}_D3`, mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: `3. ${d.name}: Memoria de Trabajo Visuoespacial`, bgAudio: 'BETA_WAVES', script: `Evaluación ejecutiva. Apunta y dispara únicamente al cubo iluminado de mayor escala.` },
+      { id: `${d.id}_D4`, mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: `4. ${d.name}: Toma de Decisiones y Conflicto`, bgAudio: 'HEARTBEAT', script: `Evaluación decisional. Selecciona rápidamente entre las dos opciones presentadas en el panel.` },
+      { id: `${d.id}_T1`, mode: 'TREATMENT', paradigm: 'AAT_3D', name: `5. Intervención AAT: ${d.treatTest}`, bgAudio: 'ALPHA_WAVES', script: `Intervención motora de rechazo. Empuja con firmeza el holograma perturbador fuera de tu espacio vital.` },
+      { id: `${d.id}_T2`, mode: 'TREATMENT', paradigm: 'EMDR_3D', name: `6. Reprocesamiento Ocular Bilateral (EMDR)`, bgAudio: 'BILATERAL_SWEEP', script: `Sigue la esfera luminosa rítmica con la mirada para desensibilizar la carga emocional.` },
+      { id: `${d.id}_T3`, mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: `7. ${d.treatTest} en Espejo Somatomotor`, bgAudio: 'THETA_WAVES', script: `Sincroniza tus brazos con los movimientos guía del avatar para afianzar coherencia sensoriomotora.` },
+      { id: `${d.id}_T4`, mode: 'TREATMENT', paradigm: 'BIO_3D', name: `8. Biofeedback Vagal de Cierre Autonómico`, bgAudio: 'DELTA_WAVES', script: `Acompasa tu respiración con la expansión del loto para restaurar el tono vagal y la serenidad.` }
+    ]
+  };
+});
+
 export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +139,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const activePatientIdRef = useRef<string>(initialPatientId);
 
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+  const [selectedDisorderKey, setSelectedDisorderKey] = useState<string>('TDAH');
+  const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
   const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('IDLE');
   const [wsOnline, setWsOnline] = useState(false);
   const [disorderTitle, setDisorderTitle] = useState('AMIE CDSS • EN ESPERA');
@@ -46,7 +150,9 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const stageGroupRef = useRef<THREE.Group | null>(null);
+  const roomGroupRef = useRef<THREE.Group | null>(null);
   const interactiveGroupRef = useRef<THREE.Group | null>(null);
+  const permanentAvatarRef = useRef<THREE.Group | null>(null);
   const hudMeshRef = useRef<THREE.Mesh | null>(null);
   const bgSphereMeshRef = useRef<THREE.Mesh | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -55,7 +161,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const bgOscillatorRef = useRef<{ stop: () => void } | null>(null);
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader());
 
-  // Elementos del reproductor de video MP4
+  // Elementos de pantalla virtual para MP4
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
   const videoCinemaMeshRef = useRef<THREE.Mesh | null>(null);
@@ -441,7 +547,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return () => ws.close();
   }, [initialPatientId, setupParadigmVisuals, playSpeechAudio, executeHardStop, load360JpegEcosystem, playProvocationMp4Video]);
 
-  // Montaje WebXR Three.js
+  // Montaje WebXR
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -506,7 +612,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     stageGroup.add(interactiveGroup);
     interactiveGroupRef.current = interactiveGroup;
 
-    // Mandos con puntero láser
+    // Mandos con láser
     const buildLaser = () => {
       const g = new THREE.Group();
       g.add(new THREE.Line(
@@ -533,21 +639,16 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     const clock = new THREE.Clock();
 
-    // ========================================================================
-    // BUCLE DE RENDERIZADO Y CONTROL DE ENSAYOS TEMPORIZADOS (Trials)
-    // ========================================================================
     renderer.setAnimationLoop(() => {
       const t = clock.getElapsedTime();
       const now = Date.now();
       const trial = trialStateRef.current;
 
-      // Si no hay sesión activa o está en reposo, renderizar y retornar
       if (!trial.isActiveSession || trial.paradigm === 'IDLE') {
         renderer.render(scene, camera);
         return;
       }
 
-      // 1. Ensayos Conners CPT
       if (trial.paradigm === 'CPT_3D' && interactiveGroupRef.current) {
         const sphere = interactiveGroupRef.current.getObjectByName('CPT_SPHERE') as THREE.Mesh;
         if (sphere) {
@@ -579,7 +680,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         }
       }
 
-      // 2. Ensayos BART
       if (trial.paradigm === 'BART_3D' && interactiveGroupRef.current) {
         const balloon = interactiveGroupRef.current.getObjectByName('BART_BALLOON');
         if (balloon) {
@@ -587,7 +687,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         }
       }
 
-      // 3. Ensayos EMDR
       if (trial.paradigm === 'EMDR_3D' && interactiveGroupRef.current) {
         interactiveGroupRef.current.position.x = 0.35 + Math.sin(t * 2.5) * 0.95;
       }
