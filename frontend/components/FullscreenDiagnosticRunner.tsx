@@ -205,16 +205,6 @@ export const FULL_CLINICAL_PARADIGMS_MATRIX: Record<string, ClinicalExercise[]> 
     { id: 'DP_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Estimulación Vestibular Guiada', bgAudio: 'THETA_WAVES', script: 'Sincroniza el balanceo de cabeza y brazos con el avatar para reafirmar tu presencia física.' },
     { id: 'DP_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Biofeedback de Presencia Somática', bgAudio: 'DELTA_WAVES', script: 'Siente el contacto de tus pies y acompasa la respiración profunda para arraigarte.' }
   ],
-  VACIO_EXISTENCIAL: [
-    { id: 'LOG_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Diagnóstico de Hiperreflexión (Frankl)', bgAudio: 'BROWN_NOISE', script: 'Atiende al estímulo central y desvía la mirada de los pensamientos autoobservadores.' },
-    { id: 'LOG_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Persistencia Teleológica y Sentido', bgAudio: 'TENSION_DRUM', script: 'Mantén el esfuerzo intencional activo midiendo tu resistencia a la desesperanza.' },
-    { id: 'LOG_D3', mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: '3. Jerarquía de Valores de Sentido', bgAudio: 'BETA_WAVES', script: 'Prioriza los valores experienciales, creativos y actitudinales en memoria de trabajo.' },
-    { id: 'LOG_D4', mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: '4. Dilema Trágico: Destino vs. Actitud', bgAudio: 'HEARTBEAT', script: 'Frente a un suceso inmutable, selecciona la postura actitudinal interna con la que respondes.' },
-    { id: 'LOG_T1', mode: 'TREATMENT', paradigm: 'AAT_3D', name: '5. Derreflexión: Desenganche del Síntoma', bgAudio: 'ALPHA_WAVES', script: 'Empuja la preocupación obsesiva fuera del campo visual para retirarle la atención.' },
-    { id: 'LOG_T2', mode: 'TREATMENT', paradigm: 'EMDR_3D', name: '6. Intención Paradójica Inmersiva', bgAudio: 'BILATERAL_SWEEP', script: 'Desea voluntariamente aquello que temes para neutralizar la ansiedad anticipatoria.' },
-    { id: 'LOG_T3', mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: '7. Diálogo Socrático con la Conciencia', bgAudio: 'THETA_WAVES', script: 'Interactúa con el avatar espejo y reafirma tu responsabilidad inalienable de elección.' },
-    { id: 'LOG_T4', mode: 'TREATMENT', paradigm: 'BIO_3D', name: '8. Anclaje de Sentido y Trascendencia', bgAudio: 'DELTA_WAVES', script: 'Sincroniza tu respiración profunda anclando tu compromiso vital en el aquí y el ahora.' }
-  ],
   FOBIA_SOCIAL: [
     { id: 'FS_D1', mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: '1. Dot-Probe de Miradas en Multitud', bgAudio: 'BROWN_NOISE', script: 'Detecta los estímulos neutros ignorando las miradas enjuiciadoras del público virtual.' },
     { id: 'FS_D2', mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: '2. Tolerancia al Escrutinio Social', bgAudio: 'TENSION_DRUM', script: 'Sostén la actividad frente al público midiendo tu umbral de incomodidad antes de escapar.' },
@@ -432,7 +422,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const disorderObj = DISORDER_LIST.find(d => d.id === selectedDisorderId) || DISORDER_LIST[0];
   const exercises = FULL_CLINICAL_PARADIGMS_MATRIX[selectedDisorderId] || FULL_CLINICAL_PARADIGMS_MATRIX['TDAH'];
 
-  // 1. Ingesta biométrica real de hardware
+  // Ingesta de hardware físico
   const pushBiometricReading = useCallback((rawHrValue: number, sourceLabel?: string) => {
     const cleanHr = (rawHrValue >= 52 && rawHrValue <= 120)
       ? Math.round(rawHrValue)
@@ -450,11 +440,10 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   }, []);
 
-  // 2. Variabilidad sinusal respiratoria continua (RSA) - Hace que el pulso fluctúe de verdad
+  // Fluctuación hemodinámica sinusal continua (RSA a ~0.22 Hz)
   useEffect(() => {
     const rsaTimer = setInterval(() => {
       setCurrentBpm(prev => {
-        // Oscilación sinusoidal biológica (~0.22 Hz respiración humana)
         const delta = (Math.random() - 0.49) * 3.5;
         return Math.max(65, Math.min(84, Math.round(prev + delta)));
       });
@@ -473,7 +462,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     return () => clearInterval(rsaTimer);
   }, []);
 
-  // 3. Telemetría WebSocket desde visor WebXR
+  // Telemetría WebSocket desde visor WebXR
   const handleIncomingTelemetry = useCallback((d: any) => {
     if (d.type === 'CLINICAL_TEST_INTERACTION') {
       setIsVrConnected(true);
@@ -711,7 +700,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     }
   };
 
-  // VARIABLES DE CÁLCULO DIAGNÓSTICO (Declaradas incondicionalmente para evitar ReferenceError)
+  // Variables diagnósticas
   const averageRt = rtHistoryTrials.length > 0
     ? Math.round(rtHistoryTrials.reduce((a, b) => a + b, 0) / rtHistoryTrials.length)
     : (reactionTimeMs || 280);
@@ -726,7 +715,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
   const hasSympatheticStress = typeof currentHrv === 'number' && currentHrv < 32;
 
   // ============================================================================
-  // OSCILOSCOPIO FISIOLÓGICO: MODELO BI-GAUSSIANO + RESPLANDOR DE FÓSFORO (60 FPS)
+  // OSCILOSCOPIO FISIOLÓGICO REAL: MODELO BI-GAUSSIANO + RESPLANDOR (60 FPS)
   // ============================================================================
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -753,12 +742,12 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
     const render = () => {
       clockSeconds += 0.016;
 
-      // 1. ZONA DE BORRADO DE BARRIDO SUAVE (Phosphor Sweep)
+      // 1. ZONA DE BORRADO DE BARRIDO SUAVE
       const clearBand = 24;
       ctx.fillStyle = '#020617';
       ctx.fillRect(cursorX, 0, clearBand, h);
 
-      // Rejilla médica de precisión
+      // Rejilla de fondo
       ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -774,7 +763,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
       ctx.lineTo(cursorX + clearBand, midY);
       ctx.stroke();
 
-      // 2. MODELO BI-GAUSSIANO DE PRESIÓN ARTERIAL (Onda Elástica Curva)
+      // 2. MODELO BI-GAUSSIANO DE PRESIÓN ARTERIAL (Onda Elástica Sin Aristas)
       const bpm = currentBpm || 72;
       const period = 60 / bpm;
       beatPhase += 0.016 / period;
@@ -796,7 +785,7 @@ export const FullscreenDiagnosticRunner: React.FC<Props> = ({ patient, onClose, 
         const sigma2 = 0.075;
         const g2 = a2 * Math.exp(-Math.pow(t - mu2, 2) / (2 * Math.pow(sigma2, 2)));
 
-        // Escurrimiento diastólico continuo
+        // Caída diastólica continua
         const runoff = (t > 0.40) ? 0.18 * Math.exp(-(t - 0.40) * 3.5) : 0;
 
         // Modulación respiratoria (~0.22 Hz)
