@@ -1,3 +1,9 @@
+// ============================================================================
+// AMIE CLINICAL COPILOT - PROTOCOLO DE EMERGENCIA ANTICRISIS JITAI 24/7
+// Monitoreo Biométrico Continuo • Despacho Multicanal de Rescate
+// frontend/components/JitaiEmergencyProtocolModule.tsx
+// ============================================================================
+
 import React, { useState, useEffect } from 'react';
 import { PatientRecord, JitaiTelemetryPacket, JitaiConsentRecord } from '../types';
 import {
@@ -28,7 +34,7 @@ export const JitaiEmergencyProtocolModule: React.FC<Props> = ({ patient, onClose
   const patientId = p?.id || p?.patientId || 'PAC-8104';
   const emergencyContact = p?.sentinelTelemetry?.emergencyContact;
 
-  // Estado de Consentimiento Informado con fallback dinámico al expediente
+  // Estado de Consentimiento Informado con fallback dinámico
   const [consent, setConsent] = useState<JitaiConsentRecord>({
     patientSigned: true,
     patientSignatureDate: '2026-01-15',
@@ -62,7 +68,7 @@ export const JitaiEmergencyProtocolModule: React.FC<Props> = ({ patient, onClose
   const [isGroundingActive, setIsGroundingActive] = useState(false);
   const [activeTab, setActiveTab] = useState<'monitor' | 'patient_screen' | 'legal'>('monitor');
 
-  // Simulación continua de flujo teleimétrico cada 3 segundos
+  // Flujo telemetrico dinámico cada 3 segundos
   useEffect(() => {
     const interval = setInterval(() => {
       setTelemetry(prev => ({
@@ -91,7 +97,7 @@ export const JitaiEmergencyProtocolModule: React.FC<Props> = ({ patient, onClose
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-6xl w-full mx-auto space-y-6 font-sans">
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-w-6xl w-full mx-auto space-y-6 font-sans select-none">
       
       {/* Cabecera Principal */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
@@ -266,7 +272,7 @@ export const JitaiEmergencyProtocolModule: React.FC<Props> = ({ patient, onClose
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Notificación enviada al Workstation y canal prioritario del facultativo ({consent.attendingPsychiatristId}).
+                  Notificación enviada a la estación médica y canal prioritario del facultativo ({consent.attendingPsychiatristId}).
                 </p>
               </div>
 
@@ -286,7 +292,7 @@ export const JitaiEmergencyProtocolModule: React.FC<Props> = ({ patient, onClose
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Interfaz de rescate activada en el smartphone del paciente con audio anxiolítico de respiración guiada.
+                  Interfaz de rescate activada en el smartphone del paciente con audio ansiolítico de respiración guiada.
                 </p>
               </div>
             </div>
@@ -319,7 +325,6 @@ export const JitaiEmergencyProtocolModule: React.FC<Props> = ({ patient, onClose
               </p>
             </div>
 
-            {/* Enlace con sesión de Grounding VR Pico 3 */}
             <div className="p-3 bg-slate-900/60 border border-indigo-500/30 rounded-xl text-[10px] text-indigo-300 flex items-center gap-2 text-left">
               <Glasses className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>Si dispones de tu visor Pico 3, colócatelo para entrar al Santuario Alpino.</span>
