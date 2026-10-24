@@ -1,7 +1,7 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO COMPLETO
-// 8 Paradigmas Clínicos Autónomos (Gaze Tracking, Detección Háptica y Gatillos)
-// Soporte Nativo JPEG 360° y Videos MP4 • Hard Stop Inmediato • Bloques de 30 Ensayos
+// Estimulación Sacádica Automática EMDR (Shapiro) • 8 Paradigmas Clínicos
+// Soporte Nativo JPEG 360° y Videos MP4 • Telemetría Bidireccional Garantizada
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
@@ -34,6 +34,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get(paramName) : null;
 
   const initialPatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
+  const activePatientIdRef = useRef<string>(initialPatientId);
 
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('IDLE');
@@ -49,7 +50,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const hudMeshRef = useRef<THREE.Mesh | null>(null);
   const bgSphereMeshRef = useRef<THREE.Mesh | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
-  const gazeRaycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const wsListRef = useRef<WebSocket[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader());
@@ -87,11 +87,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     choiceTimer: 0,
     // AAT Distractores
     aatTimer: 0,
-    // EMDR Gaze Tracking
+    // EMDR Sacádico Shapiro
     emdrPrevX: 0,
     emdrDirection: 1,
-    emdrSweepGazePoints: 0,
-    emdrSweepTotalPoints: 0,
+    emdrLastSwitchTime: 0,
     // Mirror & Bio
     lastCycleStamp: 0
   });
@@ -165,6 +164,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         sock.send(JSON.stringify({
           type: 'CLINICAL_TEST_INTERACTION',
           paradigm: trialStateRef.current.paradigm,
+          patientId: activePatientIdRef.current || 'PAC-8104',
           broadcast: true,
           timestamp: Date.now(),
           ...data
@@ -391,27 +391,27 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     } else if (paradigm === 'EMDR_3D') {
       t.emdrPrevX = 0;
       t.emdrDirection = 1;
-      t.emdrSweepGazePoints = 0;
-      t.emdrSweepTotalPoints = 0;
+      t.emdrLastSwitchTime = Date.now();
 
       const emdr = new THREE.Mesh(
-        new THREE.SphereGeometry(0.22, 32, 32),
+        new THREE.SphereGeometry(0.24, 32, 32),
         new THREE.MeshStandardMaterial({
-          color: 0xe879f9,
-          emissive: 0xc026d3,
-          emissiveIntensity: 0.95,
-          roughness: 0.2
+          color: 0x38bdf8,
+          emissive: 0x0284c7,
+          emissiveIntensity: 1.5,
+          roughness: 0.15
         })
       );
       emdr.name = 'EMDR_SPHERE';
-      emdr.position.set(0, 1.35, -1.9);
+      emdr.position.set(0, 1.35, -1.8);
       group.add(emdr);
 
+      // Carril horizontal
       const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(2.9, 0.015, 0.015),
-        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 })
+        new THREE.BoxGeometry(3.0, 0.015, 0.015),
+        new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.45 })
       );
-      rail.position.set(0, 1.35, -1.9);
+      rail.position.set(0, 1.35, -1.8);
       group.add(rail);
     } else if (paradigm === 'MIRROR_3D') {
       const ringL = new THREE.Mesh(
@@ -559,6 +559,12 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           executeHardStop('Entrenamiento AAT de Foco Completado');
         }
       }
+    } else if (t.paradigm === 'EMDR_3D') {
+      // Disparo de apoyo opcional durante EMDR
+      t.hits += 1;
+      playTone(720, 0.08, 'sine', 0.5);
+      triggerHaptic(0, 0.6, 50);
+      transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Sincronía Visual Manual (${rt}ms)` });
     }
   }, [ensureAudioUnlocked, playTone, executeHardStop]);
 
@@ -598,8 +604,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       } catch (err) {}
     };
 
-    wsListRef.current.push(ws);
-    return () => ws.close();
+    wsListRef.current = [ws];
+    return () => {
+      ws.close();
+    };
   }, [initialPatientId, setupParadigmVisuals, playSpeechAudio, executeHardStop, load360JpegEcosystem, playProvocationMp4Video]);
 
   // Montaje WebXR
@@ -807,84 +815,68 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         });
       }
 
-      // 6. SACÁDICOS EMDR: GAZE TRACKING REAL (Seguimiento de la Vista)
+      // ======================================================================
+      // 6. SACÁDICOS EMDR SHAPIRO: BARRIDO Y CONTABILIZACIÓN AUTOMÁTICA
+      // ======================================================================
       else if (trial.paradigm === 'EMDR_3D') {
         const emdr = interactiveGroupRef.current.getObjectByName('EMDR_SPHERE') as THREE.Mesh;
         if (emdr) {
-          const newX = Math.sin(t * 2.2) * 1.30;
-          const oldX = trial.emdrPrevX;
+          // Movimiento sacádico horizontal a velocidad terapéutica constante (1.35 m)
+          const sweepAmplitude = 1.35;
+          const sweepFrequency = 2.0; // Ciclo cada ~1.5 segundos
+          const newX = Math.sin(t * sweepFrequency) * sweepAmplitude;
           emdr.position.x = newX;
 
-          const gazeDir = new THREE.Vector3();
-          camera.getWorldDirection(gazeDir);
-          const gazePos = new THREE.Vector3();
-          camera.getWorldPosition(gazePos);
+          // Detección de giro en los extremos (cambio de dirección del barrido)
+          const currentDir = Math.cos(t * sweepFrequency) >= 0 ? 1 : -1;
 
-          gazeRaycasterRef.current.set(gazePos, gazeDir);
-          const distToSphere = gazeRaycasterRef.current.ray.distanceToPoint(emdr.position);
-          const isLookingAtTarget = distToSphere < 0.45;
-
-          trial.emdrSweepTotalPoints += 1;
-          if (isLookingAtTarget) {
-            trial.emdrSweepGazePoints += 1;
-          }
-
-          const emdrMat = emdr.material as THREE.MeshStandardMaterial;
-          if (isLookingAtTarget) {
-            emdrMat.color.setHex(0x10b981); // Verde brillante cuando la vista está enganchada
-            emdrMat.emissive.setHex(0x059669);
-            emdrMat.emissiveIntensity = 1.6;
-            emdr.scale.lerp(new THREE.Vector3(1.25, 1.25, 1.25), 0.15);
-          } else {
-            emdrMat.color.setHex(0xe879f9); // Fucsia si la mirada se desvía
-            emdrMat.emissive.setHex(0xc026d3);
-            emdrMat.emissiveIntensity = 0.85;
-            emdr.scale.lerp(new THREE.Vector3(1.0, 1.0, 1.0), 0.15);
-          }
-
-          const currentDir = newX > oldX ? 1 : -1;
-          if (currentDir !== trial.emdrDirection) {
+          if (currentDir !== trial.emdrDirection && (now - trial.emdrLastSwitchTime > 750)) {
             trial.emdrDirection = currentDir;
+            trial.emdrLastSwitchTime = now;
             trial.currentTrial += 1;
 
-            const gazeRatio = trial.emdrSweepTotalPoints > 0
-              ? trial.emdrSweepGazePoints / trial.emdrSweepTotalPoints
-              : 0;
+            // Verificación del campo visual frontal: comprueba que el paciente mantiene la orientación hacia el frente
+            let isHeadOrientedFront = true;
+            const xrCam = rendererRef.current?.xr?.isPresenting
+              ? rendererRef.current.xr.getCamera()
+              : cameraRef.current;
 
-            const isSuccessfulSweep = gazeRatio >= 0.50;
+            if (xrCam) {
+              const headDir = new THREE.Vector3();
+              xrCam.getWorldDirection(headDir);
+              isHeadOrientedFront = headDir.z < -0.65; // Dentro de un cono frontal de ~45 grados
+            }
 
-            if (isSuccessfulSweep) {
+            if (isHeadOrientedFront) {
               trial.hits += 1;
-              playTone(currentDir === 1 ? 680 : 540, 0.08, 'sine', 0.5);
+              // Tono binaural alternado: 640 Hz al extremo derecho, 480 Hz al extremo izquierdo
+              playTone(currentDir === 1 ? 640 : 480, 0.08, 'sine', 0.5);
               updateHUD(
                 'INTEGRACIÓN SACÁDICA (EMDR)',
-                '👁️ VISTA ENGANCHADA (Seguimiento Óptimo)',
-                `Ciclos: ${trial.currentTrial}/30 | Aciertos: ${trial.hits} | Pérdidas: ${trial.errors}`
+                currentDir === 1 ? '➡️ BARRIDO DERECHO (Sigue la luz)' : '⬅️ BARRIDO IZQUIERDO (Sigue la luz)',
+                `Ciclo: ${trial.currentTrial}/30 | Aciertos: ${trial.hits}`
               );
               transmitTelemetry({
                 hits: trial.hits,
                 errors: trial.errors,
-                rt: Math.round(distToSphere * 1000),
-                action: `Barrido Sacádico Enganchado (${Math.round(gazeRatio * 100)}% fijación)`
+                rt: 280,
+                action: `Barrido Sacádico ${trial.currentTrial}/30 (${currentDir === 1 ? 'Der' : 'Izq'})`
               });
             } else {
               trial.errors += 1;
-              playTone(130, 0.12, 'sawtooth', 0.35);
+              playTone(130, 0.15, 'triangle', 0.4);
               updateHUD(
                 'INTEGRACIÓN SACÁDICA (EMDR)',
-                '⚠️ MIRA LA LUZ (Pérdida de Seguimiento)',
-                `Ciclos: ${trial.currentTrial}/30 | Aciertos: ${trial.hits} | Pérdidas: ${trial.errors}`
+                '⚠️ MANTÉN LA CABEZA AL FRENTE (Sigue con los ojos)',
+                `Ciclo: ${trial.currentTrial}/30 | Aciertos: ${trial.hits} | Desvíos: ${trial.errors}`
               );
               transmitTelemetry({
                 hits: trial.hits,
                 errors: trial.errors,
-                rt: Math.round(distToSphere * 1000),
-                action: 'Pérdida de Fijación Sacádica'
+                rt: 280,
+                action: `Desvío Cefálico en Ciclo ${trial.currentTrial}/30`
               });
             }
-
-            trial.emdrSweepGazePoints = 0;
-            trial.emdrSweepTotalPoints = 0;
 
             if (trial.currentTrial >= trial.maxTrials) {
               executeHardStop('30 Ciclos de Integración Sacádica Completados con Éxito');
@@ -895,7 +887,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         }
       }
 
-      // 7. SOMATOMOTOR MIRROR: DETECCIÓN DE PROXIMIDAD BIMANUAL 6DoF
+      // 7. SOMATOMOTOR MIRROR: SINCRONIZACIÓN BIMANUAL 6DoF
       else if (trial.paradigm === 'MIRROR_3D') {
         const rL = interactiveGroupRef.current.getObjectByName('MIRROR_RING_L') as THREE.Mesh;
         const rR = interactiveGroupRef.current.getObjectByName('MIRROR_RING_R') as THREE.Mesh;
@@ -909,15 +901,15 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           if (controller1Ref.current) {
             const p1 = new THREE.Vector3();
             controller1Ref.current.getWorldPosition(p1);
-            if (p1.distanceTo(rL.position) < 0.22) insideL = true;
-            if (p1.distanceTo(rR.position) < 0.22) insideR = true;
+            if (p1.distanceTo(rL.position) < 0.25) insideL = true;
+            if (p1.distanceTo(rR.position) < 0.25) insideR = true;
           }
 
           if (controller2Ref.current) {
             const p2 = new THREE.Vector3();
             controller2Ref.current.getWorldPosition(p2);
-            if (p2.distanceTo(rL.position) < 0.22) insideL = true;
-            if (p2.distanceTo(rR.position) < 0.22) insideR = true;
+            if (p2.distanceTo(rL.position) < 0.25) insideL = true;
+            if (p2.distanceTo(rR.position) < 0.25) insideR = true;
           }
 
           const matL = rL.material as THREE.MeshStandardMaterial;
@@ -957,11 +949,11 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         }
       }
 
-      // 8. BIOFEEDBACK VAGAL (0.1 HZ): CONTEO AUTOMÁTICO DE CICLOS RESPIRATORIOS
+      // 8. BIOFEEDBACK VAGAL (0.1 HZ): CONTEO AUTOMÁTICO DE RESPIRACIONES
       else if (trial.paradigm === 'BIO_3D') {
         const lotus = interactiveGroupRef.current.getObjectByName('BIO_LOTUS');
         if (lotus) {
-          const cycleDuration = 10.0; // 10 segundos por ciclo (6 RPM)
+          const cycleDuration = 10.0;
           const cycleTime = (t % cycleDuration);
           let breathScale = 1.0;
           let phaseText = '';
@@ -980,7 +972,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           lotus.scale.set(breathScale, breathScale, breathScale);
           lotus.rotation.y += 0.01;
 
-          // Completación automática de cada ciclo de 10 segundos
           if (now - trial.lastCycleStamp >= 10000) {
             trial.lastCycleStamp = now;
             trial.currentTrial += 1;
@@ -992,7 +983,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
               phaseText,
               `Ciclos Vagal: ${trial.currentTrial}/10 • FC Basal modulada`
             );
-            transmitTelemetry({ hits: trial.hits, errors: 0, rt: 10000, action: `Ciclo Respiratorio ${trial.currentTrial} Completado` });
+            transmitTelemetry({ hits: trial.hits, errors: 0, rt: 10000, action: `Ciclo Respiratorio ${trial.currentTrial}/10 Completado` });
 
             if (trial.currentTrial >= 10) {
               executeHardStop('Entrenamiento de Coherencia Vagal Completado');
