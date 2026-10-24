@@ -1,14 +1,14 @@
 // ============================================================================
 // AMIE CLINICAL COPILOT - MOTOR WEBXR 6DoF DEFINITIVO COMPLETO
-// 240 Protocolos Clínicos DSM-5 • Soporte Nativo JPEG 360° y Videos MP4
-// Ensayos Estandarizados (30 Trials) • Hard Stop Inmediato • Cero Pantallas Negras
+// Gaze Tracking Real (Seguimiento de Vista EMDR) • 8 Paradigmas Clínicos
+// Soporte Nativo JPEG 360° y Videos MP4 • Hard Stop Inmediato (30 Trials)
 // frontend/components/VrPatientExperience.tsx
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { Target, VolumeX, Play, Volume2, Layers, Activity } from 'lucide-react';
+import { Target, VolumeX, Play, Volume2 } from 'lucide-react';
 
 interface Props {
   patientId?: string;
@@ -27,108 +27,6 @@ export type InteractiveParadigm =
   | 'BIO_3D'
   | 'MIRROR_3D';
 
-export type ClinicalArchetype = 'DOCTOR' | 'SEXUAL_PARTNER' | 'FORENSIC_PEER' | 'HYPNOTIC_GUIDE';
-
-export interface VrClinicalExercise {
-  id: string;
-  mode: 'DIAGNOSTIC' | 'TREATMENT';
-  paradigm: InteractiveParadigm;
-  name: string;
-  bgAudio: string;
-  script: string;
-}
-
-export interface VrDisorderData {
-  id: string;
-  modId: string;
-  name: string;
-  archetype: ClinicalArchetype;
-  environment: 'OFFICE' | 'FOREST' | 'STREET';
-  exercises: VrClinicalExercise[];
-}
-
-interface RawDisorderMeta {
-  id: string;
-  modId: string;
-  name: string;
-  archetype: ClinicalArchetype;
-  environment: 'OFFICE' | 'FOREST' | 'STREET';
-  evalTest: string;
-  treatTest: string;
-}
-
-const RAW_DISORDERS: RawDisorderMeta[] = [
-  // Módulo I: Neurodesarrollo & Motor
-  { id: 'TDAH', modId: 'MOD_NEURODEV', name: 'TDAH / Déficit de Atención', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: "Conners CPT-3 (d')", treatTest: 'Neurofeedback SMR' },
-  { id: 'TEA_1', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 1 (Asperger)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Microexpresiones Faciales', treatTest: 'Neuronas Espejo' },
-  { id: 'TEA_2_3', modId: 'MOD_NEURODEV', name: 'Espectro Autista Nivel 2-3', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad Multisensorial', treatTest: 'Integración Háptica' },
-  { id: 'ALZHEIMER', modId: 'MOD_NEURODEV', name: 'Deterioro Cognitivo / Alzheimer', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Memoria Episódica Inmediata', treatTest: 'Terapia de Reminiscencia' },
-  { id: 'PARKINSON', modId: 'MOD_NEURODEV', name: 'Parkinson (Temblor & Bradicinesia)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Cuantificación 90Hz', treatTest: 'LSVT BIG VR / Amplitud' },
-
-  // Módulo II: Afectivo & Estado de Ánimo
-  { id: 'DEPRESION', modId: 'MOD_AFFECTIVE', name: 'Depresión Mayor Unipolar', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Sesgo Cognitivo Dot-Probe', treatTest: 'Activación Conductual (BAT)' },
-  { id: 'BIPOLAR', modId: 'MOD_AFFECTIVE', name: 'Trastorno Bipolar', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Latencia Acelerada Maníaca', treatTest: 'Estabilización Interhemisférica' },
-  { id: 'DISTIMIA', modId: 'MOD_AFFECTIVE', name: 'Distimia / Depresión Persistente', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Perseveración en el Error', treatTest: 'Reactivación Propioceptiva' },
-  { id: 'CICLOTIMIA', modId: 'MOD_AFFECTIVE', name: 'Ciclotimia', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Fluctuación de Latencias', treatTest: 'Neutralización de Euforia' },
-
-  // Módulo III: Trauma, TEPT & Disociación
-  { id: 'TEPT', modId: 'MOD_TRAUMA', name: 'Estrés Postraumático (TEPT)', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Reactividad a Cues Fóbicos', treatTest: 'EMDR de 8 Fases (Shapiro)' },
-  { id: 'TRAUMA_COMPLEJO', modId: 'MOD_TRAUMA', name: 'Trauma Complejo (C-PTSD)', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Umbral de Sumisión por Miedo', treatTest: 'Reconstrucción de Límites' },
-  { id: 'DESPERSONALIZACION', modId: 'MOD_TRAUMA', name: 'Despersonalización / Desrealización', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Retraso Táctil-Visual 6DoF', treatTest: 'Anclaje Vestibular Somático' },
-
-  // Módulo IV: Ansiedad, Fobias & TOC
-  { id: 'FOBIA_SOCIAL', modId: 'MOD_ANXIETY', name: 'Fobia Social / Ansiedad de Escrutinio', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Escrutinio Ocular en Multitud', treatTest: 'Desensibilización de Vergüenza' },
-  { id: 'PANICO', modId: 'MOD_ANXIETY', name: 'Trastorno de Pánico y Agorafobia', archetype: 'DOCTOR', environment: 'STREET', evalTest: 'Exposición Interoceptiva', treatTest: 'Reentrenamiento Capnográfico' },
-  { id: 'TOC', modId: 'MOD_ANXIETY', name: 'Trastorno Obsesivo Compulsivo (TOC)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Latencia de Verificación', treatTest: 'Prevención de Respuesta (EPR)' },
-  { id: 'TAG', modId: 'MOD_ANXIETY', name: 'Ansiedad Generalizada (TAG)', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Supresión de Tono Vagal', treatTest: 'Mindfulness Anti-Preocupación' },
-
-  // Módulo V: Adicciones & Control de Impulsos
-  { id: 'ADICCION_SUST', modId: 'MOD_ADDICTIONS', name: 'Dependencia a Sustancias', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Approach Bias hacia Cues', treatTest: 'Rechazo Motor AAT & Urge-Surfing' },
-  { id: 'LUDOPATIA', modId: 'MOD_ADDICTIONS', name: 'Ludopatía y Apuestas Digitales', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Iowa Gambling Task (IGT 3D)', treatTest: 'Extinción de Recompensas' },
-  { id: 'ATRACON', modId: 'MOD_ADDICTIONS', name: 'Trastorno por Atracón Compulsivo', archetype: 'DOCTOR', environment: 'OFFICE', evalTest: 'Sesgo hacia Ultraprocesados', treatTest: 'Rechazo Motor Háptico' },
-  { id: 'CLEPTOMANIA', modId: 'MOD_ADDICTIONS', name: 'Cleptomanía / Falla del Control', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Tensión Previa (Pico GSR)', treatTest: 'Freno Háptico de Urgencia' },
-
-  // Módulo VI: Forense, Psicopatía & Cluster B
-  { id: 'TLP', modId: 'MOD_FORENSIC', name: 'Trastorno Límite de Personalidad (TLP)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Hipersensibilidad al Rechazo', treatTest: 'Habilidades DBT TIPP en VR' },
-  { id: 'PSICOPATIA', modId: 'MOD_FORENSIC', name: 'Psicopatía (Factor 1 y 2 PCL-R)', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Dilema Moral Utilitarista', treatTest: 'Condicionamiento Aversivo' },
-  { id: 'NARCISISMO', modId: 'MOD_FORENSIC', name: 'Narcisismo Maligno', archetype: 'FORENSIC_PEER', environment: 'OFFICE', evalTest: 'Reactividad Colérica ante Fallo', treatTest: 'Desescalamiento de Ira' },
-  { id: 'HISTRIONICO', modId: 'MOD_FORENSIC', name: 'Trastorno Histriónico', archetype: 'FORENSIC_PEER', environment: 'STREET', evalTest: 'Dependencia de Atención Social', treatTest: 'Concentración sin Refuerzo' },
-
-  // Módulo VII: Neurohipnosis & Dolor Crónico
-  { id: 'HIPNO_ERICKSONIANA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnosis Ericksoniana', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', evalTest: 'Escala de Sugestionabilidad', treatTest: 'Siembra de Metáforas Inmersivas' },
-  { id: 'HIPNO_ANALGESIA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Hipnoanalgesia (Dolor Crónico)', archetype: 'HYPNOTIC_GUIDE', environment: 'FOREST', evalTest: 'Mapeo Espacial Nociceptivo', treatTest: 'Guantelete de Anestesia Térmica' },
-  { id: 'HIPNO_FANTASMA', modId: 'MOD_HYPNOSIS_PAIN', name: 'Miembro Fantasma', archetype: 'HYPNOTIC_GUIDE', environment: 'OFFICE', evalTest: 'Discordancia Sensoriomotora', treatTest: 'Espejo Virtual 6DoF en Vivo' },
-
-  // Módulo VIII: Salud Sexual & Psicosomática
-  { id: 'SEX_INHIB', modId: 'MOD_SEXOLOGY', name: 'Inhibición Sexual (SIS)', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', evalTest: 'Modelo de Control Dual (SIS)', treatTest: 'Sensate Focus VR (Focalización)' },
-  { id: 'DISFUNCION_SOM', modId: 'MOD_SEXOLOGY', name: 'Ansiedad de Rendimiento Sexual', archetype: 'SEXUAL_PARTNER', environment: 'OFFICE', evalTest: 'Rol de Espectador Crítico', treatTest: 'Descatastrofización y Confort' },
-
-  // Módulo IX: Logoterapia & Sentido
-  { id: 'VACIO_EXISTENCIAL', modId: 'MOD_LOGOTHERAPY', name: 'Vacío Existencial / Logoterapia', archetype: 'DOCTOR', environment: 'FOREST', evalTest: 'Diagnóstico de Hiperreflexión', treatTest: 'Intención Paradójica Inmersiva' }
-];
-
-export const CLINICAL_VR_MATRIX: Record<string, VrDisorderData> = {};
-
-RAW_DISORDERS.forEach((d) => {
-  CLINICAL_VR_MATRIX[d.id] = {
-    id: d.id,
-    modId: d.modId,
-    name: d.name,
-    archetype: d.archetype,
-    environment: d.environment,
-    exercises: [
-      { id: `${d.id}_D1`, mode: 'DIAGNOSTIC', paradigm: 'CPT_3D', name: `1. ${d.evalTest}: Freno Go/No-Go`, bgAudio: 'BROWN_NOISE', script: `Evaluación clínica de ${d.name}. Dispara únicamente a las esferas verdes y suprime el disparo ante rojas.` },
-      { id: `${d.id}_D2`, mode: 'DIAGNOSTIC', paradigm: 'BART_3D', name: `2. ${d.name}: Tolerancia al Riesgo (BART)`, bgAudio: 'TENSION_DRUM', script: `Evaluación de riesgo en ${d.name}. Bombea el globo para sumar puntos o asegúralos antes de que explote.` },
-      { id: `${d.id}_D3`, mode: 'DIAGNOSTIC', paradigm: 'N_BACK_3D', name: `3. ${d.name}: Memoria de Trabajo Visuoespacial`, bgAudio: 'BETA_WAVES', script: `Evaluación ejecutiva. Apunta y dispara únicamente al cubo iluminado de mayor escala.` },
-      { id: `${d.id}_D4`, mode: 'DIAGNOSTIC', paradigm: 'CHOICE_3D', name: `4. ${d.name}: Toma de Decisiones y Conflicto`, bgAudio: 'HEARTBEAT', script: `Evaluación decisional. Selecciona rápidamente entre las dos opciones presentadas en el panel.` },
-      { id: `${d.id}_T1`, mode: 'TREATMENT', paradigm: 'AAT_3D', name: `5. Intervención AAT: ${d.treatTest}`, bgAudio: 'ALPHA_WAVES', script: `Intervención motora de rechazo. Empuja con firmeza el holograma perturbador fuera de tu espacio vital.` },
-      { id: `${d.id}_T2`, mode: 'TREATMENT', paradigm: 'EMDR_3D', name: `6. Reprocesamiento Ocular Bilateral (EMDR)`, bgAudio: 'BILATERAL_SWEEP', script: `Sigue la esfera luminosa rítmica con la mirada para desensibilizar la carga emocional.` },
-      { id: `${d.id}_T3`, mode: 'TREATMENT', paradigm: 'MIRROR_3D', name: `7. ${d.treatTest} en Espejo Somatomotor`, bgAudio: 'THETA_WAVES', script: `Sincroniza tus brazos con los movimientos guía del avatar para afianzar coherencia sensoriomotora.` },
-      { id: `${d.id}_T4`, mode: 'TREATMENT', paradigm: 'BIO_3D', name: `8. Biofeedback Vagal de Cierre Autonómico`, bgAudio: 'DELTA_WAVES', script: `Acompasa tu respiración con la expansión del loto para restaurar el tono vagal y la serenidad.` }
-    ]
-  };
-});
-
 export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -136,11 +34,8 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get(paramName) : null;
 
   const initialPatientId = propsPatientId || getUrlParam('paciente') || getUrlParam('patientId') || 'PAC-8104';
-  const activePatientIdRef = useRef<string>(initialPatientId);
 
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-  const [selectedDisorderKey, setSelectedDisorderKey] = useState<string>('TDAH');
-  const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
   const [activeParadigm, setActiveParadigm] = useState<InteractiveParadigm>('IDLE');
   const [wsOnline, setWsOnline] = useState(false);
   const [disorderTitle, setDisorderTitle] = useState('AMIE CDSS • EN ESPERA');
@@ -150,15 +45,13 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const stageGroupRef = useRef<THREE.Group | null>(null);
-  const roomGroupRef = useRef<THREE.Group | null>(null);
   const interactiveGroupRef = useRef<THREE.Group | null>(null);
-  const permanentAvatarRef = useRef<THREE.Group | null>(null);
   const hudMeshRef = useRef<THREE.Mesh | null>(null);
   const bgSphereMeshRef = useRef<THREE.Mesh | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  const gazeRaycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const wsListRef = useRef<WebSocket[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const bgOscillatorRef = useRef<{ stop: () => void } | null>(null);
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader());
 
   // Elementos de pantalla virtual para MP4
@@ -174,14 +67,28 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     maxTrials: 30,
     hits: 0,
     errors: 0,
+    // CPT
     cptActive: false,
     cptType: 'GO' as 'GO' | 'NOGO',
     stimulusOnsetTime: 0,
     trialTimer: 0,
+    // BART
     balloonPumps: 0,
     balloonMaxCap: 12,
     balloonScale: 1.0,
-    activeCube: 0
+    // N-Back
+    activeCube: 0,
+    nBackTimer: 0,
+    // Choice
+    choiceTimer: 0,
+    // AAT Distractores
+    aatTimer: 0,
+    // EMDR Gaze Tracking
+    emdrPrevX: 0,
+    emdrDirection: 1, // 1: der, -1: izq
+    emdrGazeLocked: false,
+    emdrSweepGazePoints: 0,
+    emdrSweepTotalPoints: 0
   });
 
   const ensureAudioUnlocked = useCallback(() => {
@@ -350,11 +257,6 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     stopProvocationMp4Video();
 
-    if (bgOscillatorRef.current) {
-      bgOscillatorRef.current.stop();
-      bgOscillatorRef.current = null;
-    }
-
     if (interactiveGroupRef.current) {
       safeClearGroup(interactiveGroupRef.current);
     }
@@ -367,6 +269,29 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     playSpeechAudio('La prueba ha finalizado. Puede retirarse el visor con calma.');
   }, [playSpeechAudio, stopProvocationMp4Video]);
 
+  const spawnSingleDistractor = (index: number) => {
+    if (!interactiveGroupRef.current) return;
+    const angles = [-1.3, -0.7, 0.7, 1.3];
+    const angle = angles[index % angles.length] + (Math.random() - 0.5) * 0.25;
+    const dist = 1.9 + Math.random() * 0.4;
+    const height = 1.1 + Math.random() * 0.6;
+
+    const m = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.18, 1),
+      new THREE.MeshStandardMaterial({
+        color: index % 2 === 0 ? 0xef4444 : 0xf59e0b,
+        emissive: index % 2 === 0 ? 0xb91c1c : 0xd97706,
+        emissiveIntensity: 0.95,
+        roughness: 0.3
+      })
+    );
+    m.name = `AAT_DISTRACTOR_${Date.now()}_${index}`;
+    m.position.set(Math.sin(angle) * dist, height, -Math.cos(angle) * dist);
+    m.userData = { spawnTime: Date.now() };
+    interactiveGroupRef.current.add(m);
+  };
+
+  // Constructor visual de los paradigmas
   const setupParadigmVisuals = useCallback((paradigm: InteractiveParadigm) => {
     if (!interactiveGroupRef.current) return;
     safeClearGroup(interactiveGroupRef.current);
@@ -410,30 +335,103 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
       t.balloonScale = 1.0;
       t.balloonMaxCap = 5 + Math.floor(Math.random() * 8);
     } else if (paradigm === 'N_BACK_3D') {
-      const colors = [0x22d3ee, 0xa855f7, 0xf59e0b];
-      t.activeCube = Math.floor(Math.random() * 3);
-      for (let i = 0; i < 3; i++) {
-        const isTarget = i === t.activeCube;
+      const colors = [0x22d3ee, 0xa855f7, 0xf59e0b, 0x10b981];
+      t.activeCube = 0;
+      t.nBackTimer = Date.now() + 1500;
+      for (let i = 0; i < 4; i++) {
         const cube = new THREE.Mesh(
-          new THREE.BoxGeometry(0.28, 0.28, 0.28),
-          new THREE.MeshStandardMaterial({ color: colors[i], emissive: colors[i], emissiveIntensity: isTarget ? 1.2 : 0.25 })
+          new THREE.BoxGeometry(0.26, 0.26, 0.26),
+          new THREE.MeshStandardMaterial({ color: colors[i], emissive: colors[i], emissiveIntensity: 0.25 })
         );
         cube.name = `CUBE_${i}`;
-        cube.position.set((i - 1) * 0.46, 0, 0);
-        cube.scale.setScalar(isTarget ? 1.28 : 0.85);
+        const angle = ((i - 1.5) * 0.35);
+        cube.position.set(Math.sin(angle) * 1.8, 1.25, -Math.cos(angle) * 1.8);
         group.add(cube);
       }
+    } else if (paradigm === 'CHOICE_3D') {
+      t.choiceTimer = Date.now();
+      const pLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(0.46, 0.46, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xc2410c, emissiveIntensity: 0.75 })
+      );
+      pLeft.name = 'CHOICE_LEFT';
+      pLeft.position.set(-0.55, 1.25, -1.8);
+
+      const pRight = new THREE.Mesh(
+        new THREE.BoxGeometry(0.46, 0.46, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x0891b2, emissiveIntensity: 0.75 })
+      );
+      pRight.name = 'CHOICE_RIGHT';
+      pRight.position.set(0.55, 1.25, -1.8);
+      group.add(pLeft, pRight);
+    } else if (paradigm === 'AAT_3D') {
+      t.aatTimer = Date.now();
+      const centerRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.24, 0.04, 16, 64),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.85 })
+      );
+      centerRing.name = 'AAT_CENTER';
+      centerRing.position.set(0, 1.35, -2.0);
+      group.add(centerRing);
+
+      for (let i = 0; i < 4; i++) {
+        spawnSingleDistractor(i);
+      }
     } else if (paradigm === 'EMDR_3D') {
+      // 6. SACÁDICOS EMDR CON GAZE TRACKING
+      t.emdrPrevX = 0;
+      t.emdrDirection = 1;
+      t.emdrGazeLocked = false;
+      t.emdrSweepGazePoints = 0;
+      t.emdrSweepTotalPoints = 0;
+
       const emdr = new THREE.Mesh(
-        new THREE.SphereGeometry(0.20, 24, 24),
-        new THREE.MeshStandardMaterial({ color: 0xe879f9, emissive: 0xc026d3, emissiveIntensity: 1.0 })
+        new THREE.SphereGeometry(0.22, 32, 32),
+        new THREE.MeshStandardMaterial({
+          color: 0xe879f9,
+          emissive: 0xc026d3,
+          emissiveIntensity: 0.95,
+          roughness: 0.2
+        })
       );
       emdr.name = 'EMDR_SPHERE';
+      emdr.position.set(0, 1.35, -1.9);
       group.add(emdr);
+
+      // Línea guía sutil del carril horizontal
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(2.9, 0.015, 0.015),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 })
+      );
+      rail.position.set(0, 1.35, -1.9);
+      group.add(rail);
+    } else if (paradigm === 'MIRROR_3D') {
+      const ringL = new THREE.Mesh(
+        new THREE.TorusGeometry(0.16, 0.03, 16, 48),
+        new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x0891b2, emissiveIntensity: 0.8 })
+      );
+      ringL.name = 'MIRROR_RING_L';
+      ringL.position.set(-0.35, 1.25, -1.5);
+
+      const ringR = new THREE.Mesh(
+        new THREE.TorusGeometry(0.16, 0.03, 16, 48),
+        new THREE.MeshStandardMaterial({ color: 0xd946ef, emissive: 0xa21caf, emissiveIntensity: 0.8 })
+      );
+      ringR.name = 'MIRROR_RING_R';
+      ringR.position.set(0.35, 1.25, -1.5);
+      group.add(ringL, ringR);
+    } else if (paradigm === 'BIO_3D') {
+      const lotus = new THREE.Mesh(
+        new THREE.TorusKnotGeometry(0.28, 0.09, 64, 16),
+        new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.85, roughness: 0.25 })
+      );
+      lotus.name = 'BIO_LOTUS';
+      lotus.position.set(0, 1.35, -1.7);
+      group.add(lotus);
     }
   }, [stopProvocationMp4Video]);
 
-  // Interacción de gatillo en mandos
+  // Interacción motora de mandos (para CPT, BART, N-Back, Choice, AAT)
   const handleTrigger = useCallback((event: any) => {
     const t = trialStateRef.current;
     if (!t.isActiveSession || t.paradigm === 'IDLE') return;
@@ -504,6 +502,55 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           transmitTelemetry({ hits: t.hits, errors: t.errors, pumps: t.balloonPumps, rt, action: `Bombeo ${t.balloonPumps}` });
         }
       }
+    } else if (t.paradigm === 'N_BACK_3D') {
+      const hitObj = hits.length > 0 ? hits[0].object : null;
+      if (hitObj && hitObj.name === `CUBE_${t.activeCube}`) {
+        t.hits += 1;
+        t.currentTrial += 1;
+        playTone(620, 0.12, 'sine');
+        updateHUD('MEMORIA DE TRABAJO (N-BACK)', `¡CUBO CORRECTO! (${rt}ms)`, `Ensayo: ${t.currentTrial}/30 | Aciertos: ${t.hits}`);
+        transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Acierto N-Back (${rt}ms)` });
+        t.nBackTimer = now + 1200;
+      } else if (hitObj && hitObj.name.startsWith('CUBE_')) {
+        t.errors += 1;
+        t.currentTrial += 1;
+        playTone(95, 0.22, 'sawtooth');
+        updateHUD('MEMORIA DE TRABAJO (N-BACK)', '❌ CUBO INCORRECTO', `Ensayo: ${t.currentTrial}/30 | Aciertos: ${t.hits}`);
+        transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Fallo N-Back (${rt}ms)` });
+        t.nBackTimer = now + 1200;
+      }
+      if (t.currentTrial >= t.maxTrials) {
+        executeHardStop('Bloque N-Back Completado');
+      }
+    } else if (t.paradigm === 'CHOICE_3D') {
+      const hitObj = hits.length > 0 ? hits[0].object : null;
+      if (hitObj && (hitObj.name === 'CHOICE_LEFT' || hitObj.name === 'CHOICE_RIGHT')) {
+        t.hits += 1;
+        t.currentTrial += 1;
+        const choiceLabel = hitObj.name === 'CHOICE_LEFT' ? 'Opción A' : 'Opción B';
+        playTone(520, 0.15, 'triangle');
+        updateHUD('DILEMA DECISIONAL', `Elección: ${choiceLabel} (${rt}ms)`, `Ensayo: ${t.currentTrial}/20`);
+        transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Decisión: ${choiceLabel} (${rt}ms)` });
+        if (t.currentTrial >= 20) {
+          executeHardStop('Batería Decisional Completada');
+        }
+      }
+    } else if (t.paradigm === 'AAT_3D') {
+      const hitObj = hits.length > 0 ? hits[0].object : null;
+      if (hitObj && hitObj.name.startsWith('AAT_DISTRACTOR_')) {
+        t.hits += 1;
+        t.currentTrial += 1;
+        playTone(840, 0.08, 'sine');
+        interactiveGroupRef.current.remove(hitObj);
+        if ((hitObj as THREE.Mesh).geometry) (hitObj as THREE.Mesh).geometry.dispose();
+        spawnSingleDistractor(t.currentTrial);
+        updateHUD('AAT: DISTRACTOR REPELIDO', `¡BLINDAJE EXITOSO! (${rt}ms)`, `Ensayo: ${t.currentTrial}/30 | Aciertos: ${t.hits}`);
+        transmitTelemetry({ hits: t.hits, errors: t.errors, rt, action: `Distractor Repelido (${rt}ms)` });
+
+        if (t.currentTrial >= t.maxTrials) {
+          executeHardStop('Entrenamiento AAT de Foco Completado');
+        }
+      }
     }
   }, [ensureAudioUnlocked, playTone, executeHardStop]);
 
@@ -547,7 +594,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     return () => ws.close();
   }, [initialPatientId, setupParadigmVisuals, playSpeechAudio, executeHardStop, load360JpegEcosystem, playProvocationMp4Video]);
 
-  // Montaje WebXR
+  // Montaje WebXR Three.js
   useEffect(() => {
     if (!mountRef.current) return;
     const container = mountRef.current;
@@ -587,7 +634,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
     scene.add(bgSphere);
     bgSphereMeshRef.current = bgSphere;
 
-    // Pantalla de Cine Virtual Flotante para Videos MP4
+    // Pantalla de Cine Virtual para Videos MP4
     const screenGeo = new THREE.PlaneGeometry(3.6, 2.0, 16, 16);
     const screenMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
     const cinemaScreen = new THREE.Mesh(screenGeo, screenMat);
@@ -608,11 +655,10 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     // Hologramas a la derecha
     const interactiveGroup = new THREE.Group();
-    interactiveGroup.position.set(0.35, 1.25, -1.8);
     stageGroup.add(interactiveGroup);
     interactiveGroupRef.current = interactiveGroup;
 
-    // Mandos con láser
+    // Mandos con puntero láser
     const buildLaser = () => {
       const g = new THREE.Group();
       g.add(new THREE.Line(
@@ -639,17 +685,21 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
 
     const clock = new THREE.Clock();
 
+    // ========================================================================
+    // BUCLE DE RENDERIZADO Y CONTROL DE LOS 8 PARADIGMAS A 60/90 FPS
+    // ========================================================================
     renderer.setAnimationLoop(() => {
       const t = clock.getElapsedTime();
       const now = Date.now();
       const trial = trialStateRef.current;
 
-      if (!trial.isActiveSession || trial.paradigm === 'IDLE') {
+      if (!trial.isActiveSession || trial.paradigm === 'IDLE' || !interactiveGroupRef.current) {
         renderer.render(scene, camera);
         return;
       }
 
-      if (trial.paradigm === 'CPT_3D' && interactiveGroupRef.current) {
+      // 1. CPT GO/NO-GO
+      if (trial.paradigm === 'CPT_3D') {
         const sphere = interactiveGroupRef.current.getObjectByName('CPT_SPHERE') as THREE.Mesh;
         if (sphere) {
           if (!sphere.visible && now >= trial.trialTimer) {
@@ -658,6 +708,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
             const isGo = trial.cptType === 'GO';
             (sphere.material as THREE.MeshStandardMaterial).color.setHex(isGo ? 0x10b981 : 0xef4444);
             (sphere.material as THREE.MeshStandardMaterial).emissive.setHex(isGo ? 0x059669 : 0xb91c1c);
+            sphere.position.set(0.35, 1.25, -1.8);
             sphere.visible = true;
             trial.stimulusOnsetTime = now;
             trial.cptActive = true;
@@ -680,15 +731,203 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
         }
       }
 
-      if (trial.paradigm === 'BART_3D' && interactiveGroupRef.current) {
+      // 2. BART RIESGO
+      else if (trial.paradigm === 'BART_3D') {
         const balloon = interactiveGroupRef.current.getObjectByName('BART_BALLOON');
         if (balloon) {
           balloon.scale.lerp(new THREE.Vector3(trial.balloonScale, trial.balloonScale * 1.15, trial.balloonScale), 0.1);
         }
       }
 
-      if (trial.paradigm === 'EMDR_3D' && interactiveGroupRef.current) {
-        interactiveGroupRef.current.position.x = 0.35 + Math.sin(t * 2.5) * 0.95;
+      // 3. N-BACK MEMORIA
+      else if (trial.paradigm === 'N_BACK_3D') {
+        if (now >= trial.nBackTimer) {
+          trial.activeCube = Math.floor(Math.random() * 4);
+          trial.stimulusOnsetTime = now;
+          trial.nBackTimer = now + 2400;
+
+          interactiveGroupRef.current.children.forEach((child) => {
+            const mesh = child as THREE.Mesh;
+            if (mesh.name && mesh.name.startsWith('CUBE_')) {
+              const isTarget = mesh.name === `CUBE_${trial.activeCube}`;
+              mesh.scale.setScalar(isTarget ? 1.35 : 0.88);
+              if (mesh.material && 'emissiveIntensity' in mesh.material) {
+                (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = isTarget ? 1.4 : 0.25;
+              }
+            }
+          });
+        }
+      }
+
+      // 4. DILEMA DECISIONAL (CHOICE)
+      else if (trial.paradigm === 'CHOICE_3D') {
+        const pLeft = interactiveGroupRef.current.getObjectByName('CHOICE_LEFT');
+        const pRight = interactiveGroupRef.current.getObjectByName('CHOICE_RIGHT');
+        if (pLeft && pRight) {
+          pLeft.rotation.y = Math.sin(t * 1.5) * 0.08;
+          pRight.rotation.y = -Math.sin(t * 1.5) * 0.08;
+        }
+      }
+
+      // 5. RESISTENCIA A DISTRACTORES (AAT)
+      else if (trial.paradigm === 'AAT_3D') {
+        const center = interactiveGroupRef.current.getObjectByName('AAT_CENTER');
+        if (center) center.rotation.z += 0.015;
+
+        interactiveGroupRef.current.children.forEach((child) => {
+          if (child.name.startsWith('AAT_DISTRACTOR_')) {
+            child.rotation.x += 0.02;
+            child.rotation.y += 0.03;
+            child.position.y += Math.sin(t * 2.0 + child.id) * 0.002;
+
+            if (child.userData.spawnTime && now - child.userData.spawnTime > 3800) {
+              trial.errors += 1;
+              trial.currentTrial += 1;
+              playTone(130, 0.18, 'sawtooth');
+              updateHUD('AAT: DISTRACCIÓN NO REPELIDA', '⚠️ TIEMPO LÍMITE AGOTADO', `Ensayo: ${trial.currentTrial}/30 | Aciertos: ${trial.hits}`);
+              transmitTelemetry({ hits: trial.hits, errors: trial.errors, rt: 3800, action: 'Fallo: Distractor no repelido a tiempo' });
+              interactiveGroupRef.current?.remove(child);
+              spawnSingleDistractor(trial.currentTrial);
+
+              if (trial.currentTrial >= trial.maxTrials) {
+                executeHardStop('Entrenamiento AAT Completado');
+              }
+            }
+          }
+        });
+      }
+
+      // ======================================================================
+      // 6. SACÁDICOS EMDR: SEGUIMIENTO DE LA VISTA REAL (GAZE TRACKING)
+      // ======================================================================
+      else if (trial.paradigm === 'EMDR_3D') {
+        const emdr = interactiveGroupRef.current.getObjectByName('EMDR_SPHERE') as THREE.Mesh;
+        if (emdr) {
+          // Desplazamiento horizontal sinusoidal suave (1.3 m de amplitud)
+          const newX = Math.sin(t * 2.2) * 1.30;
+          const oldX = trial.emdrPrevX;
+          emdr.position.x = newX;
+
+          // 1. Raycast de la mirada desde la cabeza del paciente (Headset Gaze)
+          const gazeDir = new THREE.Vector3();
+          camera.getWorldDirection(gazeDir);
+          const gazePos = new THREE.Vector3();
+          camera.getWorldPosition(gazePos);
+
+          gazeRaycasterRef.current.set(gazePos, gazeDir);
+          const distToSphere = gazeRaycasterRef.current.ray.distanceToPoint(emdr.position);
+          const isLookingAtTarget = distToSphere < 0.45; // Cono de atención foveal/parafoveal (~14°)
+
+          trial.emdrSweepTotalPoints += 1;
+          if (isLookingAtTarget) {
+            trial.emdrSweepGazePoints += 1;
+          }
+
+          // 2. Feedback visual de enganche foveal en la esfera
+          const emdrMat = emdr.material as THREE.MeshStandardMaterial;
+          if (isLookingAtTarget) {
+            // VERDE ESMERALDA BRILLANTE = Vista enganchada con éxito
+            emdrMat.color.setHex(0x10b981);
+            emdrMat.emissive.setHex(0x059669);
+            emdrMat.emissiveIntensity = 1.6;
+            emdr.scale.lerp(new THREE.Vector3(1.25, 1.25, 1.25), 0.15);
+          } else {
+            // FUCSIA CLÁSICO = Mirada desviada o no alineada
+            emdrMat.color.setHex(0xe879f9);
+            emdrMat.emissive.setHex(0xc026d3);
+            emdrMat.emissiveIntensity = 0.85;
+            emdr.scale.lerp(new THREE.Vector3(1.0, 1.0, 1.0), 0.15);
+          }
+
+          // 3. Detección de giro en los extremos (Completación de un barrido sacádico)
+          const currentDir = newX > oldX ? 1 : -1;
+          if (currentDir !== trial.emdrDirection) {
+            // Se alcanzó el extremo horizontal: Computar barrido
+            trial.emdrDirection = currentDir;
+            trial.currentTrial += 1;
+
+            const gazeRatio = trial.emdrSweepTotalPoints > 0
+              ? trial.emdrSweepGazePoints / trial.emdrSweepTotalPoints
+              : 0;
+
+            const isSuccessfulSweep = gazeRatio >= 0.50; // Al menos 50% de seguimiento efectivo
+
+            if (isSuccessfulSweep) {
+              trial.hits += 1;
+              playTone(currentDir === 1 ? 680 : 540, 0.08, 'sine', 0.5); // Tono alternado por oído
+              updateHUD(
+                'INTEGRACIÓN SACÁDICA (EMDR)',
+                '👁️ VISTA ENGANCHADA (Seguimiento Óptimo)',
+                `Ciclos: ${trial.currentTrial}/30 | Aciertos: ${trial.hits} | Pérdidas: ${trial.errors}`
+              );
+              transmitTelemetry({
+                hits: trial.hits,
+                errors: trial.errors,
+                rt: Math.round(distToSphere * 1000),
+                action: `Barrido Sacádico Enganchado (${Math.round(gazeRatio * 100)}% fijación)`
+              });
+            } else {
+              trial.errors += 1;
+              playTone(130, 0.12, 'sawtooth', 0.35);
+              updateHUD(
+                'INTEGRACIÓN SACÁDICA (EMDR)',
+                '⚠️ MIRA LA LUZ (Pérdida de Seguimiento)',
+                `Ciclos: ${trial.currentTrial}/30 | Aciertos: ${trial.hits} | Pérdidas: ${trial.errors}`
+              );
+              transmitTelemetry({
+                hits: trial.hits,
+                errors: trial.errors,
+                rt: Math.round(distToSphere * 1000),
+                action: 'Pérdida de Fijación Sacádica'
+              });
+            }
+
+            // Reiniciar acumuladores para el siguiente barrido
+            trial.emdrSweepGazePoints = 0;
+            trial.emdrSweepTotalPoints = 0;
+
+            if (trial.currentTrial >= trial.maxTrials) {
+              executeHardStop('30 Ciclos de Integración Sacádica Completados con Éxito');
+            }
+          }
+
+          trial.emdrPrevX = newX;
+        }
+      }
+
+      // 7. SOMATOMOTOR MIRROR
+      else if (trial.paradigm === 'MIRROR_3D') {
+        const rL = interactiveGroupRef.current.getObjectByName('MIRROR_RING_L');
+        const rR = interactiveGroupRef.current.getObjectByName('MIRROR_RING_R');
+        if (rL && rR) {
+          rL.position.y = 1.25 + Math.sin(t * 1.8) * 0.22;
+          rR.position.y = 1.25 + Math.sin(t * 1.8 + Math.PI) * 0.22;
+        }
+      }
+
+      // 8. BIOFEEDBACK VAGAL (0.1 HZ)
+      else if (trial.paradigm === 'BIO_3D') {
+        const lotus = interactiveGroupRef.current.getObjectByName('BIO_LOTUS');
+        if (lotus) {
+          const breathCycle = (t % 10.0);
+          let breathScale = 1.0;
+          let phaseText = '';
+
+          if (breathCycle < 4.0) {
+            breathScale = 0.85 + (breathCycle / 4.0) * 0.55;
+            phaseText = '🟢 INHALA PROFUNDO... (Expansión)';
+          } else if (breathCycle < 6.0) {
+            breathScale = 1.40;
+            phaseText = '🟡 SOSTÉN EL AIRE... (Pausa)';
+          } else {
+            breathScale = 1.40 - ((breathCycle - 6.0) / 4.0) * 0.55;
+            phaseText = '🔵 EXHALA DESPACIO... (Relajación)';
+          }
+
+          lotus.scale.set(breathScale, breathScale, breathScale);
+          lotus.rotation.y += 0.01;
+          updateHUD('BIOFEEDBACK RESPIRATORIO (0.1 Hz)', phaseText, 'Sincroniza tu ritmo con la flor.');
+        }
       }
 
       renderer.render(scene, camera);
@@ -713,6 +952,7 @@ export const VrPatientExperience: React.FC<Props> = ({ patientId: propsPatientId
           <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl text-center shadow-2xl max-w-sm space-y-4">
             <VolumeX className="w-10 h-10 text-emerald-400 mx-auto animate-pulse" />
             <h2 className="text-xl font-black text-white">Activar Entorno Clínico VR</h2>
+            <p className="text-xs text-slate-400">Presiona para habilitar audio 3D y telemetría espacial.</p>
             <button className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer">
               <Play className="w-5 h-5 fill-white" /> ENTRAR A LA SESIÓN
             </button>
